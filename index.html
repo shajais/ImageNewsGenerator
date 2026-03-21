@@ -1,0 +1,294 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nepal Viral News Generator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="header-icon">📰</div>
+  <div>
+    <h1>Nepal Viral News Generator</h1>
+    <p>Fetch breaking news · Generate viral content · Download shareable images</p>
+  </div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-shrink:0">
+    <button id="aiBadge" class="btn ai-badge-btn" onclick="openAISettings()" title="Configure free Gemini AI for smart rewriting">⚙️ Setup AI</button>
+  </div>
+</header>
+
+<!-- MAIN -->
+<div class="container">
+
+  <!-- LEFT: News Panel -->
+  <aside class="panel" id="newsPanel">
+    <div class="panel-header">
+      <span>🗞️</span> Latest Nepal News
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <span style="font-size:.65rem;color:var(--muted);white-space:nowrap">6 sources</span>
+        <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+      </div>
+    </div>
+    <div class="fetch-bar">
+      <button class="btn btn-primary" id="fetchBtn" onclick="fetchNews()">
+        <span>🔄</span> Fetch Nepal News
+      </button>
+      <button class="btn btn-ghost" onclick="showManualInput()" style="font-size:.8rem;padding:8px 14px">
+        ✏️ Manual
+      </button>
+      <span class="status-badge" id="statusBadge">No data loaded</span>
+    </div>
+    <div class="news-list" id="newsList">
+      <div class="empty-state">
+        <div class="icon">🌐</div>
+        <p>Click <strong>Fetch Nepal News</strong><br>to load the latest headlines.</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- RIGHT: Output Panel -->
+  <div class="right-col">
+
+    <!-- Viral Content Card -->
+    <div class="panel" id="contentPanel">
+      <div class="panel-header"><span>✨</span> Viral Social Media Content</div>
+
+      <div id="contentWelcome" class="welcome">
+        <div class="big-icon"></div>
+        <h3>Select a headline to begin</h3>
+        <p>Click any news article on the left to auto-generate a viral social media post with hook, title, description and hashtags.</p>
+      </div>
+
+      <div id="contentOutput" style="display:none">
+        <div class="content-grid">
+          <div class="content-block">
+            <div class="content-block-label">
+               Hook
+              <button class="reimagine-btn" onclick="reimagineField('hook')" id="reimagineBtnHook" title="Reimagine with AI">✨ Reimagine</button>
+              <button class="edit-field-btn" onclick="startEdit('hook')" id="editBtnHook" title="Edit Hook">✏️</button>
+              <button class="save-field-btn" onclick="saveEdit('hook')" id="saveBtnHook" style="display:none" title="Save">✅ Save</button>
+              <button class="cancel-field-btn" onclick="cancelEdit('hook')" id="cancelBtnHook" style="display:none" title="Cancel">✕</button>
+            </div>
+            <div class="content-block-text" id="outHook">—</div>
+            <textarea class="edit-field-textarea" id="editHook" style="display:none" rows="2"></textarea>
+          </div>
+          <div class="content-block">
+            <div class="content-block-label">
+               Title
+              <button class="reimagine-btn" onclick="reimagineField('title')" id="reimagineBtnTitle" title="Reimagine with AI">✨ Reimagine</button>
+              <button class="edit-field-btn" onclick="startEdit('title')" id="editBtnTitle" title="Edit Title">✏️</button>
+              <button class="save-field-btn" onclick="saveEdit('title')" id="saveBtnTitle" style="display:none" title="Save">✅ Save</button>
+              <button class="cancel-field-btn" onclick="cancelEdit('title')" id="cancelBtnTitle" style="display:none" title="Cancel">✕</button>
+            </div>
+            <div class="content-block-text" id="outTitle">—</div>
+            <textarea class="edit-field-textarea" id="editTitle" style="display:none" rows="2"></textarea>
+          </div>
+          <div class="content-block full">
+            <div class="content-block-label">
+               Description
+              <button class="reimagine-btn" onclick="reimagineField('desc')" id="reimagineBtnDesc" title="Reimagine with AI">✨ Reimagine</button>
+              <button class="edit-field-btn" onclick="startEdit('desc')" id="editBtnDesc" title="Edit Description">✏️</button>
+              <button class="save-field-btn" onclick="saveEdit('desc')" id="saveBtnDesc" style="display:none" title="Save">✅ Save</button>
+              <button class="cancel-field-btn" onclick="cancelEdit('desc')" id="cancelBtnDesc" style="display:none" title="Cancel">✕</button>
+            </div>
+            <div class="content-block-text" id="outDesc">—</div>
+            <textarea class="edit-field-textarea" id="editDesc" style="display:none" rows="5"></textarea>
+          </div>
+          <div class="content-block full">
+            <div class="content-block-label"> Hashtags</div>
+            <div class="hashtags" id="outHashtags"></div>
+          </div>
+        </div>
+        <div class="action-row">
+          <button class="btn btn-blue"   onclick="generateImage()"><span></span> Generate Image</button>
+          <button class="btn btn-orange" onclick="openCopyModal()"><span></span> Copy Post Text</button>
+          <button class="btn" style="background:linear-gradient(135deg,#1877f2,#0d65d9);color:#fff;box-shadow:0 3px 12px rgba(24,119,242,.4)" onclick="shareOnFacebook()"><span></span> Facebook</button>
+          <button class="btn" style="background:linear-gradient(135deg,#e1306c,#833ab4,#fd1d1d);color:#fff;box-shadow:0 3px 12px rgba(225,48,108,.4)" onclick="shareOnInstagram()"><span></span> Instagram</button>
+          <button class="btn" style="background:linear-gradient(135deg,#000,#222);color:#fff;box-shadow:0 3px 12px rgba(0,0,0,.5);border:1px solid #333" onclick="shareOnX()"><span></span> X (Twitter)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Image Card -->
+    <div class="panel" id="imagePanel" style="display:none">
+      <div class="panel-header"><span></span> Generated Image</div>
+
+      <div style="padding:12px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:rgba(59,130,246,.05)">
+        <span style="font-size:.8rem;color:var(--muted);flex-shrink:0"> Use your own photo:</span>
+        <label style="cursor:pointer">
+          <input type="file" id="customImgInput" accept="image/*" style="display:none" onchange="onCustomImage(event)">
+          <span class="btn btn-ghost" style="font-size:.78rem;padding:6px 14px">⬆️ Upload Image</span>
+        </label>
+        <span id="imgSourceBadge" style="font-size:.75rem;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:3px 10px"></span>
+        <button class="btn btn-ghost" id="clearCustomBtn" style="font-size:.75rem;padding:5px 12px;display:none" onclick="clearCustomImage()">✕ Clear</button>
+        <!-- AI Enhance Button — shown only when a custom photo is uploaded -->
+        <button class="btn enhance-ai-btn" id="enhanceAIBtn" style="display:none" onclick="toggleBgPicker()" title="AI removes background & replaces it with a cinematic scene">🎨 Enhance with AI</button>
+      </div>
+
+      <!-- Background Style Picker — hidden until user clicks Enhance with AI -->
+      <div id="bgStylePicker" style="display:none">
+        <div class="bg-picker-header">
+          <span>🖼️ Choose a Background Style</span>
+          <span class="bg-picker-hint">AI will keep your subject and replace the background</span>
+        </div>
+        <div class="bg-style-grid">
+          <div class="bg-style-tile active" id="bgtile-newsroom"   onclick="selectBgStyle('newsroom')">
+            <div class="bg-tile-swatch bg-swatch-newsroom"></div>
+            <div class="bg-tile-label">📺 News Studio</div>
+          </div>
+          <div class="bg-style-tile" id="bgtile-parliament" onclick="selectBgStyle('parliament')">
+            <div class="bg-tile-swatch bg-swatch-parliament"></div>
+            <div class="bg-tile-label">🏛️ Parliament</div>
+          </div>
+          <div class="bg-style-tile" id="bgtile-mountains"  onclick="selectBgStyle('mountains')">
+            <div class="bg-tile-swatch bg-swatch-mountains"></div>
+            <div class="bg-tile-label">🏔️ Himalaya</div>
+          </div>
+          <div class="bg-style-tile" id="bgtile-city"       onclick="selectBgStyle('city')">
+            <div class="bg-tile-swatch bg-swatch-city"></div>
+            <div class="bg-tile-label">🌆 Kathmandu</div>
+          </div>
+          <div class="bg-style-tile" id="bgtile-breaking"   onclick="selectBgStyle('breaking')">
+            <div class="bg-tile-swatch bg-swatch-breaking"></div>
+            <div class="bg-tile-label">🚨 Breaking</div>
+          </div>
+          <div class="bg-style-tile" id="bgtile-press"      onclick="selectBgStyle('press')">
+            <div class="bg-tile-swatch bg-swatch-press"></div>
+            <div class="bg-tile-label">🎙️ Press Conf.</div>
+          </div>
+          <div class="bg-style-tile" id="bgtile-field"      onclick="selectBgStyle('field')">
+            <div class="bg-tile-swatch bg-swatch-field"></div>
+            <div class="bg-tile-label">🌾 Rural Nepal</div>
+          </div>
+          <div class="bg-style-tile" id="bgtile-digital"    onclick="selectBgStyle('digital')">
+            <div class="bg-tile-swatch bg-swatch-digital"></div>
+            <div class="bg-tile-label">💡 Digital</div>
+          </div>
+        </div>
+        <div style="padding:10px 16px 14px;text-align:center">
+          <button class="btn enhance-apply-btn" onclick="enhanceImageWithAI()">✨ Apply AI Enhancement</button>
+          <p style="margin:8px 0 0;font-size:.72rem;color:var(--muted)">Uses Remove.bg API (50 free credits/month) · Works on news photos &amp; your uploads · Only background is replaced, subject stays intact</p>
+        </div>
+      </div>
+
+      <!-- Image Adjust Toolbar (shown whenever an image is generated) -->
+      <div id="imgAdjustBar" style="display:none">
+        <div class="img-adjust-bar">
+          <span class="img-adjust-label">🔍 Zoom</span>
+          <input type="range" id="zoomSlider" min="80" max="200" value="100" step="1"
+                 class="img-zoom-slider" oninput="onImgAdjust()">
+          <span id="zoomVal" class="img-adjust-val">100%</span>
+          <span class="img-adjust-divider"></span>
+          <span class="img-adjust-label">🧭 Pan</span>
+          <div class="img-pan-grid">
+            <button class="pan-btn" onclick="panImage(0,-30)" title="Up">▲</button>
+            <button class="pan-btn" onclick="panImage(-30,0)" title="Left">◀</button>
+            <button class="pan-btn pan-reset" onclick="resetImgAdjust()" title="Reset">⌂</button>
+            <button class="pan-btn" onclick="panImage(30,0)"  title="Right">▶</button>
+            <button class="pan-btn" onclick="panImage(0,30)"  title="Down">▼</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="canvas-wrap">
+        <canvas id="newsCanvas" width="1080" height="1080"></canvas>
+        <div class="canvas-actions">
+          <button class="btn btn-green" onclick="downloadImage()"><span></span> Download Image</button>
+          <button class="btn btn-blue"  onclick="generateImage()"><span></span> Regenerate</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- AI SETTINGS MODAL -->
+<div id="aiSettingsModal">
+  <div class="modal-box ai-settings-box">
+    <div class="ai-settings-header">
+      <span class="ai-settings-icon">🤖</span>
+      <div>
+        <h3>AI Setup</h3>
+        <p class="ai-settings-sub">Free AI rewriting + background replacement — copyright-safe content</p>
+      </div>
+    </div>
+    <div class="ai-settings-body">
+      <!-- ── Gemini section ── -->
+      <div class="ai-info-box">
+        <strong>📌 Gemini AI — Free text rewriting:</strong>
+        <ol>
+          <li>Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a></li>
+          <li>Sign in with Google (free) → click <strong>"Create API Key"</strong></li>
+          <li>Paste below — saved in your browser only</li>
+        </ol>
+        <p style="margin-top:6px;font-size:.78rem;color:var(--muted)">✅ Free: 15 req/min · 1M tokens/day · No credit card</p>
+      </div>
+      <label class="ai-key-label">Gemini API Key</label>
+      <div class="ai-key-row">
+        <input type="password" id="geminiKeyInput" class="ai-key-input"
+               placeholder="AIzaSy…" autocomplete="off" spellcheck="false" />
+        <button class="btn btn-ghost" style="flex-shrink:0;padding:8px 14px;font-size:.8rem"
+                onclick="this.previousElementSibling.type=this.previousElementSibling.type==='password'?'text':'password';this.textContent=this.previousElementSibling.type==='password'?'👁':'🙈'">👁</button>
+      </div>
+      <p class="ai-key-hint">🔒 Stored locally — only sent to Google Gemini API</p>
+
+      <!-- ── Remove.bg section ── -->
+      <div class="ai-info-box" style="margin-top:16px;border-color:rgba(139,92,246,.35);background:rgba(139,92,246,.07)">
+        <strong>🎨 Remove.bg — Free background removal:</strong>
+        <ol>
+          <li>Go to <a href="https://www.remove.bg/api" target="_blank" rel="noopener">remove.bg/api</a></li>
+          <li>Sign up free → go to <strong>API Keys</strong> → copy your key</li>
+          <li>Paste below — used only when you click <em>"Enhance with AI"</em></li>
+        </ol>
+        <p style="margin-top:6px;font-size:.78rem;color:var(--muted)">✅ Free: 50 background removals/month · No credit card needed</p>
+      </div>
+      <label class="ai-key-label">Remove.bg API Key</label>
+      <div class="ai-key-row">
+        <input type="password" id="removebgKeyInput" class="ai-key-input"
+               placeholder="abc123XYZ…" autocomplete="off" spellcheck="false" />
+        <button class="btn btn-ghost" style="flex-shrink:0;padding:8px 14px;font-size:.8rem"
+                onclick="this.previousElementSibling.type=this.previousElementSibling.type==='password'?'text':'password';this.textContent=this.previousElementSibling.type==='password'?'👁':'🙈'">👁</button>
+      </div>
+      <p class="ai-key-hint">🔒 Stored locally — only sent to Remove.bg API when enhancing images</p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeAISettings()">Cancel</button>
+      <button class="btn btn-green" onclick="saveAISettings()">✅ Save &amp; Enable AI</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHARE MODAL -->
+<div id="shareModal">
+  <div class="share-modal-box">
+    <h3 id="shareModalTitle"> Share</h3>
+    <p id="shareModalNote"></p>
+    <div class="share-preview" id="sharePreviewText"></div>
+    <div class="share-btns">
+      <button class="btn btn-green" id="shareOpenBtn" onclick="openShareWindow()"> Share Now</button>
+      <button class="btn btn-ghost" onclick="closeShareModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- COPY MODAL -->
+<div id="copyModal">
+  <div class="modal-box">
+    <h3> Copy Post Text</h3>
+    <div class="modal-text-area" id="modalText"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeCopyModal()">Close</button>
+      <button class="btn btn-green" onclick="copyText()"><span></span> Copy to Clipboard</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
