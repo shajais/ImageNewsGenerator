@@ -685,13 +685,20 @@ function renderNewsList() {
                        : '';
     const sourceBadge  = a.source ? `<span class="source-badge">${escHtml(a.source)}</span>` : '';
 
+    const openBtn = a.link
+      ? `<button class="news-open-btn" onclick="event.stopPropagation();window.open('${escHtml(a.link)}','_blank','noopener')" title="Open original story">🔗 Open Story</button>`
+      : '';
+
     return `
       <div class="news-item${a.isTrending ? ' trending' : ''}" id="item-${i}" onclick="selectArticle(${i})">
         ${thumb}
         <div class="news-item-body">
           <div class="news-item-badges">${viralBadge}${sourceBadge}</div>
           <div class="news-item-title">${escHtml(a.title)}</div>
-          ${dateStr ? `<div class="news-item-date">🕐 ${dateStr}</div>` : ''}
+          <div class="news-item-footer">
+            ${dateStr ? `<div class="news-item-date">🕐 ${dateStr}</div>` : ''}
+            ${openBtn}
+          </div>
         </div>
       </div>`;
   }).join('');
@@ -1159,55 +1166,69 @@ async function callAI(prompt, timeoutMs = 22000) {
 async function rewriteWithAI(rawTitle, articleBody, sourceLang) {
   if (!_grokKey && !_geminiKey) return null;
 
-  /* Use up to 1400 chars of body for richer context */
-  const bodySnippet = (articleBody || '').replace(/\s+/g, ' ').slice(0, 1400).trim();
+  /* Give AI the richest possible context — up to 3000 chars of actual article body */
+  const bodySnippet = (articleBody || '').replace(/\s+/g, ' ').slice(0, 3000).trim();
   const langNote = sourceLang === 'ne' ? 'Nepali' : sourceLang === 'hi' ? 'Hindi' : 'English';
+  const hasBody = bodySnippet.length > 100;
 
-  const prompt = `You are a professional Nepali viral news editor with deep knowledge of Nepal's current affairs.
+  const prompt = `You are an expert Nepali news journalist and viral social media editor.
 
-TASK: Read the news story below carefully. Understand the specific event, people involved, location, and impact.
-Then produce 100% original, creative Nepali content based on this SPECIFIC story — not generic news phrases.
+READ THIS NEWS ARTICLE CAREFULLY:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HEADLINE (${langNote}): ${rawTitle}
+${hasBody ? `FULL ARTICLE BODY:\n${bodySnippet}` : '(No article body available — work from headline only)'}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-SOURCE NEWS (in ${langNote}):
-Title: ${rawTitle}
-Body: ${bodySnippet}
+Your job: After reading the article above, write compelling Nepali social media content.
+CRITICAL: Every output field MUST be based on the ACTUAL specific details in this article.
+- Use the REAL names of people, places, organisations mentioned
+- Use the REAL numbers (deaths, injuries, amounts, dates) from the article
+- Use the REAL event/action described — do NOT invent or guess details
 
-OUTPUT REQUIREMENTS — read every rule carefully:
+━━━ OUTPUT FORMAT (strict JSON, no markdown) ━━━
 
-1. "hook" — One emotionally powerful viral opening line.
-   - Must reference THIS specific event/person/place from the story
-   - Start with exactly 1 emoji that matches the news theme (e.g. 🔥 for controversy, 😱 for shock, 💔 for tragedy, ⚡ for breaking)
-   - Maximum 20 Nepali words
-   - Must feel urgent and shareable — NOT generic like "नेपालमा ठूलो घटना"
+{
+  "hook": "<ONE punchy viral opening line in Nepali Devanagari>",
+  "title": "<Sharp news headline in Nepali Devanagari>",
+  "description": "<3-4 sentence factual news paragraph in Nepali Devanagari>",
+  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5", "#tag6", "#tag7", "#tag8"]
+}
 
-2. "title" — SEO-optimised Nepali headline
-   - Must contain the KEY subject (name/place/event) from the story
-   - Maximum 12 Nepali words
-   - Factual, keyword-rich — readers must know exactly what happened
+━━━ RULES FOR EACH FIELD ━━━
 
-3. "description" — Original 3-4 sentence news paragraph
-   - Sentence 1: What happened and who is involved (specific names/places from the story)
-   - Sentence 2: Key details, cause, or context
-   - Sentence 3: Impact or reaction
-   - Sentence 4: What happens next or current status
-   - Total: 60-90 Nepali words
-   - NEVER copy source sentences word-for-word
+HOOK (max 18 words in Nepali):
+• Start with ONE emoji matching the news mood (🔥 anger/controversy, 😱 shock, 💔 tragedy, ⚡ breaking, 🏆 victory, 💰 money/economy, 🚨 urgent, 🗳️ politics/election)
+• Must mention the SPECIFIC subject of THIS news (a real name, place, or event from the article)
+• Make it feel urgent and personal — WHY should a Nepali reader care RIGHT NOW?
+• NEVER write generic phrases like "नेपालमा ठूलो घटना" or "महत्त्वपूर्ण समाचार"
 
-4. "hashtags" — Array of exactly 8 hashtags
-   - At least 3 must be SPECIFIC to this news story (person name, place, event keyword)
-   - Mix Nepali Devanagari and English
-   - FORBIDDEN generic tags: #Nepal #नेपाल #NepalNews #नेपालसमाचार #BreakingNews #Kathmandu (only use these if the story is literally about Nepal in general)
-   - Each starts with #, no spaces inside
+TITLE (max 12 words in Nepali):
+• Must contain the KEY fact: WHO did WHAT (or WHAT happened WHERE)
+• Include the most important name or number from the story
+• SEO-friendly — reads like a newspaper front page headline
+• NEVER start with "नेपालमा" unless the story is specifically about Nepal as a country
 
-5. ALL text fields (hook, title, description) must be in Nepali Devanagari script.
-6. Output ONLY a raw JSON object — zero markdown, zero explanation.
+DESCRIPTION (60-90 Nepali words total, 3-4 sentences):
+• Sentence 1: State exactly WHAT happened, WHO was involved, WHERE/WHEN (use real names from article)
+• Sentence 2: WHY it happened or KEY details/numbers (death toll, amount, cause)
+• Sentence 3: Reaction, impact, or consequence (who responded, what changed)
+• Sentence 4: Current status or what happens next
+• Write in formal Nepali journalism style (like Kantipur or Onlinekhabar)
+• NEVER use vague fillers like "सम्बन्धित निकायले जानकारी दिएको छ"
 
-JSON format:
-{"hook":"...","title":"...","description":"...","hashtags":["#...","#...","#...","#...","#...","#...","#...","#..."]}`;
+HASHTAGS (exactly 8):
+• 3-4 must be STORY-SPECIFIC: the real name, place, or event keyword from THIS article
+• Mix: ~4 in Nepali Devanagari, ~4 in English
+• Include relevant trending Nepali news hashtags like #NepalPolitics, #नेपाल_राजनीति, #BreakingNepal etc. ONLY if relevant
+• NO generic tags like #Nepal or #नेपाल unless the story is pan-Nepal
+• No spaces within a hashtag
+
+LANGUAGE: All hook, title, description text MUST be in Nepali Devanagari script.
+OUTPUT: Raw JSON only — no \`\`\`json, no explanation, nothing else.`;
 
   let result;
   try {
-    result = await callAI(prompt, 25000);
+    result = await callAI(prompt, 30000);
   } catch(e) {
     console.warn('[AI Rewrite] callAI threw:', e.message);
     return null;
@@ -1255,11 +1276,11 @@ async function selectArticle(idx) {
 
   /* Show spinners while everything loads */
   document.getElementById('outHook').innerHTML =
-    '<span class="spinner" style="border-color:rgba(246,173,85,.3);border-top-color:#f6ad55"></span>';
+    '<span class="spinner" style="border-color:rgba(246,173,85,.3);border-top-color:#f6ad55"></span> तयार हुँदैछ…';
   document.getElementById('outTitle').innerHTML =
-    '<span class="spinner" style="border-color:rgba(246,173,85,.3);border-top-color:#f6ad55"></span> शीर्षक तयार हुँदैछ…';
+    '<span class="spinner" style="border-color:rgba(246,173,85,.3);border-top-color:#f6ad55"></span> लेख पढ्दैछ…';
   document.getElementById('outDesc').innerHTML =
-    '<span class="spinner" style="border-color:rgba(99,102,241,.3);border-top-color:#818cf8"></span> लेख पढ्दैछ र विवरण तयार गर्दैछ…';
+    '<span class="spinner" style="border-color:rgba(99,102,241,.3);border-top-color:#818cf8"></span> लेख खोलेर पढ्दैछ र विवरण तयार गर्दैछ…';
   document.getElementById('outHashtags').innerHTML = '';
   document.getElementById('contentPanel').scrollIntoView({ behavior:'smooth', block:'nearest' });
 
@@ -1269,17 +1290,23 @@ async function selectArticle(idx) {
   /* Step 1: Fetch the full article page for deep context */
   let fullArticleText = selectedArticle.fullArticleText || '';
   if (!fullArticleText && selectedArticle.link) {
+    document.getElementById('outDesc').innerHTML =
+      '<span class="spinner" style="border-color:rgba(99,102,241,.3);border-top-color:#818cf8"></span> 🌐 मूल लेख डाउनलोड गर्दैछ…';
     fullArticleText = await fetchFullArticle(selectedArticle.link);
     selectedArticle.fullArticleText = fullArticleText;
   }
   const bestBody = fullArticleText || selectedArticle.description || '';
 
-  /* ── Step 2: Show AI indicator in spinners if key is set ── */
-  if (_geminiKey) {
+  /* ── Step 2: Show AI indicator in spinners if any AI key is set ── */
+  const aiReady = _geminiKey || _grokKey;
+  const aiLabel = _aiProvider === 'grok' ? '⚡ Grok' : '✨ Gemini';
+  if (aiReady) {
+    document.getElementById('outHook').innerHTML =
+      `<span class="spinner" style="border-color:rgba(139,92,246,.3);border-top-color:#a78bfa"></span> 🤖 ${aiLabel} AI ले hook लेख्दैछ…`;
     document.getElementById('outTitle').innerHTML =
-      '<span class="spinner" style="border-color:rgba(99,102,241,.3);border-top-color:#818cf8"></span> 🤖 AI ले सामग्री तयार गर्दैछ…';
+      `<span class="spinner" style="border-color:rgba(139,92,246,.3);border-top-color:#a78bfa"></span> 🤖 ${aiLabel} AI ले शीर्षक तयार गर्दैछ…`;
     document.getElementById('outDesc').innerHTML =
-      '<span class="spinner" style="border-color:rgba(99,102,241,.3);border-top-color:#818cf8"></span> 🤖 AI ले मौलिक विवरण लेख्दैछ…';
+      `<span class="spinner" style="border-color:rgba(139,92,246,.3);border-top-color:#a78bfa"></span> 🤖 ${aiLabel} AI ले लेख पढेर मौलिक विवरण लेख्दैछ…`;
   }
 
   /* ── Step 3: Try AI rewrite first (Gemini free tier) ── */
@@ -1315,7 +1342,8 @@ async function selectArticle(idx) {
   renderHashtags(hashtags);
 
   if (aiUsed) {
-    toast('🤖 AI ले मौलिक सामग्री तयार गर्‍यो — copyright-safe!', 'success', 3500);
+    const prov = _aiProvider === 'grok' ? '⚡ Grok' : '✨ Gemini';
+    toast(`🤖 ${prov} AI ले मूल लेख पढेर मौलिक सामग्री तयार गर्‍यो!`, 'success', 3500);
   }
 }
 
