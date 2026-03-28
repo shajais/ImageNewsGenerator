@@ -88,6 +88,14 @@ const RSS_FEEDS = [
 ];
 const RSS2JSON = 'https://api.rss2json.com/v1/api.json?rss_url=';
 
+/* Public CORS proxies tried in order when not on localhost.
+   Each returns the raw XML which we parse ourselves. */
+const CORS_PROXIES = [
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+];
+
 /* Viral signal keywords — articles containing these score higher */
 const VIRAL_KEYWORDS = [
   'मृत्यु','मारिए','घाइते','पक्राउ','बर्खास्त','बाढी','भूकम्प','आगलागी',
@@ -249,10 +257,29 @@ async function fetchSingleFeed(feed) {
           if (parsed.length) return parsed;
         }
       }
-    } catch { /* fall through to RSS2JSON */ }
+    } catch { /* fall through */ }
   }
 
-  /* ── Fallback: rss2json API (used when not on localhost) ── */
+  /* ── Public CORS proxies — tried in order (used on GitHub Pages) ── */
+  if (!_fetchProxyBase) {
+    for (const proxyFn of CORS_PROXIES) {
+      try {
+        const ctrl = new AbortController();
+        const tid  = setTimeout(() => ctrl.abort(), 10000);
+        const res  = await fetch(proxyFn(feed.url), { signal: ctrl.signal });
+        clearTimeout(tid);
+        if (res.ok) {
+          const text = await res.text();
+          if (text && text.length > 100 && (text.includes('<rss') || text.includes('<feed') || text.includes('<item'))) {
+            const parsed = parseRssXml(text, feed);
+            if (parsed.length) return parsed;
+          }
+        }
+      } catch { /* try next proxy */ }
+    }
+  }
+
+  /* ── Last resort: rss2json API ── */
   const apiUrl = RSS2JSON + encodeURIComponent(feed.url) + '&count=20';
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), 12000);

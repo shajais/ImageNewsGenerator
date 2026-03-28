@@ -970,7 +970,7 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
 
 /* ─── Canvas wrap — relative so floating toolbar positions inside it ── */
 .canvas-wrap {
-  padding: 18px;
+  padding: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -985,7 +985,7 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
 /* ─── Floating image editor overlay (sits on top of canvas) ─────── */
 #canvasEditorOverlay {
   position: absolute;
-  top: 18px;
+  top: 0;
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
@@ -1244,14 +1244,14 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
 #newsCanvas {
   width: 100%;
   max-width: 640px;
-  border-radius: 12px;
+  border-radius: 0;
   border: none;
-  box-shadow: 0 12px 48px rgba(0,0,0,.65);
+  box-shadow: none;
   cursor: grab;
   display: block;
 }
 #newsCanvas:active { cursor: grabbing; }
-.canvas-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.canvas-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; padding: 14px 18px; }
 
 /* ─── Spinner ────────────────────────────────────────────────── */
 .spinner {
