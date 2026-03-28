@@ -77,14 +77,35 @@ let _activeImageDataUrl = null;
 /* True while the canvas is showing an AI-enhanced background composite */
 let _enhancedMode = false;
 
-/* Multiple RSS feeds — fetched in parallel for maximum coverage */
+/* ─────────────────────────────────────────────────────────────────
+   NEWS SOURCES
+   • Google News RSS — pulls trending stories from ALL Nepali outlets
+     aggregated by Google, no rate limits, always fresh
+   • Individual Nepali outlets — direct RSS for extra coverage
+   All fetched in parallel; results are merged, de-duped & viral-scored.
+   ───────────────────────────────────────────────────────────────── */
 const RSS_FEEDS = [
-  { url: 'https://www.onlinekhabar.com/feed',               name: 'Online Khabar',  lang: 'ne' },
-  { url: 'https://www.setopati.com/feed',                    name: 'Setopati',       lang: 'ne' },
-  { url: 'https://ratopati.com/feed',                        name: 'Ratopati',       lang: 'ne' },
-  { url: 'https://www.ekantipur.com/rss/',                   name: 'eKantipur',      lang: 'ne' },
-  { url: 'https://thehimalayantimes.com/feed/',              name: 'Himalayan Times', lang: 'en' },
-  { url: 'https://kathmandupost.com/rss',                    name: 'Kathmandu Post', lang: 'en' },
+  /* ── Google News RSS — Nepal trending (no rate limit, real-time) ── */
+  { url: 'https://news.google.com/rss/search?q=nepal&hl=ne&gl=NP&ceid=NP:ne',
+                                                    name: 'Google News NP (Nepali)', lang: 'ne' },
+  { url: 'https://news.google.com/rss/search?q=nepal&hl=en&gl=NP&ceid=NP:en',
+                                                    name: 'Google News NP (English)', lang: 'en' },
+  { url: 'https://news.google.com/rss/headlines/section/geo/NP?hl=en&gl=NP&ceid=NP:en',
+                                                    name: 'Google Top Stories Nepal', lang: 'en' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%A8%E0%A5%87%E0%A4%AA%E0%A4%BE%E0%A4%B2+%E0%A4%AC%E0%A5%8D%E0%A4%B0%E0%A5%87%E0%A4%95%E0%A4%BF%E0%A4%99&hl=ne&gl=NP&ceid=NP:ne',
+                                                    name: 'Google ब्रेकिङ Nepal',    lang: 'ne' },
+
+  /* ── Direct Nepali outlet RSS feeds ── */
+  { url: 'https://www.onlinekhabar.com/feed',       name: 'Online Khabar',           lang: 'ne' },
+  { url: 'https://www.setopati.com/feed',            name: 'Setopati',                lang: 'ne' },
+  { url: 'https://ratopati.com/feed',                name: 'Ratopati',                lang: 'ne' },
+  { url: 'https://www.ekantipur.com/rss/',           name: 'eKantipur',               lang: 'ne' },
+  { url: 'https://thehimalayantimes.com/feed/',      name: 'Himalayan Times',         lang: 'en' },
+  { url: 'https://kathmandupost.com/rss',            name: 'Kathmandu Post',          lang: 'en' },
+  { url: 'https://www.nepalnews.com/feed/',          name: 'Nepal News',              lang: 'en' },
+  { url: 'https://nepalpress.com/feed/',             name: 'Nepal Press',             lang: 'ne' },
+  { url: 'https://annapurnapost.com/rss/',           name: 'Annapurna Post',          lang: 'ne' },
+  { url: 'https://nagariknews.nagariknetwork.com/feed/', name: 'Nagarik News',        lang: 'ne' },
 ];
 const RSS2JSON = 'https://api.rss2json.com/v1/api.json?rss_url=';
 
@@ -325,9 +346,18 @@ function parseRssXml(xml, feed) {
     const items  = [...doc.querySelectorAll('item, entry')];
     if (!items.length) return [];
 
-    return items.slice(0, 20).map(item => {
+    const isGoogleNews = feed.url.includes('news.google.com');
+
+    return items.slice(0, 25).map(item => {
       const get = (tag) => item.querySelector(tag)?.textContent?.trim() || '';
-      const title   = get('title') || 'No title';
+
+      /* Google News titles come as "Story headline - Publisher Name"
+         Strip the " - Publisher" suffix for cleaner display */
+      let title = get('title') || 'No title';
+      if (isGoogleNews) {
+        title = title.replace(/\s[-–]\s[^-–]+$/, '').trim() || title;
+      }
+
       const link    = item.querySelector('link')?.getAttribute('href') || get('link') || '';
       const pubDate = get('pubDate') || get('published') || get('updated') || new Date().toISOString();
 
@@ -349,9 +379,14 @@ function parseRssXml(xml, feed) {
         if (imgMatch) imageUrl = imgMatch[1];
       }
 
+      /* For Google News, extract the real publisher name from <source> */
+      const publisher = isGoogleNews
+        ? (item.querySelector('source')?.textContent?.trim() || feed.name)
+        : feed.name;
+
       return {
         title, description: plainText.slice(0, 1500), rawHtml, imageUrl,
-        pubDate, link, source: feed.name, sourceLang: feed.lang, fullArticleText: null,
+        pubDate, link, source: publisher, sourceLang: feed.lang, fullArticleText: null,
       };
     });
   } catch (e) {
