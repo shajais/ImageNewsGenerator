@@ -1384,9 +1384,10 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
   inset: 0;
   background: rgba(0,0,0,.75);
   z-index: 10000;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 16px;
+  overflow-y: auto;
 }
 #aiSettingsModal.open { display: flex; }
 
@@ -1394,45 +1395,66 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  max-width: 540px;
+  max-width: 580px;
   width: 100%;
   box-shadow: 0 16px 64px rgba(0,0,0,.7);
   overflow: hidden;
+  margin: auto;
+  /* Prevent it from growing taller than the viewport */
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 32px);
 }
 
 .ai-settings-header {
   background: linear-gradient(135deg,rgba(99,102,241,.25),rgba(79,70,229,.15));
   border-bottom: 1px solid var(--border);
-  padding: 20px 24px;
+  padding: 16px 20px;
   display: flex;
   align-items: center;
   gap: 14px;
+  flex-shrink: 0;  /* never shrink — always visible at top */
 }
-.ai-settings-icon { font-size: 2rem; flex-shrink: 0; }
-.ai-settings-header h3 { font-size: 1.15rem; color: var(--text); margin: 0; }
-.ai-settings-sub { font-size: .8rem; color: var(--muted); margin-top: 3px; }
+.ai-settings-icon { font-size: 1.7rem; flex-shrink: 0; }
+.ai-settings-header h3 { font-size: 1.05rem; color: var(--text); margin: 0; }
+.ai-settings-sub { font-size: .78rem; color: var(--muted); margin-top: 2px; }
 
-.ai-settings-body { padding: 20px 24px; }
+.ai-settings-body {
+  padding: 16px 20px;
+  overflow-y: auto;           /* scrollable body */
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  flex: 1;                    /* takes remaining height */
+}
+
+.ai-settings-footer {
+  flex-shrink: 0;             /* always visible at bottom */
+  border-top: 1px solid var(--border);
+  padding: 12px 20px;
+  background: var(--card);
+}
 
 .ai-info-box {
   background: rgba(99,102,241,.08);
   border: 1px solid rgba(99,102,241,.25);
   border-radius: 8px;
-  padding: 14px 16px;
-  font-size: .82rem;
+  padding: 11px 14px;
+  font-size: .8rem;
   color: var(--text);
-  margin-bottom: 18px;
-  line-height: 1.6;
+  margin-bottom: 14px;
+  line-height: 1.55;
 }
-.ai-info-box strong { color: #a5b4fc; }
-.ai-info-box ol { padding-left: 18px; margin-top: 8px; }
-.ai-info-box ol li { margin-bottom: 4px; }
+.ai-info-box strong { color: #a5b4fc; font-size: .82rem; }
+.ai-info-box ol { padding-left: 16px; margin-top: 6px; margin-bottom: 0; }
+.ai-info-box ol li { margin-bottom: 3px; font-size: .79rem; }
 .ai-info-box a { color: #818cf8; text-decoration: underline; }
 .ai-info-box a:hover { color: #a5b4fc; }
 
 /* ── AI Provider pill buttons ── */
 .ai-provider-pill {
   transition: all .2s;
+  font-size: .82rem !important;
+  padding: 8px 12px !important;
 }
 .ai-provider-pill.active[data-provider="gemini"] {
   border-color: #0ea5e9 !important;
@@ -1450,11 +1472,12 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
 
 .ai-key-label {
   display: block;
-  font-size: .82rem;
+  font-size: .78rem;
   font-weight: 700;
   color: var(--muted);
-  margin-bottom: 8px;
-  letter-spacing: .4px;
+  margin-bottom: 4px;
+  margin-top: 2px;
+  letter-spacing: .3px;
 }
 .ai-key-row {
   display: flex;
