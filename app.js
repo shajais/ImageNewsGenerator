@@ -81,8 +81,16 @@ let _enhancedMode = false;
    NEWS SOURCES
    • Google News RSS — pulls trending stories from ALL Nepali outlets
      aggregated by Google, no rate limits, always fresh
+   • Google Trends RSS — real trending search topics in Nepal
    • Individual Nepali outlets — direct RSS for extra coverage
    All fetched in parallel; results are merged, de-duped & viral-scored.
+
+   TRENDING LOGIC (multi-signal):
+   1. Recency      — newer articles score higher (decays over 48h)
+   2. Viral keywords — death/crisis/breaking/protest words boost score
+   3. Cross-source frequency — same story covered by 3+ sources = highly trending
+   4. Google Trends boost — if a keyword is actively trending on Google in Nepal
+   5. Time-of-day peak — stories published 6am-9pm Nepal time score higher
    ───────────────────────────────────────────────────────────────── */
 const RSS_FEEDS = [
   /* ── Google News RSS — Nepal trending (no rate limit, real-time) ── */
@@ -94,6 +102,12 @@ const RSS_FEEDS = [
                                                     name: 'Google Top Stories Nepal', lang: 'en' },
   { url: 'https://news.google.com/rss/search?q=%E0%A4%A8%E0%A5%87%E0%A4%AA%E0%A4%BE%E0%A4%B2+%E0%A4%AC%E0%A5%8D%E0%A4%B0%E0%A5%87%E0%A4%95%E0%A4%BF%E0%A4%99&hl=ne&gl=NP&ceid=NP:ne',
                                                     name: 'Google ब्रेकिङ Nepal',    lang: 'ne' },
+
+  /* ── Google Trends RSS — what Nepal is SEARCHING right now ──
+     These feeds tell us what topics people are actively searching/engaging with.
+     Higher search volume = higher trending signal. */
+  { url: 'https://trends.google.com/trending/rss?geo=NP',
+                                                    name: 'Google Trends Nepal',      lang: 'en', isTrendsSource: true },
 
   /* ── Direct Nepali outlet RSS feeds ── */
   { url: 'https://www.onlinekhabar.com/feed',       name: 'Online Khabar',           lang: 'ne' },
@@ -202,10 +216,19 @@ async function fetchNews() {
 
   let allItems = [];
   let successCount = 0;
+  /* Collect Google Trends keywords separately for boost signal */
+  let trendingKeywords = [];
+
   for (const r of results) {
     if (r.status === 'fulfilled' && r.value.length) {
-      allItems = allItems.concat(r.value);
-      successCount++;
+      const feed = RSS_FEEDS[results.indexOf(r)];
+      if (feed && feed.isTrendsSource) {
+        /* Extract trending terms from Google Trends feed */
+        trendingKeywords = r.value.map(a => a.title.toLowerCase().split(/[\s,]+/)).flat().filter(w => w.length > 3);
+      } else {
+        allItems = allItems.concat(r.value);
+        successCount++;
+      }
     }
   }
 
@@ -240,17 +263,70 @@ async function fetchNews() {
     return true;
   });
 
-  /* Viral score: recency + keyword hits */
+  /* ── Multi-signal viral scoring ──────────────────────────────────
+     Signal 1: RECENCY        — stories < 6h ago score highest (40%)
+     Signal 2: VIRAL KEYWORDS — death/crisis/protest/breaking words (25%)
+     Signal 3: CROSS-SOURCE   — same story in 3+ outlets = trending (20%)
+     Signal 4: GOOGLE TRENDS  — matches active Nepal trending searches (10%)
+     Signal 5: PEAK HOURS     — 6am–9pm Nepal time bonus (5%)
+     ─────────────────────────────────────────────────────────────── */
+
+  /* Pre-build cross-source frequency map (title keyword overlap) */
+  const titleFingerprints = allItems.map(a =>
+    new Set(a.title.toLowerCase().replace(/[^\w\s\u0900-\u097F]/g, '').split(/\s+/).filter(w => w.length > 3))
+  );
+  const crossSourceCount = allItems.map((_, i) => {
+    let count = 0;
+    for (let j = 0; j < allItems.length; j++) {
+      if (i === j) continue;
+      const overlap = [...titleFingerprints[i]].filter(w => titleFingerprints[j].has(w)).length;
+      if (overlap >= 2) count++;
+    }
+    return count;
+  });
+
   const now = Date.now();
-  allItems.forEach(a => {
-    const ageHours = (now - new Date(a.pubDate).getTime()) / 3600000;
-    const recencyScore = Math.max(0, 48 - ageHours) / 48; // 1.0 = just published, 0 = 48h old
+  /* Nepal Standard Time offset: UTC+5:45 */
+  const nepalOffsetMs = (5 * 60 + 45) * 60 * 1000;
+
+  allItems.forEach((a, i) => {
+    const ageHours = Math.max(0, (now - new Date(a.pubDate).getTime()) / 3600000);
+
+    /* Signal 1: Recency (0→1, decays over 48h; articles <2h get 1.0) */
+    const recencyScore = ageHours < 2
+      ? 1.0
+      : ageHours < 6
+        ? 0.85
+        : Math.max(0, (48 - ageHours) / 48);
+
+    /* Signal 2: Viral keywords */
     const text = (a.title + ' ' + a.description).toLowerCase();
     const kwHits = VIRAL_KEYWORDS.filter(k => text.includes(k.toLowerCase())).length;
-    const kwScore = Math.min(kwHits / 3, 1.0); // cap at 3 keyword hits
-    a.viralScore = recencyScore * 0.4 + kwScore * 0.6;
-    a.isViral = a.viralScore > 0.55;
-    a.isTrending = kwHits >= 2 && ageHours < 6;
+    const kwScore = Math.min(kwHits / 3, 1.0);
+
+    /* Signal 3: Cross-source frequency (same story in multiple outlets) */
+    const crossScore = Math.min(crossSourceCount[i] / 4, 1.0); // cap at 4 outlets
+
+    /* Signal 4: Google Trends keyword match */
+    const trendsScore = trendingKeywords.length > 0
+      ? (trendingKeywords.some(tw => text.includes(tw)) ? 1.0 : 0.0)
+      : 0.0;
+
+    /* Signal 5: Peak hours bonus (6am–9pm Nepal local time) */
+    const pubLocalHour = ((new Date(a.pubDate).getTime() + nepalOffsetMs) % 86400000) / 3600000;
+    const peakScore = (pubLocalHour >= 6 && pubLocalHour <= 21) ? 1.0 : 0.3;
+
+    /* Weighted composite score */
+    a.viralScore = (recencyScore * 0.40) +
+                   (kwScore       * 0.25) +
+                   (crossScore    * 0.20) +
+                   (trendsScore   * 0.10) +
+                   (peakScore     * 0.05);
+
+    a.isViral    = a.viralScore > 0.60;
+    a.isTrending = (kwHits >= 2 && ageHours < 6) || crossSourceCount[i] >= 3 || trendsScore === 1.0;
+    a._crossCount = crossSourceCount[i];
+    a._trendsMatch = trendsScore === 1.0;
   });
 
   /* Sort: viral/trending first, then by date */
@@ -683,6 +759,8 @@ function renderNewsList() {
     const viralBadge   = a.isTrending ? '<span class="viral-badge trending-badge">🔥 TRENDING</span>'
                        : a.isViral    ? '<span class="viral-badge">⚡ VIRAL</span>'
                        : '';
+    const trendsBadge  = a._trendsMatch ? '<span class="viral-badge trends-badge">📈 Google Trends</span>' : '';
+    const crossBadge   = (a._crossCount >= 3) ? `<span class="viral-badge cross-badge">🗞️ ${a._crossCount} sources</span>` : '';
     const sourceBadge  = a.source ? `<span class="source-badge">${escHtml(a.source)}</span>` : '';
 
     const openBtn = a.link
@@ -693,7 +771,7 @@ function renderNewsList() {
       <div class="news-item${a.isTrending ? ' trending' : ''}" id="item-${i}" onclick="selectArticle(${i})">
         ${thumb}
         <div class="news-item-body">
-          <div class="news-item-badges">${viralBadge}${sourceBadge}</div>
+          <div class="news-item-badges">${viralBadge}${trendsBadge}${crossBadge}${sourceBadge}</div>
           <div class="news-item-title">${escHtml(a.title)}</div>
           <div class="news-item-footer">
             ${dateStr ? `<div class="news-item-date">🕐 ${dateStr}</div>` : ''}
@@ -1341,8 +1419,11 @@ async function selectArticle(idx) {
   generatedPost = { hook, title: nepaliTitle, description: desc, hashtags, link: selectedArticle.link || '' };
   renderHashtags(hashtags);
 
+  /* ── Update AI/Template badges on all content fields ── */
+  const prov = _aiProvider === 'grok' ? '⚡ Grok' : '✨ Gemini';
+  setGenBadges(aiUsed, aiUsed ? prov : '');
+
   if (aiUsed) {
-    const prov = _aiProvider === 'grok' ? '⚡ Grok' : '✨ Gemini';
     toast(`🤖 ${prov} AI ले मूल लेख पढेर मौलिक सामग्री तयार गर्‍यो!`, 'success', 3500);
   }
 }
@@ -3354,46 +3435,7 @@ function drawTextOverlay(ctx, post, W, H) {
   ctx.shadowBlur = 0;
   ctx.textAlign = 'center';
 
-  /* ── Catchy decorative border ── */
-  _drawCanvasBorder(ctx, W, H);
-}
-
-/**
- * Draw a catchy, consistent decorative border on every generated image.
- * Double-line news frame with red + gold accent corners.
- */
-function _drawCanvasBorder(ctx, W, H) {
-  const inset = 14;
-  const cornerSize = 38;
-
-  /* Outer red line */
-  ctx.strokeStyle = 'rgba(229,62,62,0.90)';
-  ctx.lineWidth = 4;
-  ctx.strokeRect(inset, inset, W - inset * 2, H - inset * 2);
-
-  /* Inner gold line */
-  ctx.strokeStyle = 'rgba(246,173,85,0.55)';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(inset + 7, inset + 7, W - (inset + 7) * 2, H - (inset + 7) * 2);
-
-  /* Gold corner accents — four L-shaped brackets */
-  ctx.strokeStyle = '#f6ad55';
-  ctx.lineWidth = 4;
-  ctx.lineCap = 'square';
-  const corners = [
-    [inset, inset,  1,  1],
-    [W - inset, inset, -1,  1],
-    [inset, H - inset,  1, -1],
-    [W - inset, H - inset, -1, -1],
-  ];
-  for (const [cx, cy, sx, sy] of corners) {
-    ctx.beginPath();
-    ctx.moveTo(cx + sx * cornerSize, cy);
-    ctx.lineTo(cx, cy);
-    ctx.lineTo(cx, cy + sy * cornerSize);
-    ctx.stroke();
-  }
-  ctx.lineCap = 'butt';
+  /* Border removed — clean, borderless image */
 }
 
 /* ─── Text Editor Modal ───────────────────────────────────────── */
@@ -3680,6 +3722,42 @@ function startEdit(field) {
  * AI Reimagine — rewrites a single field (hook | title | desc) with a
  * fresh creative take using Gemini. Uses a higher temperature for variety.
  */
+/**
+ * Update the AI/Template generation badges on each content field.
+ * @param {boolean} aiUsed  - true = AI generated, false = template/fallback
+ * @param {string}  providerLabel - e.g. '✨ Gemini' or '⚡ Grok'
+ */
+function setGenBadges(aiUsed, providerLabel) {
+  const fields = ['Hook', 'Title', 'Desc', 'Hashtags'];
+  for (const f of fields) {
+    const badge = document.getElementById('badge' + f);
+    if (!badge) continue;
+    badge.style.display = '';
+    if (aiUsed) {
+      const isGrok = (providerLabel || '').includes('Grok');
+      badge.className = 'gen-badge ' + (isGrok ? 'gen-badge-grok' : 'gen-badge-ai');
+      badge.textContent = isGrok ? '⚡ Grok AI' : '✨ Gemini AI';
+      badge.title = 'Content generated by ' + (isGrok ? 'Grok' : 'Gemini') + ' AI — specific to this article';
+    } else {
+      badge.className = 'gen-badge gen-badge-template';
+      badge.textContent = '📋 Template';
+      badge.title = 'No AI key set — content generated using smart template system. Add Gemini/Grok key for AI-generated content.';
+    }
+  }
+}
+
+/** Update badge for a single reimagined field */
+function _setFieldBadgeAI(field) {
+  const idMap = { hook: 'badgeHook', title: 'badgeTitle', desc: 'badgeDesc' };
+  const badge = document.getElementById(idMap[field]);
+  if (!badge) return;
+  const isGrok = _aiProvider === 'grok';
+  badge.style.display = '';
+  badge.className = 'gen-badge ' + (isGrok ? 'gen-badge-grok' : 'gen-badge-ai');
+  badge.textContent = isGrok ? '⚡ Grok AI' : '✨ Gemini AI';
+  badge.title = 'Reimagined by ' + (isGrok ? 'Grok' : 'Gemini') + ' AI';
+}
+
 async function reimagineField(field) {
   if (!generatedPost || !selectedArticle) {
     toast('⚠️ Please select an article first.', 'error'); return;
@@ -3805,6 +3883,9 @@ Return ONLY this JSON (no markdown, no explanation):
     /* Flash the card to signal success */
     display.classList.add('reimagine-flash');
     setTimeout(() => display.classList.remove('reimagine-flash'), 800);
+
+    /* Update badge for this field to show AI */
+    _setFieldBadgeAI(field);
 
     const fieldLabel = field === 'hook' ? 'Hook' : field === 'title' ? 'Title' : 'Description';
     toast(`✨ ${fieldLabel} reimagined by AI!`, 'success', 3000);

@@ -4,13 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Shashi Viral Post Generator</title>
-  <link rel="stylesheet" href="style.css?v=20260328g" />
+  <link rel="stylesheet" href="style.css?v=20260328h" />
 </head>
 <body>
 
 <!-- CORS WARNING — shown only when opened as file:// -->
 <div id="corsWarning" style="display:none;background:#7f1d1d;color:#fecaca;padding:10px 20px;font-size:.85rem;text-align:center;border-bottom:2px solid #dc2626">
-  ⚠️ <strong>CORS blocked:</strong> AI features won't work when opened as a file. Run <code style="background:#991b1b;padding:2px 6px;border-radius:4px">python server.py</code> then open <a href="http://localhost:3000" style="color:#fca5a5;font-weight:bold">http://localhost:3000</a>
+  ⚠️ <strong>CORS blocked:</strong> AI features won  <script src="app.js?v=20260328k"></script>t work when opened as a file. Run <code style="background:#991b1b;padding:2px 6px;border-radius:4px">python server.py</code> then open <a href="http://localhost:3000" style="color:#fca5a5;font-weight:bold">http://localhost:3000</a>
 </div>
 
 <!-- HEADER -->
@@ -33,7 +33,7 @@
     <div class="panel-header">
       <span>🗞️</span> Latest Nepal News
       <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-        <span style="font-size:.65rem;color:var(--muted);white-space:nowrap">10 sources</span>
+        <span style="font-size:.65rem;color:var(--muted);white-space:nowrap">11 sources</span>
         <div class="live-badge"><div class="live-dot"></div>LIVE</div>
       </div>
     </div>
@@ -72,6 +72,7 @@
           <div class="content-block">
             <div class="content-block-label">
                Hook
+              <span id="badgeHook" class="gen-badge gen-badge-template" style="display:none"></span>
               <button class="reimagine-btn" onclick="reimagineField('hook')" id="reimagineBtnHook" title="Reimagine with AI">✨ Reimagine</button>
               <button class="edit-field-btn" onclick="startEdit('hook')" id="editBtnHook" title="Edit Hook">✏️</button>
               <button class="save-field-btn" onclick="saveEdit('hook')" id="saveBtnHook" style="display:none" title="Save">✅ Save</button>
@@ -83,6 +84,7 @@
           <div class="content-block">
             <div class="content-block-label">
                Title
+              <span id="badgeTitle" class="gen-badge gen-badge-template" style="display:none"></span>
               <button class="reimagine-btn" onclick="reimagineField('title')" id="reimagineBtnTitle" title="Reimagine with AI">✨ Reimagine</button>
               <button class="edit-field-btn" onclick="startEdit('title')" id="editBtnTitle" title="Edit Title">✏️</button>
               <button class="save-field-btn" onclick="saveEdit('title')" id="saveBtnTitle" style="display:none" title="Save">✅ Save</button>
@@ -94,6 +96,7 @@
           <div class="content-block full">
             <div class="content-block-label">
                Description
+              <span id="badgeDesc" class="gen-badge gen-badge-template" style="display:none"></span>
               <button class="reimagine-btn" onclick="reimagineField('desc')" id="reimagineBtnDesc" title="Reimagine with AI">✨ Reimagine</button>
               <button class="edit-field-btn" onclick="startEdit('desc')" id="editBtnDesc" title="Edit Description">✏️</button>
               <button class="save-field-btn" onclick="saveEdit('desc')" id="saveBtnDesc" style="display:none" title="Save">✅ Save</button>
@@ -105,6 +108,7 @@
           <div class="content-block full">
             <div class="content-block-label">
                Hashtags
+              <span id="badgeHashtags" class="gen-badge gen-badge-template" style="display:none"></span>
               <button class="reimagine-btn" onclick="regenerateHashtags()" id="reimagineBtnHashtags" title="Generate new hashtags with AI">✨ Regenerate</button>
             </div>
             <div class="hashtags" id="outHashtags"></div>

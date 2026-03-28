@@ -231,6 +231,18 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
   color: #f87171;
   animation: pulse-badge 1.8s ease-in-out infinite;
 }
+/* 📈 Google Trends badge — green */
+.trends-badge {
+  background: rgba(16,185,129,.15);
+  border-color: rgba(16,185,129,.4);
+  color: #34d399;
+}
+/* 🗞️ Multi-source badge — blue */
+.cross-badge {
+  background: rgba(59,130,246,.15);
+  border-color: rgba(59,130,246,.35);
+  color: #93c5fd;
+}
 @keyframes pulse-badge {
   0%,100% { opacity: 1; }
   50%      { opacity: .6; }
@@ -260,6 +272,36 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
   overflow: hidden;
 }
 .news-item-date { font-size: .72rem; color: var(--muted); }
+
+/* ─── AI / Template generation badge ──────────────────────────── */
+.gen-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: .6rem;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 20px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.gen-badge-ai {
+  background: rgba(139,92,246,.18);
+  border: 1px solid rgba(139,92,246,.45);
+  color: #c4b5fd;
+}
+.gen-badge-grok {
+  background: rgba(20,184,166,.15);
+  border: 1px solid rgba(20,184,166,.4);
+  color: #5eead4;
+}
+.gen-badge-template {
+  background: rgba(100,116,139,.14);
+  border: 1px solid rgba(100,116,139,.3);
+  color: var(--muted);
+}
 
 .news-item-footer {
   display: flex;
