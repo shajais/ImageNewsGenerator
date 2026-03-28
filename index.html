@@ -3,20 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Nepal Viral News Generator</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>Shashi Viral Post Generator</title>
+  <link rel="stylesheet" href="style.css?v=20260328d" />
 </head>
 <body>
+
+<!-- CORS WARNING — shown only when opened as file:// -->
+<div id="corsWarning" style="display:none;background:#7f1d1d;color:#fecaca;padding:10px 20px;font-size:.85rem;text-align:center;border-bottom:2px solid #dc2626">
+  ⚠️ <strong>CORS blocked:</strong> AI features won't work when opened as a file. Run <code style="background:#991b1b;padding:2px 6px;border-radius:4px">python server.py</code> then open <a href="http://localhost:3000" style="color:#fca5a5;font-weight:bold">http://localhost:3000</a>
+</div>
 
 <!-- HEADER -->
 <header>
   <div class="header-icon">📰</div>
   <div>
-    <h1>Nepal Viral News Generator</h1>
+    <h1>Shashi Viral Post Generator</h1>
     <p>Fetch breaking news · Generate viral content · Download shareable images</p>
   </div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-shrink:0">
-    <button id="aiBadge" class="btn ai-badge-btn" onclick="openAISettings()" title="Configure free Gemini AI for smart rewriting">⚙️ Setup AI</button>
+    <button id="aiBadge" class="btn ai-badge-btn" onclick="openAISettings()" title="AI key status">⏳ AI…</button>
   </div>
 </header>
 
@@ -98,8 +103,18 @@
             <textarea class="edit-field-textarea" id="editDesc" style="display:none" rows="5"></textarea>
           </div>
           <div class="content-block full">
-            <div class="content-block-label"> Hashtags</div>
+            <div class="content-block-label">
+               Hashtags
+              <button class="reimagine-btn" onclick="regenerateHashtags()" id="reimagineBtnHashtags" title="Generate new hashtags with AI">✨ Regenerate</button>
+            </div>
             <div class="hashtags" id="outHashtags"></div>
+            <div class="hashtag-add-row" id="hashtagAddRow" style="display:none">
+              <input type="text" id="hashtagInput" class="hashtag-input" placeholder="#AddHashtag" maxlength="60"
+                     onkeydown="if(event.key==='Enter')addCustomHashtag();if(event.key==='Escape')toggleHashtagInput(false)">
+              <button class="btn btn-ghost" style="padding:5px 12px;font-size:.8rem" onclick="addCustomHashtag()">Add</button>
+              <button class="btn btn-ghost" style="padding:5px 10px;font-size:.8rem" onclick="toggleHashtagInput(false)">✕</button>
+            </div>
+            <button class="hashtag-add-btn" id="hashtagAddBtn" onclick="toggleHashtagInput(true)">＋ Add Hashtag</button>
           </div>
         </div>
         <div class="action-row">
@@ -174,27 +189,162 @@
         </div>
       </div>
 
-      <!-- Image Adjust Toolbar (shown whenever an image is generated) -->
+      <!-- Image Edit & Crop Toolbar (hidden — superseded by overlay) -->
       <div id="imgAdjustBar" style="display:none">
-        <div class="img-adjust-bar">
-          <span class="img-adjust-label">🔍 Zoom</span>
-          <input type="range" id="zoomSlider" min="80" max="200" value="100" step="1"
-                 class="img-zoom-slider" oninput="onImgAdjust()">
-          <span id="zoomVal" class="img-adjust-val">100%</span>
-          <span class="img-adjust-divider"></span>
-          <span class="img-adjust-label">🧭 Pan</span>
-          <div class="img-pan-grid">
-            <button class="pan-btn" onclick="panImage(0,-30)" title="Up">▲</button>
-            <button class="pan-btn" onclick="panImage(-30,0)" title="Left">◀</button>
-            <button class="pan-btn pan-reset" onclick="resetImgAdjust()" title="Reset">⌂</button>
-            <button class="pan-btn" onclick="panImage(30,0)"  title="Right">▶</button>
-            <button class="pan-btn" onclick="panImage(0,30)"  title="Down">▼</button>
+        <!-- kept for JS compatibility — layout replaced by overlay -->
+        <input type="range" id="zoomSlider" min="50" max="300" value="100" step="1" style="display:none" oninput="onImgAdjust()">
+        <span id="zoomVal" style="display:none">100%</span>
+        <select id="cropPreset" style="display:none" onchange="applyCropPreset(this.value)">
+          <option value="none">— Preset —</option>
+          <option value="square">1:1 Square</option>
+          <option value="portrait">4:5 Portrait</option>
+          <option value="landscape">16:9 Landscape</option>
+          <option value="fill">Fill Canvas</option>
+          <option value="fit">Fit in Canvas</option>
+        </select>
+      </div>
+
+      <!-- Text Editor Overlay Modal (full-screen, still available via Edit Text button) -->
+      <div id="textEditorModal">
+        <div class="text-editor-box">
+          <div class="text-editor-header">
+            <span>✏️ Edit Image Text</span>
+            <button class="btn btn-ghost" style="padding:4px 10px;font-size:.78rem" onclick="closeTextEditor()">✕ Close</button>
+          </div>
+          <div class="text-editor-body">
+            <label class="te-label">🔴 Banner Label <span class="te-hint">(top banner)</span></label>
+            <input type="text" id="teBanner" class="te-input" value="🚨  BREAKING NEWS" maxlength="40">
+            <label class="te-label">📰 Title <span class="te-hint">(main headline on image)</span></label>
+            <textarea id="teTitle" class="te-textarea" rows="3"></textarea>
+            <label class="te-label">🔤 Title Font Size <span id="teFontSizeVal" class="te-hint">62px</span></label>
+            <input type="range" id="teFontSize" min="28" max="90" value="62" step="1" class="img-zoom-slider" style="width:100%" oninput="document.getElementById('teFontSizeVal').textContent=this.value+'px'">
+            <label class="te-label">🎨 Title Colour</label>
+            <div class="te-colour-row">
+              <span class="te-colour-chip active" data-colour="#ffffff" onclick="selectTextColour(this)" style="background:#ffffff"></span>
+              <span class="te-colour-chip" data-colour="#f6ad55" onclick="selectTextColour(this)" style="background:#f6ad55"></span>
+              <span class="te-colour-chip" data-colour="#fcd34d" onclick="selectTextColour(this)" style="background:#fcd34d"></span>
+              <span class="te-colour-chip" data-colour="#f87171" onclick="selectTextColour(this)" style="background:#f87171"></span>
+              <span class="te-colour-chip" data-colour="#34d399" onclick="selectTextColour(this)" style="background:#34d399"></span>
+              <span class="te-colour-chip" data-colour="#60a5fa" onclick="selectTextColour(this)" style="background:#60a5fa"></span>
+              <input type="color" value="#ffffff" style="width:28px;height:28px;border:none;border-radius:50%;cursor:pointer;background:none;padding:0" oninput="setCustomTextColour(this.value)">
+            </div>
+            <label class="te-label">🏷️ Banner Colour</label>
+            <div class="te-colour-row">
+              <span class="te-banner-chip active" data-colour="#c0392b" onclick="selectBannerColour(this)" style="background:#c0392b"></span>
+              <span class="te-banner-chip" data-colour="#1d4ed8" onclick="selectBannerColour(this)" style="background:#1d4ed8"></span>
+              <span class="te-banner-chip" data-colour="#15803d" onclick="selectBannerColour(this)" style="background:#15803d"></span>
+              <span class="te-banner-chip" data-colour="#7c3aed" onclick="selectBannerColour(this)" style="background:#7c3aed"></span>
+              <span class="te-banner-chip" data-colour="#b45309" onclick="selectBannerColour(this)" style="background:#b45309"></span>
+              <span class="te-banner-chip" data-colour="#0f172a" onclick="selectBannerColour(this)" style="background:#0f172a;border:1px solid #334155"></span>
+              <input type="color" value="#c0392b" style="width:28px;height:28px;border:none;border-radius:50%;cursor:pointer;background:none;padding:0" oninput="setCustomBannerColour(this.value)">
+            </div>
+          </div>
+          <div class="text-editor-footer">
+            <button class="btn btn-ghost" onclick="closeTextEditor()">Cancel</button>
+            <button class="btn btn-green" onclick="applyTextEdits()">✅ Apply to Image</button>
           </div>
         </div>
       </div>
 
       <div class="canvas-wrap">
         <canvas id="newsCanvas" width="1080" height="1080"></canvas>
+
+        <!-- Floating editor overlay — positioned over the canvas -->
+        <div id="canvasEditorOverlay">
+
+          <!-- Floating side toolbar (appears on hover) -->
+          <div id="floatingToolbar">
+
+            <!-- Move group -->
+            <div class="ft-group">
+              <button class="ft-btn" onclick="panImage(0,-30)"  title="Pan up">▲</button>
+              <button class="ft-btn" onclick="panImage(-30,0)"  title="Pan left">◀</button>
+              <button class="ft-btn" onclick="centerImage()"    title="Centre">⊕</button>
+              <button class="ft-btn" onclick="panImage(30,0)"   title="Pan right">▶</button>
+              <button class="ft-btn" onclick="panImage(0,30)"   title="Pan down">▼</button>
+            </div>
+
+            <!-- Transform group -->
+            <div class="ft-group">
+              <button class="ft-btn" onclick="rotateImage(-90)" title="Rotate left">↺</button>
+              <button class="ft-btn" onclick="rotateImage(90)"  title="Rotate right">↻</button>
+              <button class="ft-btn" onclick="flipImage('h')"   title="Flip H">⇔</button>
+              <button class="ft-btn" onclick="flipImage('v')"   title="Flip V">⇕</button>
+            </div>
+
+            <!-- Edit/Reset group -->
+            <div class="ft-group">
+              <button class="ft-btn ft-edit" onclick="openInlineTextEditor()" title="Edit text">✏️</button>
+              <button class="ft-btn ft-danger" onclick="resetImgAdjust()" title="Reset all">↺ Reset</button>
+            </div>
+
+          </div>
+
+          <!-- Zoom readout pill -->
+          <div id="canvasZoomPill">100%</div>
+
+          <!-- Inline text editor — slides up from bottom of canvas -->
+          <div id="inlineTextOverlay">
+            <div class="ite-row">
+              <span class="ite-label">Banner</span>
+              <input type="text" id="iteBanner" class="ite-input" placeholder="🚨 BREAKING NEWS" maxlength="40">
+              <div class="ite-colour-strip" id="iteBannerColours">
+                <span class="ite-chip ite-chip-banner active" data-colour="#c0392b" style="background:#c0392b" onclick="itePickBanner(this)"></span>
+                <span class="ite-chip ite-chip-banner" data-colour="#1d4ed8" style="background:#1d4ed8" onclick="itePickBanner(this)"></span>
+                <span class="ite-chip ite-chip-banner" data-colour="#15803d" style="background:#15803d" onclick="itePickBanner(this)"></span>
+                <span class="ite-chip ite-chip-banner" data-colour="#7c3aed" style="background:#7c3aed" onclick="itePickBanner(this)"></span>
+                <span class="ite-chip ite-chip-banner" data-colour="#b45309" style="background:#b45309" onclick="itePickBanner(this)"></span>
+                <input type="color" value="#c0392b" style="width:22px;height:22px;border:none;border-radius:4px;cursor:pointer;padding:0;background:none" oninput="_textOpts.bannerColor=this.value; iteRedraw()">
+              </div>
+            </div>
+            <div class="ite-row">
+              <span class="ite-label">Title</span>
+              <textarea id="iteTitle" class="ite-textarea" rows="2" placeholder="Headline text…"></textarea>
+            </div>
+            <div class="ite-row">
+              <span class="ite-label">Size</span>
+              <input type="range" id="iteFontSize" class="ite-size-slider" min="28" max="90" value="62"
+                     oninput="document.getElementById('iteSizeVal').textContent=this.value+'px';_textOpts.titleSize=+this.value;iteRedraw()">
+              <span id="iteSizeVal" style="font-size:.7rem;color:#a78bfa;min-width:32px;font-weight:700">62px</span>
+              <div class="ite-colour-strip" id="iteTitleColours">
+                <span class="ite-chip active" data-colour="#ffffff" style="background:#ffffff" onclick="itePickTitle(this)"></span>
+                <span class="ite-chip" data-colour="#f6ad55" style="background:#f6ad55" onclick="itePickTitle(this)"></span>
+                <span class="ite-chip" data-colour="#fcd34d" style="background:#fcd34d" onclick="itePickTitle(this)"></span>
+                <span class="ite-chip" data-colour="#f87171" style="background:#f87171" onclick="itePickTitle(this)"></span>
+                <span class="ite-chip" data-colour="#34d399" style="background:#34d399" onclick="itePickTitle(this)"></span>
+                <input type="color" value="#ffffff" style="width:22px;height:22px;border:none;border-radius:50%;cursor:pointer;padding:0;background:none" oninput="_textOpts.titleColor=this.value;iteRedraw()">
+              </div>
+            </div>
+            <div class="ite-actions">
+              <button class="btn btn-ghost" style="font-size:.78rem;padding:5px 12px" onclick="closeInlineTextEditor()">✕ Cancel</button>
+              <button class="btn btn-green" style="font-size:.78rem;padding:5px 14px" onclick="iteApply()">✅ Apply</button>
+            </div>
+          </div>
+
+        </div><!-- /canvasEditorOverlay -->
+
+        <!-- Quick bar below canvas: zoom slider + crop presets -->
+        <div id="canvasQuickBar">
+          <span class="qb-label">🔍</span>
+          <input type="range" id="qbZoom" class="qb-slider" min="50" max="300" value="100" step="1"
+                 oninput="onQbZoom(this.value)">
+          <span id="qbZoomVal" class="qb-val">100%</span>
+          <div class="qb-sep"></div>
+          <span class="qb-label">✂️</span>
+          <select class="qb-select" onchange="applyCropPreset(this.value)">
+            <option value="none">Preset…</option>
+            <option value="square">1:1</option>
+            <option value="portrait">4:5</option>
+            <option value="landscape">16:9</option>
+            <option value="fill">Fill</option>
+            <option value="fit">Fit</option>
+          </select>
+          <div class="qb-sep"></div>
+          <button class="qb-btn" onclick="centerImage()">⊕ Centre</button>
+          <button class="qb-btn" onclick="resetImgAdjust()">↺ Reset</button>
+          <button class="qb-btn" style="color:#a78bfa;border-color:rgba(139,92,246,.3)" onclick="openInlineTextEditor()">✏️ Text</button>
+        </div>
+
         <div class="canvas-actions">
           <button class="btn btn-green" onclick="downloadImage()"><span></span> Download Image</button>
           <button class="btn btn-blue"  onclick="generateImage()"><span></span> Regenerate</button>
@@ -212,28 +362,56 @@
       <span class="ai-settings-icon">🤖</span>
       <div>
         <h3>AI Setup</h3>
-        <p class="ai-settings-sub">Free AI rewriting + background replacement — copyright-safe content</p>
+        <p class="ai-settings-sub">API keys are stored securely in <code>.env</code> on the server — never exposed to the browser</p>
       </div>
     </div>
     <div class="ai-settings-body">
+
+      <!-- ── AI Provider Selector ── -->
+      <div style="margin-bottom:18px">
+        <label class="ai-key-label" style="display:block;margin-bottom:8px">🔀 Active AI Provider</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="ai-provider-pill" data-provider="gemini" onclick="setAIProvider('gemini')"
+            style="flex:1;padding:9px 14px;border-radius:10px;border:2px solid rgba(14,165,233,.4);background:rgba(14,165,233,.08);color:#fff;font-size:.85rem;cursor:pointer;transition:all .2s;min-width:120px">
+            ✨ Gemini (Google)
+          </button>
+          <button class="ai-provider-pill" data-provider="grok" onclick="setAIProvider('grok')"
+            style="flex:1;padding:9px 14px;border-radius:10px;border:2px solid rgba(168,85,247,.4);background:rgba(168,85,247,.08);color:#fff;font-size:.85rem;cursor:pointer;transition:all .2s;min-width:120px">
+            ⚡ Grok (xAI / X)
+          </button>
+        </div>
+        <p style="margin-top:6px;font-size:.78rem;color:var(--muted)">The selected provider is used for Hook, Title, Description, Hashtags &amp; Reimagine. Your choice is saved automatically.</p>
+      </div>
+
+      <!-- ── Grok section ── -->
+      <div class="ai-info-box" style="border-color:rgba(168,85,247,.4);background:rgba(168,85,247,.07)">
+        <strong>⚡ Grok AI (xAI) — Premium text rewriting:</strong>
+        <ol>
+          <li>Go to <a href="https://console.x.ai" target="_blank" rel="noopener">console.x.ai</a> and sign in with your X (Twitter) account</li>
+          <li>Click <strong>"API Keys"</strong> → <strong>"Create API Key"</strong></li>
+          <li>Open <code>.env</code> in the project folder and set:<br>
+              <code style="display:block;margin-top:4px;padding:6px 10px;background:rgba(0,0,0,.25);border-radius:6px;font-size:.82rem">GROK_API_KEY=xai-…your-key…</code></li>
+          <li>Restart the server (<code>python server.py</code>)</li>
+        </ol>
+        <p style="margin-top:6px;font-size:.78rem;color:var(--muted)">⭐ Uses <strong>grok-3-mini</strong> — fast &amp; cost-efficient. Requires X Premium subscription.</p>
+      </div>
+      <label class="ai-key-label">Grok AI Status</label>
+      <p id="grokKeyStatus" class="ai-key-hint" style="font-size:.9rem;margin:4px 0 12px">Checking…</p>
+
       <!-- ── Gemini section ── -->
-      <div class="ai-info-box">
-        <strong>📌 Gemini AI — Free text rewriting:</strong>
+      <div class="ai-info-box" style="margin-top:4px">
+        <strong>📌 Gemini AI (Google) — Free text rewriting:</strong>
         <ol>
           <li>Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a></li>
           <li>Sign in with Google (free) → click <strong>"Create API Key"</strong></li>
-          <li>Paste below — saved in your browser only</li>
+          <li>Open <code>.env</code> in the project folder and set:<br>
+              <code style="display:block;margin-top:4px;padding:6px 10px;background:rgba(0,0,0,.25);border-radius:6px;font-size:.82rem">GEMINI_API_KEY=AIzaSy…your-key…</code></li>
+          <li>Restart the server (<code>python server.py</code>)</li>
         </ol>
         <p style="margin-top:6px;font-size:.78rem;color:var(--muted)">✅ Free: 15 req/min · 1M tokens/day · No credit card</p>
       </div>
-      <label class="ai-key-label">Gemini API Key</label>
-      <div class="ai-key-row">
-        <input type="password" id="geminiKeyInput" class="ai-key-input"
-               placeholder="AIzaSy…" autocomplete="off" spellcheck="false" />
-        <button class="btn btn-ghost" style="flex-shrink:0;padding:8px 14px;font-size:.8rem"
-                onclick="this.previousElementSibling.type=this.previousElementSibling.type==='password'?'text':'password';this.textContent=this.previousElementSibling.type==='password'?'👁':'🙈'">👁</button>
-      </div>
-      <p class="ai-key-hint">🔒 Stored locally — only sent to Google Gemini API</p>
+      <label class="ai-key-label">Gemini AI Status</label>
+      <p id="geminiKeyStatus" class="ai-key-hint" style="font-size:.9rem;margin:4px 0 12px">Checking…</p>
 
       <!-- ── Remove.bg section ── -->
       <div class="ai-info-box" style="margin-top:16px;border-color:rgba(139,92,246,.35);background:rgba(139,92,246,.07)">
@@ -241,22 +419,24 @@
         <ol>
           <li>Go to <a href="https://www.remove.bg/api" target="_blank" rel="noopener">remove.bg/api</a></li>
           <li>Sign up free → go to <strong>API Keys</strong> → copy your key</li>
-          <li>Paste below — used only when you click <em>"Enhance with AI"</em></li>
+          <li>Open <code>.env</code> and set:<br>
+              <code style="display:block;margin-top:4px;padding:6px 10px;background:rgba(0,0,0,.25);border-radius:6px;font-size:.82rem">REMOVEBG_API_KEY=abc123…your-key…</code></li>
+          <li>Restart the server (<code>python server.py</code>)</li>
         </ol>
         <p style="margin-top:6px;font-size:.78rem;color:var(--muted)">✅ Free: 50 background removals/month · No credit card needed</p>
       </div>
-      <label class="ai-key-label">Remove.bg API Key</label>
-      <div class="ai-key-row">
-        <input type="password" id="removebgKeyInput" class="ai-key-input"
-               placeholder="abc123XYZ…" autocomplete="off" spellcheck="false" />
-        <button class="btn btn-ghost" style="flex-shrink:0;padding:8px 14px;font-size:.8rem"
-                onclick="this.previousElementSibling.type=this.previousElementSibling.type==='password'?'text':'password';this.textContent=this.previousElementSibling.type==='password'?'👁':'🙈'">👁</button>
+      <label class="ai-key-label">Remove.bg Status</label>
+      <p id="removebgKeyStatus" class="ai-key-hint" style="font-size:.9rem;margin:4px 0 12px">Checking…</p>
+
+      <div class="ai-info-box" style="border-color:rgba(234,179,8,.4);background:rgba(234,179,8,.08);margin-top:16px">
+        <strong>🔒 Security note:</strong>
+        <p style="margin-top:4px;font-size:.82rem">Keys are stored only in <code>.env</code> on the server. They are never sent to the browser, never visible in DevTools, and never stored in <code>localStorage</code>. Make sure <code>.env</code> is listed in <code>.gitignore</code> so it is never committed to Git.</p>
       </div>
-      <p class="ai-key-hint">🔒 Stored locally — only sent to Remove.bg API when enhancing images</p>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeAISettings()">Cancel</button>
-      <button class="btn btn-green" onclick="saveAISettings()">✅ Save &amp; Enable AI</button>
+      <button class="btn btn-ghost" onclick="closeAISettings()">Close</button>
+      <button class="btn" style="background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff" onclick="testGrokKey()">⚡ Test Grok</button>
+      <button class="btn" style="background:linear-gradient(135deg,#0ea5e9,#0284c7);color:#fff" onclick="testGeminiKey()">🔍 Test Gemini</button>
     </div>
   </div>
 </div>
@@ -289,6 +469,28 @@
 <!-- TOAST -->
 <div id="toast"></div>
 
-<script src="app.js"></script>
+<!-- MANUAL INPUT MODAL -->
+<div id="manualModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10000;align-items:center;justify-content:center;padding:20px">
+  <div class="modal-box" style="max-width:560px;width:95%">
+    <h3>✏️ Manual Article Entry</h3>
+    <p style="font-size:.82rem;color:var(--muted);margin-bottom:14px">Paste a <strong style="color:#60a5fa">URL</strong> or type/paste the <strong style="color:#f6ad55">news text</strong> directly.</p>
+    <div id="manualModalEntries">
+      <div class="manual-entry" data-idx="0">
+        <div class="manual-entry-num">1</div>
+        <div class="manual-entry-body">
+          <textarea class="manual-textarea" id="manualTextarea0" rows="4"
+            placeholder="🔗 Paste a news URL (e.g. https://www.onlinekhabar.com/…)&#10;— or —&#10;📝 Paste/type the news headline or article text directly"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions" style="justify-content:space-between;margin-top:16px">
+      <button class="btn btn-ghost" onclick="closeManualModal()">✕ Cancel</button>
+      <button class="btn btn-primary" id="manualModalLoadBtn" onclick="loadManualArticles()">🚀 Fetch &amp; Load</button>
+    </div>
+    <div id="manualModalStatus" style="margin-top:10px;font-size:.8rem;display:flex;flex-direction:column;gap:6px"></div>
+  </div>
+</div>
+
+<script src="app.js?v=20260328f"></script>
 </body>
 </html>

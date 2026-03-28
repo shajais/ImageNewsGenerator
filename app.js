@@ -3,14 +3,45 @@
    app.js
 ================================================================ */
 
+/* ── Global JS error catcher — shows errors visibly on page ── */
+window.onerror = function(msg, src, line, col, err) {
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#7f1d1d;color:#fecaca;padding:10px 16px;font-size:.85rem;z-index:99999;font-family:monospace;white-space:pre-wrap;';
+  d.textContent = '❌ JS ERROR: ' + msg + '\n  at ' + src + ':' + line + ':' + col;
+  document.body.prepend(d);
+};
+
 /* ── Globals ─────────────────────────────────────────────────── */
 const CANVAS_W  = 1080;
 const CANVAS_H  = 1080;
 
 /* ── AI (Gemini) Configuration ──────────────────────────────── */
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-let _geminiKey    = localStorage.getItem('gemini_api_key')   || '';
-let _removebgKey  = localStorage.getItem('removebg_api_key') || '';
+
+/* ── AI (Grok / xAI) Configuration ─────────────────────────── */
+const GROK_API_URL   = 'https://api.x.ai/v1/chat/completions';
+const GROK_MODEL     = 'grok-3-mini';   // fast & cost-efficient; swap to 'grok-3' for max quality
+
+/* When running via the local Node server (http://localhost:*) all API calls
+   are routed through the built-in proxy endpoints — the browser never sends
+   or sees the API keys (they live in .env on the server only).
+   When the file is opened directly (file://) direct URLs are used — note
+   that file:// origins are blocked by CORS; always use `node server.js`. */
+const _isLocalhost = location.protocol === 'http:' && (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+const _geminiProxyBase   = _isLocalhost ? '/proxy/gemini'   : null;
+const _removebgProxyBase = _isLocalhost ? '/proxy/removebg' : null;
+const _fetchProxyBase    = _isLocalhost ? '/proxy/fetch'    : null;
+const _grokProxyBase     = _isLocalhost ? '/proxy/grok'     : null;
+
+/* Key availability flags — populated from /api/key-status on load.
+   The actual key strings NEVER exist in the browser. */
+let _geminiKey    = false;   // true = server has key configured
+let _removebgKey  = false;   // true = server has key configured
+let _grokKey      = false;   // true = server has Grok (xAI) key configured
+
+/* Active AI provider: 'gemini' | 'grok'
+   Persisted in localStorage so the user's choice survives page refresh. */
+let _aiProvider = localStorage.getItem('aiProvider') || 'gemini';
 
 /* Background styles for AI image enhancement */
 const BG_STYLES = [
@@ -64,6 +95,20 @@ let customImageDataUrl = null;
 let imgOffsetX = 0;
 let imgOffsetY = 0;
 let imgScale   = 1.0;
+let imgRotation = 0;   // degrees: 0, 90, 180, 270
+let imgFlipH   = false;
+let imgFlipV   = false;
+
+/* Cached image object — used for instant drag/zoom redraws without re-fetching */
+let _cachedNewsImg = null;
+
+/* Text overlay customisation (editable via the Text Editor modal) */
+let _textOpts = {
+  bannerText:  '🚨  BREAKING NEWS',
+  bannerColor: '#c0392b',
+  titleColor:  '#ffffff',
+  titleSize:   62,
+};
 
 /* ================================================================
    UTILITY
@@ -127,16 +172,22 @@ async function fetchNews() {
   if (!allItems.length) {
     setFetchState(false);
     document.getElementById('statusBadge').textContent = 'Failed to load';
+    const serverHint = _isLocalhost
+      ? `<p style="margin-top:6px;font-size:.8rem;color:#f87171;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:8px 12px">
+           ⚠️ <strong>Is the server running?</strong><br>
+           Open a terminal in the project folder and run:<br>
+           <code style="font-size:.78rem">python server.py</code>&nbsp;&nbsp;then refresh this page.
+         </p>`
+      : `<p style="margin-top:8px;font-size:.8rem;color:var(--muted)">Try on a personal hotspot, or use the manual option below.</p>`;
     list.innerHTML = `
       <div class="empty-state">
         <div class="icon">⚠️</div>
         <p style="color:var(--text)">Could not load news from any source.</p>
-        <p style="margin-top:8px;font-size:.8rem;color:var(--muted)">
-          Try on a personal hotspot, or use the manual option below.
-        </p>
+        ${serverHint}
         <button class="btn btn-ghost" style="margin-top:14px" onclick="showManualInput()">✏️ Enter News Manually</button>
+        <button class="btn btn-primary" style="margin-top:8px" onclick="fetchNews()">🔄 Try Again</button>
       </div>`;
-    toast('❌ All feeds failed. Try manual mode.', 'error', 5000);
+    toast('❌ All feeds failed — is the server running?', 'error', 6000);
     return;
   }
 
@@ -173,6 +224,24 @@ async function fetchNews() {
 }
 
 async function fetchSingleFeed(feed) {
+  /* ── Fast path: fetch RSS XML directly via local proxy ── */
+  if (_fetchProxyBase) {
+    try {
+      const ctrl = new AbortController();
+      const tid  = setTimeout(() => ctrl.abort(), 12000);
+      const res  = await fetch(`${_fetchProxyBase}?url=${encodeURIComponent(feed.url)}`, { signal: ctrl.signal });
+      clearTimeout(tid);
+      if (res.ok) {
+        const xml = await res.text();
+        if (xml && xml.length > 100) {
+          const parsed = parseRssXml(xml, feed);
+          if (parsed.length) return parsed;
+        }
+      }
+    } catch { /* fall through to RSS2JSON */ }
+  }
+
+  /* ── Fallback: rss2json API (used when not on localhost) ── */
   const apiUrl = RSS2JSON + encodeURIComponent(feed.url) + '&count=20';
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), 12000);
@@ -196,14 +265,9 @@ async function fetchSingleFeed(feed) {
         if (imgTag) imageUrl = imgTag.src || imgTag.getAttribute('src') || '';
       }
       const fullText  = (tempDiv.textContent || tempDiv.innerText || '').replace(/\s+/g, ' ').trim();
-      const cleanDesc = fullText.slice(0, 1500);
-      const rawHtml   = item.description || '';
       return {
-        title, description: cleanDesc, rawHtml, imageUrl,
-        pubDate, link,
-        source: feed.name,
-        sourceLang: feed.lang,
-        fullArticleText: null, /* populated on-demand when article is selected */
+        title, description: fullText.slice(0, 1500), rawHtml: item.description || '', imageUrl,
+        pubDate, link, source: feed.name, sourceLang: feed.lang, fullArticleText: null,
       };
     });
   } catch {
@@ -212,48 +276,81 @@ async function fetchSingleFeed(feed) {
   }
 }
 
+/**
+ * Parse RSS/Atom XML string into article objects.
+ * Called when the local proxy fetches the feed directly.
+ */
+function parseRssXml(xml, feed) {
+  try {
+    const parser = new DOMParser();
+    const doc    = parser.parseFromString(xml, 'text/xml');
+    const items  = [...doc.querySelectorAll('item, entry')];
+    if (!items.length) return [];
+
+    return items.slice(0, 20).map(item => {
+      const get = (tag) => item.querySelector(tag)?.textContent?.trim() || '';
+      const title   = get('title') || 'No title';
+      const link    = item.querySelector('link')?.getAttribute('href') || get('link') || '';
+      const pubDate = get('pubDate') || get('published') || get('updated') || new Date().toISOString();
+
+      /* Description from <description>, <content:encoded>, or <summary> */
+      const rawHtml = item.querySelector('encoded')?.textContent
+                    || item.querySelector('description')?.textContent
+                    || item.querySelector('summary')?.textContent || '';
+
+      /* Strip HTML tags to get plain text */
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = rawHtml;
+      const plainText = (tempDiv.textContent || '').replace(/\s+/g, ' ').trim();
+
+      /* Image from <enclosure>, <media:content>, or first <img> in description */
+      let imageUrl = item.querySelector('enclosure[type^="image"]')?.getAttribute('url')
+                   || item.querySelector('content')?.getAttribute('url') || '';
+      if (!imageUrl) {
+        const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
+        if (imgMatch) imageUrl = imgMatch[1];
+      }
+
+      return {
+        title, description: plainText.slice(0, 1500), rawHtml, imageUrl,
+        pubDate, link, source: feed.name, sourceLang: feed.lang, fullArticleText: null,
+      };
+    });
+  } catch (e) {
+    console.warn('[parseRssXml] failed:', e.message);
+    return [];
+  }
+}
+
 /* ================================================================
    MANUAL INPUT — URL or raw text, fetches full article if URL
+   Uses a fixed-position modal overlay (same pattern as #shareModal)
 ================================================================ */
 function showManualInput() {
-  document.getElementById('newsList').innerHTML = `
-    <div class="manual-input-panel">
-      <div class="manual-input-header">
-        <span class="manual-input-icon">✏️</span>
-        <div>
-          <div class="manual-input-title">Manual Article Entry</div>
-          <div class="manual-input-sub">Paste a URL <em>or</em> type/paste news text — one entry per box.</div>
-        </div>
-      </div>
+  const modal  = document.getElementById('manualModal');
+  const ta     = document.getElementById('manualTextarea0');
+  const status = document.getElementById('manualModalStatus');
+  const btn    = document.getElementById('manualModalLoadBtn');
 
-      <div id="manualEntries">
-        <div class="manual-entry" data-idx="0">
-          <div class="manual-entry-num">1</div>
-          <div class="manual-entry-body">
-            <textarea class="manual-textarea"
-              placeholder="🔗 Paste a news URL (e.g. https://www.onlinekhabar.com/…)&#10;— or —&#10;📝 Paste/type the news headline or article text directly"
-              rows="3"></textarea>
-            <div class="manual-entry-hint">
-              <span class="hint-url">🔗 URL detected → will fetch full article automatically</span>
-              <span class="hint-text">📝 Text mode → uses your text as the article body</span>
-            </div>
-          </div>
-          <button class="manual-remove-btn" onclick="removeManualEntry(this)" title="Remove">✕</button>
-        </div>
-      </div>
+  /* DEBUG — show visible alert so we know exactly what's happening */
+  if (!modal) {
+    alert('DEBUG: #manualModal element NOT FOUND in DOM!');
+    return;
+  }
 
-      <div class="manual-input-actions">
-        <button class="btn btn-ghost manual-add-btn" onclick="addManualEntry()">＋ Add Another</button>
-        <button class="btn btn-primary manual-load-btn" id="manualLoadBtn" onclick="loadManualArticles()">
-          <span>🚀</span> Fetch &amp; Load
-        </button>
-      </div>
-      <div id="manualStatus" class="manual-status"></div>
-    </div>`;
-
-  /* Wire up live URL/text detection hints per textarea */
-  wireManualHints();
+  if (ta)     ta.value      = '';
+  if (status) status.innerHTML = '';
+  if (btn)    { btn.disabled = false; btn.innerHTML = '🚀 Fetch &amp; Load'; }
+  modal.style.display = 'flex';
+  setTimeout(() => { if (ta) ta.focus(); }, 60);
 }
+
+function closeManualModal() {
+  document.getElementById('manualModal').style.display = 'none';
+}
+
+/* Keep old alias in case anything still references it */
+function cancelManualInput() { closeManualModal(); }
 
 function wireManualHints() {
   document.querySelectorAll('.manual-entry').forEach(entry => {
@@ -314,53 +411,48 @@ function isValidUrl(str) {
 }
 
 async function loadManualArticles() {
-  const entries = [...document.querySelectorAll('.manual-entry')];
-  const inputs  = entries.map(e => e.querySelector('.manual-textarea')?.value.trim()).filter(v => v && v.length > 3);
+  /* Reads from the modal textarea (#manualTextarea0) */
+  const ta     = document.getElementById('manualTextarea0');
+  const input  = ta ? ta.value.trim() : '';
 
-  if (!inputs.length) { toast('⚠️ Please enter at least one URL or text.', 'error'); return; }
-
-  const btn = document.getElementById('manualLoadBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Processing…';
-
-  const statusEl = document.getElementById('manualStatus');
-  statusEl.innerHTML = '';
-
-  const loaded = [];
-
-  for (let i = 0; i < inputs.length; i++) {
-    const input = inputs[i];
-    const label = isValidUrl(input) ? `Entry ${i + 1}: fetching <code>${escHtml(new URL(input).hostname)}</code>…`
-                                    : `Entry ${i + 1}: processing text…`;
-    statusEl.innerHTML += `<div class="manual-status-row" id="msr-${i}">
-      <span class="spinner" style="width:12px;height:12px;border-width:2px"></span> ${label}
-    </div>`;
-
-    try {
-      const article = await buildManualArticle(input, i);
-      loaded.push(article);
-      document.getElementById('msr-' + i).innerHTML =
-        `<span style="color:#4ade80">✅</span> Entry ${i + 1}: <strong>${escHtml(article.title.slice(0, 60))}${article.title.length > 60 ? '…' : ''}</strong>`;
-    } catch (err) {
-      document.getElementById('msr-' + i).innerHTML =
-        `<span style="color:#f87171">⚠️</span> Entry ${i + 1}: ${escHtml(err.message)}`;
-    }
-  }
-
-  if (!loaded.length) {
-    btn.disabled = false;
-    btn.innerHTML = '<span>🚀</span> Fetch &amp; Load';
-    toast('❌ Could not process any entries.', 'error');
+  if (!input || input.length < 3) {
+    const s = document.getElementById('manualModalStatus');
+    if (s) s.innerHTML = '<span style="color:#f87171">⚠️ Please enter a URL or some text.</span>';
     return;
   }
 
-  articles = loaded;
-  renderNewsList();
-  document.getElementById('statusBadge').textContent = `${loaded.length} article${loaded.length > 1 ? 's' : ''} loaded`;
-  toast(`✅ ${loaded.length} article${loaded.length > 1 ? 's' : ''} ready — click to generate!`, 'success', 4000);
+  const btn      = document.getElementById('manualModalLoadBtn');
+  const statusEl = document.getElementById('manualModalStatus');
 
-  btn.disabled = false;
-  btn.innerHTML = '<span>🚀</span> Fetch &amp; Load';
+  btn.disabled  = true;
+  btn.innerHTML = '<span class="spinner"></span> Processing…';
+  statusEl.innerHTML = `<div class="status-item">
+    <span class="spinner" style="width:12px;height:12px;border-width:2px"></span>
+    ${isValidUrl(input) ? 'Fetching article from <code>' + escHtml(new URL(input).hostname) + '</code>…' : 'Processing text…'}
+  </div>`;
+
+  let article;
+  try {
+    article = await buildManualArticle(input, 0);
+    statusEl.innerHTML = `<div class="status-item" style="color:#4ade80">✅ ${escHtml(article.title.slice(0, 80))}${article.title.length > 80 ? '…' : ''}</div>`;
+  } catch (err) {
+    statusEl.innerHTML = `<div class="status-item" style="color:#f87171">⚠️ ${escHtml(err.message)}</div>`;
+    btn.disabled  = false;
+    btn.innerHTML = '🚀 Fetch &amp; Load';
+    return;
+  }
+
+  /* Success — close modal, load article, render list */
+  setTimeout(() => {
+    closeManualModal();
+    articles = [article];
+    renderNewsList();
+    document.getElementById('statusBadge').textContent = '1 article loaded';
+    toast('✅ Article ready — click it to generate!', 'success', 4000);
+  }, 800);
+
+  btn.disabled  = false;
+  btn.innerHTML = '🚀 Fetch &amp; Load';
 }
 
 /**
@@ -434,10 +526,26 @@ async function buildManualArticle(input, idx) {
 }
 
 /**
- * Fetch raw HTML from a URL using a proxy chain.
- * Handles both allorigins (JSON wrapper) and corsproxy (raw HTML).
+ * Fetch raw HTML from a URL.
+ * On localhost: uses the built-in /proxy/fetch endpoint (fast, no CORS issues).
+ * Otherwise: falls through a chain of public CORS proxies.
  */
 async function fetchRawHtml(url) {
+  /* ── Fast path: local proxy ── */
+  if (_fetchProxyBase) {
+    try {
+      const ctrl = new AbortController();
+      const tid  = setTimeout(() => ctrl.abort(), 15000);
+      const res  = await fetch(`${_fetchProxyBase}?url=${encodeURIComponent(url)}`, { signal: ctrl.signal });
+      clearTimeout(tid);
+      if (res.ok) {
+        const html = await res.text();
+        if (html && html.length > 200) return html;
+      }
+    } catch { /* fall through to external proxies */ }
+  }
+
+  /* ── Fallback: public CORS proxies (used when not on localhost) ── */
   const proxies = [
     { url: `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, json: true  },
     { url: `https://corsproxy.io/?${encodeURIComponent(url)}`,              json: false },
@@ -453,7 +561,6 @@ async function fetchRawHtml(url) {
 
       let html = '';
       if (proxy.json) {
-        /* allorigins wraps the page in { contents: "..." } */
         const data = await res.json().catch(() => null);
         html = data?.contents || '';
       } else {
@@ -518,70 +625,212 @@ function renderNewsList() {
 }
 
 /* ================================================================
-   AI REWRITING ENGINE  (Gemini 1.5-flash — Free Tier)
+   AI REWRITING ENGINE  (Gemini 2.0-flash — Free Tier)
    Rewrites hook, title, description and hashtags so the output
    is 100% original, SEO-friendly and copyright-safe.
 ================================================================ */
 
 /**
- * Save / load Gemini API key via a small UI modal.
- * The key is persisted in localStorage so the user only needs to enter it once.
+ * Fetch key status from the server and update the UI.
+ * API keys live in .env on the server — the browser never sees them.
  */
+async function loadKeyStatus() {
+  if (!_isLocalhost) {
+    updateAIBadge();
+    return; // can't reach /api/key-status from file://
+  }
+  try {
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), 5000); // 5s timeout
+    const res  = await fetch('/api/key-status', { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (res.ok) {
+      const data = await res.json();
+      _geminiKey   = !!data.gemini;
+      _removebgKey = !!data.removebg;
+      _grokKey     = !!data.grok;
+      _serverOnline = true;
+      hideServerDownBanner();
+    } else {
+      _geminiKey = _removebgKey = false;
+      _serverOnline = false;
+    }
+  } catch {
+    _geminiKey = _removebgKey = false;
+    _serverOnline = false;
+    showServerDownBanner();
+  }
+  updateAIBadge();
+}
+
+/* ── Server health state ─────────────────────────────────── */
+let _serverOnline = true;
+
+function showServerDownBanner() {
+  let banner = document.getElementById('serverDownBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'serverDownBanner';
+    banner.style.cssText = `
+      position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+      background:#7f1d1d;color:#fecaca;padding:12px 24px;
+      border-radius:12px;font-size:.85rem;text-align:center;
+      border:1px solid #dc2626;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.6);
+      max-width:90%;cursor:pointer;
+    `;
+    banner.innerHTML = `⚠️ <strong>Server not running.</strong> 
+      Open a terminal and run: <code style="background:#991b1b;padding:2px 8px;border-radius:4px;margin:0 4px">python server.py</code>
+      then refresh this page. <span style="opacity:.7;font-size:.75rem">(click to dismiss)</span>`;
+    banner.onclick = () => banner.remove();
+    document.body.appendChild(banner);
+  }
+}
+
+function hideServerDownBanner() {
+  const banner = document.getElementById('serverDownBanner');
+  if (banner) banner.remove();
+}
+
+/** Open the AI status modal (read-only — keys are managed via .env) */
 function openAISettings() {
-  document.getElementById('geminiKeyInput').value   = localStorage.getItem('gemini_api_key')   || '';
-  document.getElementById('removebgKeyInput').value = localStorage.getItem('removebg_api_key') || '';
-  document.getElementById('aiSettingsModal').classList.add('open');
+  const modal = document.getElementById('aiSettingsModal');
+  /* Refresh status badge inside the modal */
+  const geminiStatus   = document.getElementById('geminiKeyStatus');
+  const removebgStatus = document.getElementById('removebgKeyStatus');
+  const grokStatus     = document.getElementById('grokKeyStatus');
+  if (geminiStatus)   geminiStatus.textContent   = _geminiKey   ? '✅ Configured in .env' : '❌ Not set in .env';
+  if (removebgStatus) removebgStatus.textContent = _removebgKey ? '✅ Configured in .env' : '❌ Not set in .env';
+  if (grokStatus)     grokStatus.textContent     = _grokKey     ? '✅ Configured in .env' : '❌ Not set in .env';
+  /* Sync the provider toggle pills */
+  _syncProviderUI();
+  modal.classList.add('open');
 }
 function closeAISettings() {
   document.getElementById('aiSettingsModal').classList.remove('open');
 }
-function saveAISettings() {
-  const gKey = document.getElementById('geminiKeyInput').value.trim();
-  const rKey = document.getElementById('removebgKeyInput').value.trim();
 
-  if (gKey) {
-    localStorage.setItem('gemini_api_key', gKey);
-    _geminiKey = gKey;
-  } else {
-    localStorage.removeItem('gemini_api_key');
-    _geminiKey = '';
+/** Test Gemini connectivity via the server proxy (no key passed from browser) */
+async function testGeminiKey() {
+  if (!_geminiKey) {
+    toast('⚠️ GEMINI_API_KEY is not set in the server .env file.', 'error', 5000); return;
   }
+  const btn = document.querySelector('[onclick="testGeminiKey()"]');
+  const origText = btn.textContent;
+  btn.textContent = '⏳ Testing…';
+  btn.disabled = true;
 
-  if (rKey) {
-    localStorage.setItem('removebg_api_key', rKey);
-    _removebgKey = rKey;
-  } else {
-    localStorage.removeItem('removebg_api_key');
-    _removebgKey = '';
+  const testUrl = _geminiProxyBase || GEMINI_API_URL;
+  try {
+    const res = await fetch(testUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: 'Reply with exactly: {"ok":true}' }] }],
+        generationConfig: { maxOutputTokens: 20 }
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const msg = data?.error?.message || res.status;
+      toast(`❌ Gemini error: ${msg}`, 'error', 6000);
+    } else {
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      console.log('[Test Gemini] response:', text);
+      toast('✅ Gemini connection works!', 'success', 5000);
+    }
+  } catch (e) {
+    const isFile = location.protocol === 'file:';
+    const msg = isFile
+      ? 'App must be opened via http://localhost:3000 (run: python server.py)'
+      : e.message;
+    toast(`❌ ${msg}`, 'error', 7000);
   }
+  btn.textContent = origText;
+  btn.disabled = false;
+}
 
-  const msgs = [];
-  if (gKey)  msgs.push('Gemini AI');
-  if (rKey)  msgs.push('Remove.bg');
-  toast(msgs.length ? `✅ ${msgs.join(' + ')} enabled!` : 'ℹ️ Keys cleared. Using template mode.', msgs.length ? 'success' : 'info', 4000);
+/** Test Grok connectivity via the server proxy */
+async function testGrokKey() {
+  if (!_grokKey) {
+    toast('⚠️ GROK_API_KEY is not set in the server .env file.', 'error', 5000); return;
+  }
+  const btn = document.querySelector('[onclick="testGrokKey()"]');
+  const origText = btn.textContent;
+  btn.textContent = '⏳ Testing…';
+  btn.disabled = true;
 
-  closeAISettings();
-  updateAIBadge();
+  const testUrl = _grokProxyBase || GROK_API_URL;
+  try {
+    const res = await fetch(testUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: GROK_MODEL,
+        messages: [
+          { role: 'system', content: 'Reply with raw JSON only.' },
+          { role: 'user',   content: 'Reply with exactly: {"ok":true}' }
+        ],
+        max_tokens: 20
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const msg = data?.error?.message || res.status;
+      toast(`❌ Grok error: ${msg}`, 'error', 6000);
+    } else {
+      const text = data?.choices?.[0]?.message?.content || '';
+      console.log('[Test Grok] response:', text);
+      toast('✅ Grok connection works!', 'success', 5000);
+    }
+  } catch (e) {
+    toast(`❌ Grok test failed: ${e.message}`, 'error', 7000);
+  }
+  btn.textContent = origText;
+  btn.disabled = false;
 }
 
 function updateAIBadge() {
   const badge = document.getElementById('aiBadge');
   if (!badge) return;
-  const both = _geminiKey && _removebgKey;
-  const any  = _geminiKey || _removebgKey;
-  if (both) {
-    badge.textContent = '🤖 AI Active';
+  const aiReady = (_aiProvider === 'grok') ? _grokKey : _geminiKey;
+  const providerLabel = (_aiProvider === 'grok') ? 'Grok' : 'Gemini';
+  const both = (_geminiKey || _grokKey) && _removebgKey;
+  const anyAI = _geminiKey || _grokKey;
+  if (aiReady && _removebgKey) {
+    badge.textContent = `🤖 ${providerLabel} + BgRemover`;
     badge.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
-    badge.title = 'Gemini + Remove.bg active — click to manage keys';
-  } else if (any) {
-    badge.textContent = '🤖 AI Partial';
+    badge.title = `${providerLabel} AI + Remove.bg active — keys stored securely in .env`;
+  } else if (aiReady) {
+    badge.textContent = `🤖 ${providerLabel} AI`;
     badge.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
-    badge.title = (_geminiKey ? 'Gemini active' : 'Remove.bg active') + ' — click to add the other key';
+    badge.title = `${providerLabel} active — add REMOVEBG_API_KEY to .env for background removal`;
+  } else if (_removebgKey) {
+    badge.textContent = '🎨 BgRemover';
+    badge.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
+    badge.title = 'Remove.bg active — add GEMINI_API_KEY or GROK_API_KEY for AI rewriting';
   } else {
     badge.textContent = '⚙️ Setup AI';
     badge.style.background = 'linear-gradient(135deg,#6366f1,#4f46e5)';
-    badge.title = 'Click to enter your free API keys';
+    badge.title = 'Add GEMINI_API_KEY or GROK_API_KEY and REMOVEBG_API_KEY to your .env file';
   }
+}
+
+/** Switch the active AI provider and persist the choice */
+function setAIProvider(provider) {
+  if (provider !== 'gemini' && provider !== 'grok') return;
+  _aiProvider = provider;
+  localStorage.setItem('aiProvider', provider);
+  _syncProviderUI();
+  updateAIBadge();
+  const label = provider === 'grok' ? 'Grok (xAI)' : 'Gemini';
+  toast(`🤖 AI provider switched to ${label}`, 'success', 2500);
+}
+
+/** Keep the pill buttons in the modal in sync with _aiProvider */
+function _syncProviderUI() {
+  document.querySelectorAll('.ai-provider-pill').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.provider === _aiProvider);
+  });
 }
 
 /**
@@ -591,11 +840,18 @@ function updateAIBadge() {
  * @param {number} timeoutMs
  */
 async function callGemini(prompt, timeoutMs = 18000) {
-  if (!_geminiKey) return null;
+  if (!_geminiKey) throw new Error('NO_KEY: Gemini API key not configured on server');
   const ctrl = new AbortController();
   const tid  = setTimeout(() => ctrl.abort(), timeoutMs);
+
+  /* Route through local proxy when on localhost — key is injected server-side,
+     never exposed to the browser. */
+  const fetchUrl = _geminiProxyBase
+    ? `${_geminiProxyBase}`
+    : `${GEMINI_API_URL}`;   // file:// fallback (CORS will likely block)
+
   try {
-    const res = await fetch(`${GEMINI_API_URL}?key=${encodeURIComponent(_geminiKey)}`, {
+    const res = await fetch(fetchUrl, {
       method: 'POST',
       signal: ctrl.signal,
       headers: { 'Content-Type': 'application/json' },
@@ -606,88 +862,218 @@ async function callGemini(prompt, timeoutMs = 18000) {
           topK: 40,
           topP: 0.95,
           maxOutputTokens: 1024,
-          /* NOTE: responseMimeType intentionally omitted — not universally supported on free tier */
         },
       }),
     });
     clearTimeout(tid);
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
-      console.warn('[Gemini] HTTP', res.status, errData?.error?.message || '');
-      return null;
+      const msg = errData?.error?.message || res.statusText || res.status;
+      console.error('[Gemini] HTTP error:', res.status, msg);
+      throw new Error(`HTTP_${res.status}: ${msg}`);
     }
     const data = await res.json();
     const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    if (!raw) { console.warn('[Gemini] empty response'); return null; }
-
-    /* ── Robust JSON extraction ──
-       The model may return:
-         1. A bare JSON object            { "hook": "…" }
-         2. Fenced with ```json … ```
-         3. Fenced with ``` … ```
-         4. JSON embedded in prose text   …text… { "hook": "…" } …text…
-    */
-    let cleaned = raw
-      .replace(/^[\s\S]*?```json\s*/i, '')   // strip everything before ```json
-      .replace(/^```\s*/i, '')                // or bare ```
-      .replace(/```[\s\S]*$/i, '')            // strip closing fence + anything after
-      .trim();
-
-    /* If still not starting with { , grab the first { … } block from raw */
-    if (!cleaned.startsWith('{')) {
-      const m = raw.match(/\{[\s\S]*\}/);
-      if (m) cleaned = m[0].trim();
+    if (!raw) {
+      console.error('[Gemini] empty response:', JSON.stringify(data).slice(0, 300));
+      throw new Error('EMPTY_RESPONSE: Gemini returned no text');
     }
 
-    if (!cleaned) { console.warn('[Gemini] no JSON found in response'); return null; }
-    return JSON.parse(cleaned);
+    console.log('[Gemini] raw response (first 400 chars):', raw.slice(0, 400));
+
+    /* ── Extract JSON from the raw text using multiple strategies ──
+       Try each strategy in order; return as soon as one parses cleanly.
+    */
+
+    // Strategy 1: Raw text IS already valid JSON
+    try { return JSON.parse(raw.trim()); } catch (_) {}
+
+    // Strategy 2: Strip ```json ... ``` code fence
+    const fenced = raw.match(/```json\s*([\s\S]*?)```/i);
+    if (fenced) {
+      try { return JSON.parse(fenced[1].trim()); } catch (_) {}
+    }
+
+    // Strategy 3: Strip any ``` ... ``` code fence
+    const anyFence = raw.match(/```\s*([\s\S]*?)```/i);
+    if (anyFence) {
+      try { return JSON.parse(anyFence[1].trim()); } catch (_) {}
+    }
+
+    // Strategy 4: Find the last { ... } block (greedy — handles nested objects)
+    const firstBrace = raw.indexOf('{');
+    const lastBrace  = raw.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      const block = raw.slice(firstBrace, lastBrace + 1);
+      try { return JSON.parse(block); } catch (_) {}
+    }
+
+    console.error('[Gemini] could not extract JSON. Full raw:', raw);
+    throw new Error('NO_JSON: Could not extract JSON from Gemini response');
   } catch (e) {
     clearTimeout(tid);
-    console.warn('[Gemini] error:', e.message);
-    return null;
+    const msg = e.name === 'AbortError' ? 'TIMEOUT: Request timed out' : e.message;
+    console.error('[Gemini] threw:', msg);
+    throw new Error(msg);
   }
+}
+
+/**
+ * Call Grok (xAI) with a structured prompt.
+ * Uses the OpenAI-compatible chat/completions endpoint.
+ * Returns parsed JSON from the model or throws on failure.
+ * @param {string} prompt
+ * @param {number} timeoutMs
+ */
+async function callGrok(prompt, timeoutMs = 20000) {
+  if (!_grokKey) throw new Error('NO_KEY: Grok API key not configured on server');
+  const ctrl = new AbortController();
+  const tid  = setTimeout(() => ctrl.abort(), timeoutMs);
+
+  const fetchUrl = _grokProxyBase || GROK_API_URL;  // always use proxy on localhost
+
+  try {
+    const res = await fetch(fetchUrl, {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: GROK_MODEL,
+        messages: [
+          { role: 'system', content: 'You are a helpful assistant. Always respond with valid raw JSON only — no markdown, no explanation.' },
+          { role: 'user',   content: prompt }
+        ],
+        temperature: 0.85,
+        max_tokens: 1200,
+      }),
+    });
+    clearTimeout(tid);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      const msg = errData?.error?.message || res.statusText || res.status;
+      console.error('[Grok] HTTP error:', res.status, msg);
+      throw new Error(`HTTP_${res.status}: ${msg}`);
+    }
+    const data = await res.json();
+    const raw = data?.choices?.[0]?.message?.content || '';
+    if (!raw) {
+      console.error('[Grok] empty response:', JSON.stringify(data).slice(0, 300));
+      throw new Error('EMPTY_RESPONSE: Grok returned no text');
+    }
+
+    console.log('[Grok] raw response (first 400 chars):', raw.slice(0, 400));
+
+    // Strategy 1: Raw text IS already valid JSON
+    try { return JSON.parse(raw.trim()); } catch (_) {}
+
+    // Strategy 2: Strip ```json ... ``` code fence
+    const fenced = raw.match(/```json\s*([\s\S]*?)```/i);
+    if (fenced) { try { return JSON.parse(fenced[1].trim()); } catch (_) {} }
+
+    // Strategy 3: Strip any ``` ... ``` code fence
+    const anyFence = raw.match(/```\s*([\s\S]*?)```/i);
+    if (anyFence) { try { return JSON.parse(anyFence[1].trim()); } catch (_) {} }
+
+    // Strategy 4: Find the outermost { ... } block
+    const firstBrace = raw.indexOf('{');
+    const lastBrace  = raw.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      try { return JSON.parse(raw.slice(firstBrace, lastBrace + 1)); } catch (_) {}
+    }
+
+    // Strategy 5: Find a JSON array [ ... ]
+    const firstBrack = raw.indexOf('[');
+    const lastBrack  = raw.lastIndexOf(']');
+    if (firstBrack !== -1 && lastBrack > firstBrack) {
+      try { return JSON.parse(raw.slice(firstBrack, lastBrack + 1)); } catch (_) {}
+    }
+
+    console.error('[Grok] could not extract JSON. Full raw:', raw);
+    throw new Error('NO_JSON: Could not extract JSON from Grok response');
+  } catch (e) {
+    clearTimeout(tid);
+    const msg = e.name === 'AbortError' ? 'TIMEOUT: Request timed out' : e.message;
+    console.error('[Grok] threw:', msg);
+    throw new Error(msg);
+  }
+}
+
+/**
+ * Unified AI dispatcher — routes to Grok or Gemini based on _aiProvider.
+ * Falls back to the other provider if the selected one has no key.
+ * @param {string} prompt
+ * @param {number} timeoutMs
+ */
+async function callAI(prompt, timeoutMs = 22000) {
+  /* Primary: use whichever provider the user has selected */
+  if (_aiProvider === 'grok' && _grokKey)     return callGrok(prompt, timeoutMs);
+  if (_aiProvider === 'gemini' && _geminiKey) return callGemini(prompt, timeoutMs);
+  /* Fallback: try the other provider automatically */
+  if (_grokKey)   return callGrok(prompt, timeoutMs);
+  if (_geminiKey) return callGemini(prompt, timeoutMs);
+  throw new Error('NO_KEY: No AI provider configured — add GEMINI_API_KEY or GROK_API_KEY to .env');
 }
 
 /**
  * AI-rewrite all four content fields in one single API call to save quota.
  * Returns { hook, title, description, hashtags } or null on failure.
- *
- * The prompt instructs Gemini to:
- *  - Write 100% original content — no direct copy of source sentences
- *  - Use Nepali language throughout (Devanagari script)
- *  - Make the hook emotionally engaging and viral
- *  - Make the title SEO-optimised (under 12 words)
- *  - Write 3-4 factual sentences in the description (60-90 Nepali words)
- *  - Generate 6 relevant hashtags mixing Nepali + English
  */
 async function rewriteWithAI(rawTitle, articleBody, sourceLang) {
-  if (!_geminiKey) return null;
+  if (!_grokKey && !_geminiKey) return null;
 
-  /* Prepare a concise news summary (max 800 chars) to keep the prompt small */
-  const bodySnippet = (articleBody || '').replace(/\s+/g, ' ').slice(0, 800).trim();
+  /* Use up to 1400 chars of body for richer context */
+  const bodySnippet = (articleBody || '').replace(/\s+/g, ' ').slice(0, 1400).trim();
   const langNote = sourceLang === 'ne' ? 'Nepali' : sourceLang === 'hi' ? 'Hindi' : 'English';
 
-  const prompt = `You are a professional Nepali viral news editor.
+  const prompt = `You are a professional Nepali viral news editor with deep knowledge of Nepal's current affairs.
 
-TASK: Rewrite the following news story in creative, SEO-friendly Nepali (Devanagari script).
-The output must be 100% original — no sentence should match the source word-for-word.
+TASK: Read the news story below carefully. Understand the specific event, people involved, location, and impact.
+Then produce 100% original, creative Nepali content based on this SPECIFIC story — not generic news phrases.
 
 SOURCE NEWS (in ${langNote}):
 Title: ${rawTitle}
 Body: ${bodySnippet}
 
-STRICT RULES:
-1. All text values must be in Nepali (Devanagari script) — hashtags can mix Nepali + English
-2. hook: one punchy emotional viral line, max 20 words, start with 1 relevant emoji
-3. title: SEO headline, max 12 Nepali words, factual, keyword-rich
-4. description: 3-4 original sentences, 60-90 Nepali words, covers what/who/impact/next steps
-5. hashtags: array of 6 strings mixing Nepali and English hashtags
-6. Output MUST be a single raw JSON object — no markdown fences, no explanation, no extra text
+OUTPUT REQUIREMENTS — read every rule carefully:
 
-Output exactly this JSON structure (replace all values):
-{"hook":"हुक यहाँ","title":"शीर्षक यहाँ","description":"विवरण यहाँ","hashtags":["#नेपालसमाचार","#BreakingNews","#Nepal","#नेपाल","#Kathmandu","#NepalNews"]}`;
+1. "hook" — One emotionally powerful viral opening line.
+   - Must reference THIS specific event/person/place from the story
+   - Start with exactly 1 emoji that matches the news theme (e.g. 🔥 for controversy, 😱 for shock, 💔 for tragedy, ⚡ for breaking)
+   - Maximum 20 Nepali words
+   - Must feel urgent and shareable — NOT generic like "नेपालमा ठूलो घटना"
 
-  const result = await callGemini(prompt, 20000);
+2. "title" — SEO-optimised Nepali headline
+   - Must contain the KEY subject (name/place/event) from the story
+   - Maximum 12 Nepali words
+   - Factual, keyword-rich — readers must know exactly what happened
+
+3. "description" — Original 3-4 sentence news paragraph
+   - Sentence 1: What happened and who is involved (specific names/places from the story)
+   - Sentence 2: Key details, cause, or context
+   - Sentence 3: Impact or reaction
+   - Sentence 4: What happens next or current status
+   - Total: 60-90 Nepali words
+   - NEVER copy source sentences word-for-word
+
+4. "hashtags" — Array of exactly 8 hashtags
+   - At least 3 must be SPECIFIC to this news story (person name, place, event keyword)
+   - Mix Nepali Devanagari and English
+   - FORBIDDEN generic tags: #Nepal #नेपाल #NepalNews #नेपालसमाचार #BreakingNews #Kathmandu (only use these if the story is literally about Nepal in general)
+   - Each starts with #, no spaces inside
+
+5. ALL text fields (hook, title, description) must be in Nepali Devanagari script.
+6. Output ONLY a raw JSON object — zero markdown, zero explanation.
+
+JSON format:
+{"hook":"...","title":"...","description":"...","hashtags":["#...","#...","#...","#...","#...","#...","#...","#..."]}`;
+
+  let result;
+  try {
+    result = await callAI(prompt, 25000);
+  } catch(e) {
+    console.warn('[AI Rewrite] callAI threw:', e.message);
+    return null;
+  }
   if (!result) return null;
 
   /* Validate the response has all required fields with Devanagari content */
@@ -707,7 +1093,7 @@ Output exactly this JSON structure (replace all values):
     hook:        hook.trim(),
     title:       cleanTitle(title.trim()),
     description: description.trim(),
-    hashtags:    hashtags.slice(0, 6).map(h => h.startsWith('#') ? h : '#' + h),
+    hashtags:    hashtags.slice(0, 8).map(h => h.startsWith('#') ? h : '#' + h),
   };
 }
 
@@ -786,10 +1172,9 @@ async function selectArticle(idx) {
   document.getElementById('outHook').textContent   = hook;
   document.getElementById('outTitle').textContent  = nepaliTitle;
   document.getElementById('outDesc').textContent   = desc;
-  document.getElementById('outHashtags').innerHTML =
-    hashtags.map(h => `<span class="hashtag">${escHtml(h)}</span>`).join('');
 
   generatedPost = { hook, title: nepaliTitle, description: desc, hashtags, link: selectedArticle.link || '' };
+  renderHashtags(hashtags);
 
   if (aiUsed) {
     toast('🤖 AI ले मौलिक सामग्री तयार गर्‍यो — copyright-safe!', 'success', 3500);
@@ -1518,6 +1903,143 @@ function buildHashtags(title) {
 }
 
 /* ================================================================
+   HASHTAG EDITOR — interactive chips (toggle off/on, add, remove, regenerate)
+================================================================ */
+
+/**
+ * Render hashtag chips into #outHashtags.
+ * Each chip stores its active state as a data-active attribute.
+ * Clicking toggles it; the × button removes it entirely.
+ * generatedPost.hashtags is kept in sync after every change.
+ */
+function renderHashtags(tags) {
+  const container = document.getElementById('outHashtags');
+  container.innerHTML = tags.map((h, i) => `
+    <span class="hashtag" data-index="${i}" data-tag="${escHtml(h)}" data-active="true"
+          onclick="toggleHashtag(this)" title="Click to toggle">
+      ${escHtml(h)}<span class="ht-remove" onclick="removeHashtag(event,this)" title="Remove">✕</span>
+    </span>`).join('');
+  syncHashtagsToPost();
+}
+
+/** Toggle a hashtag chip on/off (struck-through = excluded from post) */
+function toggleHashtag(el) {
+  const active = el.dataset.active === 'true';
+  el.dataset.active = active ? 'false' : 'true';
+  el.classList.toggle('off', !active ? false : true);
+  syncHashtagsToPost();
+}
+
+/** Remove a hashtag chip entirely */
+function removeHashtag(e, removeBtn) {
+  e.stopPropagation();
+  removeBtn.closest('.hashtag').remove();
+  syncHashtagsToPost();
+}
+
+/** Show/hide the custom hashtag input row */
+function toggleHashtagInput(show) {
+  document.getElementById('hashtagAddRow').style.display = show ? 'flex' : 'none';
+  document.getElementById('hashtagAddBtn').style.display = show ? 'none' : 'inline-block';
+  if (show) {
+    const inp = document.getElementById('hashtagInput');
+    inp.value = '';
+    inp.focus();
+  }
+}
+
+/** Add a custom hashtag typed by the user */
+function addCustomHashtag() {
+  let val = document.getElementById('hashtagInput').value.trim();
+  if (!val) return;
+  if (!val.startsWith('#')) val = '#' + val;
+  val = val.replace(/\s+/g, '');          // no spaces in hashtags
+  if (val.length < 2) return;
+
+  const container = document.getElementById('outHashtags');
+  const span = document.createElement('span');
+  span.className = 'hashtag';
+  span.dataset.active = 'true';
+  span.dataset.tag = val;
+  span.title = 'Click to toggle';
+  span.setAttribute('onclick', 'toggleHashtag(this)');
+  span.innerHTML = `${escHtml(val)}<span class="ht-remove" onclick="removeHashtag(event,this)" title="Remove">✕</span>`;
+  container.appendChild(span);
+
+  syncHashtagsToPost();
+  toggleHashtagInput(false);
+  toast(`✅ ${val} added`, 'success', 1800);
+}
+
+/** Read all active (non-struck) chips and push them into generatedPost */
+function syncHashtagsToPost() {
+  const chips = document.querySelectorAll('#outHashtags .hashtag');
+  const active = Array.from(chips)
+    .filter(c => c.dataset.active === 'true')
+    .map(c => c.dataset.tag);
+  if (generatedPost) generatedPost.hashtags = active;
+}
+
+/** Regenerate hashtags with AI (or fallback keyword method) */
+async function regenerateHashtags() {
+  if (!generatedPost) { toast('⚠️ Generate a post first.', 'error'); return; }
+  const btn = document.getElementById('reimagineBtnHashtags');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="width:10px;height:10px;border-width:2px"></span>';
+
+  try {
+    let newTags;
+    if ((_grokKey || _geminiKey) && selectedArticle) {
+      const articleBody = (selectedArticle.fullArticleText || selectedArticle.description || '').replace(/\s+/g, ' ').slice(0, 800);
+      const prompt = `You are a Nepali social media expert who knows trending hashtags.
+
+NEWS STORY:
+Title: ${selectedArticle.title}
+Body: ${articleBody}
+
+TASK: Generate exactly 8 hashtags for THIS specific news story to maximise reach on Facebook, Instagram, and Twitter/X.
+
+RULES:
+1. At least 4 hashtags must be SPECIFIC to this story — use the actual person's name, place name, organisation, or event keyword from the story
+2. Remaining tags can be broader topic categories (politics, sports, economy etc.)
+3. Mix Nepali Devanagari and English (aim for 4 Nepali + 4 English)
+4. Each hashtag starts with # and has NO spaces or special characters inside
+5. FORBIDDEN generic tags: #Nepal #नेपाल #NepalNews #नेपालसमाचार #BreakingNews #Kathmandu #News #Trending (avoid these unless directly relevant)
+6. Make them the tags a real journalist or influencer would actually use for this story
+7. Return ONLY a JSON array of exactly 8 strings — no markdown, no explanation
+
+Example format: ["#RealTag1","#वास्तविकट्याग2","#SpecificTopic","#सम्बन्धितविषय","#ActualPerson","#स्थान","#EventKeyword","#TopicCategory"]`;
+
+      /* callAI returns a parsed object or array, or throws */
+      const result = await callAI(prompt, 15000);
+      /* Gemini may return an array directly, or wrap it in an object */
+      let arr = null;
+      if (Array.isArray(result)) {
+        arr = result;
+      } else if (result && typeof result === 'object') {
+        /* Try common wrapper keys: "hashtags", "tags", or the first array value */
+        arr = result.hashtags || result.tags || Object.values(result).find(v => Array.isArray(v));
+      }
+      if (arr && arr.length) {
+        newTags = arr.slice(0, 8).map(h => (typeof h === 'string' && h.startsWith('#')) ? h : '#' + String(h));
+      }
+    }
+    if (!newTags || newTags.length < 3) {
+      /* Fallback: keyword method */
+      newTags = buildHashtags((selectedArticle?.title || '') + ' ' + (generatedPost?.title || ''));
+    }
+    renderHashtags(newTags);
+    toast('✅ Hashtags regenerated!', 'success', 2000);
+  } catch (e) {
+    console.error('[regenerateHashtags]', e);
+    toast('⚠️ Could not regenerate hashtags.', 'error', 3000);
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '✨ Regenerate';
+}
+
+/* ================================================================
    FEATURE 3b – AI IMAGE ENHANCEMENT (Remove.bg + Canvas Backgrounds)
    Removes the background from the uploaded photo via Remove.bg API,
    then composites the subject onto a freshly drawn news-themed
@@ -1650,9 +2172,9 @@ async function removeBackground(dataUrl) {
   const ctrl = new AbortController();
   const tid  = setTimeout(() => ctrl.abort(), 30000);
 
-  const res = await fetch('https://api.remove.bg/v1.0/removebg', {
+  const res = await fetch(_removebgProxyBase || 'https://api.remove.bg/v1.0/removebg', {
     method: 'POST',
-    headers: { 'X-Api-Key': _removebgKey },
+    /* No X-Api-Key header here — the server proxy injects it from .env */
     body: formData,
     signal: ctrl.signal,
   });
@@ -1967,31 +2489,370 @@ function clearCustomImage() {
 /** Reset pan and zoom to defaults. Pass true to skip re-render. */
 function resetImgAdjust(silent) {
   imgOffsetX = 0; imgOffsetY = 0; imgScale = 1.0;
+  imgRotation = 0; imgFlipH = false; imgFlipV = false;
   const slider = document.getElementById('zoomSlider');
   const label  = document.getElementById('zoomVal');
   if (slider) slider.value = 100;
   if (label)  label.textContent = '100%';
-  if (!silent) {
-    if (_enhancedMode) { redrawEnhanced(); return; }
-    if (selectedArticle && generatedPost) generateImage();
+  const preset = document.getElementById('cropPreset');
+  if (preset) preset.value = 'none';
+  if (!silent) fastRedraw();
+}
+
+/** Centre image (zero pan offsets, keep scale) */
+function centerImage() {
+  imgOffsetX = 0; imgOffsetY = 0;
+  fastRedraw();
+}
+
+/** Rotate image by delta degrees (90/-90) */
+function rotateImage(delta) {
+  imgRotation = ((imgRotation + delta) % 360 + 360) % 360;
+  fastRedraw();
+}
+
+/** Flip image horizontally or vertically */
+function flipImage(axis) {
+  if (axis === 'h') imgFlipH = !imgFlipH;
+  else              imgFlipV = !imgFlipV;
+  fastRedraw();
+}
+
+/** Apply a crop/scale preset */
+function applyCropPreset(preset) {
+  if (preset === 'none') return;
+  imgOffsetX = 0; imgOffsetY = 0;
+  switch (preset) {
+    case 'square':    imgScale = 1.0;  break;
+    case 'portrait':  imgScale = 0.85; break;   // show more vertical room
+    case 'landscape': imgScale = 1.35; break;   // zoom in to fill wide
+    case 'fill':      imgScale = 1.5;  break;
+    case 'fit':       imgScale = 0.7;  break;
   }
+  const slider = document.getElementById('zoomSlider');
+  const label  = document.getElementById('zoomVal');
+  if (slider) { slider.value = Math.round(imgScale * 100); }
+  if (label)  { label.textContent = Math.round(imgScale * 100) + '%'; }
+  _syncZoomUI(Math.round(imgScale * 100));
+  if (_enhancedMode) { redrawEnhanced(); return; }
+  if (selectedArticle && generatedPost) generateImage();
+  const presetEl = document.getElementById('cropPreset');
+  if (presetEl) presetEl.value = 'none';
 }
 
 /** Called by the zoom slider */
 function onImgAdjust() {
-  const pct = parseInt(document.getElementById('zoomSlider').value, 10);
-  document.getElementById('zoomVal').textContent = pct + '%';
+  const slider = document.getElementById('zoomSlider');
+  if (!slider) return;
+  const pct = parseInt(slider.value, 10);
   imgScale = pct / 100;
-  if (_enhancedMode) { redrawEnhanced(); return; }
-  if (selectedArticle && generatedPost) generateImage();
+  _syncZoomUI(pct);
+  fastRedraw();
+}
+
+/** Sync all zoom UI elements to a given percentage */
+function _syncZoomUI(pct) {
+  const qbZoom = document.getElementById('qbZoom');
+  const qbVal  = document.getElementById('qbZoomVal');
+  if (qbZoom) qbZoom.value = pct;
+  if (qbVal)  qbVal.textContent = pct + '%';
+  _showZoomPill(pct + '%');
+}
+
+/** Called by the quick-bar zoom slider */
+function onQbZoom(val) {
+  const pct = parseInt(val, 10);
+  imgScale = pct / 100;
+  const qbVal = document.getElementById('qbZoomVal');
+  if (qbVal) qbVal.textContent = pct + '%';
+  _showZoomPill(pct + '%');
+  fastRedraw();
+}
+
+/* ── Zoom pill display ── */
+let _zoomPillTimer = null;
+function _showZoomPill(text) {
+  const pill = document.getElementById('canvasZoomPill');
+  if (!pill) return;
+  pill.textContent = text;
+  pill.classList.add('visible');
+  clearTimeout(_zoomPillTimer);
+  _zoomPillTimer = setTimeout(() => pill.classList.remove('visible'), 1400);
+}
+
+/* ── Show/hide the quick bar and overlay when image is generated ── */
+function _showCanvasEditor() {
+  const overlay  = document.getElementById('canvasEditorOverlay');
+  const quickBar = document.getElementById('canvasQuickBar');
+  if (overlay)  overlay.style.display = 'block';
+  if (quickBar) quickBar.classList.add('visible');
+}
+function _hideCanvasEditor() {
+  const overlay  = document.getElementById('canvasEditorOverlay');
+  const quickBar = document.getElementById('canvasQuickBar');
+  if (overlay)  overlay.style.display = 'none';
+  if (quickBar) quickBar.classList.remove('visible');
+}
+
+/**
+ * Public fast-redraw — uses cached image, no network fetch.
+ * Called by toolbar buttons, text editor, colour pickers, etc.
+ */
+function fastRedraw() {
+  if (_enhancedMode && typeof redrawEnhanced === 'function') { redrawEnhanced(); return; }
+  const canvas = document.getElementById('newsCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width  = CANVAS_W;
+  canvas.height = CANVAS_H;
+  if (_cachedNewsImg) {
+    drawNewsImage(ctx, _cachedNewsImg, CANVAS_W, CANVAS_H);
+  } else {
+    drawBackground(ctx, CANVAS_W, CANVAS_H);
+  }
+  if (generatedPost) drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+}
+
+/* ────────────────────────────────────────────────────────────────
+   CANVAS MOUSE INTERACTION
+   • Drag to pan
+   • Scroll/pinch to zoom
+   • Click on title area to open inline text editor
+   ──────────────────────────────────────────────────────────────── */
+(function _initCanvasInteraction() {
+  let _dragging = false;
+  let _dragStartX = 0, _dragStartY = 0;
+  let _lastMouseX = 0, _lastMouseY = 0;
+  let _pinchDist = 0;
+  let _rafPending = false;
+
+  function _getCanvas() { return document.getElementById('newsCanvas'); }
+
+  /* Convert CSS-pixel delta → canvas-pixel delta */
+  function _scale(canvas, px) {
+    const w = canvas.offsetWidth;
+    if (!w) return px; /* panel not yet visible — use 1:1 */
+    return px * (canvas.width / w);
+  }
+
+  /* ── Fast redraw using cached image — no network fetch ── */
+  function _fastRedraw() {
+    if (_rafPending) return;
+    _rafPending = true;
+    requestAnimationFrame(() => {
+      _rafPending = false;
+      const canvas = _getCanvas();
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+
+      if (_enhancedMode && _subjectImg) {
+        /* Enhanced mode — redraw background + subject */
+        redrawEnhanced();
+        return;
+      }
+
+      if (_cachedNewsImg) {
+        /* Fast path — use cached image, no fetch */
+        canvas.width  = CANVAS_W;
+        canvas.height = CANVAS_H;
+        drawNewsImage(ctx, _cachedNewsImg, CANVAS_W, CANVAS_H);
+        if (generatedPost) drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+      } else if (generatedPost) {
+        /* No image loaded yet — just redraw background + text */
+        canvas.width  = CANVAS_W;
+        canvas.height = CANVAS_H;
+        drawBackground(ctx, CANVAS_W, CANVAS_H);
+        drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+      }
+    });
+  }
+
+  /* ── Mouse events ── */
+  function _onMouseDown(e) {
+    if (e.button !== 0) return;
+    const ito = document.getElementById('inlineTextOverlay');
+    if (ito && ito.classList.contains('open')) return;
+    _dragging   = true;
+    _dragStartX = e.clientX;
+    _dragStartY = e.clientY;
+    _lastMouseX = e.clientX;
+    _lastMouseY = e.clientY;
+    _getCanvas().style.cursor = 'grabbing';
+    e.preventDefault();
+  }
+
+  function _onMouseMove(e) {
+    if (!_dragging) return;
+    const canvas = _getCanvas();
+    imgOffsetX += _scale(canvas, e.clientX - _lastMouseX);
+    imgOffsetY += _scale(canvas, e.clientY - _lastMouseY);
+    _lastMouseX = e.clientX;
+    _lastMouseY = e.clientY;
+    _fastRedraw();
+  }
+
+  function _onMouseUp(e) {
+    if (!_dragging) return;
+    _dragging = false;
+    _getCanvas().style.cursor = 'grab';
+    /* Treat as a click if mouse barely moved */
+    const moved = Math.abs(e.clientX - _dragStartX) + Math.abs(e.clientY - _dragStartY);
+    if (moved < 6) _checkTitleClick(e);
+  }
+
+  /* ── Scroll-to-zoom ── */
+  function _onWheel(e) {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.06 : 0.94;
+    imgScale = Math.min(3.0, Math.max(0.25, imgScale * factor));
+    _syncZoomUI(Math.round(imgScale * 100));
+    _fastRedraw();
+  }
+
+  /* ── Touch events ── */
+  function _touchDist(t) {
+    const dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+    return Math.sqrt(dx*dx + dy*dy);
+  }
+
+  function _onTouchStart(e) {
+    if (e.touches.length === 2) {
+      _pinchDist = _touchDist(e.touches);
+    } else if (e.touches.length === 1) {
+      _dragging   = true;
+      _dragStartX = e.touches[0].clientX;
+      _dragStartY = e.touches[0].clientY;
+      _lastMouseX = e.touches[0].clientX;
+      _lastMouseY = e.touches[0].clientY;
+    }
+    e.preventDefault();
+  }
+
+  function _onTouchMove(e) {
+    if (e.touches.length === 2) {
+      const dist = _touchDist(e.touches);
+      imgScale = Math.min(3.0, Math.max(0.25, imgScale * (dist / _pinchDist)));
+      _pinchDist = dist;
+      _syncZoomUI(Math.round(imgScale * 100));
+      _fastRedraw();
+    } else if (_dragging && e.touches.length === 1) {
+      const canvas = _getCanvas();
+      imgOffsetX += _scale(canvas, e.touches[0].clientX - _lastMouseX);
+      imgOffsetY += _scale(canvas, e.touches[0].clientY - _lastMouseY);
+      _lastMouseX = e.touches[0].clientX;
+      _lastMouseY = e.touches[0].clientY;
+      _fastRedraw();
+    }
+    e.preventDefault();
+  }
+
+  function _onTouchEnd() { _dragging = false; }
+
+  /* Click on lower 60% of canvas → open inline text editor */
+  function _checkTitleClick(e) {
+    const canvas = _getCanvas();
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const relY  = (e.clientY - rect.top) / rect.height;
+    if (relY > 0.60) openInlineTextEditor();
+  }
+
+  /* ── Attach listeners — called AFTER the canvas exists ── */
+  function _attach() {
+    const canvas = _getCanvas();
+    if (!canvas) { setTimeout(_attach, 200); return; }
+    canvas.addEventListener('mousedown',  _onMouseDown,  { passive: false });
+    window.addEventListener('mousemove',  _onMouseMove,  { passive: true  });
+    window.addEventListener('mouseup',    _onMouseUp,    { passive: true  });
+    canvas.addEventListener('wheel',      _onWheel,      { passive: false });
+    canvas.addEventListener('touchstart', _onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove',  _onTouchMove,  { passive: false });
+    canvas.addEventListener('touchend',   _onTouchEnd,   { passive: true  });
+  }
+
+  /* Script is at bottom of <body>, DOM is already parsed */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _attach);
+  } else {
+    _attach();
+  }
+})();
+
+/* ────────────────────────────────────────────────────────────────
+   INLINE TEXT EDITOR (on-canvas panel)
+   ──────────────────────────────────────────────────────────────── */
+
+function openInlineTextEditor() {
+  const overlay = document.getElementById('inlineTextOverlay');
+  if (!overlay) return;
+
+  /* Populate */
+  const bEl = document.getElementById('iteBanner');
+  const tEl = document.getElementById('iteTitle');
+  const sEl = document.getElementById('iteFontSize');
+  const svEl= document.getElementById('iteSizeVal');
+
+  if (bEl) bEl.value = _textOpts.bannerText || '🚨  BREAKING NEWS';
+  if (tEl) tEl.value = generatedPost ? (generatedPost.title || '') : '';
+  if (sEl) { sEl.value = _textOpts.titleSize || 62; }
+  if (svEl) svEl.textContent = (_textOpts.titleSize || 62) + 'px';
+
+  /* Sync colour chips */
+  document.querySelectorAll('#iteBannerColours .ite-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.colour === _textOpts.bannerColor);
+  });
+  document.querySelectorAll('#iteTitleColours .ite-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.colour === _textOpts.titleColor);
+  });
+
+  overlay.classList.add('open');
+  if (tEl) setTimeout(() => tEl.focus(), 80);
+}
+
+function closeInlineTextEditor() {
+  const overlay = document.getElementById('inlineTextOverlay');
+  if (overlay) overlay.classList.remove('open');
+}
+
+/** Live-redraw while editing (called by colour chips & size slider) */
+function iteRedraw() {
+  fastRedraw();
+}
+
+function itePickTitle(el) {
+  document.querySelectorAll('#iteTitleColours .ite-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  _textOpts.titleColor = el.dataset.colour;
+  iteRedraw();
+}
+
+function itePickBanner(el) {
+  document.querySelectorAll('#iteBannerColours .ite-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  _textOpts.bannerColor = el.dataset.colour;
+  iteRedraw();
+}
+
+/** Apply button in inline editor */
+function iteApply() {
+  const bEl = document.getElementById('iteBanner');
+  const tEl = document.getElementById('iteTitle');
+  const sEl = document.getElementById('iteFontSize');
+
+  if (bEl) _textOpts.bannerText  = bEl.value.trim() || '🚨  BREAKING NEWS';
+  if (sEl) _textOpts.titleSize   = parseInt(sEl.value, 10) || 62;
+  if (tEl && tEl.value.trim() && generatedPost) generatedPost.title = tEl.value.trim();
+
+  closeInlineTextEditor();
+  fastRedraw();
+  if (typeof toast === 'function') toast('✅ Text updated!', 'success', 1800);
 }
 
 /** Called by arrow pan buttons. dx/dy in canvas pixels */
 function panImage(dx, dy) {
   imgOffsetX += dx;
   imgOffsetY += dy;
-  if (_enhancedMode) { redrawEnhanced(); return; }
-  if (selectedArticle && generatedPost) generateImage();
+  fastRedraw();
 }
 
 async function generateImage() {
@@ -2018,20 +2879,23 @@ async function generateImage() {
     const src = selectedArticle.imageUrl;
     const candidates = [
       src,
+      _fetchProxyBase ? `${_fetchProxyBase}?url=${encodeURIComponent(src)}` : null,
       `https://corsproxy.io/?${encodeURIComponent(src)}`,
       `https://api.allorigins.win/raw?url=${encodeURIComponent(src)}`,
       `https://images.weserv.nl/?url=${encodeURIComponent(src)}&w=1080`,
-    ];
+    ].filter(Boolean);
     for (const c of candidates) {
       try { newsImg = await loadImageFromSrc(c, 6000); imgSource = '🌐 News photo'; break; } catch {}
     }
   }
 
   if (newsImg) {
+    _cachedNewsImg = newsImg;   /* ← cache for instant drag/zoom redraws */
     drawNewsImage(ctx, newsImg, CANVAS_W, CANVAS_H);
     document.getElementById('imgSourceBadge').textContent = imgSource;
-    /* Show the adjust toolbar for ANY image (uploaded OR from URL) */
-    document.getElementById('imgAdjustBar').style.display = 'block';
+    /* Show the canvas editor overlay + quick bar */
+    document.getElementById('imgAdjustBar').style.display = 'block'; // keeps old JS guards happy
+    _showCanvasEditor();
     /* Cache active image as data-URL so AI enhance can use it */
     const tmpCanvas = document.createElement('canvas');
     tmpCanvas.width = newsImg.naturalWidth || newsImg.width;
@@ -2040,10 +2904,12 @@ async function generateImage() {
     try { _activeImageDataUrl = tmpCanvas.toDataURL('image/jpeg', 0.92); } catch { _activeImageDataUrl = customImageDataUrl; }
     document.getElementById('enhanceAIBtn').style.display = 'inline-flex';
   } else {
+    _cachedNewsImg = null;   /* no image available */
     drawBackground(ctx, CANVAS_W, CANVAS_H);
     document.getElementById('imgSourceBadge').textContent = '🎨 Graphic background';
-    /* No image — hide adjust toolbar and enhance button */
+    /* No image — hide overlay tools and enhance button */
     document.getElementById('imgAdjustBar').style.display = 'none';
+    _hideCanvasEditor();
     document.getElementById('enhanceAIBtn').style.display = 'none';
     document.getElementById('bgStylePicker').style.display = 'none';
     _activeImageDataUrl = null;
@@ -2147,20 +3013,29 @@ function drawHorizonBlurStrip(ctx, W, H) {
 }
 
 function drawNewsImage(ctx, img, W, H) {
-  /* ── 1. Off-screen canvas for colour grading ── */
+  /* ── 1. Off-screen canvas for colour grading + rotation/flip ── */
   const offscreen = document.createElement('canvas');
   offscreen.width = W; offscreen.height = H;
   const oct = offscreen.getContext('2d');
 
+  /* Apply rotation & flip transforms */
+  oct.save();
+  oct.translate(W / 2, H / 2);
+  if (imgRotation) oct.rotate(imgRotation * Math.PI / 180);
+  if (imgFlipH) oct.scale(-1, 1);
+  if (imgFlipV) oct.scale(1, -1);
+  oct.translate(-W / 2, -H / 2);
+
   /* Scale-to-fill exactly — apply user zoom on top */
   const baseSc = Math.max(W / img.width, H / img.height);
-  const scale  = baseSc * imgScale;          // imgScale defaults to 1.0
+  const scale  = baseSc * imgScale;
   const sw = img.width * scale, sh = img.height * scale;
   /* Centre the image, then apply user pan offsets */
   oct.drawImage(img,
     (W - sw) / 2 + imgOffsetX,
     (H - sh) / 2 + imgOffsetY,
     sw, sh);
+  oct.restore();
 
   /* ── 2. Pixel colour grade (cinematic teal-orange look) ── */
   const graded = applyColourGrade(oct, W, H);
@@ -2203,8 +3078,9 @@ function drawNewsImage(ctx, img, W, H) {
 }
 
 function _drawNewsBanner(ctx, W) {
+  const bannerColor = _textOpts.bannerColor || '#c0392b';
   /* Red banner bar */
-  ctx.fillStyle = '#c0392b';
+  ctx.fillStyle = bannerColor;
   ctx.fillRect(0, 22, W, 88);
   /* Left accent stripe */
   ctx.fillStyle = '#f6ad55';
@@ -2215,7 +3091,7 @@ function _drawNewsBanner(ctx, W) {
   ctx.textAlign = 'center';
   ctx.shadowColor = 'rgba(0,0,0,0.7)';
   ctx.shadowBlur = 8;
-  ctx.fillText('🚨  BREAKING NEWS', W / 2, 88);
+  ctx.fillText(_textOpts.bannerText || '🚨  BREAKING NEWS', W / 2, 88);
   ctx.shadowBlur = 0;
   /* Bottom rule */
   ctx.fillStyle = 'rgba(246,173,85,0.6)';
@@ -2249,9 +3125,11 @@ function drawBackground(ctx, W, H) {
 
 function drawTextOverlay(ctx, post, W, H) {
   const pad = 54;
+  const titleSize = _textOpts.titleSize || 62;
+  const titleColor = _textOpts.titleColor || '#ffffff';
 
   /* ── Measure title line count first so we can layout bottom-up ── */
-  ctx.font = 'bold 62px "Segoe UI",Arial,sans-serif';
+  ctx.font = `bold ${titleSize}px "Segoe UI",Arial,sans-serif`;
   const titleWords = (post.title || '').split(' ');
   let titleLine = '', titleLineCount = 0;
   for (const w of titleWords) {
@@ -2264,8 +3142,8 @@ function drawTextOverlay(ctx, post, W, H) {
   }
   titleLineCount++;
 
-  const TITLE_LINE_H = 78;
-  const BRAND_H      = 36;
+  const TITLE_LINE_H = Math.round(titleSize * 1.26);
+  const BRAND_H      = 46;
   const BOTTOM_PAD   = 32;
   const TOP_PAD      = 36;
 
@@ -2288,8 +3166,8 @@ function drawTextOverlay(ctx, post, W, H) {
   let y = blockY + TOP_PAD;
 
   /* ── Title ── */
-  ctx.font = 'bold 62px "Segoe UI",Arial,sans-serif';
-  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${titleSize}px "Segoe UI",Arial,sans-serif`;
+  ctx.fillStyle = titleColor;
   ctx.textAlign = 'center';
   ctx.shadowColor = 'rgba(0,0,0,1)'; ctx.shadowBlur = 16;
   const drawnLines = wrapText(ctx, post.title, W / 2, y, W - pad * 2, TITLE_LINE_H, 3);
@@ -2297,14 +3175,149 @@ function drawTextOverlay(ctx, post, W, H) {
   ctx.shadowBlur = 0;
 
   /* ── Branding watermark ── */
-  ctx.font = 'bold 22px "Segoe UI",Arial,sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.50)';
   ctx.textAlign = 'right';
   ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 5;
-  ctx.fillText('© Shashi News Generator', W - 28, y + 22);
+  ctx.font = 'bold 22px "Segoe UI",Arial,sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillText('© Shashi Viral Post Generator', W - 28, y + 22);
+  ctx.font = '15px "Segoe UI",Arial,sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.40)';
+  ctx.fillText('shashi19.jaiswal@gmail.com', W - 28, y + 42);
   ctx.shadowBlur = 0;
   ctx.textAlign = 'center';
+
+  /* ── Catchy decorative border ── */
+  _drawCanvasBorder(ctx, W, H);
 }
+
+/**
+ * Draw a catchy, consistent decorative border on every generated image.
+ * Double-line news frame with red + gold accent corners.
+ */
+function _drawCanvasBorder(ctx, W, H) {
+  const inset = 14;
+  const cornerSize = 38;
+
+  /* Outer red line */
+  ctx.strokeStyle = 'rgba(229,62,62,0.90)';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(inset, inset, W - inset * 2, H - inset * 2);
+
+  /* Inner gold line */
+  ctx.strokeStyle = 'rgba(246,173,85,0.55)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(inset + 7, inset + 7, W - (inset + 7) * 2, H - (inset + 7) * 2);
+
+  /* Gold corner accents — four L-shaped brackets */
+  ctx.strokeStyle = '#f6ad55';
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'square';
+  const corners = [
+    [inset, inset,  1,  1],
+    [W - inset, inset, -1,  1],
+    [inset, H - inset,  1, -1],
+    [W - inset, H - inset, -1, -1],
+  ];
+  for (const [cx, cy, sx, sy] of corners) {
+    ctx.beginPath();
+    ctx.moveTo(cx + sx * cornerSize, cy);
+    ctx.lineTo(cx, cy);
+    ctx.lineTo(cx, cy + sy * cornerSize);
+    ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+}
+
+/* ─── Text Editor Modal ───────────────────────────────────────── */
+
+function openTextEditor() {
+  const modal = document.getElementById('textEditorModal');
+  if (!modal) return;
+
+  // Populate fields from current state
+  const bannerInput = document.getElementById('teBanner');
+  const titleInput  = document.getElementById('teTitle');
+  const sizeSlider  = document.getElementById('teFontSize');
+  const sizeLabel   = document.getElementById('teFontSizeVal');
+
+  if (bannerInput) bannerInput.value = _textOpts.bannerText;
+  if (titleInput)  titleInput.value  = generatedPost ? (generatedPost.title || '') : '';
+  if (sizeSlider)  sizeSlider.value  = _textOpts.titleSize;
+  if (sizeLabel)   sizeLabel.textContent = _textOpts.titleSize + 'px';
+
+  // Sync title colour chips
+  document.querySelectorAll('.te-colour-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.colour === _textOpts.titleColor);
+  });
+
+  // Sync banner colour chips
+  document.querySelectorAll('.te-banner-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.colour === _textOpts.bannerColor);
+  });
+
+  modal.classList.add('open');
+}
+
+function closeTextEditor() {
+  const modal = document.getElementById('textEditorModal');
+  if (modal) modal.classList.remove('open');
+}
+
+function applyTextEdits() {
+  const bannerInput = document.getElementById('teBanner');
+  const titleInput  = document.getElementById('teTitle');
+  const sizeSlider  = document.getElementById('teFontSize');
+
+  if (bannerInput) {
+    _textOpts.bannerText = bannerInput.value.trim() || '🚨  BREAKING NEWS';
+  }
+  if (sizeSlider) {
+    _textOpts.titleSize = parseInt(sizeSlider.value, 10) || 62;
+  }
+  if (titleInput && titleInput.value.trim() && generatedPost) {
+    generatedPost.title = titleInput.value.trim();
+  }
+
+  closeTextEditor();
+
+  fastRedraw();
+
+  if (typeof toast === 'function') toast('✅ Text updated!', 'success', 2000);
+}
+
+/** Update font size preview label as slider moves */
+function onFontSizeSlide(val) {
+  const label = document.getElementById('teFontSizeVal');
+  if (label) label.textContent = val + 'px';
+}
+
+/** Title colour chip click */
+function selectTextColour(el) {
+  document.querySelectorAll('.te-colour-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  _textOpts.titleColor = el.dataset.colour;
+}
+
+/** Title custom colour-picker change */
+function setCustomTextColour(val) {
+  document.querySelectorAll('.te-colour-chip').forEach(c => c.classList.remove('active'));
+  _textOpts.titleColor = val;
+}
+
+/** Banner colour chip click */
+function selectBannerColour(el) {
+  document.querySelectorAll('.te-banner-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  _textOpts.bannerColor = el.dataset.colour;
+}
+
+/** Banner custom colour-picker change */
+function setCustomBannerColour(val) {
+  document.querySelectorAll('.te-banner-chip').forEach(c => c.classList.remove('active'));
+  _textOpts.bannerColor = val;
+}
+
+/* ──────────────────────────────────────────────────────────────── */
 
 function wrapText(ctx, text, x, y, maxW, lineH, maxLines) {
   if (!text) return 0;
@@ -2457,6 +3470,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('shareModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeShareModal(); });
   document.getElementById('copyModal').addEventListener('click',  e => { if (e.target === e.currentTarget) closeCopyModal(); });
   document.getElementById('aiSettingsModal')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeAISettings(); });
+  document.getElementById('manualModal')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeManualModal(); });
   /* Update AI badge based on stored key */
   updateAIBadge();
 });
@@ -2502,8 +3516,8 @@ async function reimagineField(field) {
   if (!generatedPost || !selectedArticle) {
     toast('⚠️ Please select an article first.', 'error'); return;
   }
-  if (!_geminiKey) {
-    toast('⚙️ Setup your free Gemini API key first — click the AI button in the header.', 'error', 5000); return;
+  if (!_grokKey && !_geminiKey) {
+    toast('⚙️ Setup your AI key first — click the AI button in the header.', 'error', 5000); return;
   }
 
   const m       = _EDIT_MAP[field];
@@ -2516,79 +3530,102 @@ async function reimagineField(field) {
   btn.disabled   = true;
   display.style.opacity = '0.4';
 
-  const rawTitle   = selectedArticle.title || '';
-  const bodySnippet = (selectedArticle.fullArticleText || selectedArticle.description || '').slice(0, 600);
+  const rawTitle    = selectedArticle.title || '';
+  const bodySnippet = (selectedArticle.fullArticleText || selectedArticle.description || '').replace(/\s+/g, ' ').slice(0, 1000);
   const currentVal  = generatedPost[m.postKey] || '';
 
-  /* Build a field-specific prompt */
+  /* The JSON key Gemini must return — matches _EDIT_MAP postKey */
+  const jsonKey = m.postKey; /* 'hook', 'title', or 'description' */
+
+  /* ── Field-specific prompts ── */
   let prompt = '';
   if (field === 'hook') {
     prompt = `You are a professional Nepali viral news editor.
 
-TASK: Write ONE brand-new viral hook (opening line) for the news story below.
-It must be COMPLETELY DIFFERENT from the existing hook — fresh angle, different emotion.
+NEWS STORY:
+Title: ${rawTitle}
+Body: ${bodySnippet}
 
-News Title: ${rawTitle}
-News Body: ${bodySnippet}
-Existing Hook (DO NOT reuse): ${currentVal}
+TASK: Write ONE brand-new viral hook (opening line) for THIS specific news story.
+The hook must be about the actual event, person, or place in this story — NOT generic.
 
-STRICT RULES:
-1. Nepali language only (Devanagari script)
-2. Maximum 20 Nepali words
-3. Start with exactly 1 relevant emoji
-4. Emotionally gripping and shareable
-5. Output MUST be a single raw JSON object — no markdown, no explanation, no extra text
+RULES:
+1. Must reference a specific detail from this story (name, place, incident, number)
+2. Start with exactly 1 emoji that fits the mood (🔥😱💔⚡🚨😤🏆💣 etc.)
+3. Maximum 20 Nepali words — punchy, emotional, makes people want to share
+4. Nepali Devanagari script only
+5. COMPLETELY different angle from existing hook — fresh emotion or perspective
+6. FORBIDDEN: generic phrases like "नेपालमा ठूलो घटना", "यो समाचार हेर्नुस्", "ब्रेकिङ न्युज"
+7. Existing hook (DO NOT copy): ${currentVal}
 
-Output exactly this JSON (replace the value):
-{"hook":"नयाँ हुक यहाँ लेख्नुहोस्"}`;
+Return ONLY this JSON (no markdown, no explanation):
+{"hook":"<your specific, emotional, story-relevant hook here>"}`;
 
   } else if (field === 'title') {
     prompt = `You are a professional Nepali SEO news editor.
 
-TASK: Write ONE brand-new SEO headline for the news story below.
-It must be COMPLETELY DIFFERENT from the existing title.
+NEWS STORY:
+Title (source): ${rawTitle}
+Body: ${bodySnippet}
 
-News Title (source): ${rawTitle}
-News Body: ${bodySnippet}
-Existing Title (DO NOT reuse): ${currentVal}
+TASK: Write ONE brand-new SEO headline for THIS specific story.
 
-STRICT RULES:
-1. Nepali language only (Devanagari script)
+RULES:
+1. Must contain the KEY noun from the story — actual person name, place, or event
 2. Maximum 12 Nepali words
-3. Factual, keyword-rich, no clickbait
-4. Different keywords and structure from existing title
-5. Output MUST be a single raw JSON object — no markdown, no explanation, no extra text
+3. Nepali Devanagari script only
+4. Factual, keyword-rich — reader must understand exactly what happened
+5. COMPLETELY different structure and keywords from existing title
+6. Existing title (DO NOT copy): ${currentVal}
 
-Output exactly this JSON (replace the value):
-{"title":"नयाँ शीर्षक यहाँ लेख्नुहोस्"}`;
+Return ONLY this JSON (no markdown, no explanation):
+{"title":"<your specific, keyword-rich headline here>"}`;
 
   } else if (field === 'desc') {
-    prompt = `You are a professional Nepali news writer.
+    prompt = `You are a professional Nepali news journalist.
 
-TASK: Rewrite the description for this news story in a completely fresh way.
-Same core facts, but entirely different sentence structures and word choices.
+NEWS STORY:
+Title: ${rawTitle}
+Body: ${bodySnippet}
 
-News Title: ${rawTitle}
-News Body: ${bodySnippet}
-Existing Description (DO NOT copy): ${currentVal}
+TASK: Write a completely fresh description paragraph for this story.
 
-STRICT RULES:
-1. Nepali language only (Devanagari script)
+RULES:
+1. Nepali Devanagari script only
 2. Exactly 3-4 sentences, 60-90 Nepali words total
-3. Cover: what happened · who is involved · impact · what happens next
-4. Zero sentence overlap with existing description
-5. Output MUST be a single raw JSON object — no markdown, no explanation, no extra text
+3. Structure:
+   - Sentence 1: What happened + who/where (use real names/places from the story)
+   - Sentence 2: Key cause, context, or background detail
+   - Sentence 3: Impact, reaction, or consequence
+   - Sentence 4: Current status or what happens next
+4. NEVER copy any sentence from the existing description or the source body
+5. Existing description (DO NOT copy): ${currentVal}
 
-Output exactly this JSON (replace the value):
-{"description":"नयाँ विवरण यहाँ लेख्नुहोस्"}`;
+Return ONLY this JSON (no markdown, no explanation):
+{"description":"<your 3-4 sentence factual description here>"}`;
   }
 
   try {
-    const result = await callGemini(prompt, 18000);
-    const newVal = result?.[field === 'desc' ? 'description' : field];
+    console.log(`[Reimagine] calling ${_aiProvider} for field="${field}", jsonKey="${jsonKey}"`);
+    const result = await callAI(prompt, 22000);
 
-    if (!newVal || !/[\u0900-\u097F]{3,}/.test(newVal)) {
-      throw new Error('No valid Nepali content returned');
+    /* callGemini now throws on any failure — if we get here, result is a parsed object */
+    console.log('[Reimagine] parsed result keys:', Object.keys(result || {}));
+
+    /* Try the exact key first, then try common aliases Gemini might return */
+    let newVal = result?.[jsonKey];
+
+    /* Fallback: Gemini sometimes returns "hook_text", "new_hook", "rewritten_title" etc. */
+    if (!newVal) {
+      const firstVal = Object.values(result || {}).find(v => typeof v === 'string' && v.trim().length > 4);
+      if (firstVal) {
+        console.warn(`[Reimagine] key "${jsonKey}" not found, using first string value:`, firstVal.slice(0, 60));
+        newVal = firstVal;
+      }
+    }
+
+    if (!newVal || newVal.trim().length < 5) {
+      throw new Error(`Gemini returned no usable value for key "${jsonKey}". Got: ${JSON.stringify(result)}`);
     }
 
     /* Apply the new value */
@@ -2597,19 +3634,33 @@ Output exactly this JSON (replace the value):
     display.textContent = cleaned;
     display.style.opacity = '1';
 
-    /* Flash the card green to signal success */
+    /* Flash the card to signal success */
     display.classList.add('reimagine-flash');
     setTimeout(() => display.classList.remove('reimagine-flash'), 800);
 
-    toast(`✨ ${field === 'hook' ? 'Hook' : field === 'title' ? 'Title' : 'Description'} reimagined by AI!`, 'success', 3000);
+    const fieldLabel = field === 'hook' ? 'Hook' : field === 'title' ? 'Title' : 'Description';
+    toast(`✨ ${fieldLabel} reimagined by AI!`, 'success', 3000);
 
     /* Regenerate canvas if image is visible */
     if (document.getElementById('imagePanel').style.display !== 'none') generateImage();
 
   } catch (e) {
-    console.warn('[Reimagine] failed:', e.message);
+    console.error('[Reimagine] failed for field:', field, '—', e.message);
     display.style.opacity = '1';
-    toast('❌ AI reimagine failed — try again.', 'error');
+
+    /* Show a meaningful error based on the prefixed error codes from callGemini */
+    const em = e.message || '';
+    let userMsg;
+    if      (em.includes('NO_KEY'))          userMsg = '⚙️ Gemini API key not set — click the AI button to add it.';
+    else if (em.includes('HTTP_400') || em.includes('API key'))  userMsg = '❌ Invalid Gemini API key — click AI to fix it.';
+    else if (em.includes('HTTP_429'))        userMsg = '⏳ Rate limit hit — wait 60 s and try again.';
+    else if (em.includes('HTTP_5'))          userMsg = '❌ Gemini service unavailable — try again shortly.';
+    else if (em.includes('TIMEOUT'))         userMsg = '⏱️ Request timed out — check your internet connection.';
+    else if (em.includes('NO_JSON'))         userMsg = '❌ AI gave bad response format — tap Reimagine again.';
+    else if (em.includes('no usable value')) userMsg = '❌ AI returned empty value — tap Reimagine again.';
+    else                                     userMsg = `❌ Reimagine failed: ${em.slice(0, 80)}`;
+
+    toast(userMsg, 'error', 5000);
   }
 
   btn.innerHTML = origHTML;
@@ -2654,3 +3705,32 @@ function _closeEditMode(m) {
   document.getElementById(m.saveBtn).style.display      = 'none';
   document.getElementById(m.cancelBtn).style.display    = 'none';
 }
+
+/* ================================================================
+   STARTUP CHECKS
+================================================================ */
+(function onStartup() {
+  /* Show red CORS warning banner if opened as file:// */
+  if (location.protocol === 'file:') {
+    const warn = document.getElementById('corsWarning');
+    if (warn) warn.style.display = 'block';
+    console.warn(
+      '%c⚠️ CORS Warning',
+      'color:red;font-size:16px;font-weight:bold',
+      '\nAI features are blocked because you opened index.html directly as a file.\n' +
+      'Fix: open a terminal in the project folder and run:\n\n  python server.py\n\n' +
+      'Then open: http://localhost:3000'
+    );
+  }
+
+  /* Fetch key availability from the server and update the AI badge.
+     Keys live only in .env — the browser never sees the actual values. */
+  loadKeyStatus();
+
+  /* Retry every 10 seconds if server was offline at startup */
+  setInterval(async () => {
+    if (!_serverOnline && _isLocalhost) {
+      await loadKeyStatus();
+    }
+  }, 10000);
+})();

@@ -1,0 +1,13 @@
+{
+  "name": "nepal-viral-news-generator",
+  "version": "1.0.0",
+  "description": "Nepal Viral News Generator — fetch, rewrite & share Nepali news with AI",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["nepal", "news", "gemini", "ai", "viral"],
+  "author": "Shashibhushan Jaiswal",
+  "license": "MIT"
+}

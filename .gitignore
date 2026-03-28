@@ -1,0 +1,11 @@
+# Environment variables — NEVER expose API keys
+.env
+.env.local
+.env.*.local
+
+# Node modules
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
