@@ -432,6 +432,40 @@
         <strong>🔒 Security note:</strong>
         <p style="margin-top:4px;font-size:.82rem">Keys are stored only in <code>.env</code> on the server. They are never sent to the browser, never visible in DevTools, and never stored in <code>localStorage</code>. Make sure <code>.env</code> is listed in <code>.gitignore</code> so it is never committed to Git.</p>
       </div>
+
+      <!-- ── GitHub Pages / Browser Key Entry (shown only when no server proxy) ── -->
+      <div id="browserKeySection" style="display:none;margin-top:18px">
+        <div class="ai-info-box" style="border-color:rgba(251,191,36,.5);background:rgba(251,191,36,.07)">
+          <strong>🌐 GitHub Pages Mode — Enter Keys in Browser</strong>
+          <p style="margin-top:6px;font-size:.82rem">You are running this app from GitHub Pages (no server). Enter your API keys below — they are saved only in <strong>your browser's localStorage</strong> and never sent anywhere except directly to the respective API services.</p>
+          <p style="margin-top:4px;font-size:.78rem;color:var(--muted)">⚠️ Only use on your own personal device. Clear keys before sharing your device.</p>
+        </div>
+        <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+          <div>
+            <label class="ai-key-label">Grok API Key (xAI)</label>
+            <input id="inputGrokKey" type="password" placeholder="xai-…your-grok-key…"
+              style="width:100%;padding:9px 12px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.4);border-radius:8px;color:#fff;font-size:.85rem;font-family:monospace;box-sizing:border-box">
+          </div>
+          <div>
+            <label class="ai-key-label">Gemini API Key (Google)</label>
+            <input id="inputGeminiKey" type="password" placeholder="AIzaSy…your-gemini-key…"
+              style="width:100%;padding:9px 12px;background:rgba(14,165,233,.1);border:1px solid rgba(14,165,233,.4);border-radius:8px;color:#fff;font-size:.85rem;font-family:monospace;box-sizing:border-box">
+          </div>
+          <div>
+            <label class="ai-key-label">Remove.bg API Key</label>
+            <input id="inputRemovebgKey" type="password" placeholder="your-removebg-key…"
+              style="width:100%;padding:9px 12px;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.4);border-radius:8px;color:#fff;font-size:.85rem;font-family:monospace;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn" style="flex:1;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff" onclick="saveBrowserKeys()">💾 Save Keys</button>
+          <button class="btn btn-ghost" style="font-size:.8rem" onclick="clearBrowserKeys()">🗑️ Clear Saved Keys</button>
+        </div>
+        <div style="margin-top:10px;font-size:.78rem;color:var(--muted)">
+          Keys already saved: 
+          <span id="savedKeysSummary">checking…</span>
+        </div>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeAISettings()">Close</button>
@@ -491,6 +525,6 @@
   </div>
 </div>
 
-<script src="app.js?v=20260328f"></script>
+<script src="app.js?v=20260328g"></script>
 </body>
 </html>

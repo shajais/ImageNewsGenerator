@@ -34,10 +34,21 @@ const _fetchProxyBase    = _isLocalhost ? '/proxy/fetch'    : null;
 const _grokProxyBase     = _isLocalhost ? '/proxy/grok'     : null;
 
 /* Key availability flags — populated from /api/key-status on load.
-   The actual key strings NEVER exist in the browser. */
+   The actual key strings NEVER exist in the browser when using the local proxy.
+   On GitHub Pages (no server), keys are entered by the user and stored in localStorage. */
 let _geminiKey    = false;   // true = server has key configured
 let _removebgKey  = false;   // true = server has key configured
 let _grokKey      = false;   // true = server has Grok (xAI) key configured
+
+/* ── Browser-side keys for GitHub Pages mode (no server proxy) ──
+   On localhost these are always empty — the server proxy handles keys.
+   On GitHub Pages the user enters them manually and they are saved to localStorage. */
+const _LS_GEMINI   = 'ghp_gemini_key';
+const _LS_REMOVEBG = 'ghp_removebg_key';
+const _LS_GROK     = 'ghp_grok_key';
+let _browserGeminiKey   = localStorage.getItem(_LS_GEMINI)   || '';
+let _browserRemovebgKey = localStorage.getItem(_LS_REMOVEBG) || '';
+let _browserGrokKey     = localStorage.getItem(_LS_GROK)     || '';
 
 /* Active AI provider: 'gemini' | 'grok'
    Persisted in localStorage so the user's choice survives page refresh. */
@@ -636,8 +647,13 @@ function renderNewsList() {
  */
 async function loadKeyStatus() {
   if (!_isLocalhost) {
+    /* ── GitHub Pages / direct file mode ──
+       No server proxy available. Use browser-stored keys from localStorage. */
+    _geminiKey   = !!_browserGeminiKey;
+    _removebgKey = !!_browserRemovebgKey;
+    _grokKey     = !!_browserGrokKey;
     updateAIBadge();
-    return; // can't reach /api/key-status from file://
+    return;
   }
   try {
     const ctrl = new AbortController();
@@ -698,9 +714,24 @@ function openAISettings() {
   const geminiStatus   = document.getElementById('geminiKeyStatus');
   const removebgStatus = document.getElementById('removebgKeyStatus');
   const grokStatus     = document.getElementById('grokKeyStatus');
-  if (geminiStatus)   geminiStatus.textContent   = _geminiKey   ? '✅ Configured in .env' : '❌ Not set in .env';
-  if (removebgStatus) removebgStatus.textContent = _removebgKey ? '✅ Configured in .env' : '❌ Not set in .env';
-  if (grokStatus)     grokStatus.textContent     = _grokKey     ? '✅ Configured in .env' : '❌ Not set in .env';
+  if (geminiStatus)   geminiStatus.textContent   = _geminiKey   ? '✅ Configured' : '❌ Not set';
+  if (removebgStatus) removebgStatus.textContent = _removebgKey ? '✅ Configured' : '❌ Not set';
+  if (grokStatus)     grokStatus.textContent     = _grokKey     ? '✅ Configured' : '❌ Not set';
+
+  /* Show browser key entry section only on GitHub Pages (no localhost proxy) */
+  const browserSection = document.getElementById('browserKeySection');
+  if (browserSection) {
+    browserSection.style.display = _isLocalhost ? 'none' : 'block';
+    const summary = document.getElementById('savedKeysSummary');
+    if (summary) {
+      const parts = [];
+      if (_browserGrokKey)     parts.push('⚡ Grok');
+      if (_browserGeminiKey)   parts.push('✨ Gemini');
+      if (_browserRemovebgKey) parts.push('🎨 Remove.bg');
+      summary.textContent = parts.length ? parts.join(', ') : 'none';
+    }
+  }
+
   /* Sync the provider toggle pills */
   _syncProviderUI();
   modal.classList.add('open');
@@ -834,6 +865,48 @@ function _syncProviderUI() {
 }
 
 /**
+ * Save browser-entered API keys to localStorage (GitHub Pages mode only).
+ * On localhost this is a no-op — keys come from .env via the server proxy.
+ */
+function saveBrowserKeys() {
+  if (_isLocalhost) {
+    toast('ℹ️ Running locally — keys are managed via .env on the server.', 'info', 4000);
+    return;
+  }
+  const g  = (document.getElementById('inputGeminiKey')  ?.value || '').trim();
+  const rb = (document.getElementById('inputRemovebgKey') ?.value || '').trim();
+  const gr = (document.getElementById('inputGrokKey')     ?.value || '').trim();
+
+  if (g)  { localStorage.setItem(_LS_GEMINI,   g);  _browserGeminiKey   = g; }
+  if (rb) { localStorage.setItem(_LS_REMOVEBG, rb); _browserRemovebgKey = rb; }
+  if (gr) { localStorage.setItem(_LS_GROK,     gr); _browserGrokKey     = gr; }
+
+  /* Clear the input fields after saving (don't leave keys visible) */
+  ['inputGeminiKey','inputRemovebgKey','inputGrokKey'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+
+  _geminiKey   = !!_browserGeminiKey;
+  _removebgKey = !!_browserRemovebgKey;
+  _grokKey     = !!_browserGrokKey;
+
+  updateAIBadge();
+  openAISettings(); // refresh status labels
+  toast('✅ Keys saved in browser! AI features are now active.', 'success', 4000);
+}
+
+/** Clear all browser-stored keys */
+function clearBrowserKeys() {
+  [_LS_GEMINI, _LS_REMOVEBG, _LS_GROK].forEach(k => localStorage.removeItem(k));
+  _browserGeminiKey = _browserRemovebgKey = _browserGrokKey = '';
+  _geminiKey = _removebgKey = _grokKey = false;
+  updateAIBadge();
+  openAISettings();
+  toast('🗑️ All saved keys cleared.', 'info', 3000);
+}
+
+/**
  * Call Gemini 2.0-flash (free tier) with a structured prompt.
  * Returns parsed JSON from the model or null on failure.
  * @param {string} prompt
@@ -844,11 +917,11 @@ async function callGemini(prompt, timeoutMs = 18000) {
   const ctrl = new AbortController();
   const tid  = setTimeout(() => ctrl.abort(), timeoutMs);
 
-  /* Route through local proxy when on localhost — key is injected server-side,
-     never exposed to the browser. */
+  /* On localhost: route through proxy (key injected server-side, never exposed).
+     On GitHub Pages: call the API directly with the browser-stored key. */
   const fetchUrl = _geminiProxyBase
     ? `${_geminiProxyBase}`
-    : `${GEMINI_API_URL}`;   // file:// fallback (CORS will likely block)
+    : `${GEMINI_API_URL}?key=${encodeURIComponent(_browserGeminiKey)}`;
 
   try {
     const res = await fetch(fetchUrl, {
@@ -930,13 +1003,16 @@ async function callGrok(prompt, timeoutMs = 20000) {
   const ctrl = new AbortController();
   const tid  = setTimeout(() => ctrl.abort(), timeoutMs);
 
-  const fetchUrl = _grokProxyBase || GROK_API_URL;  // always use proxy on localhost
+  /* On localhost: route through proxy.
+     On GitHub Pages: call xAI directly with the browser-stored key. */
+  const fetchUrl = _grokProxyBase || GROK_API_URL;
+  const extraHeaders = _grokProxyBase ? {} : { 'Authorization': `Bearer ${_browserGrokKey}` };
 
   try {
     const res = await fetch(fetchUrl, {
       method: 'POST',
       signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...extraHeaders },
       body: JSON.stringify({
         model: GROK_MODEL,
         messages: [
@@ -2174,7 +2250,9 @@ async function removeBackground(dataUrl) {
 
   const res = await fetch(_removebgProxyBase || 'https://api.remove.bg/v1.0/removebg', {
     method: 'POST',
-    /* No X-Api-Key header here — the server proxy injects it from .env */
+    /* Localhost: proxy injects the key from .env (no key in browser).
+       GitHub Pages: send the browser-stored key directly. */
+    headers: _removebgProxyBase ? {} : { 'X-Api-Key': _browserRemovebgKey },
     body: formData,
     signal: ctrl.signal,
   });
