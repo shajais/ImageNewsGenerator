@@ -76,6 +76,12 @@ let _subjectImg = null;
 let _activeImageDataUrl = null;
 /* True while the canvas is showing an AI-enhanced background composite */
 let _enhancedMode = false;
+/* Sprite-like bounding box for the main subject in enhanced mode — allows
+   the handle canvas to make it selectable / draggable / resizable.
+   null when not in enhanced mode. Fields: x, y, w, h, rot  (canvas-pixel space). */
+let _mainImgSprite = null;
+/* True when the main image sprite is the currently selected object */
+let _mainImgSelected = false;
 
 /* ─────────────────────────────────────────────────────────────────
    NEWS SOURCES
@@ -195,10 +201,13 @@ let _imageTint = {
 /* ── Extra custom text labels (dynamic — unlimited) ─────────────
    Each: { id, text, size, color, bold,
            posX ('left'|'center'|'right'),
-           posY ('top'|'middle'|'bottom') }
+           posY ('top'|'middle'|'bottom'),
+           px (canvas pixel x, overrides posX when set),
+           py (canvas pixel y, overrides posY when set) }
    ──────────────────────────────────────────────────────────────── */
 let _extraTexts    = [];    // dynamic — populated via addExtraText()
 let _nextTextId    = 1;     // auto-increment
+let _selectedTextId = null; // which extra-text label is selected for drag
 
 /* ================================================================
    UTILITY
@@ -1383,13 +1392,15 @@ async function selectArticle(idx) {
   _subjectImg          = null;
   _activeImageDataUrl  = null;
   _enhancedMode        = false;
+  _mainImgSprite       = null;
+  _mainImgSelected     = false;
   /* Clear composite side images */
-  _leftImageDataUrl    = null; _leftSubjectDataUrl  = null; _leftSubjectImg  = null;
-  _rightImageDataUrl   = null; _rightSubjectDataUrl = null; _rightSubjectImg = null;
+  _sideSprites         = [];
+  _selectedSpriteId    = null;
   _compositeMode       = false;
   _showCompositeHandles(false);
   /* Reset composite UI */
-  _updateCompositeUI();
+  _renderSideImageList();
   const resetBtn = document.getElementById('compositeClearBtn');
   if (resetBtn) resetBtn.style.display = 'none';
   /* Reset custom image UI */
@@ -2415,11 +2426,13 @@ async function enhanceImageWithAI() {
     _enhancedMode = true;
     redrawEnhanced();
 
-    toast('✨ AI enhancement done! Zoom/pan still work.', 'success', 4000);
+    toast('✨ AI enhancement done! Drag the green handles to move/resize the subject.', 'success', 5000);
 
   } catch (err) {
     console.error('[EnhanceAI]', err);
-    _enhancedMode = false;
+    _enhancedMode    = false;
+    _mainImgSprite   = null;
+    _mainImgSelected = false;
     toast('❌ AI enhance failed: ' + err.message, 'error', 6000);
   }
 
@@ -2441,36 +2454,49 @@ function redrawEnhanced() {
   canvas.width  = CANVAS_W;
   canvas.height = CANVAS_H;
 
+  /* ── Initialise the main-image sprite if not yet created ── */
+  if (!_mainImgSprite) {
+    const baseScale = Math.min(CANVAS_W / _subjectImg.width, CANVAS_H / _subjectImg.height);
+    const sw = _subjectImg.width  * baseScale;
+    const sh = _subjectImg.height * baseScale;
+    _mainImgSprite = {
+      x: (CANVAS_W - sw) / 2,
+      y: (CANVAS_H - sh) / 2,
+      w: sw, h: sh, rot: 0
+    };
+  }
+
   /* ── Draw chosen AI background ── */
   drawAIBackground(ctx, _selectedBgStyle, CANVAS_W, CANVAS_H);
 
-  /* ── Composite subject: base scale fills the canvas height, then apply user zoom ── */
-  const baseScale = Math.min(CANVAS_W / _subjectImg.width, CANVAS_H / _subjectImg.height);
-  const scale = baseScale * imgScale;
-  const sw = _subjectImg.width  * scale;
-  const sh = _subjectImg.height * scale;
-  const sx = (CANVAS_W - sw) / 2 + imgOffsetX;
-  const sy = (CANVAS_H - sh) / 2 + imgOffsetY;
-
-  /* Subtle drop shadow for depth */
+  /* ── Composite subject using sprite position ── */
+  const sp = _mainImgSprite;
   ctx.save();
+  ctx.translate(sp.x + sp.w / 2, sp.y + sp.h / 2);
+  ctx.rotate(sp.rot);
   ctx.shadowColor   = 'rgba(0,0,0,0.55)';
   ctx.shadowBlur    = 38;
   ctx.shadowOffsetX = 6;
   ctx.shadowOffsetY = 10;
-  ctx.drawImage(_subjectImg, sx, sy, sw, sh);
+  ctx.drawImage(_subjectImg, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
   ctx.restore();
 
-  /* ── News banner + text overlay ── */
+  /* Re-layer composite side images on top of the AI background */
+  if (_compositeMode && _sideSprites.length > 0) {
+    _drawSpritesOnCtx(ctx);
+  }
+
+  /* ── Banner always drawn LAST over all images/sprites ── */
   _drawNewsBanner(ctx, CANVAS_W);
   if (generatedPost) drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
-  /* Re-layer composite side images on top of the AI background */
-  if (_compositeMode && (_leftSubjectImg || _rightSubjectImg)) {
-    _drawSpritesOnCtx(ctx);
-    _drawCompositeHandles();
-  }
   /* Extra custom text labels */
   _drawExtraTexts(ctx, CANVAS_W, CANVAS_H);
+
+  /* Redraw all selection handles (main image + sprites + texts) */
+  _drawCompositeHandles();
+
+  /* Show handle canvas whenever enhanced mode is active */
+  _showCompositeHandles(true);
 
   /* Update badge */
   document.getElementById('imgSourceBadge').textContent =
@@ -2799,6 +2825,8 @@ function clearCustomImage() {
   _subjectDataUrl     = null;
   _subjectImg         = null;
   _enhancedMode       = false;
+  _mainImgSprite      = null;
+  _mainImgSelected    = false;
   document.getElementById('customImgInput').value = '';
   document.getElementById('clearCustomBtn').style.display = 'none';
   document.getElementById('enhanceAIBtn').style.display   = 'none';
@@ -2873,21 +2901,21 @@ function _renderSideImageList() {
   if (clearBtn) clearBtn.style.display = _sideSprites.length ? 'inline-flex' : 'none';
 }
 
-/** Compute a default position for sprite index i */
+/** Compute a default position for sprite index i — centred on canvas */
 function _defaultSpritePos(i, img) {
   const W = CANVAS_W, H = CANVAS_H;
-  const cols = 5;
-  const col  = i % cols;
-  const maxW = Math.round(W * 0.30);
-  const maxH = Math.round(H * 0.55);
+  /* Scale image to fill ~45% of canvas height, preserving aspect ratio */
+  const maxH = Math.round(H * 0.45);
+  const maxW = Math.round(W * 0.45);
   const aspect = img.width / img.height;
-  let dw = maxW, dh = Math.round(maxW / aspect);
-  if (dh > maxH) { dh = maxH; dw = Math.round(maxH * aspect); }
-  /* spread across the bottom of the canvas */
-  const spacing = Math.round((W - dw) / Math.max(cols - 1, 1));
-  const x = Math.min(col * spacing, W - dw - 4);
-  const y = Math.round(H * 0.85) - dh;
-  return { x, y, w: dw, h: dh, rot: 0 };
+  let dh = maxH, dw = Math.round(maxH * aspect);
+  if (dw > maxW) { dw = maxW; dh = Math.round(maxW / aspect); }
+  /* Centre the sprite on the canvas; stagger multiple sprites slightly */
+  const offsetX = (i % 3 - 1) * Math.round(W * 0.08);
+  const offsetY = (Math.floor(i / 3) % 2) * Math.round(H * 0.06);
+  const x = Math.round((W - dw) / 2) + offsetX;
+  const y = Math.round((H - dh) / 2) + offsetY;
+  return { x: Math.max(0, x), y: Math.max(0, y), w: dw, h: dh, rot: 0 };
 }
 
 /**
@@ -2937,6 +2965,12 @@ async function applyComposite() {
  *  Centre image → side sprites (all of _sideSprites) → text overlay → extra texts
  */
 async function redrawComposite() {
+  /* If AI enhancement is active, use that as the base (preserves AI background) */
+  if (_enhancedMode && _subjectImg) {
+    redrawEnhanced();   // redrawEnhanced already draws sprites + handles + extra texts
+    return;
+  }
+
   const canvas = document.getElementById('newsCanvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -2952,6 +2986,8 @@ async function redrawComposite() {
 
   _drawSpritesOnCtx(ctx);
 
+  /* Banner always on top of all images/sprites */
+  _drawNewsBanner(ctx, CANVAS_W);
   if (generatedPost) drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
   _drawExtraTexts(ctx, CANVAS_W, CANVAS_H);
   _drawCompositeHandles();
@@ -2994,24 +3030,45 @@ const ROTATE_GAP = 28;
 function _getHandleCanvas() {
   let hc = document.getElementById('compositeHandleCanvas');
   if (!hc) {
-    const wrap = document.querySelector('.canvas-wrap');
-    if (!wrap) return null;
+    const mc = document.getElementById('newsCanvas');
+    if (!mc) return null;
     hc = document.createElement('canvas');
     hc.id = 'compositeHandleCanvas';
+    /* Mirror newsCanvas CSS exactly so it overlays it perfectly.
+       newsCanvas uses width:100%; max-width:640px; display:block; centred via flex parent.
+       We match those rules + use left:50% / translateX(-50%) to stay centred. */
     hc.style.cssText = [
-      'position:absolute', 'top:0', 'left:0', 'width:100%', 'height:100%',
-      'pointer-events:none', 'display:none', 'z-index:10'
+      'position:absolute',
+      'top:0',
+      'left:50%',
+      'transform:translateX(-50%)',
+      'width:100%',
+      'max-width:640px',
+      'aspect-ratio:1/1',
+      'pointer-events:none',
+      'display:none',
+      'z-index:10'
     ].join(';');
-    const mc = document.getElementById('newsCanvas');
-    if (mc && mc.parentNode) mc.parentNode.insertBefore(hc, mc.nextSibling);
-    else wrap.appendChild(hc);
+    mc.parentNode.insertBefore(hc, mc.nextSibling);
   }
   return hc;
+}
+
+/** Keep handle canvas internal resolution in sync with its displayed pixel size */
+function _syncHandleCanvasSize() {
+  const hc = document.getElementById('compositeHandleCanvas');
+  const mc = document.getElementById('newsCanvas');
+  if (!hc || !mc) return;
+  /* Internal resolution must match newsCanvas attribute size (1080×1080).
+     The CSS width/max-width rules handle the visual scaling. */
+  hc.width  = mc.width  || CANVAS_W;
+  hc.height = mc.height || CANVAS_H;
 }
 
 function _showCompositeHandles(show) {
   const hc = _getHandleCanvas();
   if (!hc) return;
+  if (show) _syncHandleCanvasSize();   // keep it flush with the canvas, not the whole wrap
   hc.style.display      = show ? 'block' : 'none';
   hc.style.pointerEvents = show ? 'auto'  : 'none';
 }
@@ -3043,56 +3100,65 @@ function _rotGripWorld(sp) {
 
 function _drawCompositeHandles() {
   const hc = _getHandleCanvas();
-  if (!hc || !_compositeMode) return;
+  if (!hc) return;
   const mc = document.getElementById('newsCanvas');
   if (!mc) return;
-  hc.width = mc.width; hc.height = mc.height;
+  /* Set internal resolution to match the main canvas (1080×1080).
+     This must match so that sprite coordinates (in 1080-space) line up exactly. */
+  hc.width  = mc.width  || CANVAS_W;
+  hc.height = mc.height || CANVAS_H;
   const ctx = hc.getContext('2d');
   ctx.clearRect(0, 0, hc.width, hc.height);
 
-  const sel = _sideSprites.find(s => s.id === _selectedSpriteId);
-  if (!sel || !sel.img) {
-    hc.style.pointerEvents = _compositeMode ? 'auto' : 'none';
-    return;
+  const needsOverlay = (_enhancedMode && _mainImgSprite) || (_compositeMode && _sideSprites.length > 0) || _extraTexts.length > 0;
+  hc.style.pointerEvents = needsOverlay ? 'auto' : 'none';
+  if (!needsOverlay) return;
+
+  /* Helper: draw selection box + corner handles + rotate grip for any sprite-like object */
+  function _drawHandles(sp, color) {
+    const corners = [0,1,2,3].map(i => _cornerWorld(sp, i));
+    const grip    = _rotGripWorld(sp);
+    ctx.save();
+    ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash([10,6]);
+    ctx.beginPath();
+    ctx.moveTo(corners[0].x, corners[0].y);
+    corners.forEach(c => ctx.lineTo(c.x, c.y));
+    ctx.closePath(); ctx.stroke();
+    const topMid = { x:(corners[0].x+corners[1].x)/2, y:(corners[0].y+corners[1].y)/2 };
+    ctx.setLineDash([5,5]);
+    ctx.beginPath(); ctx.moveTo(topMid.x,topMid.y); ctx.lineTo(grip.x,grip.y); ctx.stroke();
+    ctx.restore();
+    corners.forEach(c => {
+      ctx.beginPath(); ctx.arc(c.x, c.y, HANDLE_R, 0, Math.PI*2);
+      ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash([]); ctx.stroke();
+    });
+    ctx.beginPath(); ctx.arc(grip.x, grip.y, HANDLE_R, 0, Math.PI*2);
+    ctx.fillStyle = color; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${Math.round(HANDLE_R*1.4)}px sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('↻', grip.x, grip.y);
   }
 
-  const corners = [0,1,2,3].map(i => _cornerWorld(sel, i));
-  const grip    = _rotGripWorld(sel);
-  const color   = '#f6ad55';
+  /* Draw main image (enhanced mode) handles */
+  if (_enhancedMode && _mainImgSprite) {
+    _drawHandles(_mainImgSprite, _mainImgSelected ? '#34d399' : 'rgba(52,211,153,0.5)');
+  }
 
-  /* Dashed bounding box */
-  ctx.save();
-  ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash([10,6]);
-  ctx.beginPath();
-  ctx.moveTo(corners[0].x, corners[0].y);
-  corners.forEach(c => ctx.lineTo(c.x, c.y));
-  ctx.closePath(); ctx.stroke();
-  /* Line to rotate grip */
-  const topMid = { x:(corners[0].x+corners[1].x)/2, y:(corners[0].y+corners[1].y)/2 };
-  ctx.setLineDash([5,5]);
-  ctx.beginPath(); ctx.moveTo(topMid.x,topMid.y); ctx.lineTo(grip.x,grip.y); ctx.stroke();
-  ctx.restore();
+  /* Draw selected sprite handles */
+  const selSprite = _sideSprites.find(s => s.id === _selectedSpriteId);
+  if (selSprite && selSprite.img) _drawHandles(selSprite, '#f6ad55');
 
-  /* Corner handles */
-  corners.forEach(c => {
-    ctx.beginPath(); ctx.arc(c.x, c.y, HANDLE_R, 0, Math.PI*2);
-    ctx.fillStyle = '#fff'; ctx.fill();
-    ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash([]); ctx.stroke();
-  });
-  /* Rotate grip */
-  ctx.beginPath(); ctx.arc(grip.x, grip.y, HANDLE_R, 0, Math.PI*2);
-  ctx.fillStyle = color; ctx.fill();
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.stroke();
-  ctx.fillStyle = '#fff';
-  ctx.font = `bold ${Math.round(HANDLE_R*1.4)}px sans-serif`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('↻', grip.x, grip.y);
-
-  hc.style.pointerEvents = 'auto';
+  /* Draw selected text handles */
+  const selText = _extraTexts.find(t => t.id === _selectedTextId);
+  if (selText && selText.text.trim()) _drawHandles(selText, '#818cf8');
 }
 
 function _hitTestSprite(sp, wx, wy) {
-  if (!sp.img) return null;
+  /* Works for sprite objects ({img}), text objects ({text}), and main-img sprite */
+  if (sp.img === undefined && sp.text === undefined && sp !== _mainImgSprite) return null;
   const grip = _rotGripWorld(sp);
   if (Math.hypot(wx - grip.x, wy - grip.y) <= HANDLE_R + 4) return 'rotate';
   for (let i = 0; i < 4; i++) {
@@ -3108,9 +3174,7 @@ function _hitTestSprite(sp, wx, wy) {
 }
 
 (function _initCompositeHandleInteraction() {
-  let _active    = null;  // { sprite, type }
-  let _startPx   = null;
-  let _startSp   = null;
+  let _active    = null;
   let _rafPending = false;
 
   function _getHc() { return document.getElementById('compositeHandleCanvas'); }
@@ -3125,104 +3189,180 @@ function _hitTestSprite(sp, wx, wy) {
   function _scheduleRedraw() {
     if (_rafPending) return;
     _rafPending = true;
-    requestAnimationFrame(async () => { _rafPending = false; await redrawComposite(); });
+    requestAnimationFrame(() => { _rafPending = false; fastRedraw(); });
+  }
+
+  /* Apply sprite-model resize to either a sprite or a text object */
+  function _applyResize(obj, startSnap, cornerIdx, startPt, pt) {
+    const dx = pt.x - startPt.x, dy = pt.y - startPt.y;
+    const oppIdx  = (cornerIdx + 2) % 4;
+    const oppW    = _cornerWorld(startSnap, oppIdx);
+    const corners = _spriteCorners(startSnap);
+    const origL   = corners[cornerIdx];
+    const newWx   = startSnap.x + startSnap.w/2 + _rot(origL.lx, origL.ly, startSnap.rot).x + dx;
+    const newWy   = startSnap.y + startSnap.h/2 + _rot(origL.lx, origL.ly, startSnap.rot).y + dy;
+    const vecX    = newWx - oppW.x, vecY = newWy - oppW.y;
+    const cos     = Math.cos(-startSnap.rot), sin = Math.sin(-startSnap.rot);
+    const newW    = Math.max(60, Math.abs(vecX*cos - vecY*sin));
+    const newH    = Math.max(30, Math.abs(vecX*sin + vecY*cos));
+    const midX    = (newWx + oppW.x)/2, midY = (newWy + oppW.y)/2;
+    obj.w = newW; obj.h = newH;
+    obj.x = midX - newW/2; obj.y = midY - newH/2;
+    /* For text objects: scale font size proportionally to height */
+    if (obj.text !== undefined) {
+      obj.size = Math.max(10, Math.round(newH * 0.55));
+      /* Sync size slider in the UI card */
+      const lbl = document.querySelector(`[data-txt-id="${obj.id}"] .txt-size-val`);
+      const rng = document.querySelector(`[data-txt-id="${obj.id}"] input[type=range]`);
+      if (lbl) lbl.textContent = obj.size + 'px';
+      if (rng) rng.value = obj.size;
+    }
   }
 
   function _onDown(e) {
-    if (!_compositeMode) return;
+    const hasMainImg = _enhancedMode && _mainImgSprite;
+    const hasSprites = _compositeMode && _sideSprites.length > 0;
+    const hasTexts   = _extraTexts.length > 0;
+    if (!hasMainImg && !hasSprites && !hasTexts) return;
+
     const pt = _ptToCanvas(e);
 
-    /* First check if we hit the currently selected sprite's handles */
-    const sel = _sideSprites.find(s => s.id === _selectedSpriteId);
-    if (sel) {
-      const hit = _hitTestSprite(sel, pt.x, pt.y);
+    /* ── 0. Main image (enhanced mode) ── */
+    if (hasMainImg) {
+      const hit = _hitTestSprite(_mainImgSprite, pt.x, pt.y);
       if (hit) {
-        _active = { sprite: sel, type: hit };
-        _startPx = pt; _startSp = { ...sel };
-        e.preventDefault(); e.stopPropagation(); return;
-      }
-    }
-
-    /* Then check all sprites for a new selection (topmost = last in array) */
-    for (let i = _sideSprites.length - 1; i >= 0; i--) {
-      const sp = _sideSprites[i];
-      const hit = _hitTestSprite(sp, pt.x, pt.y);
-      if (hit) {
-        _selectedSpriteId = sp.id;
-        _active = { sprite: sp, type: hit };
-        _startPx = pt; _startSp = { ...sp };
+        _mainImgSelected  = true;
+        _selectedSpriteId = null;
+        _selectedTextId   = null;
+        _active = { type: 'mainImg', obj: _mainImgSprite, hit, startPt: pt, startSnap: { ..._mainImgSprite } };
         _drawCompositeHandles();
         e.preventDefault(); e.stopPropagation(); return;
       }
     }
 
-    /* Clicked empty area — deselect */
-    _selectedSpriteId = null;
+    /* ── 1. Selected sprite handles ── */
+    if (hasSprites) {
+      const sel = _sideSprites.find(s => s.id === _selectedSpriteId);
+      if (sel) {
+        const hit = _hitTestSprite(sel, pt.x, pt.y);
+        if (hit) {
+          _mainImgSelected = false;
+          _active = { type: 'sprite', obj: sel, hit, startPt: pt, startSnap: { ...sel } };
+          e.preventDefault(); e.stopPropagation(); return;
+        }
+      }
+      /* Any other sprite */
+      for (let i = _sideSprites.length - 1; i >= 0; i--) {
+        const sp  = _sideSprites[i];
+        const hit = _hitTestSprite(sp, pt.x, pt.y);
+        if (hit) {
+          _selectedSpriteId = sp.id; _selectedTextId = null; _mainImgSelected = false;
+          _active = { type: 'sprite', obj: sp, hit, startPt: pt, startSnap: { ...sp } };
+          _drawCompositeHandles();
+          e.preventDefault(); e.stopPropagation(); return;
+        }
+      }
+    }
+
+    /* ── 2. Selected text handles ── */
+    const selTxt = _extraTexts.find(t => t.id === _selectedTextId);
+    if (selTxt) {
+      const hit = _hitTestSprite(selTxt, pt.x, pt.y);
+      if (hit) {
+        _mainImgSelected = false;
+        _active = { type: 'text', obj: selTxt, hit, startPt: pt, startSnap: { ...selTxt } };
+        e.preventDefault(); e.stopPropagation(); return;
+      }
+    }
+    /* Any other text */
+    for (let i = _extraTexts.length - 1; i >= 0; i--) {
+      const et  = _extraTexts[i];
+      const hit = _hitTestSprite(et, pt.x, pt.y);
+      if (hit) {
+        _selectedTextId = et.id; _selectedSpriteId = null; _mainImgSelected = false;
+        _active = { type: 'text', obj: et, hit, startPt: pt, startSnap: { ...et } };
+        _drawCompositeHandles();
+        e.preventDefault(); e.stopPropagation(); return;
+      }
+    }
+
+    /* ── 3. Empty area — deselect ── */
+    _selectedSpriteId = null; _selectedTextId = null; _mainImgSelected = false;
     _drawCompositeHandles();
   }
 
   function _onMove(e) {
     if (!_active) return;
     const pt  = _ptToCanvas(e);
-    const sp  = _active.sprite;
-    const ssp = _startSp;
-    const dx  = pt.x - _startPx.x;
-    const dy  = pt.y - _startPx.y;
+    const dx  = pt.x - _active.startPt.x;
+    const dy  = pt.y - _active.startPt.y;
+    const obj = _active.obj;
+    const ssp = _active.startSnap;
 
-    if (_active.type === 'move') {
-      sp.x = ssp.x + dx; sp.y = ssp.y + dy;
-    } else if (_active.type === 'rotate') {
+    if (_active.hit === 'move') {
+      obj.x = ssp.x + dx; obj.y = ssp.y + dy;
+    } else if (_active.hit === 'rotate') {
       const cx = ssp.x + ssp.w/2, cy = ssp.y + ssp.h/2;
-      sp.rot = ssp.rot + Math.atan2(pt.y - cy, pt.x - cx) - Math.atan2(_startPx.y - cy, _startPx.x - cx);
-    } else if (_active.type.startsWith('resize-')) {
-      const cornerIdx = parseInt(_active.type.split('-')[1]);
-      const oppIdx    = (cornerIdx + 2) % 4;
-      const oppW      = _cornerWorld(ssp, oppIdx);
-      const corners   = _spriteCorners(ssp);
-      const origLocal = corners[cornerIdx];
-      const newWx     = ssp.x + ssp.w/2 + _rot(origLocal.lx, origLocal.ly, ssp.rot).x + dx;
-      const newWy     = ssp.y + ssp.h/2 + _rot(origLocal.lx, origLocal.ly, ssp.rot).y + dy;
-      const vecX = newWx - oppW.x, vecY = newWy - oppW.y;
-      const cos  = Math.cos(-ssp.rot), sin = Math.sin(-ssp.rot);
-      sp.w = Math.max(40, Math.abs(vecX*cos - vecY*sin));
-      sp.h = Math.max(40, Math.abs(vecX*sin + vecY*cos));
-      const midX = (newWx + oppW.x)/2, midY = (newWy + oppW.y)/2;
-      sp.x = midX - sp.w/2; sp.y = midY - sp.h/2;
+      obj.rot = ssp.rot + Math.atan2(pt.y - cy, pt.x - cx)
+                        - Math.atan2(_active.startPt.y - cy, _active.startPt.x - cx);
+    } else if (_active.hit.startsWith('resize-')) {
+      _applyResize(obj, ssp, parseInt(_active.hit.split('-')[1]), _active.startPt, pt);
     }
     e.preventDefault();
     _scheduleRedraw();
   }
 
-  function _onUp() { _active = null; _startPx = null; _startSp = null; }
+  function _onUp() { _active = null; }
 
   function _onHover(e) {
     if (_active) return;
-    const hc = _getHc(); if (!hc || !_compositeMode) return;
+    const hc = _getHc(); if (!hc) return;
     const pt = _ptToCanvas(e);
     let cursor = 'default';
-    /* Check selected sprite handles first */
-    const sel = _sideSprites.find(s => s.id === _selectedSpriteId);
-    if (sel) {
-      const hit = _hitTestSprite(sel, pt.x, pt.y);
-      if (hit === 'move') cursor = 'grab';
+
+    /* Check main image (enhanced mode) */
+    if (_enhancedMode && _mainImgSprite) {
+      const hit = _hitTestSprite(_mainImgSprite, pt.x, pt.y);
+      if      (hit === 'move')   cursor = 'grab';
       else if (hit === 'rotate') cursor = 'crosshair';
-      else if (hit) cursor = 'nwse-resize';
+      else if (hit)              cursor = 'nwse-resize';
     }
+
+    /* Check sprites */
+    if (cursor === 'default' && _compositeMode) {
+      const sel = _sideSprites.find(s => s.id === _selectedSpriteId);
+      if (sel) {
+        const hit = _hitTestSprite(sel, pt.x, pt.y);
+        if      (hit === 'move')   cursor = 'grab';
+        else if (hit === 'rotate') cursor = 'crosshair';
+        else if (hit)              cursor = 'nwse-resize';
+      }
+      if (cursor === 'default') {
+        for (let i = _sideSprites.length - 1; i >= 0; i--) {
+          if (_hitTestSprite(_sideSprites[i], pt.x, pt.y)) { cursor = 'pointer'; break; }
+        }
+      }
+    }
+    /* Check texts */
     if (cursor === 'default') {
-      for (let i = _sideSprites.length - 1; i >= 0; i--) {
-        const hit = _hitTestSprite(_sideSprites[i], pt.x, pt.y);
-        if (hit) { cursor = 'pointer'; break; }
+      const selT = _extraTexts.find(t => t.id === _selectedTextId);
+      if (selT) {
+        const hit = _hitTestSprite(selT, pt.x, pt.y);
+        if      (hit === 'move')   cursor = 'grab';
+        else if (hit === 'rotate') cursor = 'crosshair';
+        else if (hit)              cursor = 'nwse-resize';
+      }
+      if (cursor === 'default') {
+        for (let i = _extraTexts.length - 1; i >= 0; i--) {
+          if (_hitTestSprite(_extraTexts[i], pt.x, pt.y)) { cursor = 'text'; break; }
+        }
       }
     }
     hc.style.cursor = cursor;
   }
 
-  /* Clicking the MAIN canvas (not handle overlay) deselects */
-  function _onMainCanvasClick(e) {
-    if (!_compositeMode) return;
-    /* Only deselect if not intercepted by handle canvas */
-    _selectedSpriteId = null;
-    _drawCompositeHandles();
+  function _ensureHandleCanvasVisible() {
+    if (_enhancedMode || _compositeMode || _extraTexts.length > 0) _showCompositeHandles(true);
   }
 
   function _attach() {
@@ -3232,20 +3372,21 @@ function _hitTestSprite(sp, wx, wy) {
     hc.addEventListener('touchstart', _onDown,  { passive: false });
     window.addEventListener('mousemove', _onMove, { passive: false });
     window.addEventListener('touchmove', _onMove, { passive: false });
-    window.addEventListener('mouseup',  _onUp, { passive: true });
-    window.addEventListener('touchend', _onUp, { passive: true });
+    window.addEventListener('mouseup',   _onUp,   { passive: true });
+    window.addEventListener('touchend',  _onUp,   { passive: true });
     hc.addEventListener('mousemove', _onHover, { passive: true });
-
-    /* Main canvas click deselects sprite */
+    /* Main canvas click deselects everything */
     const mc = document.getElementById('newsCanvas');
-    if (mc) mc.addEventListener('click', _onMainCanvasClick);
+    if (mc) mc.addEventListener('click', () => {
+      _selectedSpriteId = null; _selectedTextId = null;
+      _drawCompositeHandles();
+    });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _attach);
-  } else {
-    setTimeout(_attach, 400);
-  }
+  window._ensureHandleCanvasVisible = _ensureHandleCanvasVisible;
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _attach);
+  else setTimeout(_attach, 400);
 })();
 
 /** Clear all composite side images and exit composite mode */
@@ -3253,7 +3394,7 @@ function clearAllComposite() {
   _sideSprites = [];
   _selectedSpriteId = null;
   _compositeMode = false;
-  _showCompositeHandles(false);
+  if (!_enhancedMode && _extraTexts.length === 0) _showCompositeHandles(false);
   _renderSideImageList();
   fastRedraw();
   toast('↺ Composite cleared', 'info', 1800);
@@ -3372,8 +3513,9 @@ function _hideCanvasEditor() {
  * Called by toolbar buttons, text editor, colour pickers, etc.
  */
 function fastRedraw() {
-  if (_compositeMode) { redrawComposite(); return; }
+  /* Enhanced mode takes priority — redrawEnhanced handles composite sprites too */
   if (_enhancedMode && typeof redrawEnhanced === 'function') { redrawEnhanced(); return; }
+  if (_compositeMode) { redrawComposite(); return; }
   const canvas = document.getElementById('newsCanvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -3384,6 +3526,8 @@ function fastRedraw() {
   } else {
     drawBackground(ctx, CANVAS_W, CANVAS_H);
   }
+  /* Banner always on top of image layer */
+  _drawNewsBanner(ctx, CANVAS_W);
   if (generatedPost) drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
   _drawExtraTexts(ctx, CANVAS_W, CANVAS_H);
 }
@@ -3420,15 +3564,15 @@ function fastRedraw() {
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
 
-      if (_compositeMode) {
-        /* Composite mode — side subjects overlaid on centre image */
-        redrawComposite();
+      if (_enhancedMode && _subjectImg) {
+        /* Enhanced mode — redraw background + subject (also handles composite sprites) */
+        redrawEnhanced();
         return;
       }
 
-      if (_enhancedMode && _subjectImg) {
-        /* Enhanced mode — redraw background + subject */
-        redrawEnhanced();
+      if (_compositeMode) {
+        /* Composite mode — side subjects overlaid on centre image */
+        redrawComposite();
         return;
       }
 
@@ -3437,6 +3581,7 @@ function fastRedraw() {
         canvas.width  = CANVAS_W;
         canvas.height = CANVAS_H;
         drawNewsImage(ctx, _cachedNewsImg, CANVAS_W, CANVAS_H);
+        _drawNewsBanner(ctx, CANVAS_W);
         if (generatedPost) drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
         _drawExtraTexts(ctx, CANVAS_W, CANVAS_H);
       } else if (generatedPost) {
@@ -3444,6 +3589,7 @@ function fastRedraw() {
         canvas.width  = CANVAS_W;
         canvas.height = CANVAS_H;
         drawBackground(ctx, CANVAS_W, CANVAS_H);
+        _drawNewsBanner(ctx, CANVAS_W);
         drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
         _drawExtraTexts(ctx, CANVAS_W, CANVAS_H);
       }
@@ -3643,7 +3789,9 @@ async function generateImage() {
     toast('⚠️ Please select a news article first.', 'error'); return;
   }
   /* Regenerate always exits enhanced/composite mode — user wants the original image */
-  _enhancedMode = false;
+  _enhancedMode    = false;
+  _mainImgSprite   = null;
+  _mainImgSelected = false;
   /* Note: composite mode is NOT auto-exited — it re-composites on the fresh image */
   document.getElementById('imagePanel').style.display = 'block';
   document.getElementById('imagePanel').scrollIntoView({ behavior:'smooth', block:'nearest' });
@@ -3676,6 +3824,7 @@ async function generateImage() {
   if (newsImg) {
     _cachedNewsImg = newsImg;   /* ← cache for instant drag/zoom redraws */
     drawNewsImage(ctx, newsImg, CANVAS_W, CANVAS_H);
+    _drawNewsBanner(ctx, CANVAS_W);
     document.getElementById('imgSourceBadge').textContent = imgSource;
     /* Show the canvas editor overlay + quick bar */
     document.getElementById('imgAdjustBar').style.display = 'block'; // keeps old JS guards happy
@@ -3690,6 +3839,7 @@ async function generateImage() {
   } else {
     _cachedNewsImg = null;   /* no image available */
     drawBackground(ctx, CANVAS_W, CANVAS_H);
+    _drawNewsBanner(ctx, CANVAS_W);
     document.getElementById('imgSourceBadge').textContent = '🎨 Graphic background';
     /* No image — hide overlay tools and enhance button */
     document.getElementById('imgAdjustBar').style.display = 'none';
@@ -3701,7 +3851,7 @@ async function generateImage() {
   drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
 
   /* If composite mode is active, re-composite side subjects on the new image */
-  if (_compositeMode && (_leftSubjectImg || _rightSubjectImg)) {
+  if (_compositeMode && _sideSprites.length > 0) {
     redrawComposite();   // async, but non-blocking — updates canvas after centre is drawn
   }
 
@@ -3879,37 +4029,98 @@ function resetImageTint() {
 function _drawExtraTexts(ctx, W, H) {
   _extraTexts.forEach(et => {
     if (!et.text.trim()) return;
+    /* Determine the canvas-space position.
+       New format uses sprite-compatible x/y/w/h/rot.
+       Legacy format uses px/py or posX/posY presets. */
+    let cx, cy, bw, bh, rot;
+    if (et.x != null && et.w != null) {
+      /* New sprite-model format */
+      cx  = et.x + et.w / 2;
+      cy  = et.y + et.h / 2;
+      bw  = et.w;
+      bh  = et.h;
+      rot = et.rot || 0;
+    } else {
+      /* Legacy fallback */
+      const padX = 60;
+      cx = (et.px != null) ? et.px : W / 2;
+      let y;
+      if (et.py != null) y = et.py;
+      else if (et.posY === 'top') y = 140;
+      else if (et.posY === 'bottom') y = H - 220;
+      else y = H * 0.45;
+      cy  = y;
+      bw  = W - padX * 2;
+      bh  = (et.size || 32) * 2;
+      rot = 0;
+    }
+
     const size = et.size || 32;
     ctx.save();
-    ctx.font = `${et.bold ? 'bold ' : ''}${size}px "Segoe UI",Arial,sans-serif`;
+    ctx.translate(cx, cy);
+    ctx.rotate(rot);
+
+    /* ── Background fill (optional) ── */
+    if (et.bgColor && et.bgColor !== 'transparent' && et.bgColor !== '#00000000') {
+      const padX = 18, padY = 10;
+      ctx.shadowColor = 'rgba(0,0,0,0)';  // no shadow on bg rect
+      ctx.shadowBlur  = 0;
+      ctx.fillStyle   = et.bgColor;
+      /* Rounded rect */
+      const rx = -bw / 2 - padX, ry = -bh / 2 - padY;
+      const rw = bw + padX * 2,  rh = bh + padY * 2, rr = 12;
+      ctx.beginPath();
+      ctx.moveTo(rx + rr, ry);
+      ctx.lineTo(rx + rw - rr, ry);
+      ctx.arcTo(rx + rw, ry, rx + rw, ry + rr, rr);
+      ctx.lineTo(rx + rw, ry + rh - rr);
+      ctx.arcTo(rx + rw, ry + rh, rx + rw - rr, ry + rh, rr);
+      ctx.lineTo(rx + rr, ry + rh);
+      ctx.arcTo(rx, ry + rh, rx, ry + rh - rr, rr);
+      ctx.lineTo(rx, ry + rr);
+      ctx.arcTo(rx, ry, rx + rr, ry, rr);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.font         = `${et.bold ? 'bold ' : ''}${size}px "Segoe UI",Arial,sans-serif`;
     ctx.fillStyle    = et.color || '#ffffff';
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
     ctx.shadowColor  = 'rgba(0,0,0,0.85)';
     ctx.shadowBlur   = 14;
-    const padX = 60;
-    let x = W / 2;
-    if (et.posX === 'left')        { ctx.textAlign = 'left';   x = padX; }
-    else if (et.posX === 'right')  { ctx.textAlign = 'right';  x = W - padX; }
-    else                           { ctx.textAlign = 'center'; x = W / 2; }
-    let y;
-    if      (et.posY === 'top')    y = 140;
-    else if (et.posY === 'bottom') y = H - 220;
-    else                           y = H * 0.45;
-    wrapText(ctx, et.text, x, y, W - padX * 2, size * 1.35, 3);
+    /* Wrap text inside the bounding box */
+    wrapText(ctx, et.text, 0, 0, bw - 20, size * 1.35, Math.max(1, Math.floor(bh / (size * 1.35))));
     ctx.restore();
   });
 }
 
 /** Add a new extra text label and render its card in the UI */
 function addExtraText() {
-  const id = _nextTextId++;
-  _extraTexts.push({ id, text: '', size: 32, color: '#ffffff', bold: false, posX: 'center', posY: 'middle' });
+  const id  = _nextTextId++;
+  const col = (_extraTexts.length % 5) * 80;   // stagger vertically
+  const w   = 400, h = 70;
+  _extraTexts.push({
+    id, text: 'New Text', size: 40, color: '#ffffff', bgColor: 'transparent', bold: false,
+    /* Sprite-compatible positioning fields */
+    x: (CANVAS_W - w) / 2, y: Math.round(CANVAS_H * 0.40) + col,
+    w, h, rot: 0,
+    /* Keep legacy preset fields for backward compat */
+    posX: 'center', posY: 'middle', px: null, py: null
+  });
+  _selectedTextId = id;
   _renderExtraTextList();
+  if (window._ensureHandleCanvasVisible) window._ensureHandleCanvasVisible();
+  fastRedraw();
 }
 
 /** Remove a text label by id */
 function removeExtraText(id) {
   _extraTexts = _extraTexts.filter(et => et.id !== id);
+  if (_selectedTextId === id) _selectedTextId = null;
   _renderExtraTextList();
+  /* Hide handle canvas if nothing needs it */
+  if (!_enhancedMode && !_compositeMode && _extraTexts.length === 0) _showCompositeHandles(false);
   fastRedraw();
 }
 
@@ -3925,6 +4136,11 @@ function updateExtraText(id, field, val) {
     const lbl = document.querySelector(`[data-txt-id="${id}"] .txt-size-val`);
     if (lbl) lbl.textContent = val + 'px';
   }
+  /* sync bg colour picker opacity */
+  if (field === 'bgColor') {
+    const picker = document.querySelector(`[data-bg-picker="${id}"]`);
+    if (picker) picker.style.opacity = (val && val !== 'transparent') ? '1' : '0.4';
+  }
   fastRedraw();
 }
 
@@ -3937,6 +4153,10 @@ function _renderExtraTextList() {
     const card = document.createElement('div');
     card.className = 'extra-text-card';
     card.dataset.txtId = et.id;
+    /* Resolve bg colour: 'transparent' → '#000000' with opacity trick for the picker;
+       we store 'transparent' as a sentinel meaning "no background" */
+    const bgPickerVal = (!et.bgColor || et.bgColor === 'transparent') ? '#000000' : et.bgColor;
+    const bgPickerEnabled = et.bgColor && et.bgColor !== 'transparent';
     card.innerHTML = `
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <span style="font-size:.68rem;font-weight:700;color:#818cf8;min-width:18px">#${idx+1}</span>
@@ -3944,36 +4164,31 @@ function _renderExtraTextList() {
           style="flex:1;min-width:100px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:.75rem"
           oninput="updateExtraText(${et.id},'text',this.value)">
         <label title="Bold" style="cursor:pointer;font-size:.7rem;color:var(--muted)">
-          <input type="checkbox" ${et.bold?'checked':''} onchange="updateExtraText(${et.id},'bold',this.checked)"> B
+          <input type="checkbox" ${et.bold?'checked':''} onchange="updateExtraText(${et.id},'bold',this.checked)"> <strong>B</strong>
         </label>
-        <input type="color" value="${et.color}" title="Colour"
-          style="width:28px;height:26px;padding:0;border:none;border-radius:5px;cursor:pointer"
-          oninput="updateExtraText(${et.id},'color',this.value)">
         <button class="btn btn-ghost" style="padding:2px 7px;font-size:.7rem;color:#f87171;border-color:rgba(248,113,113,.3)"
           onclick="removeExtraText(${et.id})" title="Remove">✕</button>
       </div>
-      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:4px;padding-left:24px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:5px;padding-left:24px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:.67rem;color:var(--muted);cursor:pointer" title="Text (foreground) colour">
+          <span style="font-size:.7rem">🔤</span> Text
+          <input type="color" value="${et.color || '#ffffff'}" title="Text colour"
+            style="width:28px;height:24px;padding:0;border:none;border-radius:5px;cursor:pointer"
+            oninput="updateExtraText(${et.id},'color',this.value)">
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:.67rem;color:var(--muted);cursor:pointer" title="Background colour">
+          <span style="font-size:.7rem">🎨</span> BG
+          <input type="checkbox" title="Enable background colour" ${bgPickerEnabled?'checked':''}
+            onchange="updateExtraText(${et.id},'bgColor', this.checked ? document.querySelector('[data-bg-picker=\\'${et.id}\\']').value : 'transparent')">
+          <input type="color" value="${bgPickerVal}" data-bg-picker="${et.id}" title="Background colour"
+            style="width:28px;height:24px;padding:0;border:none;border-radius:5px;cursor:pointer;${bgPickerEnabled?'':'opacity:0.4'}"
+            oninput="updateExtraText(${et.id},'bgColor',this.value)">
+        </label>
         <label style="font-size:.67rem;color:var(--muted)">Size
-          <input type="range" min="14" max="96" value="${et.size}"
+          <input type="range" min="14" max="120" value="${et.size}"
             style="width:65px;vertical-align:middle;accent-color:#818cf8"
             oninput="updateExtraText(${et.id},'size',this.value)">
           <span class="txt-size-val" style="font-size:.67rem;color:#818cf8;font-weight:700">${et.size}px</span>
-        </label>
-        <label style="font-size:.67rem;color:var(--muted)">H
-          <select style="font-size:.67rem;padding:2px 4px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)"
-            onchange="updateExtraText(${et.id},'posX',this.value)">
-            <option value="left"   ${et.posX==='left'  ?'selected':''}>Left</option>
-            <option value="center" ${et.posX==='center'?'selected':''}>Centre</option>
-            <option value="right"  ${et.posX==='right' ?'selected':''}>Right</option>
-          </select>
-        </label>
-        <label style="font-size:.67rem;color:var(--muted)">V
-          <select style="font-size:.67rem;padding:2px 4px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)"
-            onchange="updateExtraText(${et.id},'posY',this.value)">
-            <option value="top"    ${et.posY==='top'   ?'selected':''}>Top</option>
-            <option value="middle" ${et.posY==='middle'?'selected':''}>Middle</option>
-            <option value="bottom" ${et.posY==='bottom'?'selected':''}>Bottom</option>
-          </select>
         </label>
       </div>`;
     list.appendChild(card);
@@ -3982,7 +4197,9 @@ function _renderExtraTextList() {
 
 function resetExtraTexts() {
   _extraTexts = [];
+  _selectedTextId = null;
   _renderExtraTextList();
+  if (!_enhancedMode && !_compositeMode) _showCompositeHandles(false);
   fastRedraw();
 }
 
@@ -4071,35 +4288,35 @@ function drawNewsImage(ctx, img, W, H) {
   ctx.fillStyle = topGrad;
   ctx.fillRect(0, 0, W, H * 0.18);
 
-  /* ── 8. Breaking News banner ── */
-  _drawNewsBanner(ctx, W);
+  /* ── 8. Breaking News banner — drawn separately after all image layers ── */
 }
 
 function _drawNewsBanner(ctx, W) {
   const bannerColor = _textOpts.bannerColor || '#c0392b';
-  /* Red banner bar */
+  const BANNER_H = 114;   // full height from y=0 → always covers the very top edge
+  /* Red banner bar — starts flush at y=0 */
   ctx.fillStyle = bannerColor;
-  ctx.fillRect(0, 22, W, 88);
+  ctx.fillRect(0, 0, W, BANNER_H);
   /* Left accent stripe */
   ctx.fillStyle = '#f6ad55';
-  ctx.fillRect(0, 22, 10, 88);
-  /* Banner text */
+  ctx.fillRect(0, 0, 10, BANNER_H);
+  /* Banner text — vertically centred in the bar */
   ctx.font = 'bold 56px "Segoe UI",Arial,sans-serif';
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
   ctx.shadowColor = 'rgba(0,0,0,0.7)';
   ctx.shadowBlur = 8;
-  ctx.fillText(_textOpts.bannerText || '🚨  BREAKING NEWS', W / 2, 88);
+  ctx.fillText(_textOpts.bannerText || '🚨  BREAKING NEWS', W / 2, 72);
   ctx.shadowBlur = 0;
   /* Bottom rule */
   ctx.fillStyle = 'rgba(246,173,85,0.6)';
-  ctx.fillRect(0, 112, W, 2);
+  ctx.fillRect(0, BANNER_H, W, 2);
   /* Date stamp */
   const dateStr = new Date().toLocaleDateString('ne-NP', { year:'numeric', month:'short', day:'numeric' });
   ctx.font = '22px "Segoe UI",Arial,sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.textAlign = 'right';
-  ctx.fillText(dateStr, W - 28, 102);
+  ctx.fillText(dateStr, W - 28, 100);
   ctx.textAlign = 'center';
 }
 
@@ -4118,7 +4335,7 @@ function drawBackground(ctx, W, H) {
   circ.addColorStop(0, 'rgba(229,62,62,0.15)'); circ.addColorStop(1, 'rgba(229,62,62,0)');
   ctx.fillStyle = circ; ctx.fillRect(0, 0, W, H);
 
-  _drawNewsBanner(ctx, W);
+  /* Banner drawn separately after all image layers — do NOT call here */
 }
 
 function drawTextOverlay(ctx, post, W, H) {
