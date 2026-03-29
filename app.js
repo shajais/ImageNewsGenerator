@@ -156,25 +156,21 @@ let imgFlipV   = false;
 /* Cached image object — used for instant drag/zoom redraws without re-fetching */
 let _cachedNewsImg = null;
 
-/* ── Multi-Image Composite State ────────────────────────────────
-   Centre  = main image (existing customImageDataUrl / news photo)
-   Left    = optional side image, BG removed, placed lower-left
-   Right   = optional side image, BG removed, placed lower-right
-   _compositeMode is true when at least one side image is loaded.
+/* ── Multi-Image Composite State (dynamic — unlimited side sprites) ─
+   _sideSprites[] = array of sprite objects, each:
+     { id, rawDataUrl, subjectDataUrl, img,
+       x, y, w, h, rot,          ← canvas-px transform
+       selected }                ← whether handles are shown
+   _compositeMode = true when at least one sprite is active.
    ──────────────────────────────────────────────────────────────── */
-let _leftImageDataUrl   = null;   // raw upload
-let _rightImageDataUrl  = null;   // raw upload
-let _leftSubjectDataUrl  = null;  // bg-removed
-let _rightSubjectDataUrl = null;  // bg-removed
-let _leftSubjectImg  = null;      // loaded Image object
-let _rightSubjectImg = null;      // loaded Image object
-let _compositeMode   = false;     // true when side panels are used
+let _sideSprites   = [];        // dynamic array of sprite objects
+let _compositeMode = false;     // true when _sideSprites.length > 0
+let _nextSpriteId  = 1;         // auto-increment id
+let _selectedSpriteId = null;   // which sprite has handles shown
 
-/* ── Composite sprite transforms (all in canvas pixels) ── */
-let _sprites = {
-  left:  { x: 0, y: 0, w: 0, h: 0, rot: 0 },
-  right: { x: 0, y: 0, w: 0, h: 0, rot: 0 },
-};
+/* Backward-compat aliases used by legacy code paths */
+Object.defineProperty(window, '_leftSubjectImg',  { get: () => _sideSprites[0]?.img || null });
+Object.defineProperty(window, '_rightSubjectImg', { get: () => _sideSprites[1]?.img || null });
 
 /* Text overlay customisation (editable via the Text Editor modal) */
 let _textOpts = {
@@ -196,16 +192,13 @@ let _imageTint = {
   opacity: 0.5,          // 0 = no tint wash, 1 = full tint wash
 };
 
-/* ── Extra custom text labels ───────────────────────────────────
-   Up to 3 extra text blocks drawn on the canvas.
-   Each: { text, size, color, bold, posX ('left'|'center'|'right'),
-           posY ('top'|'middle'|'bottom'), visible }
+/* ── Extra custom text labels (dynamic — unlimited) ─────────────
+   Each: { id, text, size, color, bold,
+           posX ('left'|'center'|'right'),
+           posY ('top'|'middle'|'bottom') }
    ──────────────────────────────────────────────────────────────── */
-let _extraTexts = [
-  { text: '', size: 36, color: '#ffffff', bold: true,  posX: 'center', posY: 'middle',  visible: false },
-  { text: '', size: 28, color: '#f6ad55', bold: false, posX: 'left',   posY: 'top',     visible: false },
-  { text: '', size: 28, color: '#60a5fa', bold: false, posX: 'right',  posY: 'top',     visible: false },
-];
+let _extraTexts    = [];    // dynamic — populated via addExtraText()
+let _nextTextId    = 1;     // auto-increment
 
 /* ================================================================
    UTILITY
@@ -1417,10 +1410,8 @@ async function selectArticle(idx) {
   const _tov = document.getElementById('tintOpacityVal');
   if (_tov) _tov.textContent = '50%';
   /* Reset extra text labels */
-  _extraTexts.forEach(et => { et.text = ''; et.visible = false; });
-  document.querySelectorAll('.extra-text-controls').forEach(r => { r.style.display = 'none'; });
-  document.querySelectorAll('.extra-text-toggle').forEach(cb => { cb.checked = false; });
-  document.querySelectorAll('.extra-text-input').forEach(inp => { inp.value = ''; });
+  _extraTexts = [];
+  _renderExtraTextList();
   resetImgAdjust(/* silent */ true);
 
   /* Show panel immediately */
@@ -2819,154 +2810,131 @@ function clearCustomImage() {
 }
 
 /* ================================================================
-   MULTI-IMAGE COMPOSITE — Side Image Handlers
+   MULTI-IMAGE COMPOSITE — Dynamic Side Sprites
+   _sideSprites[] — unlimited, each added via addSideImage()
 ================================================================ */
 
-/** Called when user picks a left or right side image */
-function onSideImage(event, side) {
+/** Add a new side sprite from a file-input change event */
+function addSideImage(event) {
   const file = event.target.files[0];
   if (!file) return;
+  /* reset the input so same file can be re-selected */
+  event.target.value = '';
   const reader = new FileReader();
   reader.onload = e => {
-    if (side === 'left') {
-      _leftImageDataUrl   = e.target.result;
-      _leftSubjectDataUrl  = null;
-      _leftSubjectImg      = null;
-    } else {
-      _rightImageDataUrl  = e.target.result;
-      _rightSubjectDataUrl = null;
-      _rightSubjectImg     = null;
-    }
-    _updateCompositeUI();
-    toast(`📷 ${side === 'left' ? 'Left' : 'Right'} image loaded — click "Apply Composite" to merge!`, 'success');
+    const id = _nextSpriteId++;
+    _sideSprites.push({
+      id,
+      rawDataUrl:     e.target.result,
+      subjectDataUrl: null,
+      img:            null,
+      x: 0, y: 0, w: 0, h: 0, rot: 0,
+      selected: false,
+    });
+    _renderSideImageList();
+    toast('📷 Image loaded — click ✨ Apply to merge', 'success');
   };
   reader.readAsDataURL(file);
 }
 
-/** Clear a side image */
-function clearSideImage(side) {
-  if (side === 'left') {
-    _leftImageDataUrl    = null;
-    _leftSubjectDataUrl  = null;
-    _leftSubjectImg      = null;
-    const inp = document.getElementById('leftImgInput');
-    if (inp) inp.value = '';
-  } else {
-    _rightImageDataUrl   = null;
-    _rightSubjectDataUrl = null;
-    _rightSubjectImg     = null;
-    const inp = document.getElementById('rightImgInput');
-    if (inp) inp.value = '';
-  }
-  _updateCompositeUI();
-  if (!_leftImageDataUrl && !_rightImageDataUrl) {
+/** Remove a sprite by id */
+function removeSideSprite(id) {
+  _sideSprites = _sideSprites.filter(s => s.id !== id);
+  if (_selectedSpriteId === id) _selectedSpriteId = null;
+  _renderSideImageList();
+  if (_sideSprites.length === 0) {
     _compositeMode = false;
     _showCompositeHandles(false);
     fastRedraw();
   } else {
     applyComposite();
   }
-  toast(`✕ ${side === 'left' ? 'Left' : 'Right'} image cleared`, 'info', 1800);
+  toast('✕ Image removed', 'info', 1500);
 }
 
-/** Sync the composite panel button states */
-function _updateCompositeUI() {
-  const leftSet  = !!_leftImageDataUrl;
-  const rightSet = !!_rightImageDataUrl;
-  const clearL = document.getElementById('clearLeftBtn');
-  const clearR = document.getElementById('clearRightBtn');
+/** Rebuild the side-image list UI */
+function _renderSideImageList() {
+  const list = document.getElementById('sideImageList');
+  if (!list) return;
+  list.innerHTML = '';
+  _sideSprites.forEach(sp => {
+    const item = document.createElement('div');
+    item.className = 'side-img-item';
+    item.dataset.id = sp.id;
+    item.innerHTML = `
+      <img src="${sp.rawDataUrl}" class="side-img-thumb" alt="">
+      <button class="btn btn-ghost side-img-remove" onclick="removeSideSprite(${sp.id})" title="Remove">✕</button>`;
+    list.appendChild(item);
+  });
+  /* Show/hide apply+clear buttons */
   const applyBtn = document.getElementById('compositeApplyBtn');
-  if (clearL) clearL.style.display = leftSet  ? 'inline-flex' : 'none';
-  if (clearR) clearR.style.display = rightSet ? 'inline-flex' : 'none';
-  if (applyBtn) applyBtn.style.display = (leftSet || rightSet) ? 'inline-flex' : 'none';
+  const clearBtn = document.getElementById('compositeClearBtn');
+  if (applyBtn) applyBtn.style.display = _sideSprites.length ? 'inline-flex' : 'none';
+  if (clearBtn) clearBtn.style.display = _sideSprites.length ? 'inline-flex' : 'none';
+}
 
-  // preview thumbnails
-  const thumbL = document.getElementById('sideThumbLeft');
-  const thumbR = document.getElementById('sideThumbRight');
-  if (thumbL) { thumbL.src = _leftImageDataUrl  || ''; thumbL.style.display = leftSet  ? 'block' : 'none'; }
-  if (thumbR) { thumbR.src = _rightImageDataUrl || ''; thumbR.style.display = rightSet ? 'block' : 'none'; }
+/** Compute a default position for sprite index i */
+function _defaultSpritePos(i, img) {
+  const W = CANVAS_W, H = CANVAS_H;
+  const cols = 5;
+  const col  = i % cols;
+  const maxW = Math.round(W * 0.30);
+  const maxH = Math.round(H * 0.55);
+  const aspect = img.width / img.height;
+  let dw = maxW, dh = Math.round(maxW / aspect);
+  if (dh > maxH) { dh = maxH; dw = Math.round(maxH * aspect); }
+  /* spread across the bottom of the canvas */
+  const spacing = Math.round((W - dw) / Math.max(cols - 1, 1));
+  const x = Math.min(col * spacing, W - dw - 4);
+  const y = Math.round(H * 0.85) - dh;
+  return { x, y, w: dw, h: dh, rot: 0 };
 }
 
 /**
  * Apply Composite:
- *  1. BG-remove left/right images that haven't been processed yet
- *  2. Draw centre image as background
- *  3. Composite the bg-removed side subjects on top
+ *  1. BG-remove any new sprites
+ *  2. Load Image objects
+ *  3. Assign default positions for new sprites
+ *  4. Redraw
  */
 async function applyComposite() {
-  if (!_leftImageDataUrl && !_rightImageDataUrl) {
+  if (_sideSprites.length === 0) {
     toast('⚠️ Upload at least one side image first.', 'error'); return;
   }
-
   const applyBtn = document.getElementById('compositeApplyBtn');
   if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = '⏳ Processing…'; }
-
   try {
-    /* Remove background from side images (only if not cached) */
-    if (_leftImageDataUrl && !_leftSubjectDataUrl) {
-      toast('🎨 Removing left image background…', 'info', 4000);
-      try {
-        _leftSubjectDataUrl = await removeBackground(_leftImageDataUrl);
-      } catch {
-        toast('⚠️ BG removal failed for left image — using original', 'error', 3000);
-        _leftSubjectDataUrl = _leftImageDataUrl;
+    for (const sp of _sideSprites) {
+      if (!sp.subjectDataUrl) {
+        toast(`🎨 Removing background for image ${sp.id}…`, 'info', 4000);
+        try {
+          sp.subjectDataUrl = await removeBackground(sp.rawDataUrl);
+        } catch {
+          toast('⚠️ BG removal failed — using original', 'error', 3000);
+          sp.subjectDataUrl = sp.rawDataUrl;
+        }
+      }
+      if (!sp.img) {
+        try { sp.img = await loadImageFromSrc(sp.subjectDataUrl); } catch {}
       }
     }
-    if (_rightImageDataUrl && !_rightSubjectDataUrl) {
-      toast('🎨 Removing right image background…', 'info', 4000);
-      try {
-        _rightSubjectDataUrl = await removeBackground(_rightImageDataUrl);
-      } catch {
-        toast('⚠️ BG removal failed for right image — using original', 'error', 3000);
-        _rightSubjectDataUrl = _rightImageDataUrl;
-      }
-    }
-
-    /* Pre-load Image objects */
-    if (_leftSubjectDataUrl && !_leftSubjectImg) {
-      try { _leftSubjectImg = await loadImageFromSrc(_leftSubjectDataUrl); } catch {}
-    }
-    if (_rightSubjectDataUrl && !_rightSubjectImg) {
-      try { _rightSubjectImg = await loadImageFromSrc(_rightSubjectDataUrl); } catch {}
-    }
-
+    /* Set default positions for any sprite that doesn't have one yet */
+    _sideSprites.forEach((sp, i) => {
+      if (!sp.img) return;
+      if (sp.w === 0) Object.assign(sp, _defaultSpritePos(i, sp.img));
+    });
     _compositeMode = true;
-    _initSpriteDefaults();           // set default x/y/w/h for each side image
-    _showCompositeHandles(true);     // show interactive handle overlay
-    const resetBtn = document.getElementById('compositeClearBtn');
-    if (resetBtn) resetBtn.style.display = 'inline-flex';
+    _showCompositeHandles(true);
     await redrawComposite();
-    toast('✅ Composite image created! Drag · resize · rotate side images freely.', 'success');
+    toast('✅ Composite ready! Drag · resize · rotate side images freely.', 'success');
   } finally {
     if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = '✨ Apply Composite'; }
   }
 }
 
-/* ── Initialise default sprite positions after BG-removal is done ── */
-function _initSpriteDefaults() {
-  const W = CANVAS_W, H = CANVAS_H;
-  const sideW = Math.round(W * 0.32);
-  const sideH = Math.round(H * 0.60);
-  const bottomY = Math.round(H * 0.82);
-
-  function _fitSprite(img, slot) {
-    if (!img) return;
-    const aspect = img.width / img.height;
-    let dw = sideW, dh = Math.round(sideW / aspect);
-    if (dh > sideH) { dh = sideH; dw = Math.round(sideH * aspect); }
-    const x = slot === 'left' ? Math.round(W * 0.02) : W - Math.round(W * 0.02) - dw;
-    const y = bottomY - dh;
-    _sprites[slot] = { x, y, w: dw, h: dh, rot: 0 };
-  }
-  _fitSprite(_leftSubjectImg,  'left');
-  _fitSprite(_rightSubjectImg, 'right');
-}
-
 /**
  * Redraw the composite canvas:
- *  - Centre image fills the background
- *  - Left/right subjects drawn using their sprite transform (x,y,w,h,rot)
- *  - Text overlay and banner on top
+ *  Centre image → side sprites (all of _sideSprites) → text overlay → extra texts
  */
 async function redrawComposite() {
   const canvas = document.getElementById('newsCanvas');
@@ -2982,88 +2950,46 @@ async function redrawComposite() {
     drawBackground(ctx, CANVAS_W, CANVAS_H);
   }
 
-  /* Draw a sprite using its transform */
-  function _drawSprite(img, slot) {
-    if (!img) return;
-    const sp = _sprites[slot];
-    const cx = sp.x + sp.w / 2;
-    const cy = sp.y + sp.h / 2;
+  _drawSpritesOnCtx(ctx);
 
-    /* depth glow behind figure */
-    const grd = ctx.createRadialGradient(cx, cy + sp.h * 0.3, sp.w * 0.1, cx, cy, sp.w * 0.8);
-    grd.addColorStop(0, 'rgba(0,0,0,0.45)');
-    grd.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(sp.rot);
-    ctx.fillStyle = grd;
-    ctx.fillRect(-sp.w * 0.6, -sp.h * 0.6, sp.w * 1.2, sp.h * 1.2);
-    ctx.restore();
-
-    /* draw image */
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(sp.rot);
-    ctx.drawImage(img, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
-    ctx.restore();
-
-    /* accent line at bottom of sprite */
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(sp.rot);
-    ctx.fillStyle = slot === 'left' ? 'rgba(246,173,85,0.8)' : 'rgba(59,130,246,0.8)';
-    ctx.fillRect(-sp.w / 2, sp.h / 2, sp.w, 3);
-    ctx.restore();
-  }
-
-  _drawSprite(_leftSubjectImg,  'left');
-  _drawSprite(_rightSubjectImg, 'right');
-
-  /* Text overlay on top */
   if (generatedPost) drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
-  /* Extra custom text labels */
   _drawExtraTexts(ctx, CANVAS_W, CANVAS_H);
-
-  /* Refresh handle overlay */
   _drawCompositeHandles();
 }
 
-/**
- * Draw composite sprites onto any ctx (used by redrawEnhanced too).
- * Extracted so enhanced-mode can layer side images on the AI background.
- */
+/** Draw all side sprites onto any ctx */
 function _drawSpritesOnCtx(ctx) {
-  function _drawOne(img, slot) {
-    if (!img) return;
-    const sp = _sprites[slot];
+  _sideSprites.forEach(sp => {
+    if (!sp.img) return;
     const cx = sp.x + sp.w / 2, cy = sp.y + sp.h / 2;
+    /* depth glow */
     const grd = ctx.createRadialGradient(cx, cy + sp.h * 0.3, sp.w * 0.1, cx, cy, sp.w * 0.8);
     grd.addColorStop(0, 'rgba(0,0,0,0.45)');
     grd.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
     ctx.fillStyle = grd; ctx.fillRect(-sp.w * 0.6, -sp.h * 0.6, sp.w * 1.2, sp.h * 1.2);
     ctx.restore();
+    /* image */
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
-    ctx.drawImage(img, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
+    ctx.drawImage(sp.img, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
     ctx.restore();
+    /* accent line */
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
-    ctx.fillStyle = slot === 'left' ? 'rgba(246,173,85,0.8)' : 'rgba(59,130,246,0.8)';
+    ctx.fillStyle = 'rgba(246,173,85,0.8)';
     ctx.fillRect(-sp.w / 2, sp.h / 2, sp.w, 3);
     ctx.restore();
-  }
-  _drawOne(_leftSubjectImg,  'left');
-  _drawOne(_rightSubjectImg, 'right');
+  });
 }
 
 /* ══════════════════════════════════════════════════════════════════
    COMPOSITE HANDLE OVERLAY
    A transparent <canvas> stacked over the main canvas.
-   Draws selection boxes + resize corner + rotation grip.
-   Handles pointer drag / resize / rotate.
+   Draws selection box + resize corners + rotate grip for the
+   currently selected sprite. Clicking empty canvas area deselects.
    ══════════════════════════════════════════════════════════════════ */
 
-const HANDLE_R   = 10;   // px radius of corner/rotate handles (on overlay canvas coords)
-const ROTATE_GAP = 28;   // px above sprite bounding box for the rotate grip
+const HANDLE_R   = 10;
+const ROTATE_GAP = 28;
 
 function _getHandleCanvas() {
   let hc = document.getElementById('compositeHandleCanvas');
@@ -3076,7 +3002,6 @@ function _getHandleCanvas() {
       'position:absolute', 'top:0', 'left:0', 'width:100%', 'height:100%',
       'pointer-events:none', 'display:none', 'z-index:10'
     ].join(';');
-    /* insert right after the main canvas */
     const mc = document.getElementById('newsCanvas');
     if (mc && mc.parentNode) mc.parentNode.insertBefore(hc, mc.nextSibling);
     else wrap.appendChild(hc);
@@ -3087,272 +3012,217 @@ function _getHandleCanvas() {
 function _showCompositeHandles(show) {
   const hc = _getHandleCanvas();
   if (!hc) return;
-  hc.style.display = show ? 'block' : 'none';
-  hc.style.pointerEvents = show ? 'auto' : 'none';
+  hc.style.display      = show ? 'block' : 'none';
+  hc.style.pointerEvents = show ? 'auto'  : 'none';
 }
 
-/** Convert a CSS-pixel point on the handle canvas → canvas-pixel space */
 function _hcToCanvas(hc, cx, cy) {
-  const scaleX = CANVAS_W / hc.offsetWidth;
-  const scaleY = CANVAS_H / hc.offsetHeight;
-  return { x: cx * scaleX, y: cy * scaleY };
+  return { x: cx * (CANVAS_W / hc.offsetWidth), y: cy * (CANVAS_H / hc.offsetHeight) };
 }
 
-/** Convert canvas-pixel point → handle canvas CSS-pixel space */
-function _canvasToHc(hc, cx, cy) {
-  const scaleX = hc.offsetWidth  / CANVAS_W;
-  const scaleY = hc.offsetHeight / CANVAS_H;
-  return { x: cx * scaleX, y: cy * scaleY };
-}
-
-/* Corners (in local sprite coords relative to centre) */
 function _spriteCorners(sp) {
   const hw = sp.w / 2, hh = sp.h / 2;
   return [
-    { lx: -hw, ly: -hh },   // 0 top-left
-    { lx:  hw, ly: -hh },   // 1 top-right
-    { lx:  hw, ly:  hh },   // 2 bottom-right
-    { lx: -hw, ly:  hh },   // 3 bottom-left
+    { lx: -hw, ly: -hh }, { lx: hw, ly: -hh },
+    { lx:  hw, ly:  hh }, { lx:-hw, ly:  hh },
   ];
 }
-
-/* Rotate a point around origin */
 function _rot(lx, ly, a) {
   const c = Math.cos(a), s = Math.sin(a);
-  return { x: lx * c - ly * s, y: lx * s + ly * c };
+  return { x: lx*c - ly*s, y: lx*s + ly*c };
 }
-
-/* World position of a corner */
 function _cornerWorld(sp, idx) {
-  const corners = _spriteCorners(sp);
-  const { lx, ly } = corners[idx];
+  const { lx, ly } = _spriteCorners(sp)[idx];
   const r = _rot(lx, ly, sp.rot);
-  return { x: sp.x + sp.w / 2 + r.x, y: sp.y + sp.h / 2 + r.y };
+  return { x: sp.x + sp.w/2 + r.x, y: sp.y + sp.h/2 + r.y };
 }
-
-/* World position of rotate grip (above top-left corner or top-centre) */
 function _rotGripWorld(sp) {
-  const r = _rot(0, -sp.h / 2 - ROTATE_GAP, sp.rot);
-  return { x: sp.x + sp.w / 2 + r.x, y: sp.y + sp.h / 2 + r.y };
+  const r = _rot(0, -sp.h/2 - ROTATE_GAP, sp.rot);
+  return { x: sp.x + sp.w/2 + r.x, y: sp.y + sp.h/2 + r.y };
 }
 
 function _drawCompositeHandles() {
   const hc = _getHandleCanvas();
   if (!hc || !_compositeMode) return;
-
-  /* Match pixel resolution of main canvas so coordinates align */
   const mc = document.getElementById('newsCanvas');
   if (!mc) return;
-  hc.width  = mc.width;
-  hc.height = mc.height;
+  hc.width = mc.width; hc.height = mc.height;
   const ctx = hc.getContext('2d');
   ctx.clearRect(0, 0, hc.width, hc.height);
 
-  function _drawSpriteHandles(sp, img, slotColor) {
-    if (!img) return;
-    const corners = [0,1,2,3].map(i => _cornerWorld(sp, i));
-    const grip    = _rotGripWorld(sp);
-
-    /* Dashed bounding box */
-    ctx.save();
-    ctx.strokeStyle = slotColor;
-    ctx.lineWidth   = 2.5;
-    ctx.setLineDash([10, 6]);
-    ctx.beginPath();
-    ctx.moveTo(corners[0].x, corners[0].y);
-    corners.forEach(c => ctx.lineTo(c.x, c.y));
-    ctx.closePath();
-    ctx.stroke();
-
-    /* Line to rotate grip */
-    const topMid = {
-      x: (corners[0].x + corners[1].x) / 2,
-      y: (corners[0].y + corners[1].y) / 2,
-    };
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath();
-    ctx.moveTo(topMid.x, topMid.y);
-    ctx.lineTo(grip.x, grip.y);
-    ctx.stroke();
-    ctx.restore();
-
-    /* Corner resize handles */
-    corners.forEach(c => {
-      ctx.beginPath();
-      ctx.arc(c.x, c.y, HANDLE_R, 0, Math.PI * 2);
-      ctx.fillStyle   = '#fff';
-      ctx.fill();
-      ctx.strokeStyle = slotColor;
-      ctx.lineWidth   = 2.5;
-      ctx.setLineDash([]);
-      ctx.stroke();
-    });
-
-    /* Rotation grip */
-    ctx.beginPath();
-    ctx.arc(grip.x, grip.y, HANDLE_R, 0, Math.PI * 2);
-    ctx.fillStyle   = slotColor;
-    ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth   = 2;
-    ctx.setLineDash([]);
-    ctx.stroke();
-    /* Arrow symbol inside grip */
-    ctx.fillStyle = '#fff';
-    ctx.font = `bold ${Math.round(HANDLE_R * 1.4)}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('↻', grip.x, grip.y);
+  const sel = _sideSprites.find(s => s.id === _selectedSpriteId);
+  if (!sel || !sel.img) {
+    hc.style.pointerEvents = _compositeMode ? 'auto' : 'none';
+    return;
   }
 
-  _drawSpriteHandles(_sprites.left,  _leftSubjectImg,  '#f6ad55');
-  _drawSpriteHandles(_sprites.right, _rightSubjectImg, '#60a5fa');
-  /* Only intercept pointer events when composite mode is active */
-  hc.style.pointerEvents = (_compositeMode && (_leftSubjectImg || _rightSubjectImg)) ? 'auto' : 'none';
+  const corners = [0,1,2,3].map(i => _cornerWorld(sel, i));
+  const grip    = _rotGripWorld(sel);
+  const color   = '#f6ad55';
+
+  /* Dashed bounding box */
+  ctx.save();
+  ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash([10,6]);
+  ctx.beginPath();
+  ctx.moveTo(corners[0].x, corners[0].y);
+  corners.forEach(c => ctx.lineTo(c.x, c.y));
+  ctx.closePath(); ctx.stroke();
+  /* Line to rotate grip */
+  const topMid = { x:(corners[0].x+corners[1].x)/2, y:(corners[0].y+corners[1].y)/2 };
+  ctx.setLineDash([5,5]);
+  ctx.beginPath(); ctx.moveTo(topMid.x,topMid.y); ctx.lineTo(grip.x,grip.y); ctx.stroke();
+  ctx.restore();
+
+  /* Corner handles */
+  corners.forEach(c => {
+    ctx.beginPath(); ctx.arc(c.x, c.y, HANDLE_R, 0, Math.PI*2);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash([]); ctx.stroke();
+  });
+  /* Rotate grip */
+  ctx.beginPath(); ctx.arc(grip.x, grip.y, HANDLE_R, 0, Math.PI*2);
+  ctx.fillStyle = color; ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${Math.round(HANDLE_R*1.4)}px sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('↻', grip.x, grip.y);
+
+  hc.style.pointerEvents = 'auto';
 }
 
-/* ── Hit-test: which part of which sprite did the pointer hit? ──────
-   Returns { slot, type } where type = 'move' | 'rotate' | 'resize-N'
-   or null if nothing hit.
-────────────────────────────────────────────────────────────────────── */
-function _hitTestSprite(sp, img, wx, wy) {
-  if (!img) return null;
-  /* Rotate grip */
+function _hitTestSprite(sp, wx, wy) {
+  if (!sp.img) return null;
   const grip = _rotGripWorld(sp);
   if (Math.hypot(wx - grip.x, wy - grip.y) <= HANDLE_R + 4) return 'rotate';
-  /* Corner handles */
   for (let i = 0; i < 4; i++) {
     const c = _cornerWorld(sp, i);
     if (Math.hypot(wx - c.x, wy - c.y) <= HANDLE_R + 4) return `resize-${i}`;
   }
-  /* Inside bounding box? (point in rotated rectangle) */
-  const cx = sp.x + sp.w / 2, cy = sp.y + sp.h / 2;
+  const cx = sp.x + sp.w/2, cy = sp.y + sp.h/2;
   const dx = wx - cx, dy = wy - cy;
   const cos = Math.cos(-sp.rot), sin = Math.sin(-sp.rot);
-  const lx = dx * cos - dy * sin, ly = dx * sin + dy * cos;
-  if (Math.abs(lx) <= sp.w / 2 && Math.abs(ly) <= sp.h / 2) return 'move';
+  const lx = dx*cos - dy*sin, ly = dx*sin + dy*cos;
+  if (Math.abs(lx) <= sp.w/2 && Math.abs(ly) <= sp.h/2) return 'move';
   return null;
 }
 
 (function _initCompositeHandleInteraction() {
-  let _active     = null;  // { slot, type }
-  let _startPx    = null;  // pointer start in canvas-px
-  let _startSp    = null;  // clone of sprite at drag start
+  let _active    = null;  // { sprite, type }
+  let _startPx   = null;
+  let _startSp   = null;
   let _rafPending = false;
 
   function _getHc() { return document.getElementById('compositeHandleCanvas'); }
 
   function _ptToCanvas(e) {
-    const hc = _getHc();
-    if (!hc) return { x: 0, y: 0 };
-    const rect   = hc.getBoundingClientRect();
-    const touch  = e.touches ? e.touches[0] : e;
+    const hc = _getHc(); if (!hc) return {x:0,y:0};
+    const rect  = hc.getBoundingClientRect();
+    const touch = e.touches ? e.touches[0] : e;
     return _hcToCanvas(hc, touch.clientX - rect.left, touch.clientY - rect.top);
   }
 
   function _scheduleRedraw() {
     if (_rafPending) return;
     _rafPending = true;
-    requestAnimationFrame(async () => {
-      _rafPending = false;
-      await redrawComposite();
-    });
+    requestAnimationFrame(async () => { _rafPending = false; await redrawComposite(); });
   }
 
   function _onDown(e) {
     if (!_compositeMode) return;
     const pt = _ptToCanvas(e);
 
-    /* Hit-test right side first (drawn on top) */
-    const slots = [
-      { slot: 'right', img: _rightSubjectImg, sp: _sprites.right },
-      { slot: 'left',  img: _leftSubjectImg,  sp: _sprites.left  },
-    ];
-    for (const { slot, img, sp } of slots) {
-      const hit = _hitTestSprite(sp, img, pt.x, pt.y);
+    /* First check if we hit the currently selected sprite's handles */
+    const sel = _sideSprites.find(s => s.id === _selectedSpriteId);
+    if (sel) {
+      const hit = _hitTestSprite(sel, pt.x, pt.y);
       if (hit) {
-        _active   = { slot, type: hit };
-        _startPx  = pt;
-        _startSp  = { ...sp };
-        e.preventDefault();
-        e.stopPropagation();
-        return;
+        _active = { sprite: sel, type: hit };
+        _startPx = pt; _startSp = { ...sel };
+        e.preventDefault(); e.stopPropagation(); return;
       }
     }
+
+    /* Then check all sprites for a new selection (topmost = last in array) */
+    for (let i = _sideSprites.length - 1; i >= 0; i--) {
+      const sp = _sideSprites[i];
+      const hit = _hitTestSprite(sp, pt.x, pt.y);
+      if (hit) {
+        _selectedSpriteId = sp.id;
+        _active = { sprite: sp, type: hit };
+        _startPx = pt; _startSp = { ...sp };
+        _drawCompositeHandles();
+        e.preventDefault(); e.stopPropagation(); return;
+      }
+    }
+
+    /* Clicked empty area — deselect */
+    _selectedSpriteId = null;
+    _drawCompositeHandles();
   }
 
   function _onMove(e) {
     if (!_active) return;
-    const pt = _ptToCanvas(e);
-    const sp  = _sprites[_active.slot];
+    const pt  = _ptToCanvas(e);
+    const sp  = _active.sprite;
     const ssp = _startSp;
     const dx  = pt.x - _startPx.x;
     const dy  = pt.y - _startPx.y;
 
     if (_active.type === 'move') {
-      sp.x = ssp.x + dx;
-      sp.y = ssp.y + dy;
+      sp.x = ssp.x + dx; sp.y = ssp.y + dy;
     } else if (_active.type === 'rotate') {
-      const cx = ssp.x + ssp.w / 2, cy = ssp.y + ssp.h / 2;
-      const a0 = Math.atan2(_startPx.y - cy, _startPx.x - cx);
-      const a1 = Math.atan2(pt.y - cy, pt.x - cx);
-      sp.rot = ssp.rot + (a1 - a0);
+      const cx = ssp.x + ssp.w/2, cy = ssp.y + ssp.h/2;
+      sp.rot = ssp.rot + Math.atan2(pt.y - cy, pt.x - cx) - Math.atan2(_startPx.y - cy, _startPx.x - cx);
     } else if (_active.type.startsWith('resize-')) {
       const cornerIdx = parseInt(_active.type.split('-')[1]);
-      /* Opposite corner is fixed */
-      const oppIdx = (cornerIdx + 2) % 4;
-      const oppW   = _cornerWorld(ssp, oppIdx);
-      /* New corner world position */
-      const corners = _spriteCorners(ssp);
+      const oppIdx    = (cornerIdx + 2) % 4;
+      const oppW      = _cornerWorld(ssp, oppIdx);
+      const corners   = _spriteCorners(ssp);
       const origLocal = corners[cornerIdx];
-      /* dragged world pos */
-      const newWx = ssp.x + ssp.w / 2 + _rot(origLocal.lx, origLocal.ly, ssp.rot).x + dx;
-      const newWy = ssp.y + ssp.h / 2 + _rot(origLocal.lx, origLocal.ly, ssp.rot).y + dy;
-      /* vector from opposite corner to dragged corner, rotated back to local space */
+      const newWx     = ssp.x + ssp.w/2 + _rot(origLocal.lx, origLocal.ly, ssp.rot).x + dx;
+      const newWy     = ssp.y + ssp.h/2 + _rot(origLocal.lx, origLocal.ly, ssp.rot).y + dy;
       const vecX = newWx - oppW.x, vecY = newWy - oppW.y;
-      const cos = Math.cos(-ssp.rot), sin = Math.sin(-ssp.rot);
-      const localX = vecX * cos - vecY * sin;
-      const localY = vecX * sin + vecY * cos;
-      const newW = Math.max(40, Math.abs(localX));
-      const newH = Math.max(40, Math.abs(localY));
-      sp.w = newW;
-      sp.h = newH;
-      /* Recalculate top-left so opposite corner stays fixed */
-      const newLocalCorner = _spriteCorners({ ...sp, w: newW, h: newH })[cornerIdx];
-      const newCR = _rot(newLocalCorner.lx, newLocalCorner.ly, ssp.rot);
-      sp.x = newWx - newW / 2 - newCR.x + _rot(newLocalCorner.lx, newLocalCorner.ly, ssp.rot).x - newCR.x;
-      /* simpler: centre = midpoint of dragged + opposite */
-      const midX = (newWx + oppW.x) / 2, midY = (newWy + oppW.y) / 2;
-      sp.x = midX - sp.w / 2;
-      sp.y = midY - sp.h / 2;
+      const cos  = Math.cos(-ssp.rot), sin = Math.sin(-ssp.rot);
+      sp.w = Math.max(40, Math.abs(vecX*cos - vecY*sin));
+      sp.h = Math.max(40, Math.abs(vecX*sin + vecY*cos));
+      const midX = (newWx + oppW.x)/2, midY = (newWy + oppW.y)/2;
+      sp.x = midX - sp.w/2; sp.y = midY - sp.h/2;
     }
-
     e.preventDefault();
     _scheduleRedraw();
   }
 
   function _onUp() { _active = null; _startPx = null; _startSp = null; }
 
-  /* Cursor feedback */
   function _onHover(e) {
     if (_active) return;
-    const hc = _getHc();
-    if (!hc || !_compositeMode) return;
+    const hc = _getHc(); if (!hc || !_compositeMode) return;
     const pt = _ptToCanvas(e);
-    const slots = [
-      { slot: 'right', img: _rightSubjectImg, sp: _sprites.right },
-      { slot: 'left',  img: _leftSubjectImg,  sp: _sprites.left  },
-    ];
     let cursor = 'default';
-    for (const { img, sp } of slots) {
-      const hit = _hitTestSprite(sp, img, pt.x, pt.y);
-      if (!hit) continue;
-      if (hit === 'move')   cursor = 'grab';
+    /* Check selected sprite handles first */
+    const sel = _sideSprites.find(s => s.id === _selectedSpriteId);
+    if (sel) {
+      const hit = _hitTestSprite(sel, pt.x, pt.y);
+      if (hit === 'move') cursor = 'grab';
       else if (hit === 'rotate') cursor = 'crosshair';
-      else cursor = 'nwse-resize';
-      break;
+      else if (hit) cursor = 'nwse-resize';
+    }
+    if (cursor === 'default') {
+      for (let i = _sideSprites.length - 1; i >= 0; i--) {
+        const hit = _hitTestSprite(_sideSprites[i], pt.x, pt.y);
+        if (hit) { cursor = 'pointer'; break; }
+      }
     }
     hc.style.cursor = cursor;
+  }
+
+  /* Clicking the MAIN canvas (not handle overlay) deselects */
+  function _onMainCanvasClick(e) {
+    if (!_compositeMode) return;
+    /* Only deselect if not intercepted by handle canvas */
+    _selectedSpriteId = null;
+    _drawCompositeHandles();
   }
 
   function _attach() {
@@ -3362,9 +3232,13 @@ function _hitTestSprite(sp, img, wx, wy) {
     hc.addEventListener('touchstart', _onDown,  { passive: false });
     window.addEventListener('mousemove', _onMove, { passive: false });
     window.addEventListener('touchmove', _onMove, { passive: false });
-    window.addEventListener('mouseup',  _onUp,   { passive: true  });
-    window.addEventListener('touchend', _onUp,   { passive: true  });
+    window.addEventListener('mouseup',  _onUp, { passive: true });
+    window.addEventListener('touchend', _onUp, { passive: true });
     hc.addEventListener('mousemove', _onHover, { passive: true });
+
+    /* Main canvas click deselects sprite */
+    const mc = document.getElementById('newsCanvas');
+    if (mc) mc.addEventListener('click', _onMainCanvasClick);
   }
 
   if (document.readyState === 'loading') {
@@ -3376,15 +3250,11 @@ function _hitTestSprite(sp, img, wx, wy) {
 
 /** Clear all composite side images and exit composite mode */
 function clearAllComposite() {
-  _leftImageDataUrl    = null; _leftSubjectDataUrl  = null; _leftSubjectImg  = null;
-  _rightImageDataUrl   = null; _rightSubjectDataUrl = null; _rightSubjectImg = null;
+  _sideSprites = [];
+  _selectedSpriteId = null;
   _compositeMode = false;
   _showCompositeHandles(false);
-  const li = document.getElementById('leftImgInput');  if (li) li.value = '';
-  const ri = document.getElementById('rightImgInput'); if (ri) ri.value = '';
-  _updateCompositeUI();
-  const resetBtn = document.getElementById('compositeClearBtn');
-  if (resetBtn) resetBtn.style.display = 'none';
+  _renderSideImageList();
   fastRedraw();
   toast('↺ Composite cleared', 'info', 1800);
 }
@@ -4005,50 +3875,114 @@ function resetImageTint() {
   fastRedraw();
 }
 
-/* ── Extra Text Labels ───────────────────────────────────────────── */
+/* ── Extra Text Labels (dynamic) ────────────────────────────────── */
 function _drawExtraTexts(ctx, W, H) {
-  _extraTexts.forEach((et, i) => {
-    if (!et.visible || !et.text.trim()) return;
+  _extraTexts.forEach(et => {
+    if (!et.text.trim()) return;
     const size = et.size || 32;
     ctx.save();
     ctx.font = `${et.bold ? 'bold ' : ''}${size}px "Segoe UI",Arial,sans-serif`;
-    ctx.fillStyle = et.color || '#ffffff';
-    ctx.shadowColor = 'rgba(0,0,0,0.85)';
-    ctx.shadowBlur  = 14;
+    ctx.fillStyle    = et.color || '#ffffff';
+    ctx.shadowColor  = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur   = 14;
     const padX = 60;
     let x = W / 2;
-    if (et.posX === 'left')  { ctx.textAlign = 'left';  x = padX; }
-    else if (et.posX === 'right') { ctx.textAlign = 'right'; x = W - padX; }
-    else { ctx.textAlign = 'center'; x = W / 2; }
+    if (et.posX === 'left')        { ctx.textAlign = 'left';   x = padX; }
+    else if (et.posX === 'right')  { ctx.textAlign = 'right';  x = W - padX; }
+    else                           { ctx.textAlign = 'center'; x = W / 2; }
     let y;
-    if (et.posY === 'top')    y = 140 + i * (size + 12);
-    else if (et.posY === 'bottom') y = H - 220 - (2 - i) * (size + 12);
-    else y = H * 0.42 + i * (size + 16);
-    wrapText(ctx, et.text, x, y, W - padX * 2, size * 1.35, 2);
+    if      (et.posY === 'top')    y = 140;
+    else if (et.posY === 'bottom') y = H - 220;
+    else                           y = H * 0.45;
+    wrapText(ctx, et.text, x, y, W - padX * 2, size * 1.35, 3);
     ctx.restore();
   });
 }
 
-function updateExtraText(idx, field, val) {
-  if (!_extraTexts[idx]) return;
-  if (field === 'size') val = parseInt(val, 10) || 32;
-  _extraTexts[idx][field] = val;
+/** Add a new extra text label and render its card in the UI */
+function addExtraText() {
+  const id = _nextTextId++;
+  _extraTexts.push({ id, text: '', size: 32, color: '#ffffff', bold: false, posX: 'center', posY: 'middle' });
+  _renderExtraTextList();
+}
+
+/** Remove a text label by id */
+function removeExtraText(id) {
+  _extraTexts = _extraTexts.filter(et => et.id !== id);
+  _renderExtraTextList();
   fastRedraw();
 }
 
-function toggleExtraText(idx, show) {
-  if (!_extraTexts[idx]) return;
-  _extraTexts[idx].visible = !!show;
-  const row = document.getElementById('extraTextControls' + idx);
-  if (row) row.style.display = show ? 'flex' : 'none';
+/** Update a field on a text label */
+function updateExtraText(id, field, val) {
+  const et = _extraTexts.find(e => e.id === id);
+  if (!et) return;
+  if (field === 'size') val = parseInt(val, 10) || 32;
+  if (field === 'bold') val = !!val;
+  et[field] = val;
+  /* sync size readout */
+  if (field === 'size') {
+    const lbl = document.querySelector(`[data-txt-id="${id}"] .txt-size-val`);
+    if (lbl) lbl.textContent = val + 'px';
+  }
   fastRedraw();
+}
+
+/** Rebuild the extra-text list UI */
+function _renderExtraTextList() {
+  const list = document.getElementById('extraTextList');
+  if (!list) return;
+  list.innerHTML = '';
+  _extraTexts.forEach((et, idx) => {
+    const card = document.createElement('div');
+    card.className = 'extra-text-card';
+    card.dataset.txtId = et.id;
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span style="font-size:.68rem;font-weight:700;color:#818cf8;min-width:18px">#${idx+1}</span>
+        <input type="text" value="${escHtml(et.text)}" placeholder="Enter text…" maxlength="120"
+          style="flex:1;min-width:100px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:.75rem"
+          oninput="updateExtraText(${et.id},'text',this.value)">
+        <label title="Bold" style="cursor:pointer;font-size:.7rem;color:var(--muted)">
+          <input type="checkbox" ${et.bold?'checked':''} onchange="updateExtraText(${et.id},'bold',this.checked)"> B
+        </label>
+        <input type="color" value="${et.color}" title="Colour"
+          style="width:28px;height:26px;padding:0;border:none;border-radius:5px;cursor:pointer"
+          oninput="updateExtraText(${et.id},'color',this.value)">
+        <button class="btn btn-ghost" style="padding:2px 7px;font-size:.7rem;color:#f87171;border-color:rgba(248,113,113,.3)"
+          onclick="removeExtraText(${et.id})" title="Remove">✕</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:4px;padding-left:24px">
+        <label style="font-size:.67rem;color:var(--muted)">Size
+          <input type="range" min="14" max="96" value="${et.size}"
+            style="width:65px;vertical-align:middle;accent-color:#818cf8"
+            oninput="updateExtraText(${et.id},'size',this.value)">
+          <span class="txt-size-val" style="font-size:.67rem;color:#818cf8;font-weight:700">${et.size}px</span>
+        </label>
+        <label style="font-size:.67rem;color:var(--muted)">H
+          <select style="font-size:.67rem;padding:2px 4px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)"
+            onchange="updateExtraText(${et.id},'posX',this.value)">
+            <option value="left"   ${et.posX==='left'  ?'selected':''}>Left</option>
+            <option value="center" ${et.posX==='center'?'selected':''}>Centre</option>
+            <option value="right"  ${et.posX==='right' ?'selected':''}>Right</option>
+          </select>
+        </label>
+        <label style="font-size:.67rem;color:var(--muted)">V
+          <select style="font-size:.67rem;padding:2px 4px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)"
+            onchange="updateExtraText(${et.id},'posY',this.value)">
+            <option value="top"    ${et.posY==='top'   ?'selected':''}>Top</option>
+            <option value="middle" ${et.posY==='middle'?'selected':''}>Middle</option>
+            <option value="bottom" ${et.posY==='bottom'?'selected':''}>Bottom</option>
+          </select>
+        </label>
+      </div>`;
+    list.appendChild(card);
+  });
 }
 
 function resetExtraTexts() {
-  _extraTexts.forEach(et => { et.text = ''; et.visible = false; });
-  document.querySelectorAll('.extra-text-controls').forEach(r => { r.style.display = 'none'; });
-  document.querySelectorAll('.extra-text-toggle').forEach(cb => { cb.checked = false; });
-  document.querySelectorAll('.extra-text-input').forEach(inp => { inp.value = ''; });
+  _extraTexts = [];
+  _renderExtraTextList();
   fastRedraw();
 }
 
@@ -4365,9 +4299,12 @@ function wrapText(ctx, text, x, y, maxW, lineH, maxLines) {
    FEATURE 4 – DOWNLOAD IMAGE
 ================================================================ */
 function downloadImage() {
-  /* Hide the handle overlay canvas before capturing so handles don't appear in the download */
+  /* Deselect sprite + hide handle overlay so handles don't appear in the download */
+  const prevSelected = _selectedSpriteId;
+  _selectedSpriteId = null;
   const hc = document.getElementById('compositeHandleCanvas');
-  if (hc) hc.style.display = 'none';
+  const hcWasVisible = hc && hc.style.display !== 'none';
+  if (hc) { hc.style.display = 'none'; hc.style.pointerEvents = 'none'; }
 
   try {
     const link    = document.createElement('a');
@@ -4376,15 +4313,17 @@ function downloadImage() {
     link.click();
     toast('⬇️ Image downloaded!', 'success');
   } catch (e) {
-    /* Cross-origin tainted canvas — fallback: open in new tab so user can save manually */
+    /* Cross-origin tainted canvas — open in new tab so user can save manually */
     toast('⚠️ Right-click the image → Save As to download', 'info', 5000);
-    const win = window.open();
-    if (win) {
-      win.document.write('<img src="' + document.getElementById('newsCanvas').toDataURL('image/png') + '" style="max-width:100%">');
-    }
+    try {
+      const win = window.open();
+      if (win) win.document.write('<img src="' + document.getElementById('newsCanvas').toDataURL('image/png') + '" style="max-width:100%">');
+    } catch {}
   } finally {
-    /* Restore handle overlay */
-    if (hc && _compositeMode) hc.style.display = 'block';
+    /* Restore handle overlay and selection */
+    _selectedSpriteId = prevSelected;
+    if (hc && hcWasVisible) { hc.style.display = 'block'; hc.style.pointerEvents = 'auto'; }
+    if (_compositeMode) _drawCompositeHandles();
   }
 }
 
