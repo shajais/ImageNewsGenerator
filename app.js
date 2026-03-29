@@ -196,6 +196,17 @@ let _imageTint = {
   opacity: 0.5,          // 0 = no tint wash, 1 = full tint wash
 };
 
+/* ── Extra custom text labels ───────────────────────────────────
+   Up to 3 extra text blocks drawn on the canvas.
+   Each: { text, size, color, bold, posX ('left'|'center'|'right'),
+           posY ('top'|'middle'|'bottom'), visible }
+   ──────────────────────────────────────────────────────────────── */
+let _extraTexts = [
+  { text: '', size: 36, color: '#ffffff', bold: true,  posX: 'center', posY: 'middle',  visible: false },
+  { text: '', size: 28, color: '#f6ad55', bold: false, posX: 'left',   posY: 'top',     visible: false },
+  { text: '', size: 28, color: '#60a5fa', bold: false, posX: 'right',  posY: 'top',     visible: false },
+];
+
 /* ================================================================
    UTILITY
 ================================================================ */
@@ -1405,6 +1416,11 @@ async function selectArticle(idx) {
   if (_tos) _tos.value = 0.5;
   const _tov = document.getElementById('tintOpacityVal');
   if (_tov) _tov.textContent = '50%';
+  /* Reset extra text labels */
+  _extraTexts.forEach(et => { et.text = ''; et.visible = false; });
+  document.querySelectorAll('.extra-text-controls').forEach(r => { r.style.display = 'none'; });
+  document.querySelectorAll('.extra-text-toggle').forEach(cb => { cb.checked = false; });
+  document.querySelectorAll('.extra-text-input').forEach(inp => { inp.value = ''; });
   resetImgAdjust(/* silent */ true);
 
   /* Show panel immediately */
@@ -2457,6 +2473,13 @@ function redrawEnhanced() {
   /* ── News banner + text overlay ── */
   _drawNewsBanner(ctx, CANVAS_W);
   if (generatedPost) drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+  /* Re-layer composite side images on top of the AI background */
+  if (_compositeMode && (_leftSubjectImg || _rightSubjectImg)) {
+    _drawSpritesOnCtx(ctx);
+    _drawCompositeHandles();
+  }
+  /* Extra custom text labels */
+  _drawExtraTexts(ctx, CANVAS_W, CANVAS_H);
 
   /* Update badge */
   document.getElementById('imgSourceBadge').textContent =
@@ -2998,9 +3021,38 @@ async function redrawComposite() {
 
   /* Text overlay on top */
   if (generatedPost) drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+  /* Extra custom text labels */
+  _drawExtraTexts(ctx, CANVAS_W, CANVAS_H);
 
   /* Refresh handle overlay */
   _drawCompositeHandles();
+}
+
+/**
+ * Draw composite sprites onto any ctx (used by redrawEnhanced too).
+ * Extracted so enhanced-mode can layer side images on the AI background.
+ */
+function _drawSpritesOnCtx(ctx) {
+  function _drawOne(img, slot) {
+    if (!img) return;
+    const sp = _sprites[slot];
+    const cx = sp.x + sp.w / 2, cy = sp.y + sp.h / 2;
+    const grd = ctx.createRadialGradient(cx, cy + sp.h * 0.3, sp.w * 0.1, cx, cy, sp.w * 0.8);
+    grd.addColorStop(0, 'rgba(0,0,0,0.45)');
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
+    ctx.fillStyle = grd; ctx.fillRect(-sp.w * 0.6, -sp.h * 0.6, sp.w * 1.2, sp.h * 1.2);
+    ctx.restore();
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
+    ctx.drawImage(img, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
+    ctx.restore();
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
+    ctx.fillStyle = slot === 'left' ? 'rgba(246,173,85,0.8)' : 'rgba(59,130,246,0.8)';
+    ctx.fillRect(-sp.w / 2, sp.h / 2, sp.w, 3);
+    ctx.restore();
+  }
+  _drawOne(_leftSubjectImg,  'left');
+  _drawOne(_rightSubjectImg, 'right');
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -3034,7 +3086,9 @@ function _getHandleCanvas() {
 
 function _showCompositeHandles(show) {
   const hc = _getHandleCanvas();
-  if (hc) hc.style.display = show ? 'block' : 'none';
+  if (!hc) return;
+  hc.style.display = show ? 'block' : 'none';
+  hc.style.pointerEvents = show ? 'auto' : 'none';
 }
 
 /** Convert a CSS-pixel point on the handle canvas → canvas-pixel space */
@@ -3153,7 +3207,8 @@ function _drawCompositeHandles() {
 
   _drawSpriteHandles(_sprites.left,  _leftSubjectImg,  '#f6ad55');
   _drawSpriteHandles(_sprites.right, _rightSubjectImg, '#60a5fa');
-  hc.style.pointerEvents = 'auto';
+  /* Only intercept pointer events when composite mode is active */
+  hc.style.pointerEvents = (_compositeMode && (_leftSubjectImg || _rightSubjectImg)) ? 'auto' : 'none';
 }
 
 /* ── Hit-test: which part of which sprite did the pointer hit? ──────
@@ -3460,6 +3515,7 @@ function fastRedraw() {
     drawBackground(ctx, CANVAS_W, CANVAS_H);
   }
   if (generatedPost) drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+  _drawExtraTexts(ctx, CANVAS_W, CANVAS_H);
 }
 
 /* ────────────────────────────────────────────────────────────────
@@ -3512,12 +3568,14 @@ function fastRedraw() {
         canvas.height = CANVAS_H;
         drawNewsImage(ctx, _cachedNewsImg, CANVAS_W, CANVAS_H);
         if (generatedPost) drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+        _drawExtraTexts(ctx, CANVAS_W, CANVAS_H);
       } else if (generatedPost) {
         /* No image loaded yet — just redraw background + text */
         canvas.width  = CANVAS_W;
         canvas.height = CANVAS_H;
         drawBackground(ctx, CANVAS_W, CANVAS_H);
         drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+        _drawExtraTexts(ctx, CANVAS_W, CANVAS_H);
       }
     });
   }
@@ -3947,6 +4005,53 @@ function resetImageTint() {
   fastRedraw();
 }
 
+/* ── Extra Text Labels ───────────────────────────────────────────── */
+function _drawExtraTexts(ctx, W, H) {
+  _extraTexts.forEach((et, i) => {
+    if (!et.visible || !et.text.trim()) return;
+    const size = et.size || 32;
+    ctx.save();
+    ctx.font = `${et.bold ? 'bold ' : ''}${size}px "Segoe UI",Arial,sans-serif`;
+    ctx.fillStyle = et.color || '#ffffff';
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur  = 14;
+    const padX = 60;
+    let x = W / 2;
+    if (et.posX === 'left')  { ctx.textAlign = 'left';  x = padX; }
+    else if (et.posX === 'right') { ctx.textAlign = 'right'; x = W - padX; }
+    else { ctx.textAlign = 'center'; x = W / 2; }
+    let y;
+    if (et.posY === 'top')    y = 140 + i * (size + 12);
+    else if (et.posY === 'bottom') y = H - 220 - (2 - i) * (size + 12);
+    else y = H * 0.42 + i * (size + 16);
+    wrapText(ctx, et.text, x, y, W - padX * 2, size * 1.35, 2);
+    ctx.restore();
+  });
+}
+
+function updateExtraText(idx, field, val) {
+  if (!_extraTexts[idx]) return;
+  if (field === 'size') val = parseInt(val, 10) || 32;
+  _extraTexts[idx][field] = val;
+  fastRedraw();
+}
+
+function toggleExtraText(idx, show) {
+  if (!_extraTexts[idx]) return;
+  _extraTexts[idx].visible = !!show;
+  const row = document.getElementById('extraTextControls' + idx);
+  if (row) row.style.display = show ? 'flex' : 'none';
+  fastRedraw();
+}
+
+function resetExtraTexts() {
+  _extraTexts.forEach(et => { et.text = ''; et.visible = false; });
+  document.querySelectorAll('.extra-text-controls').forEach(r => { r.style.display = 'none'; });
+  document.querySelectorAll('.extra-text-toggle').forEach(cb => { cb.checked = false; });
+  document.querySelectorAll('.extra-text-input').forEach(inp => { inp.value = ''; });
+  fastRedraw();
+}
+
 function sCurve(v) {
   /* Maps 0-255 through a gentle S-curve for contrast */
   const x = v / 255;
@@ -4260,11 +4365,27 @@ function wrapText(ctx, text, x, y, maxW, lineH, maxLines) {
    FEATURE 4 – DOWNLOAD IMAGE
 ================================================================ */
 function downloadImage() {
-  const link     = document.createElement('a');
-  link.download  = 'nepal-news-' + Date.now() + '.png';
-  link.href      = document.getElementById('newsCanvas').toDataURL('image/png');
-  link.click();
-  toast('⬇️ Image downloaded!', 'success');
+  /* Hide the handle overlay canvas before capturing so handles don't appear in the download */
+  const hc = document.getElementById('compositeHandleCanvas');
+  if (hc) hc.style.display = 'none';
+
+  try {
+    const link    = document.createElement('a');
+    link.download = 'nepal-news-' + Date.now() + '.png';
+    link.href     = document.getElementById('newsCanvas').toDataURL('image/png');
+    link.click();
+    toast('⬇️ Image downloaded!', 'success');
+  } catch (e) {
+    /* Cross-origin tainted canvas — fallback: open in new tab so user can save manually */
+    toast('⚠️ Right-click the image → Save As to download', 'info', 5000);
+    const win = window.open();
+    if (win) {
+      win.document.write('<img src="' + document.getElementById('newsCanvas').toDataURL('image/png') + '" style="max-width:100%">');
+    }
+  } finally {
+    /* Restore handle overlay */
+    if (hc && _compositeMode) hc.style.display = 'block';
+  }
 }
 
 /* ================================================================

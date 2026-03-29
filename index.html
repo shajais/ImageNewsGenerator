@@ -262,6 +262,105 @@
         </div>
       </div>
 
+      <!-- ── Extra Text Labels ──────────────────────────────────────── -->
+      <div id="extraTextBar" style="padding:9px 18px;border-bottom:1px solid var(--border);background:rgba(99,102,241,.05)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap">
+          <span style="font-size:.75rem;font-weight:700;color:#818cf8;letter-spacing:.4px;text-transform:uppercase">✏️ Extra Text Labels</span>
+          <span style="font-size:.7rem;color:var(--muted)">Add up to 3 custom text overlays on the canvas</span>
+          <button class="btn btn-ghost" style="margin-left:auto;font-size:.68rem;padding:3px 9px" onclick="resetExtraTexts()">↺ Reset</button>
+        </div>
+
+        <!-- Label 1 -->
+        <div style="margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.73rem;font-weight:700;color:#c7d2fe;min-width:72px">
+              <input type="checkbox" class="extra-text-toggle" onchange="toggleExtraText(0,this.checked)">
+              Label 1
+            </label>
+            <input type="text" class="extra-text-input" placeholder="Enter text…" maxlength="120"
+              style="flex:1;min-width:120px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:.75rem"
+              oninput="updateExtraText(0,'text',this.value)">
+          </div>
+          <div id="extraTextControls0" class="extra-text-controls" style="display:none;gap:7px;flex-wrap:wrap;margin-top:5px;padding-left:78px;align-items:center">
+            <label style="font-size:.68rem;color:var(--muted)">Size
+              <input type="range" min="16" max="96" value="36" style="width:70px;vertical-align:middle" oninput="updateExtraText(0,'size',this.value);this.nextElementSibling.textContent=this.value+'px'"><span style="font-size:.67rem;color:var(--muted)">36px</span>
+            </label>
+            <label style="font-size:.68rem;color:var(--muted)">Colour <input type="color" value="#ffffff" style="width:32px;height:22px;padding:0;border:none;cursor:pointer" oninput="updateExtraText(0,'color',this.value)"></label>
+            <label style="font-size:.68rem;color:var(--muted)"><input type="checkbox" checked onchange="updateExtraText(0,'bold',this.checked)"> Bold</label>
+            <label style="font-size:.68rem;color:var(--muted)">H-pos
+              <select style="font-size:.68rem;padding:2px 5px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)" onchange="updateExtraText(0,'posX',this.value)">
+                <option value="center" selected>Centre</option><option value="left">Left</option><option value="right">Right</option>
+              </select>
+            </label>
+            <label style="font-size:.68rem;color:var(--muted)">V-pos
+              <select style="font-size:.68rem;padding:2px 5px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)" onchange="updateExtraText(0,'posY',this.value)">
+                <option value="middle" selected>Middle</option><option value="top">Top</option><option value="bottom">Bottom</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <!-- Label 2 -->
+        <div style="margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.73rem;font-weight:700;color:#fcd34d;min-width:72px">
+              <input type="checkbox" class="extra-text-toggle" onchange="toggleExtraText(1,this.checked)">
+              Label 2
+            </label>
+            <input type="text" class="extra-text-input" placeholder="Enter text…" maxlength="120"
+              style="flex:1;min-width:120px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:.75rem"
+              oninput="updateExtraText(1,'text',this.value)">
+          </div>
+          <div id="extraTextControls1" class="extra-text-controls" style="display:none;gap:7px;flex-wrap:wrap;margin-top:5px;padding-left:78px;align-items:center">
+            <label style="font-size:.68rem;color:var(--muted)">Size
+              <input type="range" min="16" max="96" value="28" style="width:70px;vertical-align:middle" oninput="updateExtraText(1,'size',this.value);this.nextElementSibling.textContent=this.value+'px'"><span style="font-size:.67rem;color:var(--muted)">28px</span>
+            </label>
+            <label style="font-size:.68rem;color:var(--muted)">Colour <input type="color" value="#f6ad55" style="width:32px;height:22px;padding:0;border:none;cursor:pointer" oninput="updateExtraText(1,'color',this.value)"></label>
+            <label style="font-size:.68rem;color:var(--muted)"><input type="checkbox" onchange="updateExtraText(1,'bold',this.checked)"> Bold</label>
+            <label style="font-size:.68rem;color:var(--muted)">H-pos
+              <select style="font-size:.68rem;padding:2px 5px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)" onchange="updateExtraText(1,'posX',this.value)">
+                <option value="center">Centre</option><option value="left" selected>Left</option><option value="right">Right</option>
+              </select>
+            </label>
+            <label style="font-size:.68rem;color:var(--muted)">V-pos
+              <select style="font-size:.68rem;padding:2px 5px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)" onchange="updateExtraText(1,'posY',this.value)">
+                <option value="middle">Middle</option><option value="top" selected>Top</option><option value="bottom">Bottom</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <!-- Label 3 -->
+        <div>
+          <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.73rem;font-weight:700;color:#93c5fd;min-width:72px">
+              <input type="checkbox" class="extra-text-toggle" onchange="toggleExtraText(2,this.checked)">
+              Label 3
+            </label>
+            <input type="text" class="extra-text-input" placeholder="Enter text…" maxlength="120"
+              style="flex:1;min-width:120px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:.75rem"
+              oninput="updateExtraText(2,'text',this.value)">
+          </div>
+          <div id="extraTextControls2" class="extra-text-controls" style="display:none;gap:7px;flex-wrap:wrap;margin-top:5px;padding-left:78px;align-items:center">
+            <label style="font-size:.68rem;color:var(--muted)">Size
+              <input type="range" min="16" max="96" value="28" style="width:70px;vertical-align:middle" oninput="updateExtraText(2,'size',this.value);this.nextElementSibling.textContent=this.value+'px'"><span style="font-size:.67rem;color:var(--muted)">28px</span>
+            </label>
+            <label style="font-size:.68rem;color:var(--muted)">Colour <input type="color" value="#60a5fa" style="width:32px;height:22px;padding:0;border:none;cursor:pointer" oninput="updateExtraText(2,'color',this.value)"></label>
+            <label style="font-size:.68rem;color:var(--muted)"><input type="checkbox" onchange="updateExtraText(2,'bold',this.checked)"> Bold</label>
+            <label style="font-size:.68rem;color:var(--muted)">H-pos
+              <select style="font-size:.68rem;padding:2px 5px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)" onchange="updateExtraText(2,'posX',this.value)">
+                <option value="center">Centre</option><option value="left">Left</option><option value="right" selected>Right</option>
+              </select>
+            </label>
+            <label style="font-size:.68rem;color:var(--muted)">V-pos
+              <select style="font-size:.68rem;padding:2px 5px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)" onchange="updateExtraText(2,'posY',this.value)">
+                <option value="middle">Middle</option><option value="top" selected>Top</option><option value="bottom">Bottom</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+
       <!-- Background Style Picker — hidden until user clicks Enhance with AI -->
       <div id="bgStylePicker" style="display:none">
         <div class="bg-picker-header">
@@ -644,6 +743,6 @@
   </div>
 </div>
 
-<script src="app.js?v=20260329c"></script>
+<script src="app.js?v=20260329d"></script>
 </body>
 </html>
