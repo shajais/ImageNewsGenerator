@@ -147,6 +147,45 @@
         <button class="btn enhance-ai-btn" id="enhanceAIBtn" style="display:none" onclick="toggleBgPicker()" title="AI removes background & replaces it with a cinematic scene">🎨 Enhance with AI</button>
       </div>
 
+      <!-- ── Multi-Image Composite Row ── -->
+      <div id="compositeBar" style="padding:10px 18px;border-bottom:1px solid var(--border);background:rgba(139,92,246,.05)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <span style="font-size:.75rem;font-weight:700;color:#a78bfa;letter-spacing:.4px;text-transform:uppercase">🖼️ Multi-Image Composite</span>
+          <span style="font-size:.7rem;color:var(--muted)">Add side images (BG removed) merged with the centre photo</span>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
+
+          <!-- LEFT side upload -->
+          <div style="display:flex;flex-direction:column;align-items:center;gap:5px;min-width:86px">
+            <span style="font-size:.68rem;font-weight:700;color:#f6ad55;text-transform:uppercase;letter-spacing:.3px">◀ Left</span>
+            <img id="sideThumbLeft" src="" alt="" style="display:none;width:72px;height:58px;object-fit:cover;border-radius:6px;border:2px solid rgba(246,173,85,.5)">
+            <label style="cursor:pointer">
+              <input type="file" id="leftImgInput" accept="image/*" style="display:none" onchange="onSideImage(event,'left')">
+              <span class="btn btn-ghost" style="font-size:.7rem;padding:5px 10px;border-color:rgba(246,173,85,.4);color:#f6ad55">⬆️ Upload</span>
+            </label>
+            <button id="clearLeftBtn" class="btn btn-ghost" style="display:none;font-size:.68rem;padding:3px 8px" onclick="clearSideImage('left')">✕ Clear</button>
+          </div>
+
+          <!-- RIGHT side upload -->
+          <div style="display:flex;flex-direction:column;align-items:center;gap:5px;min-width:86px">
+            <span style="font-size:.68rem;font-weight:700;color:#60a5fa;text-transform:uppercase;letter-spacing:.3px">Right ▶</span>
+            <img id="sideThumbRight" src="" alt="" style="display:none;width:72px;height:58px;object-fit:cover;border-radius:6px;border:2px solid rgba(59,130,246,.5)">
+            <label style="cursor:pointer">
+              <input type="file" id="rightImgInput" accept="image/*" style="display:none" onchange="onSideImage(event,'right')">
+              <span class="btn btn-ghost" style="font-size:.7rem;padding:5px 10px;border-color:rgba(59,130,246,.4);color:#60a5fa">⬆️ Upload</span>
+            </label>
+            <button id="clearRightBtn" class="btn btn-ghost" style="display:none;font-size:.68rem;padding:3px 8px" onclick="clearSideImage('right')">✕ Clear</button>
+          </div>
+
+          <!-- Apply + hint -->
+          <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:7px;min-width:130px">
+            <button id="compositeApplyBtn" class="btn" style="display:none;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-size:.8rem;padding:8px 16px;box-shadow:0 3px 12px rgba(139,92,246,.45)" onclick="applyComposite()">✨ Apply Composite</button>
+            <button id="compositeClearBtn" class="btn btn-ghost" style="display:none;font-size:.72rem;padding:5px 12px" onclick="clearAllComposite()">↺ Reset Composite</button>
+            <p style="font-size:.67rem;color:var(--muted);line-height:1.5;margin:0">Side images use <strong style="color:#a78bfa">Remove.bg</strong> to strip backgrounds &amp; are placed left/right. Centre image stays as the main backdrop.</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Background Style Picker — hidden until user clicks Enhance with AI -->
       <div id="bgStylePicker" style="display:none">
         <div class="bg-picker-header">

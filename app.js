@@ -156,6 +156,20 @@ let imgFlipV   = false;
 /* Cached image object — used for instant drag/zoom redraws without re-fetching */
 let _cachedNewsImg = null;
 
+/* ── Multi-Image Composite State ────────────────────────────────
+   Centre  = main image (existing customImageDataUrl / news photo)
+   Left    = optional side image, BG removed, placed lower-left
+   Right   = optional side image, BG removed, placed lower-right
+   _compositeMode is true when at least one side image is loaded.
+   ──────────────────────────────────────────────────────────────── */
+let _leftImageDataUrl   = null;   // raw upload
+let _rightImageDataUrl  = null;   // raw upload
+let _leftSubjectDataUrl  = null;  // bg-removed
+let _rightSubjectDataUrl = null;  // bg-removed
+let _leftSubjectImg  = null;      // loaded Image object
+let _rightSubjectImg = null;      // loaded Image object
+let _compositeMode   = false;     // true when side panels are used
+
 /* Text overlay customisation (editable via the Text Editor modal) */
 let _textOpts = {
   bannerText:  '🚨  BREAKING NEWS',
@@ -2735,6 +2749,215 @@ function clearCustomImage() {
   else document.getElementById('imgAdjustBar').style.display = 'none';
 }
 
+/* ================================================================
+   MULTI-IMAGE COMPOSITE — Side Image Handlers
+================================================================ */
+
+/** Called when user picks a left or right side image */
+function onSideImage(event, side) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    if (side === 'left') {
+      _leftImageDataUrl   = e.target.result;
+      _leftSubjectDataUrl  = null;
+      _leftSubjectImg      = null;
+    } else {
+      _rightImageDataUrl  = e.target.result;
+      _rightSubjectDataUrl = null;
+      _rightSubjectImg     = null;
+    }
+    _updateCompositeUI();
+    toast(`📷 ${side === 'left' ? 'Left' : 'Right'} image loaded — click "Apply Composite" to merge!`, 'success');
+  };
+  reader.readAsDataURL(file);
+}
+
+/** Clear a side image */
+function clearSideImage(side) {
+  if (side === 'left') {
+    _leftImageDataUrl    = null;
+    _leftSubjectDataUrl  = null;
+    _leftSubjectImg      = null;
+    const inp = document.getElementById('leftImgInput');
+    if (inp) inp.value = '';
+  } else {
+    _rightImageDataUrl   = null;
+    _rightSubjectDataUrl = null;
+    _rightSubjectImg     = null;
+    const inp = document.getElementById('rightImgInput');
+    if (inp) inp.value = '';
+  }
+  _updateCompositeUI();
+  if (!_leftImageDataUrl && !_rightImageDataUrl) {
+    _compositeMode = false;
+    fastRedraw();
+  } else {
+    applyComposite();
+  }
+  toast(`✕ ${side === 'left' ? 'Left' : 'Right'} image cleared`, 'info', 1800);
+}
+
+/** Sync the composite panel button states */
+function _updateCompositeUI() {
+  const leftSet  = !!_leftImageDataUrl;
+  const rightSet = !!_rightImageDataUrl;
+  const clearL = document.getElementById('clearLeftBtn');
+  const clearR = document.getElementById('clearRightBtn');
+  const applyBtn = document.getElementById('compositeApplyBtn');
+  if (clearL) clearL.style.display = leftSet  ? 'inline-flex' : 'none';
+  if (clearR) clearR.style.display = rightSet ? 'inline-flex' : 'none';
+  if (applyBtn) applyBtn.style.display = (leftSet || rightSet) ? 'inline-flex' : 'none';
+
+  // preview thumbnails
+  const thumbL = document.getElementById('sideThumbLeft');
+  const thumbR = document.getElementById('sideThumbRight');
+  if (thumbL) { thumbL.src = _leftImageDataUrl  || ''; thumbL.style.display = leftSet  ? 'block' : 'none'; }
+  if (thumbR) { thumbR.src = _rightImageDataUrl || ''; thumbR.style.display = rightSet ? 'block' : 'none'; }
+}
+
+/**
+ * Apply Composite:
+ *  1. BG-remove left/right images that haven't been processed yet
+ *  2. Draw centre image as background
+ *  3. Composite the bg-removed side subjects on top
+ */
+async function applyComposite() {
+  if (!_leftImageDataUrl && !_rightImageDataUrl) {
+    toast('⚠️ Upload at least one side image first.', 'error'); return;
+  }
+
+  const applyBtn = document.getElementById('compositeApplyBtn');
+  if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = '⏳ Processing…'; }
+
+  try {
+    /* Remove background from side images (only if not cached) */
+    if (_leftImageDataUrl && !_leftSubjectDataUrl) {
+      toast('🎨 Removing left image background…', 'info', 4000);
+      try {
+        _leftSubjectDataUrl = await removeBackground(_leftImageDataUrl);
+      } catch {
+        toast('⚠️ BG removal failed for left image — using original', 'error', 3000);
+        _leftSubjectDataUrl = _leftImageDataUrl;
+      }
+    }
+    if (_rightImageDataUrl && !_rightSubjectDataUrl) {
+      toast('🎨 Removing right image background…', 'info', 4000);
+      try {
+        _rightSubjectDataUrl = await removeBackground(_rightImageDataUrl);
+      } catch {
+        toast('⚠️ BG removal failed for right image — using original', 'error', 3000);
+        _rightSubjectDataUrl = _rightImageDataUrl;
+      }
+    }
+
+    /* Pre-load Image objects */
+    if (_leftSubjectDataUrl && !_leftSubjectImg) {
+      try { _leftSubjectImg = await loadImageFromSrc(_leftSubjectDataUrl); } catch {}
+    }
+    if (_rightSubjectDataUrl && !_rightSubjectImg) {
+      try { _rightSubjectImg = await loadImageFromSrc(_rightSubjectDataUrl); } catch {}
+    }
+
+    _compositeMode = true;
+    const resetBtn = document.getElementById('compositeClearBtn');
+    if (resetBtn) resetBtn.style.display = 'inline-flex';
+    await redrawComposite();
+    toast('✅ Composite image created!', 'success');
+  } finally {
+    if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = '✨ Apply Composite'; }
+  }
+}
+
+/**
+ * Redraw the composite canvas:
+ *  - Centre image fills the background (existing _cachedNewsImg or drawBackground)
+ *  - Left subject composited bottom-left (~30% width)
+ *  - Right subject composited bottom-right (~30% width)
+ *  - Text overlay and banner on top
+ */
+async function redrawComposite() {
+  const canvas = document.getElementById('newsCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width  = CANVAS_W;
+  canvas.height = CANVAS_H;
+
+  /* Draw centre background */
+  if (_cachedNewsImg) {
+    drawNewsImage(ctx, _cachedNewsImg, CANVAS_W, CANVAS_H);
+  } else {
+    drawBackground(ctx, CANVAS_W, CANVAS_H);
+  }
+
+  const W = CANVAS_W, H = CANVAS_H;
+  const sideW = Math.round(W * 0.32);    // each side subject ~32% of width
+  const sideH = Math.round(H * 0.60);    // max height 60% of canvas
+  const bottomY = Math.round(H * 0.82);  // feet/base sits at 82% height
+
+  /* Dark gradient behind each side figure for depth */
+  function _sideGlow(x, isLeft) {
+    const grd = ctx.createRadialGradient(x, bottomY, 20, x, bottomY - sideH * 0.4, sideW * 0.9);
+    grd.addColorStop(0, 'rgba(0,0,0,0.55)');
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grd;
+    ctx.fillRect(isLeft ? 0 : W - sideW * 1.4, bottomY - sideH, sideW * 1.4, sideH + 40);
+  }
+
+  /* Draw a bg-removed subject image in the given slot */
+  function _drawSubject(img, slot) {
+    if (!img) return;
+    const aspect = img.width / img.height;
+    let dw, dh;
+    if (aspect > sideW / sideH) {
+      dw = sideW; dh = Math.round(sideW / aspect);
+    } else {
+      dh = sideH; dw = Math.round(sideH * aspect);
+    }
+    // clamp
+    if (dw > sideW) { dh = Math.round(dh * sideW / dw); dw = sideW; }
+    if (dh > sideH) { dw = Math.round(dw * sideH / dh); dh = sideH; }
+
+    let x, y;
+    if (slot === 'left') {
+      x = Math.round(W * 0.02);                // 2% from left edge
+    } else {
+      x = W - Math.round(W * 0.02) - dw;       // 2% from right edge
+    }
+    y = bottomY - dh;
+
+    _sideGlow(slot === 'left' ? x + dw * 0.5 : x + dw * 0.5, slot === 'left');
+    ctx.drawImage(img, x, y, dw, dh);
+
+    /* Thin accent line at base of figure */
+    ctx.fillStyle = slot === 'left'
+      ? 'rgba(246,173,85,0.7)'
+      : 'rgba(59,130,246,0.7)';
+    ctx.fillRect(x, bottomY, dw, 3);
+  }
+
+  _drawSubject(_leftSubjectImg,  'left');
+  _drawSubject(_rightSubjectImg, 'right');
+
+  /* Text overlay on top */
+  if (generatedPost) drawTextOverlay(ctx, generatedPost, W, H);
+}
+
+/** Clear all composite side images and exit composite mode */
+function clearAllComposite() {
+  _leftImageDataUrl    = null; _leftSubjectDataUrl  = null; _leftSubjectImg  = null;
+  _rightImageDataUrl   = null; _rightSubjectDataUrl = null; _rightSubjectImg = null;
+  _compositeMode = false;
+  const li = document.getElementById('leftImgInput');  if (li) li.value = '';
+  const ri = document.getElementById('rightImgInput'); if (ri) ri.value = '';
+  _updateCompositeUI();
+  const resetBtn = document.getElementById('compositeClearBtn');
+  if (resetBtn) resetBtn.style.display = 'none';
+  fastRedraw();
+  toast('↺ Composite cleared', 'info', 1800);
+}
+
 /** Reset pan and zoom to defaults. Pass true to skip re-render. */
 function resetImgAdjust(silent) {
   imgOffsetX = 0; imgOffsetY = 0; imgScale = 1.0;
@@ -2848,6 +3071,7 @@ function _hideCanvasEditor() {
  * Called by toolbar buttons, text editor, colour pickers, etc.
  */
 function fastRedraw() {
+  if (_compositeMode) { redrawComposite(); return; }
   if (_enhancedMode && typeof redrawEnhanced === 'function') { redrawEnhanced(); return; }
   const canvas = document.getElementById('newsCanvas');
   if (!canvas) return;
@@ -2893,6 +3117,12 @@ function fastRedraw() {
       const canvas = _getCanvas();
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
+
+      if (_compositeMode) {
+        /* Composite mode — side subjects overlaid on centre image */
+        redrawComposite();
+        return;
+      }
 
       if (_enhancedMode && _subjectImg) {
         /* Enhanced mode — redraw background + subject */
@@ -3108,8 +3338,9 @@ async function generateImage() {
   if (!selectedArticle || !generatedPost) {
     toast('⚠️ Please select a news article first.', 'error'); return;
   }
-  /* Regenerate always exits enhanced mode — user wants the original image */
+  /* Regenerate always exits enhanced/composite mode — user wants the original image */
   _enhancedMode = false;
+  /* Note: composite mode is NOT auto-exited — it re-composites on the fresh image */
   document.getElementById('imagePanel').style.display = 'block';
   document.getElementById('imagePanel').scrollIntoView({ behavior:'smooth', block:'nearest' });
 
@@ -3164,6 +3395,12 @@ async function generateImage() {
     _activeImageDataUrl = null;
   }
   drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+
+  /* If composite mode is active, re-composite side subjects on the new image */
+  if (_compositeMode && (_leftSubjectImg || _rightSubjectImg)) {
+    redrawComposite();   // async, but non-blocking — updates canvas after centre is drawn
+  }
+
   toast(newsImg ? '🖼️ Image generated!' : '🎨 Image generated (no photo)', newsImg ? 'success' : 'info');
 }
 
