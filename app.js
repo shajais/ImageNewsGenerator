@@ -1355,11 +1355,28 @@ async function selectArticle(idx) {
   document.querySelectorAll('.news-item').forEach(el => el.classList.remove('active'));
   document.getElementById('item-' + idx)?.classList.add('active');
   selectedArticle = articles[idx];
-  /* New article = new image, invalidate cached bg-removal subject */
-  _subjectDataUrl     = null;
-  _subjectImg         = null;
-  _activeImageDataUrl = null;
-  _enhancedMode       = false;
+  /* New article = new image — clear ALL uploaded images and composite state */
+  customImageDataUrl   = null;
+  _subjectDataUrl      = null;
+  _subjectImg          = null;
+  _activeImageDataUrl  = null;
+  _enhancedMode        = false;
+  /* Clear composite side images */
+  _leftImageDataUrl    = null; _leftSubjectDataUrl  = null; _leftSubjectImg  = null;
+  _rightImageDataUrl   = null; _rightSubjectDataUrl = null; _rightSubjectImg = null;
+  _compositeMode       = false;
+  /* Reset composite UI */
+  _updateCompositeUI();
+  const resetBtn = document.getElementById('compositeClearBtn');
+  if (resetBtn) resetBtn.style.display = 'none';
+  /* Reset custom image UI */
+  const customInp = document.getElementById('customImgInput');
+  if (customInp) customInp.value = '';
+  document.getElementById('clearCustomBtn').style.display = 'none';
+  document.getElementById('enhanceAIBtn').style.display   = 'none';
+  document.getElementById('bgStylePicker').style.display  = 'none';
+  document.getElementById('imgSourceBadge').textContent   = '';
+  resetImgAdjust(/* silent */ true);
 
   /* Show panel immediately */
   document.getElementById('contentWelcome').style.display = 'none';
