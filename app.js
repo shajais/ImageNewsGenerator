@@ -184,6 +184,18 @@ let _textOpts = {
   titleSize:   62,
 };
 
+/* ── Image colour tint / grade settings ─────────────────────────
+   preset  = 'cinematic' | 'warm' | 'cool' | 'dramatic' | 'vintage' |
+             'noir' | 'golden' | 'none'
+   custom  = hex colour string used when preset='custom'
+   opacity = 0.0 – 1.0  (how strongly the tint is applied)
+   ──────────────────────────────────────────────────────────────── */
+let _imageTint = {
+  preset:  'cinematic',  // default — the original grade
+  custom:  '#ff6600',
+  opacity: 0.5,          // 0 = no tint wash, 1 = full tint wash
+};
+
 /* ================================================================
    UTILITY
 ================================================================ */
@@ -1383,6 +1395,16 @@ async function selectArticle(idx) {
   document.getElementById('enhanceAIBtn').style.display   = 'none';
   document.getElementById('bgStylePicker').style.display  = 'none';
   document.getElementById('imgSourceBadge').textContent   = '';
+  /* Reset image tint to default */
+  _imageTint.preset = 'cinematic'; _imageTint.opacity = 0.5;
+  document.querySelectorAll('.tint-chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.tint === 'cinematic'));
+  const _tcr = document.getElementById('tintCustomRow');
+  if (_tcr) _tcr.style.display = 'none';
+  const _tos = document.getElementById('tintOpacitySlider');
+  if (_tos) _tos.value = 0.5;
+  const _tov = document.getElementById('tintOpacityVal');
+  if (_tov) _tov.textContent = '50%';
   resetImgAdjust(/* silent */ true);
 
   /* Show panel immediately */
@@ -3793,39 +3815,136 @@ function loadImageFromSrc(src, ms = 8000) {
 function applyColourGrade(ctx, W, H) {
   const imgData = ctx.getImageData(0, 0, W, H);
   const d = imgData.data;
+  const preset  = (_imageTint && _imageTint.preset)  || 'cinematic';
+  const opacity = (_imageTint && _imageTint.opacity != null) ? _imageTint.opacity : 0.5;
+
+  /* ── 'none' = return pixel data untouched ── */
+  if (preset === 'none') return imgData;
 
   for (let i = 0; i < d.length; i += 4) {
-    let r = d[i], g = d[i+1], b = d[i+2];
-
-    /* ── Cinematic teal-orange grade ── */
-    /* Shadows → push toward teal (boost G/B, reduce R in darks) */
+    const or = d[i], og = d[i+1], ob = d[i+2];  // original pixel
+    let r = or, g = og, b = ob;
     const lum = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
-    if (lum < 0.45) {
-      r = r * 0.82;
-      g = g * 0.98;
-      b = Math.min(255, b * 1.12);
-    } else {
-      /* Highlights → push toward warm orange (boost R, reduce B) */
-      r = Math.min(255, r * 1.08);
-      g = g * 1.02;
-      b = b * 0.88;
+
+    if (preset === 'cinematic') {
+      /* Original cinematic teal-orange grade */
+      if (lum < 0.45) { r = r * 0.82; g = g * 0.98; b = Math.min(255, b * 1.12); }
+      else            { r = Math.min(255, r * 1.08); g = g * 1.02; b = b * 0.88; }
+      r = sCurve(r); g = sCurve(g); b = sCurve(b);
+      const avg = (r + g + b) / 3, sat = 1.22;
+      r = Math.min(255, Math.max(0, avg + (r - avg) * sat));
+      g = Math.min(255, Math.max(0, avg + (g - avg) * sat));
+      b = Math.min(255, Math.max(0, avg + (b - avg) * sat));
+
+    } else if (preset === 'warm') {
+      r = Math.min(255, r * 1.12 + 10);
+      g = Math.min(255, g * 1.04);
+      b = Math.max(0, b * 0.82);
+      r = sCurve(r); g = sCurve(g); b = sCurve(b);
+
+    } else if (preset === 'cool') {
+      r = Math.max(0, r * 0.85);
+      g = Math.min(255, g * 1.02);
+      b = Math.min(255, b * 1.18 + 8);
+      r = sCurve(r); g = sCurve(g); b = sCurve(b);
+
+    } else if (preset === 'dramatic') {
+      r = sCurve(sCurve(r)); g = sCurve(sCurve(g)); b = sCurve(sCurve(b));
+      const avg2 = (r + g + b) / 3, sat2 = 0.55;
+      r = Math.min(255, Math.max(0, avg2 + (r - avg2) * sat2));
+      g = Math.min(255, Math.max(0, avg2 + (g - avg2) * sat2));
+      b = Math.min(255, Math.max(0, avg2 + (b - avg2) * sat2));
+      r = Math.min(255, r * 0.88 + 5);
+      g = Math.min(255, g * 0.90);
+      b = Math.min(255, b * 1.06 + 5);
+
+    } else if (preset === 'vintage') {
+      r = Math.min(255, r * 1.06 + 15);
+      g = Math.min(255, g * 0.96 + 8);
+      b = Math.max(0, b * 0.75 + 20);
+      const avg3 = (r + g + b) / 3, sat3 = 0.80;
+      r = Math.min(255, Math.max(0, avg3 + (r - avg3) * sat3));
+      g = Math.min(255, Math.max(0, avg3 + (g - avg3) * sat3));
+      b = Math.min(255, Math.max(0, avg3 + (b - avg3) * sat3));
+
+    } else if (preset === 'noir') {
+      const grey = Math.round(r * 0.299 + g * 0.587 + b * 0.114);
+      const gc   = sCurve(sCurve(grey));
+      r = gc; g = gc; b = gc;
+
+    } else if (preset === 'golden') {
+      r = Math.min(255, r * 1.18 + 18);
+      g = Math.min(255, g * 1.06 + 5);
+      b = Math.max(0, b * 0.68);
+      r = sCurve(r); g = sCurve(g); b = sCurve(b);
+
+    } else if (preset === 'custom') {
+      const tc = _hexToRgb(_imageTint.custom || '#ff6600');
+      r = Math.round(or * (1 - opacity) + tc.r * opacity);
+      g = Math.round(og * (1 - opacity) + tc.g * opacity);
+      b = Math.round(ob * (1 - opacity) + tc.b * opacity);
+      r = sCurve(r); g = sCurve(g); b = sCurve(b);
+      d[i] = r; d[i+1] = g; d[i+2] = b;
+      continue;  // already blended, skip blend below
     }
 
-    /* ── S-curve contrast (crush blacks, lift whites) ── */
-    r = sCurve(r);
-    g = sCurve(g);
-    b = sCurve(b);
-
-    /* ── Saturation boost (+20%) ── */
-    const avg  = (r + g + b) / 3;
-    const sat  = 1.22;
-    r = Math.min(255, Math.max(0, avg + (r - avg) * sat));
-    g = Math.min(255, Math.max(0, avg + (g - avg) * sat));
-    b = Math.min(255, Math.max(0, avg + (b - avg) * sat));
-
-    d[i] = r; d[i+1] = g; d[i+2] = b;
+    /* Blend graded result with original pixel according to opacity slider */
+    d[i]   = Math.round(or * (1 - opacity) + r * opacity);
+    d[i+1] = Math.round(og * (1 - opacity) + g * opacity);
+    d[i+2] = Math.round(ob * (1 - opacity) + b * opacity);
   }
   return imgData;
+}
+
+/* Parse '#rrggbb' or '#rgb' into {r,g,b} */
+function _hexToRgb(hex) {
+  hex = hex.replace('#', '');
+  if (hex.length === 3) hex = hex.split('').map(x => x+x).join('');
+  const n = parseInt(hex, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+/* Expose tint controls to HTML */
+function setImageTintPreset(preset) {
+  _imageTint.preset = preset;
+  /* Highlight active chip */
+  document.querySelectorAll('.tint-chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.tint === preset));
+  const customRow = document.getElementById('tintCustomRow');
+  /* Show intensity slider for every preset except 'none' */
+  if (customRow) customRow.style.display = (preset === 'none') ? 'none' : 'flex';
+  fastRedraw();
+}
+
+function setImageTintCustom(hex) {
+  _imageTint.custom  = hex;
+  _imageTint.preset  = 'custom';
+  document.querySelectorAll('.tint-chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.tint === 'custom'));
+  const customRow = document.getElementById('tintCustomRow');
+  if (customRow) customRow.style.display = 'flex';
+  fastRedraw();
+}
+
+function setImageTintOpacity(val) {
+  _imageTint.opacity = parseFloat(val);
+  const lbl = document.getElementById('tintOpacityVal');
+  if (lbl) lbl.textContent = Math.round(val * 100) + '%';
+  fastRedraw();
+}
+
+function resetImageTint() {
+  _imageTint.preset  = 'none';
+  _imageTint.opacity = 0.5;
+  document.querySelectorAll('.tint-chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.tint === 'none'));
+  const customRow = document.getElementById('tintCustomRow');
+  if (customRow) customRow.style.display = 'none';
+  const opSlider = document.getElementById('tintOpacitySlider');
+  if (opSlider) opSlider.value = 0.5;
+  const lbl = document.getElementById('tintOpacityVal');
+  if (lbl) lbl.textContent = '50%';
+  fastRedraw();
 }
 
 function sCurve(v) {

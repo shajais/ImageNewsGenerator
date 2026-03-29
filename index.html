@@ -147,6 +147,82 @@
         <button class="btn enhance-ai-btn" id="enhanceAIBtn" style="display:none" onclick="toggleBgPicker()" title="AI removes background & replaces it with a cinematic scene">🎨 Enhance with AI</button>
       </div>
 
+      <!-- ── Colour Grade / Tint Row ── -->
+      <div id="imageTintBar" style="padding:9px 18px;border-bottom:1px solid var(--border);background:rgba(234,179,8,.04)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap">
+          <span style="font-size:.73rem;font-weight:700;color:#fcd34d;letter-spacing:.3px;text-transform:uppercase">🎨 Colour Grade</span>
+          <span style="font-size:.68rem;color:var(--muted)">Choose a look or reset to original</span>
+          <button onclick="resetImageTint()" style="margin-left:auto;font-size:.68rem;padding:3px 10px;border-radius:6px;border:1px solid rgba(252,211,77,.3);background:transparent;color:#fcd34d;cursor:pointer">↺ Original</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <!-- Preset chips -->
+          <span class="tint-chip active" data-tint="cinematic"
+            onclick="setImageTintPreset('cinematic')"
+            title="Cinematic teal-orange"
+            style="display:inline-flex;align-items:center;gap:4px;font-size:.7rem;padding:4px 10px;border-radius:20px;cursor:pointer;border:1.5px solid rgba(252,211,77,.35);background:rgba(252,211,77,.1);color:#fcd34d;user-select:none">
+            🎬 Cinematic
+          </span>
+          <span class="tint-chip" data-tint="warm"
+            onclick="setImageTintPreset('warm')"
+            title="Warm golden-amber"
+            style="display:inline-flex;align-items:center;gap:4px;font-size:.7rem;padding:4px 10px;border-radius:20px;cursor:pointer;border:1.5px solid rgba(251,146,60,.35);background:rgba(251,146,60,.1);color:#fb923c;user-select:none">
+            🌅 Warm
+          </span>
+          <span class="tint-chip" data-tint="cool"
+            onclick="setImageTintPreset('cool')"
+            title="Cool blue-cyan"
+            style="display:inline-flex;align-items:center;gap:4px;font-size:.7rem;padding:4px 10px;border-radius:20px;cursor:pointer;border:1.5px solid rgba(96,165,250,.35);background:rgba(96,165,250,.1);color:#60a5fa;user-select:none">
+            ❄️ Cool
+          </span>
+          <span class="tint-chip" data-tint="dramatic"
+            onclick="setImageTintPreset('dramatic')"
+            title="High-contrast dramatic"
+            style="display:inline-flex;align-items:center;gap:4px;font-size:.7rem;padding:4px 10px;border-radius:20px;cursor:pointer;border:1.5px solid rgba(248,113,113,.35);background:rgba(248,113,113,.1);color:#f87171;user-select:none">
+            ⚡ Dramatic
+          </span>
+          <span class="tint-chip" data-tint="vintage"
+            onclick="setImageTintPreset('vintage')"
+            title="Faded vintage film"
+            style="display:inline-flex;align-items:center;gap:4px;font-size:.7rem;padding:4px 10px;border-radius:20px;cursor:pointer;border:1.5px solid rgba(167,139,250,.35);background:rgba(167,139,250,.1);color:#a78bfa;user-select:none">
+            📷 Vintage
+          </span>
+          <span class="tint-chip" data-tint="noir"
+            onclick="setImageTintPreset('noir')"
+            title="Classic black & white"
+            style="display:inline-flex;align-items:center;gap:4px;font-size:.7rem;padding:4px 10px;border-radius:20px;cursor:pointer;border:1.5px solid rgba(156,163,175,.35);background:rgba(156,163,175,.1);color:#d1d5db;user-select:none">
+            🎞️ Noir
+          </span>
+          <span class="tint-chip" data-tint="golden"
+            onclick="setImageTintPreset('golden')"
+            title="Rich golden-hour"
+            style="display:inline-flex;align-items:center;gap:4px;font-size:.7rem;padding:4px 10px;border-radius:20px;cursor:pointer;border:1.5px solid rgba(234,179,8,.45);background:rgba(234,179,8,.1);color:#eab308;user-select:none">
+            🌟 Golden
+          </span>
+          <span class="tint-chip" data-tint="none"
+            onclick="setImageTintPreset('none')"
+            title="No grade — original colours"
+            style="display:inline-flex;align-items:center;gap:4px;font-size:.7rem;padding:4px 10px;border-radius:20px;cursor:pointer;border:1.5px solid rgba(107,114,128,.35);background:rgba(107,114,128,.08);color:#9ca3af;user-select:none">
+            ✕ None
+          </span>
+          <!-- Custom colour picker chip -->
+          <label class="tint-chip" data-tint="custom"
+            title="Pick any custom colour"
+            style="display:inline-flex;align-items:center;gap:4px;font-size:.7rem;padding:4px 10px;border-radius:20px;cursor:pointer;border:1.5px solid rgba(52,211,153,.35);background:rgba(52,211,153,.1);color:#34d399;user-select:none">
+            🖌️ Custom
+            <input type="color" value="#ff6600" style="width:18px;height:18px;border:none;border-radius:4px;cursor:pointer;padding:0;background:none;vertical-align:middle"
+              oninput="setImageTintCustom(this.value)">
+          </label>
+        </div>
+        <!-- Opacity slider — shown for non-none presets -->
+        <div id="tintCustomRow" style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <span style="font-size:.68rem;color:var(--muted);white-space:nowrap">Intensity</span>
+          <input type="range" id="tintOpacitySlider" min="0" max="1" step="0.05" value="0.5"
+            style="flex:1;min-width:80px;max-width:180px;accent-color:#fcd34d"
+            oninput="setImageTintOpacity(this.value)">
+          <span id="tintOpacityVal" style="font-size:.7rem;color:#fcd34d;font-weight:700;min-width:32px">50%</span>
+        </div>
+      </div>
+
       <!-- ── Multi-Image Composite Row ── -->
       <div id="compositeBar" style="padding:10px 18px;border-bottom:1px solid var(--border);background:rgba(139,92,246,.05)">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
@@ -568,6 +644,6 @@
   </div>
 </div>
 
-<script src="app.js?v=20260329b"></script>
+<script src="app.js?v=20260329c"></script>
 </body>
 </html>

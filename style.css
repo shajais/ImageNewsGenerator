@@ -1228,6 +1228,15 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
 .ite-chip:hover { transform: scale(1.18); }
 .ite-chip.active { border-color: #fff; box-shadow: 0 0 0 2px #a78bfa; }
 .ite-chip-banner { border-radius: 6px; width: 26px; height: 22px; }
+
+/* ── Colour-grade tint chips ── */
+.tint-chip { transition: transform .12s, box-shadow .12s; }
+.tint-chip:hover { transform: scale(1.06); }
+.tint-chip.active {
+  border-color: #fff !important;
+  box-shadow: 0 0 0 2px #fcd34d;
+  font-weight: 700;
+}
 .ite-size-slider {
   -webkit-appearance: none;
   appearance: none;
