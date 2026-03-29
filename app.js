@@ -170,6 +170,12 @@ let _leftSubjectImg  = null;      // loaded Image object
 let _rightSubjectImg = null;      // loaded Image object
 let _compositeMode   = false;     // true when side panels are used
 
+/* ── Composite sprite transforms (all in canvas pixels) ── */
+let _sprites = {
+  left:  { x: 0, y: 0, w: 0, h: 0, rot: 0 },
+  right: { x: 0, y: 0, w: 0, h: 0, rot: 0 },
+};
+
 /* Text overlay customisation (editable via the Text Editor modal) */
 let _textOpts = {
   bannerText:  '🚨  BREAKING NEWS',
@@ -1365,6 +1371,7 @@ async function selectArticle(idx) {
   _leftImageDataUrl    = null; _leftSubjectDataUrl  = null; _leftSubjectImg  = null;
   _rightImageDataUrl   = null; _rightSubjectDataUrl = null; _rightSubjectImg = null;
   _compositeMode       = false;
+  _showCompositeHandles(false);
   /* Reset composite UI */
   _updateCompositeUI();
   const resetBtn = document.getElementById('compositeClearBtn');
@@ -2809,6 +2816,7 @@ function clearSideImage(side) {
   _updateCompositeUI();
   if (!_leftImageDataUrl && !_rightImageDataUrl) {
     _compositeMode = false;
+    _showCompositeHandles(false);
     fastRedraw();
   } else {
     applyComposite();
@@ -2878,20 +2886,41 @@ async function applyComposite() {
     }
 
     _compositeMode = true;
+    _initSpriteDefaults();           // set default x/y/w/h for each side image
+    _showCompositeHandles(true);     // show interactive handle overlay
     const resetBtn = document.getElementById('compositeClearBtn');
     if (resetBtn) resetBtn.style.display = 'inline-flex';
     await redrawComposite();
-    toast('✅ Composite image created!', 'success');
+    toast('✅ Composite image created! Drag · resize · rotate side images freely.', 'success');
   } finally {
     if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = '✨ Apply Composite'; }
   }
 }
 
+/* ── Initialise default sprite positions after BG-removal is done ── */
+function _initSpriteDefaults() {
+  const W = CANVAS_W, H = CANVAS_H;
+  const sideW = Math.round(W * 0.32);
+  const sideH = Math.round(H * 0.60);
+  const bottomY = Math.round(H * 0.82);
+
+  function _fitSprite(img, slot) {
+    if (!img) return;
+    const aspect = img.width / img.height;
+    let dw = sideW, dh = Math.round(sideW / aspect);
+    if (dh > sideH) { dh = sideH; dw = Math.round(sideH * aspect); }
+    const x = slot === 'left' ? Math.round(W * 0.02) : W - Math.round(W * 0.02) - dw;
+    const y = bottomY - dh;
+    _sprites[slot] = { x, y, w: dw, h: dh, rot: 0 };
+  }
+  _fitSprite(_leftSubjectImg,  'left');
+  _fitSprite(_rightSubjectImg, 'right');
+}
+
 /**
  * Redraw the composite canvas:
- *  - Centre image fills the background (existing _cachedNewsImg or drawBackground)
- *  - Left subject composited bottom-left (~30% width)
- *  - Right subject composited bottom-right (~30% width)
+ *  - Centre image fills the background
+ *  - Left/right subjects drawn using their sprite transform (x,y,w,h,rot)
  *  - Text overlay and banner on top
  */
 async function redrawComposite() {
@@ -2908,64 +2937,372 @@ async function redrawComposite() {
     drawBackground(ctx, CANVAS_W, CANVAS_H);
   }
 
-  const W = CANVAS_W, H = CANVAS_H;
-  const sideW = Math.round(W * 0.32);    // each side subject ~32% of width
-  const sideH = Math.round(H * 0.60);    // max height 60% of canvas
-  const bottomY = Math.round(H * 0.82);  // feet/base sits at 82% height
-
-  /* Dark gradient behind each side figure for depth */
-  function _sideGlow(x, isLeft) {
-    const grd = ctx.createRadialGradient(x, bottomY, 20, x, bottomY - sideH * 0.4, sideW * 0.9);
-    grd.addColorStop(0, 'rgba(0,0,0,0.55)');
-    grd.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = grd;
-    ctx.fillRect(isLeft ? 0 : W - sideW * 1.4, bottomY - sideH, sideW * 1.4, sideH + 40);
-  }
-
-  /* Draw a bg-removed subject image in the given slot */
-  function _drawSubject(img, slot) {
+  /* Draw a sprite using its transform */
+  function _drawSprite(img, slot) {
     if (!img) return;
-    const aspect = img.width / img.height;
-    let dw, dh;
-    if (aspect > sideW / sideH) {
-      dw = sideW; dh = Math.round(sideW / aspect);
-    } else {
-      dh = sideH; dw = Math.round(sideH * aspect);
-    }
-    // clamp
-    if (dw > sideW) { dh = Math.round(dh * sideW / dw); dw = sideW; }
-    if (dh > sideH) { dw = Math.round(dw * sideH / dh); dh = sideH; }
+    const sp = _sprites[slot];
+    const cx = sp.x + sp.w / 2;
+    const cy = sp.y + sp.h / 2;
 
-    let x, y;
-    if (slot === 'left') {
-      x = Math.round(W * 0.02);                // 2% from left edge
-    } else {
-      x = W - Math.round(W * 0.02) - dw;       // 2% from right edge
-    }
-    y = bottomY - dh;
+    /* depth glow behind figure */
+    const grd = ctx.createRadialGradient(cx, cy + sp.h * 0.3, sp.w * 0.1, cx, cy, sp.w * 0.8);
+    grd.addColorStop(0, 'rgba(0,0,0,0.45)');
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(sp.rot);
+    ctx.fillStyle = grd;
+    ctx.fillRect(-sp.w * 0.6, -sp.h * 0.6, sp.w * 1.2, sp.h * 1.2);
+    ctx.restore();
 
-    _sideGlow(slot === 'left' ? x + dw * 0.5 : x + dw * 0.5, slot === 'left');
-    ctx.drawImage(img, x, y, dw, dh);
+    /* draw image */
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(sp.rot);
+    ctx.drawImage(img, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
+    ctx.restore();
 
-    /* Thin accent line at base of figure */
-    ctx.fillStyle = slot === 'left'
-      ? 'rgba(246,173,85,0.7)'
-      : 'rgba(59,130,246,0.7)';
-    ctx.fillRect(x, bottomY, dw, 3);
+    /* accent line at bottom of sprite */
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(sp.rot);
+    ctx.fillStyle = slot === 'left' ? 'rgba(246,173,85,0.8)' : 'rgba(59,130,246,0.8)';
+    ctx.fillRect(-sp.w / 2, sp.h / 2, sp.w, 3);
+    ctx.restore();
   }
 
-  _drawSubject(_leftSubjectImg,  'left');
-  _drawSubject(_rightSubjectImg, 'right');
+  _drawSprite(_leftSubjectImg,  'left');
+  _drawSprite(_rightSubjectImg, 'right');
 
   /* Text overlay on top */
-  if (generatedPost) drawTextOverlay(ctx, generatedPost, W, H);
+  if (generatedPost) drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+
+  /* Refresh handle overlay */
+  _drawCompositeHandles();
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   COMPOSITE HANDLE OVERLAY
+   A transparent <canvas> stacked over the main canvas.
+   Draws selection boxes + resize corner + rotation grip.
+   Handles pointer drag / resize / rotate.
+   ══════════════════════════════════════════════════════════════════ */
+
+const HANDLE_R   = 10;   // px radius of corner/rotate handles (on overlay canvas coords)
+const ROTATE_GAP = 28;   // px above sprite bounding box for the rotate grip
+
+function _getHandleCanvas() {
+  let hc = document.getElementById('compositeHandleCanvas');
+  if (!hc) {
+    const wrap = document.querySelector('.canvas-wrap');
+    if (!wrap) return null;
+    hc = document.createElement('canvas');
+    hc.id = 'compositeHandleCanvas';
+    hc.style.cssText = [
+      'position:absolute', 'top:0', 'left:0', 'width:100%', 'height:100%',
+      'pointer-events:none', 'display:none', 'z-index:10'
+    ].join(';');
+    /* insert right after the main canvas */
+    const mc = document.getElementById('newsCanvas');
+    if (mc && mc.parentNode) mc.parentNode.insertBefore(hc, mc.nextSibling);
+    else wrap.appendChild(hc);
+  }
+  return hc;
+}
+
+function _showCompositeHandles(show) {
+  const hc = _getHandleCanvas();
+  if (hc) hc.style.display = show ? 'block' : 'none';
+}
+
+/** Convert a CSS-pixel point on the handle canvas → canvas-pixel space */
+function _hcToCanvas(hc, cx, cy) {
+  const scaleX = CANVAS_W / hc.offsetWidth;
+  const scaleY = CANVAS_H / hc.offsetHeight;
+  return { x: cx * scaleX, y: cy * scaleY };
+}
+
+/** Convert canvas-pixel point → handle canvas CSS-pixel space */
+function _canvasToHc(hc, cx, cy) {
+  const scaleX = hc.offsetWidth  / CANVAS_W;
+  const scaleY = hc.offsetHeight / CANVAS_H;
+  return { x: cx * scaleX, y: cy * scaleY };
+}
+
+/* Corners (in local sprite coords relative to centre) */
+function _spriteCorners(sp) {
+  const hw = sp.w / 2, hh = sp.h / 2;
+  return [
+    { lx: -hw, ly: -hh },   // 0 top-left
+    { lx:  hw, ly: -hh },   // 1 top-right
+    { lx:  hw, ly:  hh },   // 2 bottom-right
+    { lx: -hw, ly:  hh },   // 3 bottom-left
+  ];
+}
+
+/* Rotate a point around origin */
+function _rot(lx, ly, a) {
+  const c = Math.cos(a), s = Math.sin(a);
+  return { x: lx * c - ly * s, y: lx * s + ly * c };
+}
+
+/* World position of a corner */
+function _cornerWorld(sp, idx) {
+  const corners = _spriteCorners(sp);
+  const { lx, ly } = corners[idx];
+  const r = _rot(lx, ly, sp.rot);
+  return { x: sp.x + sp.w / 2 + r.x, y: sp.y + sp.h / 2 + r.y };
+}
+
+/* World position of rotate grip (above top-left corner or top-centre) */
+function _rotGripWorld(sp) {
+  const r = _rot(0, -sp.h / 2 - ROTATE_GAP, sp.rot);
+  return { x: sp.x + sp.w / 2 + r.x, y: sp.y + sp.h / 2 + r.y };
+}
+
+function _drawCompositeHandles() {
+  const hc = _getHandleCanvas();
+  if (!hc || !_compositeMode) return;
+
+  /* Match pixel resolution of main canvas so coordinates align */
+  const mc = document.getElementById('newsCanvas');
+  if (!mc) return;
+  hc.width  = mc.width;
+  hc.height = mc.height;
+  const ctx = hc.getContext('2d');
+  ctx.clearRect(0, 0, hc.width, hc.height);
+
+  function _drawSpriteHandles(sp, img, slotColor) {
+    if (!img) return;
+    const corners = [0,1,2,3].map(i => _cornerWorld(sp, i));
+    const grip    = _rotGripWorld(sp);
+
+    /* Dashed bounding box */
+    ctx.save();
+    ctx.strokeStyle = slotColor;
+    ctx.lineWidth   = 2.5;
+    ctx.setLineDash([10, 6]);
+    ctx.beginPath();
+    ctx.moveTo(corners[0].x, corners[0].y);
+    corners.forEach(c => ctx.lineTo(c.x, c.y));
+    ctx.closePath();
+    ctx.stroke();
+
+    /* Line to rotate grip */
+    const topMid = {
+      x: (corners[0].x + corners[1].x) / 2,
+      y: (corners[0].y + corners[1].y) / 2,
+    };
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(topMid.x, topMid.y);
+    ctx.lineTo(grip.x, grip.y);
+    ctx.stroke();
+    ctx.restore();
+
+    /* Corner resize handles */
+    corners.forEach(c => {
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, HANDLE_R, 0, Math.PI * 2);
+      ctx.fillStyle   = '#fff';
+      ctx.fill();
+      ctx.strokeStyle = slotColor;
+      ctx.lineWidth   = 2.5;
+      ctx.setLineDash([]);
+      ctx.stroke();
+    });
+
+    /* Rotation grip */
+    ctx.beginPath();
+    ctx.arc(grip.x, grip.y, HANDLE_R, 0, Math.PI * 2);
+    ctx.fillStyle   = slotColor;
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth   = 2;
+    ctx.setLineDash([]);
+    ctx.stroke();
+    /* Arrow symbol inside grip */
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${Math.round(HANDLE_R * 1.4)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('↻', grip.x, grip.y);
+  }
+
+  _drawSpriteHandles(_sprites.left,  _leftSubjectImg,  '#f6ad55');
+  _drawSpriteHandles(_sprites.right, _rightSubjectImg, '#60a5fa');
+  hc.style.pointerEvents = 'auto';
+}
+
+/* ── Hit-test: which part of which sprite did the pointer hit? ──────
+   Returns { slot, type } where type = 'move' | 'rotate' | 'resize-N'
+   or null if nothing hit.
+────────────────────────────────────────────────────────────────────── */
+function _hitTestSprite(sp, img, wx, wy) {
+  if (!img) return null;
+  /* Rotate grip */
+  const grip = _rotGripWorld(sp);
+  if (Math.hypot(wx - grip.x, wy - grip.y) <= HANDLE_R + 4) return 'rotate';
+  /* Corner handles */
+  for (let i = 0; i < 4; i++) {
+    const c = _cornerWorld(sp, i);
+    if (Math.hypot(wx - c.x, wy - c.y) <= HANDLE_R + 4) return `resize-${i}`;
+  }
+  /* Inside bounding box? (point in rotated rectangle) */
+  const cx = sp.x + sp.w / 2, cy = sp.y + sp.h / 2;
+  const dx = wx - cx, dy = wy - cy;
+  const cos = Math.cos(-sp.rot), sin = Math.sin(-sp.rot);
+  const lx = dx * cos - dy * sin, ly = dx * sin + dy * cos;
+  if (Math.abs(lx) <= sp.w / 2 && Math.abs(ly) <= sp.h / 2) return 'move';
+  return null;
+}
+
+(function _initCompositeHandleInteraction() {
+  let _active     = null;  // { slot, type }
+  let _startPx    = null;  // pointer start in canvas-px
+  let _startSp    = null;  // clone of sprite at drag start
+  let _rafPending = false;
+
+  function _getHc() { return document.getElementById('compositeHandleCanvas'); }
+
+  function _ptToCanvas(e) {
+    const hc = _getHc();
+    if (!hc) return { x: 0, y: 0 };
+    const rect   = hc.getBoundingClientRect();
+    const touch  = e.touches ? e.touches[0] : e;
+    return _hcToCanvas(hc, touch.clientX - rect.left, touch.clientY - rect.top);
+  }
+
+  function _scheduleRedraw() {
+    if (_rafPending) return;
+    _rafPending = true;
+    requestAnimationFrame(async () => {
+      _rafPending = false;
+      await redrawComposite();
+    });
+  }
+
+  function _onDown(e) {
+    if (!_compositeMode) return;
+    const pt = _ptToCanvas(e);
+
+    /* Hit-test right side first (drawn on top) */
+    const slots = [
+      { slot: 'right', img: _rightSubjectImg, sp: _sprites.right },
+      { slot: 'left',  img: _leftSubjectImg,  sp: _sprites.left  },
+    ];
+    for (const { slot, img, sp } of slots) {
+      const hit = _hitTestSprite(sp, img, pt.x, pt.y);
+      if (hit) {
+        _active   = { slot, type: hit };
+        _startPx  = pt;
+        _startSp  = { ...sp };
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+    }
+  }
+
+  function _onMove(e) {
+    if (!_active) return;
+    const pt = _ptToCanvas(e);
+    const sp  = _sprites[_active.slot];
+    const ssp = _startSp;
+    const dx  = pt.x - _startPx.x;
+    const dy  = pt.y - _startPx.y;
+
+    if (_active.type === 'move') {
+      sp.x = ssp.x + dx;
+      sp.y = ssp.y + dy;
+    } else if (_active.type === 'rotate') {
+      const cx = ssp.x + ssp.w / 2, cy = ssp.y + ssp.h / 2;
+      const a0 = Math.atan2(_startPx.y - cy, _startPx.x - cx);
+      const a1 = Math.atan2(pt.y - cy, pt.x - cx);
+      sp.rot = ssp.rot + (a1 - a0);
+    } else if (_active.type.startsWith('resize-')) {
+      const cornerIdx = parseInt(_active.type.split('-')[1]);
+      /* Opposite corner is fixed */
+      const oppIdx = (cornerIdx + 2) % 4;
+      const oppW   = _cornerWorld(ssp, oppIdx);
+      /* New corner world position */
+      const corners = _spriteCorners(ssp);
+      const origLocal = corners[cornerIdx];
+      /* dragged world pos */
+      const newWx = ssp.x + ssp.w / 2 + _rot(origLocal.lx, origLocal.ly, ssp.rot).x + dx;
+      const newWy = ssp.y + ssp.h / 2 + _rot(origLocal.lx, origLocal.ly, ssp.rot).y + dy;
+      /* vector from opposite corner to dragged corner, rotated back to local space */
+      const vecX = newWx - oppW.x, vecY = newWy - oppW.y;
+      const cos = Math.cos(-ssp.rot), sin = Math.sin(-ssp.rot);
+      const localX = vecX * cos - vecY * sin;
+      const localY = vecX * sin + vecY * cos;
+      const newW = Math.max(40, Math.abs(localX));
+      const newH = Math.max(40, Math.abs(localY));
+      sp.w = newW;
+      sp.h = newH;
+      /* Recalculate top-left so opposite corner stays fixed */
+      const newLocalCorner = _spriteCorners({ ...sp, w: newW, h: newH })[cornerIdx];
+      const newCR = _rot(newLocalCorner.lx, newLocalCorner.ly, ssp.rot);
+      sp.x = newWx - newW / 2 - newCR.x + _rot(newLocalCorner.lx, newLocalCorner.ly, ssp.rot).x - newCR.x;
+      /* simpler: centre = midpoint of dragged + opposite */
+      const midX = (newWx + oppW.x) / 2, midY = (newWy + oppW.y) / 2;
+      sp.x = midX - sp.w / 2;
+      sp.y = midY - sp.h / 2;
+    }
+
+    e.preventDefault();
+    _scheduleRedraw();
+  }
+
+  function _onUp() { _active = null; _startPx = null; _startSp = null; }
+
+  /* Cursor feedback */
+  function _onHover(e) {
+    if (_active) return;
+    const hc = _getHc();
+    if (!hc || !_compositeMode) return;
+    const pt = _ptToCanvas(e);
+    const slots = [
+      { slot: 'right', img: _rightSubjectImg, sp: _sprites.right },
+      { slot: 'left',  img: _leftSubjectImg,  sp: _sprites.left  },
+    ];
+    let cursor = 'default';
+    for (const { img, sp } of slots) {
+      const hit = _hitTestSprite(sp, img, pt.x, pt.y);
+      if (!hit) continue;
+      if (hit === 'move')   cursor = 'grab';
+      else if (hit === 'rotate') cursor = 'crosshair';
+      else cursor = 'nwse-resize';
+      break;
+    }
+    hc.style.cursor = cursor;
+  }
+
+  function _attach() {
+    const hc = _getHandleCanvas();
+    if (!hc) { setTimeout(_attach, 300); return; }
+    hc.addEventListener('mousedown',  _onDown,  { passive: false });
+    hc.addEventListener('touchstart', _onDown,  { passive: false });
+    window.addEventListener('mousemove', _onMove, { passive: false });
+    window.addEventListener('touchmove', _onMove, { passive: false });
+    window.addEventListener('mouseup',  _onUp,   { passive: true  });
+    window.addEventListener('touchend', _onUp,   { passive: true  });
+    hc.addEventListener('mousemove', _onHover, { passive: true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _attach);
+  } else {
+    setTimeout(_attach, 400);
+  }
+})();
 
 /** Clear all composite side images and exit composite mode */
 function clearAllComposite() {
   _leftImageDataUrl    = null; _leftSubjectDataUrl  = null; _leftSubjectImg  = null;
   _rightImageDataUrl   = null; _rightSubjectDataUrl = null; _rightSubjectImg = null;
   _compositeMode = false;
+  _showCompositeHandles(false);
   const li = document.getElementById('leftImgInput');  if (li) li.value = '';
   const ri = document.getElementById('rightImgInput'); if (ri) ri.value = '';
   _updateCompositeUI();
