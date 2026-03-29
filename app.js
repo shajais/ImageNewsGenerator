@@ -178,6 +178,52 @@ let _selectedSpriteId = null;   // which sprite has handles shown
 Object.defineProperty(window, '_leftSubjectImg',  { get: () => _sideSprites[0]?.img || null });
 Object.defineProperty(window, '_rightSubjectImg', { get: () => _sideSprites[1]?.img || null });
 
+/* ── Default thumbnail for news list items ───────────────────────
+   Nepal-themed SVG: Himalayan peaks + rising sun + newspaper lines.
+   Used when an article has no imageUrl or when the image fails to load.
+   ──────────────────────────────────────────────────────────────── */
+const _DEFAULT_NEWS_THUMB = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="120" height="90" viewBox="0 0 120 90">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="%23003087"/>
+      <stop offset="100%" stop-color="%23e8c84a"/>
+    </linearGradient>
+    <linearGradient id="snow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="%23ffffff"/>
+      <stop offset="100%" stop-color="%23cfe8ff"/>
+    </linearGradient>
+  </defs>
+  <!-- Sky background -->
+  <rect width="120" height="90" fill="url(%23sky)"/>
+  <!-- Sun -->
+  <circle cx="60" cy="38" r="10" fill="%23e8c84a" opacity="0.95"/>
+  <!-- Mountains (Himalayas silhouette) -->
+  <polygon points="0,65 20,30 38,52 55,20 70,45 88,28 105,48 120,35 120,90 0,90" fill="%23b0bec5"/>
+  <!-- Snow caps -->
+  <polygon points="20,30 28,45 12,45" fill="url(%23snow)"/>
+  <polygon points="55,20 63,36 47,36" fill="url(%23snow)"/>
+  <polygon points="88,28 96,43 80,43" fill="url(%23snow)"/>
+  <!-- Ground / footer bar -->
+  <rect x="0" y="72" width="120" height="18" fill="%23b71c1c" opacity="0.88"/>
+  <!-- Newspaper lines on footer -->
+  <rect x="8" y="76" width="50" height="3" rx="1.5" fill="%23ffffff" opacity="0.85"/>
+  <rect x="8" y="82" width="36" height="2" rx="1" fill="%23ffffff" opacity="0.6"/>
+  <!-- Nepal flag moon/star hint (top-right corner accent) -->
+  <text x="104" y="18" font-size="13" text-anchor="middle" fill="%23e8c84a" opacity="0.9">☀</text>
+</svg>`)}`;
+
+/* ── Author avatar — pre-loaded once, used as canvas watermark ── */
+let _authorImg = null;
+let _authorImgPromise = null;
+(function _preloadAuthorPhoto() {
+  _authorImgPromise = new Promise(resolve => {
+    const img = new Image();
+    img.onload  = () => { _authorImg = img; resolve(img); };
+    img.onerror = () => { _authorImg = null; resolve(null); };
+    img.src = 'shashi_PP.jpg?v=' + Date.now();  // cache-bust so browser actually loads it
+  });
+})();
+
 /* Text overlay customisation (editable via the Text Editor modal) */
 let _textOpts = {
   bannerText:  '🚨  BREAKING NEWS',
@@ -374,8 +420,42 @@ async function fetchNews() {
     a._trendsMatch = trendsScore === 1.0;
   });
 
-  /* Sort: viral/trending first, then by date */
-  allItems.sort((a, b) => b.viralScore - a.viralScore || new Date(b.pubDate) - new Date(a.pubDate));
+  /* ── SORT STRATEGY ───────────────────────────────────────────────
+     TOP 2  : The 2 freshest articles that have at least some viral
+              potential (published < 6h AND has ≥1 viral keyword or
+              cross-source match, or published < 1h regardless).
+              If fewer than 2 qualify, fill up with the next-newest.
+              Both top-2 slots are ordered newest-first.
+     REST   : Remaining articles sorted by viralScore (trending /
+              popularity / cross-source) descending.
+     ─────────────────────────────────────────────────────────────── */
+
+  /* Candidates: articles < 6h old with some viral potential */
+  const freshViralCandidates = allItems
+    .filter(a => {
+      const ageH = Math.max(0, (now - new Date(a.pubDate).getTime()) / 3600000);
+      const hasPotential = a.viralScore > 0.25 || a._crossCount >= 1 || ageH < 1;
+      return ageH < 6 && hasPotential;
+    })
+    .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+
+  /* If we have fewer than 2 fresh-viral candidates, fill with next-newest articles */
+  const allByDate = [...allItems].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  const top2Set = new Set();
+  for (const a of freshViralCandidates) { if (top2Set.size < 2) top2Set.add(a); }
+  if (top2Set.size < 2) {
+    for (const a of allByDate) { if (!top2Set.has(a) && top2Set.size < 2) top2Set.add(a); }
+  }
+
+  /* Mark top-2 articles so UI can badge them */
+  top2Set.forEach(a => { a._isLatestTop = true; });
+
+  const top2    = [...top2Set].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  const theRest = allItems
+    .filter(a => !top2Set.has(a))
+    .sort((a, b) => b.viralScore - a.viralScore || new Date(b.pubDate) - new Date(a.pubDate));
+
+  allItems = [...top2, ...theRest];
 
   articles = allItems;
   renderNewsList();
@@ -492,9 +572,39 @@ function parseRssXml(xml, feed) {
       tempDiv.innerHTML = rawHtml;
       const plainText = (tempDiv.textContent || '').replace(/\s+/g, ' ').trim();
 
-      /* Image from <enclosure>, <media:content>, or first <img> in description */
-      let imageUrl = item.querySelector('enclosure[type^="image"]')?.getAttribute('url')
-                   || item.querySelector('content')?.getAttribute('url') || '';
+      /* Image — try every standard RSS image field in priority order:
+         1. <enclosure type="image/...">
+         2. <media:content url="..."> / <media:thumbnail url="...">
+         3. <itunes:image href="...">
+         4. First <img src> in <description> HTML
+         5. <url> inside <image> block                                   */
+      let imageUrl = item.querySelector('enclosure[type^="image"]')?.getAttribute('url') || '';
+
+      if (!imageUrl) {
+        /* media: namespace — browsers expose these with local name only */
+        const mediaTags = ['media\\:content','media\\:thumbnail','content','thumbnail'];
+        for (const tag of mediaTags) {
+          const el = item.querySelector(tag);
+          if (el) {
+            imageUrl = el.getAttribute('url') || el.getAttribute('src') || '';
+            if (imageUrl) break;
+          }
+        }
+      }
+      if (!imageUrl) {
+        /* Also try querySelectorAll with namespace-aware local names */
+        for (const el of item.querySelectorAll('*')) {
+          const ln = el.localName.toLowerCase();
+          if (ln === 'content' || ln === 'thumbnail') {
+            imageUrl = el.getAttribute('url') || el.getAttribute('src') || '';
+            if (imageUrl) break;
+          }
+        }
+      }
+      if (!imageUrl) {
+        const itunesImg = item.querySelector('image');
+        if (itunesImg) imageUrl = itunesImg.getAttribute('href') || itunesImg.textContent?.trim() || '';
+      }
       if (!imageUrl) {
         const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
         if (imgMatch) imageUrl = imgMatch[1];
@@ -786,24 +896,89 @@ function extractOgImage(html) {
   return m ? m[1].trim() : '';
 }
 
-function renderNewsList() {
+/**
+ * For articles that have no imageUrl, fetch their article page in the background
+ * and extract the og:image, then update the list thumbnail in-place.
+ * Runs max 8 concurrent fetches so it doesn't flood the network.
+ */
+async function _lazyLoadListThumbnails() {
+  const missing = articles.filter(a => !a.imageUrl && a.link);
+  if (!missing.length) return;
+
+  /* Process in small concurrent batches */
+  const BATCH = 6;
+  for (let i = 0; i < missing.length; i += BATCH) {
+    const batch = missing.slice(i, i + BATCH);
+    await Promise.all(batch.map(async (a) => {
+      try {
+        const html = await fetchRawHtml(a.link);
+        if (!html) return;
+        const ogImg = extractOgImage(html);
+        if (!ogImg) return;
+        a.imageUrl = ogImg;   // cache so re-renders use it immediately
+        /* Update the DOM thumbnail in-place without re-rendering the whole list */
+        const origIndex = articles.indexOf(a);
+        const itemEl = document.getElementById('item-' + origIndex);
+        if (!itemEl) return;
+        const placeholder = itemEl.querySelector('.news-item-thumb-placeholder');
+        /* Use weserv.nl as an image proxy to avoid CORS issues displaying thumbnails */
+        const proxiedSrc = `https://images.weserv.nl/?url=${encodeURIComponent(ogImg)}&w=120&h=90&fit=cover&output=jpg`;
+        const img = document.createElement('img');
+        img.className = 'news-item-thumb';
+        img.alt = 'news thumbnail';
+        img.loading = 'lazy';
+        img.onerror = () => { img.style.display = 'none'; };
+        img.src = proxiedSrc;
+        if (placeholder) {
+          placeholder.replaceWith(img);
+        } else {
+          itemEl.insertBefore(img, itemEl.firstChild);
+        }
+      } catch { /* silently skip */ }
+    }));
+  }
+}
+
+function renderNewsList(filterText) {
   const list = document.getElementById('newsList');
-  if (!articles.length) {
-    list.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>No articles found.</p></div>';
+  const searchBar = document.getElementById('newsSearchBar');
+
+  /* Show/hide the search bar based on whether we have articles */
+  if (searchBar) searchBar.style.display = articles.length ? 'block' : 'none';
+
+  const query = (filterText || '').trim().toLowerCase();
+  const expansions = query ? _expandSearchQuery(query) : [];
+  const display = query
+    ? articles.filter(a => _articleMatchesQuery(a, expansions))
+    : articles;
+
+  if (!display.length) {
+    list.innerHTML = query
+      ? `<div class="empty-state"><div class="icon">🔍</div><p>No articles match "<strong>${escHtml(query)}</strong>".</p></div>`
+      : '<div class="empty-state"><div class="icon">📭</div><p>No articles found.</p></div>';
     return;
   }
-  list.innerHTML = articles.map((a, i) => {
+  list.innerHTML = display.map((a, i) => {
+    /* Use the original index so selectArticle maps to the right article */
+    const origIndex = articles.indexOf(a);
     const dateStr = a.pubDate
       ? new Date(a.pubDate).toLocaleString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })
       : '';
-    const thumb = a.imageUrl
-      ? `<img class="news-item-thumb" src="${a.imageUrl}" alt="" loading="lazy"
-             onerror="this.outerHTML='<div class=\\'news-item-thumb-placeholder\\'>📰</div>'">`
-      : `<div class="news-item-thumb-placeholder">📰</div>`;
+
+    /* Proxy image through weserv.nl to avoid CORS issues in the list */
+    let thumbHtml;
+    if (a.imageUrl) {
+      const proxied = `https://images.weserv.nl/?url=${encodeURIComponent(a.imageUrl)}&w=120&h=90&fit=cover&output=jpg`;
+      thumbHtml = `<img class="news-item-thumb" src="${proxied}" alt="news thumbnail" loading="lazy"
+             onerror="this.style.display='none'">`;
+    } else {
+      thumbHtml = `<div class="news-item-thumb-placeholder">🗞️</div>`;
+    }
 
     const viralBadge   = a.isTrending ? '<span class="viral-badge trending-badge">🔥 TRENDING</span>'
                        : a.isViral    ? '<span class="viral-badge">⚡ VIRAL</span>'
                        : '';
+    const latestBadge  = a._isLatestTop ? '<span class="viral-badge latest-badge">🆕 LATEST</span>' : '';
     const trendsBadge  = a._trendsMatch ? '<span class="viral-badge trends-badge">📈 Google Trends</span>' : '';
     const crossBadge   = (a._crossCount >= 3) ? `<span class="viral-badge cross-badge">🗞️ ${a._crossCount} sources</span>` : '';
     const sourceBadge  = a.source ? `<span class="source-badge">${escHtml(a.source)}</span>` : '';
@@ -813,10 +988,10 @@ function renderNewsList() {
       : '';
 
     return `
-      <div class="news-item${a.isTrending ? ' trending' : ''}" id="item-${i}" onclick="selectArticle(${i})">
-        ${thumb}
+      <div class="news-item${a.isTrending ? ' trending' : ''}" id="item-${origIndex}" onclick="selectArticle(${origIndex})">
+        ${thumbHtml}
         <div class="news-item-body">
-          <div class="news-item-badges">${viralBadge}${trendsBadge}${crossBadge}${sourceBadge}</div>
+          <div class="news-item-badges">${latestBadge}${viralBadge}${trendsBadge}${crossBadge}${sourceBadge}</div>
           <div class="news-item-title">${escHtml(a.title)}</div>
           <div class="news-item-footer">
             ${dateStr ? `<div class="news-item-date">🕐 ${dateStr}</div>` : ''}
@@ -825,6 +1000,283 @@ function renderNewsList() {
         </div>
       </div>`;
   }).join('');
+
+  /* For articles with no image in the RSS feed, lazily fetch their og:image in the background */
+  if (!query) _lazyLoadListThumbnails();
+}
+
+/** Filter news list by search keyword (called from search input) */
+function filterNewsList(value) {
+  renderNewsList(value);
+}
+
+/* ================================================================
+   BILINGUAL SEARCH — English ↔ Nepali (Devanagari) cross-matching
+   When a user types an English keyword the search also matches
+   Devanagari articles whose topic is the same, and vice-versa.
+================================================================ */
+
+/**
+ * Master bilingual dictionary: English term(s) → Nepali Devanagari equivalents.
+ * Each entry: [ [english variants...], [nepali variants...] ]
+ * All strings are stored lowercase for matching.
+ */
+const _BILINGUAL_DICT = [
+  /* ── Places ─────────────────────────────────────────────────── */
+  [['kathmandu','katmandu','ktm'],                           ['काठमाडौं','काठमाडौँ','काठमान्डू']],
+  [['pokhara'],                                              ['पोखरा']],
+  [['lalitpur','patan'],                                     ['ललितपुर','पाटन']],
+  [['bhaktapur'],                                            ['भक्तपुर']],
+  [['lumbini'],                                              ['लुम्बिनी']],
+  [['chitwan'],                                              ['चितवन']],
+  [['janakpur'],                                             ['जनकपुर']],
+  [['biratnagar'],                                           ['विराटनगर']],
+  [['birgunj'],                                              ['वीरगंज','वीरगञ्ज']],
+  [['butwal'],                                               ['बुटवल']],
+  [['dharan'],                                               ['धरान']],
+  [['hetauda'],                                              ['हेटौंडा']],
+  [['nepalgunj'],                                            ['नेपालगंज','नेपालगञ्ज']],
+  [['dhangadhi'],                                            ['धनगढी']],
+  [['surkhet'],                                              ['सुर्खेत']],
+  [['dolakha'],                                              ['दोलखा']],
+  [['sindhupalchok'],                                        ['सिन्धुपाल्चोक']],
+  [['mustang'],                                              ['मुस्ताङ','मुस्ताङ्ग']],
+  [['humla'],                                                ['हुम्ला']],
+  [['solukhumbu','everest','sagarmatha'],                    ['सोलुखुम्बु','सगरमाथा','एभरेस्ट']],
+  [['terai'],                                                ['तराई']],
+  [['madhesh','madhes'],                                     ['मधेश','मधेस']],
+  [['bagmati'],                                              ['बागमती']],
+  [['gandaki'],                                              ['गण्डकी']],
+  [['koshi','kosi'],                                         ['कोशी']],
+  [['lumbini province'],                                     ['लुम्बिनी प्रदेश']],
+  [['karnali'],                                              ['कर्णाली']],
+  [['sudurpashchim','far west'],                             ['सुदूरपश्चिम']],
+  [['nepal'],                                                ['नेपाल']],
+  [['india'],                                                ['भारत']],
+  [['china'],                                                ['चीन']],
+  [['tibet'],                                                ['तिब्बत']],
+
+  /* ── Government & Politics ───────────────────────────────────── */
+  [['prime minister','pm','pradhanmantri'],                  ['प्रधानमन्त्री','प्रधानमंत्री']],
+  [['president','rashtrapati'],                              ['राष्ट्रपति']],
+  [['vice president'],                                       ['उपराष्ट्रपति']],
+  [['parliament','sansad','house of representatives'],       ['संसद','प्रतिनिधिसभा','संसद्']],
+  [['national assembly','rastriya sabha'],                   ['राष्ट्रियसभा']],
+  [['cabinet','mantriparishad','council of ministers'],      ['मन्त्रिपरिषद्','मन्त्रिमण्डल']],
+  [['minister','mantri'],                                    ['मन्त्री','मंत्री']],
+  [['government','sarkar'],                                  ['सरकार']],
+  [['opposition','bipaksha'],                                ['विपक्ष','विपक्षी']],
+  [['election','nirbachan','vote','voting'],                 ['निर्वाचन','चुनाव','मतदान']],
+  [['election commission'],                                  ['निर्वाचन आयोग']],
+  [['constitution','sambidhan'],                             ['संविधान']],
+  [['supreme court','sarbochcha adalat'],                    ['सर्वोच्च अदालत']],
+  [['court','adalat'],                                       ['अदालत','न्यायालय']],
+  [['police','prahari'],                                     ['प्रहरी','पुलिस']],
+  [['army','sena','nepal army'],                             ['सेना','नेपाली सेना']],
+  [['budget','bajat'],                                       ['बजेट','बजट']],
+  [['tax','kar'],                                            ['कर']],
+  [['corruption','bhrashtachar'],                            ['भ्रष्टाचार']],
+  [['ciaa','anti-corruption'],                               ['अख्तियार','अख्तियार दुरुपयोग']],
+  [['province','pradesh'],                                   ['प्रदेश']],
+  [['municipality','nagarpalika'],                           ['नगरपालिका']],
+  [['ward'],                                                 ['वडा']],
+  [['local government','sthaniya sarkar'],                   ['स्थानीय सरकार']],
+
+  /* ── Political Parties ───────────────────────────────────────── */
+  [['nepali congress','nc'],                                 ['नेपाली कांग्रेस','कांग्रेस']],
+  [['uml','cpm uml','kp oli party'],                        ['एमाले','नेकपा एमाले']],
+  [['maoist','cpm maoist'],                                  ['माओवादी','नेकपा माओवादी']],
+  [['rastriya swatantra party','rsp'],                       ['राष्ट्रिय स्वतन्त्र पार्टी']],
+  [['rastriya prajatantra','rpp'],                           ['राष्ट्रिय प्रजातन्त्र पार्टी','राप्रपा']],
+  [['janajati','indigenous'],                                ['जनजाति','आदिवासी']],
+  [['coalition','gathbandhan'],                              ['गठबन्धन','गठबन्धन सरकार']],
+  [['party','dal'],                                          ['पार्टी','दल']],
+
+  /* ── People (prominent) ──────────────────────────────────────── */
+  [['kp oli','kp sharma oli','oli'],                         ['केपी ओली','केपी शर्मा ओली']],
+  [['pushpa kamal dahal','prachanda'],                       ['पुष्पकमल दाहाल','प्रचण्ड']],
+  [['sher bahadur deuba','deuba'],                           ['शेर बहादुर देउवा','देउवा']],
+  [['ram chandra paudel','paudel'],                          ['रामचन्द्र पौडेल','पौडेल']],
+  [['bidya devi bhandari','bhandari'],                       ['विद्यादेवी भण्डारी','भण्डारी']],
+  [['madhav kumar nepal','madhav nepal'],                    ['माधवकुमार नेपाल','माधव नेपाल']],
+  [['rabi lamichhane','rabi'],                               ['रवि लामिछाने','रवि']],
+  [['upendra yadav'],                                        ['उपेन्द्र यादव']],
+
+  /* ── Economy & Finance ───────────────────────────────────────── */
+  [['economy','arthatantra','economic'],                     ['अर्थतन्त्र','अर्थव्यवस्था','आर्थिक']],
+  [['inflation','mahangai'],                                 ['महँगाई','मुद्रास्फीति']],
+  [['remittance','bideshi aamdani'],                         ['रेमिट्यान्स','विप्रेषण']],
+  [['foreign investment'],                                   ['विदेशी लगानी']],
+  [['stock market','share market','nepse'],                  ['शेयर बजार','नेप्से']],
+  [['nepal rastra bank','nrb','central bank'],               ['नेपाल राष्ट्र बैंक','केन्द्रीय बैंक']],
+  [['bank','baink'],                                         ['बैंक']],
+  [['loan','karja'],                                         ['ऋण','कर्जा']],
+  [['fuel','petrol','diesel'],                               ['इन्धन','पेट्रोल','डिजेल']],
+  [['electricity','bijuli','power'],                         ['बिजुली','विद्युत']],
+  [['water','pani'],                                         ['पानी','खानेपानी']],
+
+  /* ── Disaster & Crisis ───────────────────────────────────────── */
+  [['earthquake','bhukampa'],                                ['भूकम्प']],
+  [['flood','badi','flash flood'],                           ['बाढी','बाढीपहिरो']],
+  [['landslide','pahiro'],                                   ['पहिरो']],
+  [['fire','aagalagi','agni'],                               ['आगलागी','आगो']],
+  [['accident','durghatana'],                                ['दुर्घटना']],
+  [['drought','sukha','sookha'],                             ['खडेरी','सुख्खा']],
+  [['storm','toofan','andhi'],                               ['आँधी','तुफान']],
+  [['relief','rahat'],                                       ['राहत']],
+  [['rescue','uddhaar'],                                     ['उद्धार']],
+  [['dead','killed','mrityu','death'],                       ['मृत्यु','मारिए','मृत']],
+  [['injured','ghaaite'],                                    ['घाइते']],
+  [['missing','haraaeko'],                                   ['हराएका','बेपत्ता']],
+
+  /* ── Crime & Law ─────────────────────────────────────────────── */
+  [['arrested','pakrao','pakrau'],                           ['पक्राउ','गिरफ्तार']],
+  [['murder','hatya'],                                       ['हत्या']],
+  [['rape','balatkar'],                                      ['बलात्कार']],
+  [['theft','chori'],                                        ['चोरी']],
+  [['fraud','thagi'],                                        ['ठगी','धोखाधडी']],
+  [['drugs','lagu'],                                         ['लागुपदार्थ','नशा']],
+  [['verdict','faisala'],                                    ['फैसला']],
+  [['bail','zamanat'],                                       ['जमानत']],
+  [['investigation','anusandhan'],                           ['अनुसन्धान','छानबिन']],
+
+  /* ── Social & Health ─────────────────────────────────────────── */
+  [['hospital','aspatal'],                                   ['अस्पताल']],
+  [['health','swasthya'],                                    ['स्वास्थ्य']],
+  [['doctor','daktar'],                                      ['डाक्टर','चिकित्सक']],
+  [['disease','rog','bimari'],                               ['रोग','बिमारी']],
+  [['covid','corona'],                                       ['कोभिड','कोरोना']],
+  [['education','shiksha'],                                  ['शिक्षा']],
+  [['school','bidyalaya'],                                   ['विद्यालय','स्कूल']],
+  [['university','bishwabidalaya'],                          ['विश्वविद्यालय']],
+  [['protest','andolan','demonstration'],                    ['आन्दोलन','प्रदर्शन','विरोध']],
+  [['strike','bandh','hartal'],                              ['बन्द','हडताल']],
+  [['rally','janaraly'],                                     ['र्‍याली','जनसभा']],
+  [['human rights','manabadhikar'],                          ['मानवअधिकार','मानव अधिकार']],
+  [['women','mahila'],                                       ['महिला']],
+  [['child','bachcha','baal'],                               ['बच्चा','बाल']],
+  [['youth','yuwa'],                                         ['युवा']],
+
+  /* ── International & Diplomacy ───────────────────────────────── */
+  [['foreign minister','foreign affairs'],                   ['परराष्ट्रमन्त्री','परराष्ट्र']],
+  [['ambassador','raajdoot'],                                ['राजदूत']],
+  [['un','united nations'],                                  ['संयुक्त राष्ट्र','राष्ट्रसंघ']],
+  [['imf','world bank'],                                     ['विश्व बैंक','आईएमएफ']],
+  [['treaty','sandhi'],                                      ['सन्धि','सम्झौता']],
+  [['visa'],                                                 ['भिसा']],
+  [['foreign worker','foreign employment'],                  ['वैदेशिक रोजगार','विदेशी रोजगार']],
+
+  /* ── Breaking / Urgency ──────────────────────────────────────── */
+  [['breaking','breaking news'],                             ['ब्रेकिङ','ब्रेकिङ न्युज','तत्काल']],
+  [['urgent','emergency'],                                   ['अलर्ट','आपतकाल','तत्काल']],
+  [['news','khabar','khabara'],                              ['खबर','समाचार']],
+  [['viral'],                                                ['भाइरल']],
+  [['trending'],                                             ['ट्रेन्डिङ']],
+
+  /* ── Sports ──────────────────────────────────────────────────── */
+  [['cricket','kriket'],                                     ['क्रिकेट']],
+  [['football','soccer'],                                    ['फुटबल']],
+  [['olympics'],                                             ['ओलम्पिक']],
+  [['gold','silver','bronze','medal'],                       ['स्वर्ण','रजत','कांस्य','पदक']],
+
+  /* ── Technology ──────────────────────────────────────────────── */
+  [['internet','antarjal'],                                  ['इन्टरनेट','अन्तर्जाल']],
+  [['mobile','phone'],                                       ['मोबाइल','फोन']],
+  [['ai tech','artificial intelligence','machine learning'], ['कृत्रिम बुद्धिमत्ता','एआई']],
+];
+
+/**
+ * Build fast lookup tables from the dictionary:
+ *   _ENG_TO_NP  : english-term → Set of nepali terms
+ *   _NP_TO_ENG  : nepali-term  → Set of english terms
+ *   _ALL_TERMS  : every string → Set of all cross-language equivalents
+ */
+const _ENG_TO_NP  = new Map();
+const _NP_TO_ENG  = new Map();
+const _ALL_TERMS  = new Map();
+
+(function _buildBilingualIndex() {
+  for (const [engVariants, npVariants] of _BILINGUAL_DICT) {
+    /* NFC-normalise every key so Unicode combining characters are canonical */
+    const allEng = engVariants.map(s => s.toLowerCase().normalize('NFC'));
+    const allNp  = npVariants.map(s => s.toLowerCase().normalize('NFC'));
+
+    for (const e of allEng) {
+      if (!_ENG_TO_NP.has(e)) _ENG_TO_NP.set(e, new Set());
+      allNp.forEach(n => _ENG_TO_NP.get(e).add(n));
+    }
+    for (const n of allNp) {
+      if (!_NP_TO_ENG.has(n)) _NP_TO_ENG.set(n, new Set());
+      allEng.forEach(e => _NP_TO_ENG.get(n).add(e));
+    }
+
+    /* _ALL_TERMS: every variant (both scripts) → all cross-language equivalents */
+    const combined = [...allEng, ...allNp];
+    for (const term of combined) {
+      if (!_ALL_TERMS.has(term)) _ALL_TERMS.set(term, new Set());
+      combined.forEach(t => { if (t !== term) _ALL_TERMS.get(term).add(t); });
+    }
+  }
+})();
+
+/**
+ * Given a search query string, return an array of ALL equivalent terms
+ * in both English and Nepali that should be matched against article text.
+ *
+ * Strategy:
+ *  1. NFC-normalize the query (fixes Devanagari combining-char mismatches).
+ *  2. Always include the original normalized query itself.
+ *  3. Look up the full phrase in _ALL_TERMS → adds cross-language equivalents.
+ *  4. Split into words (handles both Latin and Devanagari scripts).
+ *     For each word, look up _ALL_TERMS → adds all equivalents.
+ *  5. Try adjacent word-pairs too.
+ *  6. Collect all unique expansions — the filter ORs across all of them.
+ */
+function _expandSearchQuery(raw) {
+  /* NFC normalization ensures Devanagari combining characters are in
+     canonical form, matching the same normalization used in the dictionary
+     and applied to article text in _articleMatchesQuery. */
+  const q = raw.trim().toLowerCase().normalize('NFC');
+  if (!q) return [];
+
+  const expansions = new Set([q]);
+
+  /* Full-phrase lookup */
+  (_ALL_TERMS.get(q) || []).forEach(t => expansions.add(t));
+
+  /* Split on whitespace — works for both Latin and Devanagari */
+  const words = q.split(/\s+/).filter(w => w.length > 0);
+  for (const w of words) {
+    expansions.add(w);
+    (_ALL_TERMS.get(w) || []).forEach(t => expansions.add(t));
+  }
+
+  /* Adjacent word-pair lookup */
+  for (let i = 0; i < words.length - 1; i++) {
+    const pair = words[i] + ' ' + words[i + 1];
+    expansions.add(pair);
+    (_ALL_TERMS.get(pair) || []).forEach(t => expansions.add(t));
+  }
+
+  return [...expansions];
+}
+
+/**
+ * Check if an article matches a search query using bilingual expansion.
+ * Both the article text and the expansion terms are NFC-normalized so
+ * Devanagari combining characters always match regardless of how the
+ * RSS feed encoded them.
+ * Returns true if ANY expansion term is found in the article's searchable text.
+ */
+function _articleMatchesQuery(a, expansions) {
+  const haystack = [
+    a.title        || '',
+    a.description  || '',
+    a.source       || '',
+    a.fullArticleText || '',
+  ].join(' ').toLowerCase().normalize('NFC');
+
+  return expansions.some(term => haystack.includes(term));
 }
 
 /* ================================================================
@@ -902,31 +1354,75 @@ function hideServerDownBanner() {
 /** Open the AI status modal (read-only — keys are managed via .env) */
 function openAISettings() {
   const modal = document.getElementById('aiSettingsModal');
-  /* Refresh status badge inside the modal */
-  const geminiStatus   = document.getElementById('geminiKeyStatus');
-  const removebgStatus = document.getElementById('removebgKeyStatus');
-  const grokStatus     = document.getElementById('grokKeyStatus');
-  if (geminiStatus)   geminiStatus.textContent   = _geminiKey   ? '✅ Configured' : '❌ Not set';
-  if (removebgStatus) removebgStatus.textContent = _removebgKey ? '✅ Configured' : '❌ Not set';
-  if (grokStatus)     grokStatus.textContent     = _grokKey     ? '✅ Configured' : '❌ Not set';
 
-  /* Show browser key entry section only on GitHub Pages (no localhost proxy) */
-  const browserSection = document.getElementById('browserKeySection');
-  if (browserSection) {
-    browserSection.style.display = _isLocalhost ? 'none' : 'block';
-    const summary = document.getElementById('savedKeysSummary');
-    if (summary) {
-      const parts = [];
-      if (_browserGrokKey)     parts.push('⚡ Grok');
-      if (_browserGeminiKey)   parts.push('✨ Gemini');
-      if (_browserRemovebgKey) parts.push('🎨 Remove.bg');
-      summary.textContent = parts.length ? parts.join(', ') : 'none';
-    }
+  /* ── Update status text for each card ── */
+  _refreshAICardStatuses();
+
+  /* ── Pre-fill inputs from localStorage when on GitHub Pages ── */
+  if (!_isLocalhost) {
+    const gEl  = document.getElementById('inputGeminiKey');
+    const rbEl = document.getElementById('inputRemovebgKey');
+    const grEl = document.getElementById('inputGrokKey');
+    if (gEl  && !gEl.value)  gEl.placeholder  = _browserGeminiKey   ? '(saved — paste to update)' : 'AIzaSy…your-key…';
+    if (rbEl && !rbEl.value) rbEl.placeholder = _browserRemovebgKey ? '(saved — paste to update)' : 'abc123…your-key…';
+    if (grEl && !grEl.value) grEl.placeholder = _browserGrokKey     ? '(saved — paste to update)' : 'xai-…your-key…';
   }
 
   /* Sync the provider toggle pills */
   _syncProviderUI();
   modal.classList.add('open');
+}
+
+/** Refresh all card status texts, dots, and the top banner */
+function _refreshAICardStatuses() {
+  const geminiOk   = !!(_geminiKey   || _browserGeminiKey);
+  const grokOk     = !!(_grokKey     || _browserGrokKey);
+  const removebgOk = !!(_removebgKey || _browserRemovebgKey);
+
+  /* Status text */
+  const geminiEl   = document.getElementById('geminiKeyStatus');
+  const grokEl     = document.getElementById('grokKeyStatus');
+  const removebgEl = document.getElementById('removebgKeyStatus');
+
+  function _setStatus(el, ok) {
+    if (!el) return;
+    el.textContent = ok ? '✅ Active & configured' : '❌ Not configured';
+    el.className   = 'ai-card-status ' + (ok ? 'ok' : 'err');
+  }
+  _setStatus(geminiEl,   geminiOk);
+  _setStatus(grokEl,     grokOk);
+  _setStatus(removebgEl, removebgOk);
+
+  /* Status dots */
+  function _setDot(id, ok) {
+    const dot = document.getElementById(id);
+    if (!dot) return;
+    dot.className = 'ai-status-dot ' + (ok ? 'active' : 'inactive');
+    dot.title     = ok ? 'Active' : 'Not configured';
+  }
+  _setDot('geminiStatusDot',   geminiOk);
+  _setDot('grokStatusDot',     grokOk);
+  _setDot('removebgStatusDot', removebgOk);
+
+  /* Top banner */
+  const banner = document.getElementById('aiSetupStatusBanner');
+  if (banner) {
+    const parts = [];
+    if (geminiOk)   parts.push('✨ Gemini');
+    if (grokOk)     parts.push('⚡ Grok');
+    if (removebgOk) parts.push('🎨 Remove.bg');
+
+    if (parts.length === 3) {
+      banner.className   = 'ai-setup-banner active';
+      banner.textContent = `🟢 AI Setup is active for ${parts.join(', ')}`;
+    } else if (parts.length > 0) {
+      banner.className   = 'ai-setup-banner partial';
+      banner.textContent = `🟡 Active: ${parts.join(', ')} · Not configured: ${['✨ Gemini','⚡ Grok','🎨 Remove.bg'].filter(p => !parts.includes(p)).join(', ')}`;
+    } else {
+      banner.className   = 'ai-setup-banner none';
+      banner.textContent = '🔴 No API keys configured — add keys to .env or enter them below';
+    }
+  }
 }
 function closeAISettings() {
   document.getElementById('aiSettingsModal').classList.remove('open');
@@ -934,15 +1430,24 @@ function closeAISettings() {
 
 /** Test Gemini connectivity via the server proxy (no key passed from browser) */
 async function testGeminiKey() {
-  if (!_geminiKey) {
-    toast('⚠️ GEMINI_API_KEY is not set in the server .env file.', 'error', 5000); return;
+  /* Also accept a key typed in the input but not yet saved */
+  const inputVal = document.getElementById('inputGeminiKey')?.value.trim() || '';
+  const hasKey   = _geminiKey || _browserGeminiKey || inputVal;
+  if (!hasKey) {
+    _setCardFeedback('gemini', 'error', '⚠️ Enter a key first, then test');
+    toast('⚠️ Paste a Gemini key in the field first.', 'error', 4000);
+    return;
   }
-  const btn = document.querySelector('[onclick="testGeminiKey()"]');
-  const origText = btn.textContent;
-  btn.textContent = '⏳ Testing…';
-  btn.disabled = true;
+  const btn = document.querySelector('#aiCardGemini .ai-card-btn.test');
+  const origText = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = '⏳…'; btn.disabled = true; }
+  _setCardFeedback('gemini', '', '⏳ Testing connection…');
 
-  const testUrl = _geminiProxyBase || GEMINI_API_URL;
+  /* If a raw key was typed, test directly against Gemini; otherwise use proxy */
+  const testUrl = (inputVal && !_isLocalhost)
+    ? `${GEMINI_API_URL}?key=${encodeURIComponent(inputVal)}`
+    : (_geminiProxyBase || GEMINI_API_URL);
+
   try {
     const res = await fetch(testUrl, {
       method: 'POST',
@@ -954,39 +1459,43 @@ async function testGeminiKey() {
     });
     const data = await res.json();
     if (!res.ok) {
-      const msg = data?.error?.message || res.status;
+      const msg = data?.error?.message || `HTTP ${res.status}`;
+      _setCardFeedback('gemini', 'error', `❌ ${msg}`);
       toast(`❌ Gemini error: ${msg}`, 'error', 6000);
     } else {
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      console.log('[Test Gemini] response:', text);
+      _setCardFeedback('gemini', 'ok', '✅ Connection successful!');
       toast('✅ Gemini connection works!', 'success', 5000);
     }
   } catch (e) {
-    const isFile = location.protocol === 'file:';
-    const msg = isFile
-      ? 'App must be opened via http://localhost:3000 (run: python server.py)'
+    const msg = location.protocol === 'file:'
+      ? 'Open via http://localhost:3000 (run: node server.js)'
       : e.message;
+    _setCardFeedback('gemini', 'error', `❌ ${msg}`);
     toast(`❌ ${msg}`, 'error', 7000);
   }
-  btn.textContent = origText;
-  btn.disabled = false;
+  if (btn) { btn.textContent = origText; btn.disabled = false; }
 }
 
 /** Test Grok connectivity via the server proxy */
 async function testGrokKey() {
-  if (!_grokKey) {
-    toast('⚠️ GROK_API_KEY is not set in the server .env file.', 'error', 5000); return;
+  const inputVal = document.getElementById('inputGrokKey')?.value.trim() || '';
+  const hasKey   = _grokKey || _browserGrokKey || inputVal;
+  if (!hasKey) {
+    _setCardFeedback('grok', 'error', '⚠️ Enter a key first, then test');
+    toast('⚠️ Paste a Grok key in the field first.', 'error', 4000);
+    return;
   }
-  const btn = document.querySelector('[onclick="testGrokKey()"]');
-  const origText = btn.textContent;
-  btn.textContent = '⏳ Testing…';
-  btn.disabled = true;
+  const btn = document.querySelector('#aiCardGrok .ai-card-btn.test');
+  const origText = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = '⏳…'; btn.disabled = true; }
+  _setCardFeedback('grok', '', '⏳ Testing connection…');
 
-  const testUrl = _grokProxyBase || GROK_API_URL;
+  const testUrl  = _grokProxyBase || GROK_API_URL;
+  const extraHdr = (inputVal && !_isLocalhost) ? { 'Authorization': `Bearer ${inputVal}` } : {};
   try {
     const res = await fetch(testUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...extraHdr },
       body: JSON.stringify({
         model: GROK_MODEL,
         messages: [
@@ -998,18 +1507,155 @@ async function testGrokKey() {
     });
     const data = await res.json();
     if (!res.ok) {
-      const msg = data?.error?.message || res.status;
+      const msg = data?.error?.message || `HTTP ${res.status}`;
+      _setCardFeedback('grok', 'error', `❌ ${msg}`);
       toast(`❌ Grok error: ${msg}`, 'error', 6000);
     } else {
-      const text = data?.choices?.[0]?.message?.content || '';
-      console.log('[Test Grok] response:', text);
+      _setCardFeedback('grok', 'ok', '✅ Connection successful!');
       toast('✅ Grok connection works!', 'success', 5000);
     }
   } catch (e) {
+    _setCardFeedback('grok', 'error', `❌ ${e.message}`);
     toast(`❌ Grok test failed: ${e.message}`, 'error', 7000);
   }
-  btn.textContent = origText;
-  btn.disabled = false;
+  if (btn) { btn.textContent = origText; btn.disabled = false; }
+}
+
+/** Test Remove.bg by pinging the account endpoint via server proxy */
+async function testRemovebgKey() {
+  const inputVal = document.getElementById('inputRemovebgKey')?.value.trim() || '';
+  const hasKey   = _removebgKey || _browserRemovebgKey || inputVal;
+  if (!hasKey) {
+    _setCardFeedback('removebg', 'error', '⚠️ Enter a key first, then test');
+    toast('⚠️ Paste a Remove.bg key in the field first.', 'error', 4000);
+    return;
+  }
+  const btn = document.querySelector('#aiCardRemovebg .ai-card-btn.test');
+  const origText = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = '⏳…'; btn.disabled = true; }
+  _setCardFeedback('removebg', '', '⏳ Testing connection…');
+
+  const accountUrl = _isLocalhost
+    ? '/proxy/removebg-account'
+    : 'https://api.remove.bg/v1.0/account';
+
+  try {
+    const headers = {};
+    const key = inputVal || _browserRemovebgKey;
+    if (!_isLocalhost && key) headers['X-Api-Key'] = key;
+    const res = await fetch(accountUrl, { headers });
+
+    if (res.ok || res.status === 200) {
+      let credits = '';
+      try {
+        const d = await res.json();
+        const free = d?.data?.attributes?.credits?.subscription ?? d?.data?.attributes?.api?.free_calls ?? null;
+        if (free !== null) credits = ` · ${free} free credits left`;
+      } catch {}
+      _setCardFeedback('removebg', 'ok', `✅ Key is valid${credits}`);
+      toast(`✅ Remove.bg key works!${credits}`, 'success', 5000);
+    } else if (res.status === 403 || res.status === 401) {
+      _setCardFeedback('removebg', 'error', '❌ Invalid or expired key');
+      toast('❌ Remove.bg key is invalid or expired.', 'error', 5000);
+    } else {
+      _setCardFeedback('removebg', '', `ℹ️ Status: ${res.status}`);
+      toast(`ℹ️ Remove.bg responded with status ${res.status}`, 'info', 4000);
+    }
+  } catch (e) {
+    /* Cannot ping from browser directly — if key is saved it will work in use */
+    if (_removebgKey || _browserRemovebgKey || inputVal) {
+      _setCardFeedback('removebg', 'ok', '✅ Key saved — will verify on first use');
+      toast('ℹ️ Remove.bg key saved. It will be verified when you first remove a background.', 'info', 6000);
+    } else {
+      _setCardFeedback('removebg', 'error', `❌ ${e.message}`);
+      toast(`❌ Remove.bg test failed: ${e.message}`, 'error', 5000);
+    }
+  }
+  if (btn) { btn.textContent = origText; btn.disabled = false; }
+}
+
+/**
+ * Save key for a single card (gemini | grok | removebg).
+ * On localhost: POSTs to /api/save-key which writes to .env (no restart needed).
+ * On GitHub Pages: saves to localStorage.
+ */
+async function saveCardKey(service) {
+  const inputId = service === 'gemini'   ? 'inputGeminiKey'
+                : service === 'grok'     ? 'inputGrokKey'
+                :                          'inputRemovebgKey';
+  const input = document.getElementById(inputId);
+  const value = (input?.value || '').trim();
+
+  if (!value) {
+    _setCardFeedback(service, 'error', '⚠️ Please paste an API key first');
+    return;
+  }
+
+  const saveBtn = document.querySelector(`#aiCard${service.charAt(0).toUpperCase()+service.slice(1)} .ai-card-btn.save`);
+  const origLabel = saveBtn?.textContent || '💾 Save';
+  if (saveBtn) { saveBtn.textContent = '⏳…'; saveBtn.disabled = true; }
+
+  if (_isLocalhost) {
+    /* ── Localhost: write key to .env via server endpoint ── */
+    try {
+      const res = await fetch('/api/save-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ service, key: value })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Server error');
+
+      /* Re-fetch key-status so flags (_geminiKey etc.) are updated */
+      await _reloadKeyStatus();
+      if (input) input.value = '';
+      _setCardFeedback(service, 'ok', '✅ Key saved to .env!');
+      updateAIBadge();
+      _refreshAICardStatuses();
+      toast(`✅ ${service} key saved to .env — no restart needed!`, 'success', 4000);
+    } catch (e) {
+      _setCardFeedback(service, 'error', `❌ Save failed: ${e.message}`);
+      toast(`❌ Could not save key: ${e.message}`, 'error', 5000);
+    }
+  } else {
+    /* ── GitHub Pages: save to localStorage ── */
+    if (service === 'gemini')   { localStorage.setItem(_LS_GEMINI,   value); _browserGeminiKey   = value; _geminiKey   = true; }
+    if (service === 'grok')     { localStorage.setItem(_LS_GROK,     value); _browserGrokKey     = value; _grokKey     = true; }
+    if (service === 'removebg') { localStorage.setItem(_LS_REMOVEBG, value); _browserRemovebgKey = value; _removebgKey = true; }
+    if (input) input.value = '';
+    _setCardFeedback(service, 'ok', '✅ Key saved in browser!');
+    updateAIBadge();
+    _refreshAICardStatuses();
+    toast(`✅ ${service} key saved!`, 'success', 3000);
+  }
+
+  if (saveBtn) { saveBtn.textContent = origLabel; saveBtn.disabled = false; }
+}
+
+/** Re-fetch /api/key-status and update the global key flags */
+async function _reloadKeyStatus() {
+  try {
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), 5000);
+    const res  = await fetch('/api/key-status', { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!res.ok) return;
+    const data = await res.json();
+    _geminiKey   = !!data.gemini;
+    _removebgKey = !!data.removebg;
+    _grokKey     = !!data.grok;
+  } catch { /* silent — flags stay as-is */ }
+}
+
+/** Show inline feedback text inside a card status element */
+function _setCardFeedback(service, type, msg) {
+  const cardId = 'aiCard' + service.charAt(0).toUpperCase() + service.slice(1);
+  const statusEl = document.querySelector(`#${cardId} .ai-card-status`);
+  if (!statusEl) return;
+  statusEl.textContent = msg;
+  statusEl.className = 'ai-card-status ' + (type === 'ok' ? 'ok' : 'err');
+  /* Auto-revert to proper status after 4s */
+  setTimeout(() => _refreshAICardStatuses(), 4000);
 }
 
 function updateAIBadge() {
@@ -1084,7 +1730,7 @@ function saveBrowserKeys() {
   _grokKey     = !!_browserGrokKey;
 
   updateAIBadge();
-  openAISettings(); // refresh status labels
+  _refreshAICardStatuses();
   toast('✅ Keys saved in browser! AI features are now active.', 'success', 4000);
 }
 
@@ -1094,7 +1740,7 @@ function clearBrowserKeys() {
   _browserGeminiKey = _browserRemovebgKey = _browserGrokKey = '';
   _geminiKey = _removebgKey = _grokKey = false;
   updateAIBadge();
-  openAISettings();
+  _refreshAICardStatuses();
   toast('🗑️ All saved keys cleared.', 'info', 3000);
 }
 
@@ -1325,7 +1971,7 @@ HOOK (max 18 words in Nepali):
 • Make it feel urgent and personal — WHY should a Nepali reader care RIGHT NOW?
 • NEVER write generic phrases like "नेपालमा ठूलो घटना" or "महत्त्वपूर्ण समाचार"
 
-TITLE (max 12 words in Nepali):
+TITLE (max 30 words in Nepali):
 • Must contain the KEY fact: WHO did WHAT (or WHAT happened WHERE)
 • Include the most important name or number from the story
 • SEO-friendly — reads like a newspaper front page headline
@@ -1719,7 +2365,7 @@ function extractHeadlineFromBody(text) {
 }
 
 /**
- * Clean a Nepali title: remove noise, trim to 12 words max.
+ * Clean a Nepali title: remove noise, trim to 30 words max.
  */
 function rephraseNepaliTitle(title) {
   const clean = title
@@ -1732,7 +2378,7 @@ function rephraseNepaliTitle(title) {
     .replace(/\s+/g, ' ')
     .trim();
   const words = clean.split(/\s+/);
-  return words.slice(0, 14).join(' ') + (words.length > 14 ? '…' : '');
+  return words.slice(0, 30).join(' ') + (words.length > 30 ? '…' : '');
 }
 
 /**
@@ -2446,7 +3092,7 @@ async function enhanceImageWithAI() {
  * Called by enhanceImageWithAI() and also by onImgAdjust() / panImage()
  * whenever _enhancedMode is true.
  */
-function redrawEnhanced() {
+async function redrawEnhanced() {
   if (!_subjectImg || !_enhancedMode) return;
 
   const canvas = document.getElementById('newsCanvas');
@@ -2488,7 +3134,7 @@ function redrawEnhanced() {
 
   /* ── Banner always drawn LAST over all images/sprites ── */
   _drawNewsBanner(ctx, CANVAS_W);
-  if (generatedPost) drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+  if (generatedPost) await drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
   /* Extra custom text labels */
   _drawExtraTexts(ctx, CANVAS_W, CANVAS_H);
 
@@ -2977,8 +3623,24 @@ async function redrawComposite() {
   canvas.width  = CANVAS_W;
   canvas.height = CANVAS_H;
 
-  /* Draw centre background */
-  if (_cachedNewsImg) {
+  /* Initialise the main-image sprite for the cached news image if not yet created */
+  if (_cachedNewsImg && !_mainImgSprite) {
+    _mainImgSprite = {
+      x: 0, y: 0,
+      w: CANVAS_W, h: CANVAS_H,
+      rot: 0
+    };
+  }
+
+  /* Draw centre background / main image via sprite transform */
+  if (_cachedNewsImg && _mainImgSprite) {
+    const sp = _mainImgSprite;
+    ctx.save();
+    ctx.translate(sp.x + sp.w / 2, sp.y + sp.h / 2);
+    ctx.rotate(sp.rot);
+    ctx.drawImage(_cachedNewsImg, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
+    ctx.restore();
+  } else if (_cachedNewsImg) {
     drawNewsImage(ctx, _cachedNewsImg, CANVAS_W, CANVAS_H);
   } else {
     drawBackground(ctx, CANVAS_W, CANVAS_H);
@@ -2988,9 +3650,12 @@ async function redrawComposite() {
 
   /* Banner always on top of all images/sprites */
   _drawNewsBanner(ctx, CANVAS_W);
-  if (generatedPost) drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+  if (generatedPost) await drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
   _drawExtraTexts(ctx, CANVAS_W, CANVAS_H);
   _drawCompositeHandles();
+
+  /* Show handle canvas in composite mode */
+  _showCompositeHandles(true);
 }
 
 /** Draw all side sprites onto any ctx */
@@ -3110,7 +3775,7 @@ function _drawCompositeHandles() {
   const ctx = hc.getContext('2d');
   ctx.clearRect(0, 0, hc.width, hc.height);
 
-  const needsOverlay = (_enhancedMode && _mainImgSprite) || (_compositeMode && _sideSprites.length > 0) || _extraTexts.length > 0;
+  const needsOverlay = ((_enhancedMode || _compositeMode) && _mainImgSprite) || (_compositeMode && _sideSprites.length > 0) || _extraTexts.length > 0;
   hc.style.pointerEvents = needsOverlay ? 'auto' : 'none';
   if (!needsOverlay) return;
 
@@ -3142,8 +3807,8 @@ function _drawCompositeHandles() {
     ctx.fillText('↻', grip.x, grip.y);
   }
 
-  /* Draw main image (enhanced mode) handles */
-  if (_enhancedMode && _mainImgSprite) {
+  /* Draw main image (enhanced or composite mode) handles */
+  if ((_enhancedMode || _compositeMode) && _mainImgSprite) {
     _drawHandles(_mainImgSprite, _mainImgSelected ? '#34d399' : 'rgba(52,211,153,0.5)');
   }
 
@@ -3220,7 +3885,7 @@ function _hitTestSprite(sp, wx, wy) {
   }
 
   function _onDown(e) {
-    const hasMainImg = _enhancedMode && _mainImgSprite;
+    const hasMainImg = (_enhancedMode || _compositeMode) && _mainImgSprite;
     const hasSprites = _compositeMode && _sideSprites.length > 0;
     const hasTexts   = _extraTexts.length > 0;
     if (!hasMainImg && !hasSprites && !hasTexts) return;
@@ -3320,8 +3985,8 @@ function _hitTestSprite(sp, wx, wy) {
     const pt = _ptToCanvas(e);
     let cursor = 'default';
 
-    /* Check main image (enhanced mode) */
-    if (_enhancedMode && _mainImgSprite) {
+    /* Check main image (enhanced or composite mode) */
+    if ((_enhancedMode || _compositeMode) && _mainImgSprite) {
       const hit = _hitTestSprite(_mainImgSprite, pt.x, pt.y);
       if      (hit === 'move')   cursor = 'grab';
       else if (hit === 'rotate') cursor = 'crosshair';
@@ -3512,7 +4177,7 @@ function _hideCanvasEditor() {
  * Public fast-redraw — uses cached image, no network fetch.
  * Called by toolbar buttons, text editor, colour pickers, etc.
  */
-function fastRedraw() {
+async function fastRedraw() {
   /* Enhanced mode takes priority — redrawEnhanced handles composite sprites too */
   if (_enhancedMode && typeof redrawEnhanced === 'function') { redrawEnhanced(); return; }
   if (_compositeMode) { redrawComposite(); return; }
@@ -3528,7 +4193,7 @@ function fastRedraw() {
   }
   /* Banner always on top of image layer */
   _drawNewsBanner(ctx, CANVAS_W);
-  if (generatedPost) drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+  if (generatedPost) await drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
   _drawExtraTexts(ctx, CANVAS_W, CANVAS_H);
 }
 
@@ -3558,7 +4223,7 @@ function fastRedraw() {
   function _fastRedraw() {
     if (_rafPending) return;
     _rafPending = true;
-    requestAnimationFrame(() => {
+    requestAnimationFrame(async () => {
       _rafPending = false;
       const canvas = _getCanvas();
       if (!canvas) return;
@@ -3582,7 +4247,7 @@ function fastRedraw() {
         canvas.height = CANVAS_H;
         drawNewsImage(ctx, _cachedNewsImg, CANVAS_W, CANVAS_H);
         _drawNewsBanner(ctx, CANVAS_W);
-        if (generatedPost) drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+        if (generatedPost) await drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
         _drawExtraTexts(ctx, CANVAS_W, CANVAS_H);
       } else if (generatedPost) {
         /* No image loaded yet — just redraw background + text */
@@ -3590,7 +4255,7 @@ function fastRedraw() {
         canvas.height = CANVAS_H;
         drawBackground(ctx, CANVAS_W, CANVAS_H);
         _drawNewsBanner(ctx, CANVAS_W);
-        drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+        await drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
         _drawExtraTexts(ctx, CANVAS_W, CANVAS_H);
       }
     });
@@ -3821,6 +4486,22 @@ async function generateImage() {
     }
   }
 
+  /* ── If no article image, fall back to the Nepal default image ── */
+  let usedDefaultImg = false;
+  if (!newsImg) {
+    try {
+      newsImg = await new Promise((resolve, reject) => {
+        const img = new Image();   // NO crossOrigin — data URIs don't need it
+        const tid = setTimeout(() => reject(new Error('timeout')), 4000);
+        img.onload  = () => { clearTimeout(tid); resolve(img); };
+        img.onerror = () => { clearTimeout(tid); reject(new Error('error')); };
+        img.src = _DEFAULT_NEWS_THUMB;
+      });
+      imgSource = '🗺️ Nepal default';
+      usedDefaultImg = true;
+    } catch { /* SVG load failed — will fall through to graphic background */ }
+  }
+
   if (newsImg) {
     _cachedNewsImg = newsImg;   /* ← cache for instant drag/zoom redraws */
     drawNewsImage(ctx, newsImg, CANVAS_W, CANVAS_H);
@@ -3835,7 +4516,8 @@ async function generateImage() {
     tmpCanvas.height = newsImg.naturalHeight || newsImg.height;
     tmpCanvas.getContext('2d').drawImage(newsImg, 0, 0);
     try { _activeImageDataUrl = tmpCanvas.toDataURL('image/jpeg', 0.92); } catch { _activeImageDataUrl = customImageDataUrl; }
-    document.getElementById('enhanceAIBtn').style.display = 'inline-flex';
+    /* AI enhance and adjust tools available for real photos; hide for default placeholder */
+    document.getElementById('enhanceAIBtn').style.display = usedDefaultImg ? 'none' : 'inline-flex';
   } else {
     _cachedNewsImg = null;   /* no image available */
     drawBackground(ctx, CANVAS_W, CANVAS_H);
@@ -3848,9 +4530,7 @@ async function generateImage() {
     document.getElementById('bgStylePicker').style.display = 'none';
     _activeImageDataUrl = null;
   }
-  drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
-
-  /* If composite mode is active, re-composite side subjects on the new image */
+  await drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
   if (_compositeMode && _sideSprites.length > 0) {
     redrawComposite();   // async, but non-blocking — updates canvas after centre is drawn
   }
@@ -4338,41 +5018,64 @@ function drawBackground(ctx, W, H) {
   /* Banner drawn separately after all image layers — do NOT call here */
 }
 
-function drawTextOverlay(ctx, post, W, H) {
+async function drawTextOverlay(ctx, post, W, H) {
   const pad = 54;
-  const titleSize = _textOpts.titleSize || 62;
-  const titleColor = _textOpts.titleColor || '#ffffff';
+  const BANNER_BOTTOM = 116;   // keep text block below the banner
 
-  /* ── Measure title line count first so we can layout bottom-up ── */
+  /* ── Step 1: pick font size based on word count, then measure actual lines ── */
+  const rawTitle = post.title || '';
+  const wordCount = rawTitle.trim().split(/\s+/).filter(Boolean).length;
+
+  /* Font size tiers — smaller font = more lines fit = more words visible */
+  let titleSize;
+  if      (wordCount <= 8)  titleSize = Math.min(_textOpts.titleSize || 62, 62);
+  else if (wordCount <= 12) titleSize = Math.min(_textOpts.titleSize || 62, 54);
+  else if (wordCount <= 16) titleSize = Math.min(_textOpts.titleSize || 62, 48);
+  else if (wordCount <= 20) titleSize = Math.min(_textOpts.titleSize || 62, 42);
+  else if (wordCount <= 25) titleSize = Math.min(_textOpts.titleSize || 62, 36);
+  else                      titleSize = Math.min(_textOpts.titleSize || 62, 30);
+
+  const TITLE_LINE_H = Math.round(titleSize * 1.28);
+  const titleColor   = _textOpts.titleColor || '#ffffff';
+
+  /* ── Step 2: measure how many lines the title actually needs ──
+     Use canvas measurement with the chosen font — no artificial cap here.
+     Cap only to prevent the block from consuming more than 60% of canvas. */
   ctx.font = `bold ${titleSize}px "Segoe UI",Arial,sans-serif`;
-  const titleWords = (post.title || '').split(' ');
-  let titleLine = '', titleLineCount = 0;
-  for (const w of titleWords) {
-    const test = titleLine ? titleLine + ' ' + w : w;
-    if (ctx.measureText(test).width > W - pad * 2 && titleLine) {
-      titleLineCount++;
-      if (titleLineCount >= 3) break;
-      titleLine = w;
-    } else { titleLine = test; }
+  const maxW = W - pad * 2;
+  const words = rawTitle.split(' ');
+  let line = '', measuredLines = 0;
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW && line) {
+      measuredLines++;
+      line = w;
+    } else {
+      line = test;
+    }
   }
-  titleLineCount++;
+  if (line) measuredLines++;
 
-  const TITLE_LINE_H = Math.round(titleSize * 1.26);
-  const BRAND_H      = 46;
-  const BOTTOM_PAD   = 32;
-  const TOP_PAD      = 36;
+  /* Hard cap: title block + padding must not exceed available canvas height */
+  const BRAND_H    = 116;   // avatar (96px) + padding below
+  const BOTTOM_PAD = 16;
+  const TOP_PAD    = 36;
+  const availableH = H - BANNER_BOTTOM - 40;  // space between banner and bottom
+  const maxLinesFit = Math.max(1, Math.floor((availableH - TOP_PAD - 18 - BRAND_H - BOTTOM_PAD) / TITLE_LINE_H));
+  const titleLineCount = Math.min(measuredLines, maxLinesFit);
 
+  /* ── Step 3: compute block position ── */
   const blockH = TOP_PAD + titleLineCount * TITLE_LINE_H + 18 + BRAND_H + BOTTOM_PAD;
-  const blockY = H - blockH;
+  const blockY = Math.max(BANNER_BOTTOM + 20, H - blockH);
 
   /* ── Gradient overlay — fades up from bottom ── */
-  const grad = ctx.createLinearGradient(0, blockY - 100, 0, H);
+  const grad = ctx.createLinearGradient(0, blockY - 120, 0, H);
   grad.addColorStop(0,    'rgba(0,0,0,0)');
   grad.addColorStop(0.15, 'rgba(0,0,0,0.72)');
   grad.addColorStop(0.4,  'rgba(0,0,0,0.90)');
   grad.addColorStop(1,    'rgba(0,0,0,0.97)');
   ctx.fillStyle = grad;
-  ctx.fillRect(0, blockY - 100, W, blockH + 100);
+  ctx.fillRect(0, blockY - 120, W, blockH + 120);
 
   /* Left accent bar */
   ctx.fillStyle = '#e53e3e';
@@ -4385,23 +5088,97 @@ function drawTextOverlay(ctx, post, W, H) {
   ctx.fillStyle = titleColor;
   ctx.textAlign = 'center';
   ctx.shadowColor = 'rgba(0,0,0,1)'; ctx.shadowBlur = 16;
-  const drawnLines = wrapText(ctx, post.title, W / 2, y, W - pad * 2, TITLE_LINE_H, 3);
+  const drawnLines = wrapText(ctx, rawTitle, W / 2, y, maxW, TITLE_LINE_H, titleLineCount);
   y += drawnLines * TITLE_LINE_H + 18;
   ctx.shadowBlur = 0;
 
   /* ── Branding watermark ── */
-  ctx.textAlign = 'right';
-  ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 5;
-  ctx.font = 'bold 22px "Segoe UI",Arial,sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
-  ctx.fillText('© Shashi Viral Post Generator', W - 28, y + 22);
-  ctx.font = '15px "Segoe UI",Arial,sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.40)';
-  ctx.fillText('shashi19.jaiswal@gmail.com', W - 28, y + 42);
+  await _drawAuthorWatermark(ctx, W, y);
+
   ctx.shadowBlur = 0;
   ctx.textAlign = 'center';
 
   /* Border removed — clean, borderless image */
+}
+
+/**
+ * Draw circular author avatar + name + email as a watermark.
+ * Placed bottom-right, just below the title block.
+ */
+async function _drawAuthorWatermark(ctx, W, titleBottom) {
+  /* Wait for the avatar image to finish loading if it hasn't yet */
+  if (!_authorImg && _authorImgPromise) {
+    await _authorImgPromise;
+  }
+  const AVATAR_R   = 48;          // circle radius — large enough for face to be clear
+  const AVATAR_D   = AVATAR_R * 2;
+  const PAD_RIGHT  = 28;
+  const PAD_BOTTOM = 10;
+  const cx = W - PAD_RIGHT - AVATAR_R;   // circle centre x
+  const cy = titleBottom + AVATAR_R + PAD_BOTTOM;   // circle centre y
+
+  ctx.save();
+
+  /* ── Semi-transparent backdrop pill ── */
+  const pillW = 260 + AVATAR_D + 12;
+  const pillH = AVATAR_D + 16;
+  const pillX = W - PAD_RIGHT - pillW;
+  const pillY = cy - pillH / 2;
+  ctx.beginPath();
+  ctx.roundRect(pillX, pillY, pillW, pillH, pillH / 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.50)';
+  ctx.fill();
+
+  /* ── Circular clip for the photo ── */
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, AVATAR_R, 0, Math.PI * 2);
+  ctx.clip();
+
+  if (_authorImg) {
+    const srcW = _authorImg.naturalWidth;
+    const srcH = _authorImg.naturalHeight;
+    /* Full face crop: square region covering full width, top 80% of height */
+    const cropSize = Math.min(srcW, srcH * 0.80);  // square side = min(width, 80% height)
+    const cropX = (srcW - cropSize) / 2;            // horizontally centred
+    const cropY = 0;                                // from the very top (hair/head)
+    ctx.drawImage(_authorImg, cropX, cropY, cropSize, cropSize,
+                  cx - AVATAR_R, cy - AVATAR_R, AVATAR_D, AVATAR_D);
+  } else {
+    /* Fallback: solid colour circle with initials */
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(cx - AVATAR_R, cy - AVATAR_R, AVATAR_D, AVATAR_D);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${AVATAR_R}px "Segoe UI",Arial,sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('SJ', cx, cy);
+  }
+  ctx.restore();
+
+  /* ── Gold ring around avatar ── */
+  ctx.beginPath();
+  ctx.arc(cx, cy, AVATAR_R + 3, 0, Math.PI * 2);
+  ctx.strokeStyle = '#f6ad55';
+  ctx.lineWidth = 3.5;
+  ctx.stroke();
+
+  /* ── Name + email text ── */
+  const textX = cx - AVATAR_R - 14;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'alphabetic';
+  ctx.shadowColor = 'rgba(0,0,0,0.90)';
+  ctx.shadowBlur = 7;
+
+  ctx.font = 'bold 20px "Segoe UI",Arial,sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.fillText('© Shashi Viral Post Generator', textX, cy - 6);
+
+  ctx.font = '15px "Segoe UI",Arial,sans-serif';
+  ctx.fillStyle = 'rgba(246,173,85,0.88)';
+  ctx.fillText('shashi19.jaiswal@gmail.com', textX, cy + 16);
+
+  ctx.restore();
 }
 
 /* ─── Text Editor Modal ───────────────────────────────────────── */
@@ -4670,6 +5447,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('manualModal')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeManualModal(); });
   /* Update AI badge based on stored key */
   updateAIBadge();
+  /* Auto-load news on page load / refresh */
+  fetchNews();
 });
 
 /* ================================================================
@@ -4805,7 +5584,7 @@ TASK: Write ONE brand-new SEO headline for THIS specific story.
 
 RULES:
 1. Must contain the KEY noun from the story — actual person name, place, or event
-2. Maximum 12 Nepali words
+2. Maximum 30 Nepali words
 3. Nepali Devanagari script only
 4. Factual, keyword-rich — reader must understand exactly what happened
 5. COMPLETELY different structure and keywords from existing title

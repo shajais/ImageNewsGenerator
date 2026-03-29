@@ -31,11 +31,33 @@ function loadEnv() {
 }
 loadEnv();
 
-const GEMINI_API_KEY  = process.env.GEMINI_API_KEY  || '';
-const REMOVEBG_API_KEY = process.env.REMOVEBG_API_KEY || '';
+let GEMINI_API_KEY   = process.env.GEMINI_API_KEY   || '';
+let REMOVEBG_API_KEY = process.env.REMOVEBG_API_KEY || '';
+let GROK_API_KEY     = process.env.GROK_API_KEY     || '';
 
 if (!GEMINI_API_KEY)   console.warn('⚠️  GEMINI_API_KEY not set in .env');
 if (!REMOVEBG_API_KEY) console.warn('⚠️  REMOVEBG_API_KEY not set in .env');
+if (!GROK_API_KEY)     console.warn('⚠️  GROK_API_KEY not set in .env');
+
+/** Write or update a KEY=VALUE line in .env, then hot-reload it */
+function saveKeyToEnv(keyName, value) {
+  const envPath = path.join(__dirname, '.env');
+  let content = '';
+  if (fs.existsSync(envPath)) content = fs.readFileSync(envPath, 'utf8');
+  const lines = content.split('\n');
+  const idx = lines.findIndex(l => l.trim().startsWith(keyName + '=') || l.trim().startsWith(keyName + ' ='));
+  if (idx >= 0) {
+    lines[idx] = `${keyName}=${value}`;
+  } else {
+    lines.push(`${keyName}=${value}`);
+  }
+  fs.writeFileSync(envPath, lines.join('\n'), 'utf8');
+  /* Hot-reload: update the in-process variable immediately */
+  process.env[keyName] = value;
+  if (keyName === 'GEMINI_API_KEY')   GEMINI_API_KEY   = value;
+  if (keyName === 'REMOVEBG_API_KEY') REMOVEBG_API_KEY = value;
+  if (keyName === 'GROK_API_KEY')     GROK_API_KEY     = value;
+}
 
 /* ── MIME types ─────────────────────────────────────── */
 const MIME = {
@@ -133,7 +155,61 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({
       gemini:   !!GEMINI_API_KEY,
       removebg: !!REMOVEBG_API_KEY,
+      grok:     !!GROK_API_KEY,
     }));
+    return;
+  }
+
+  /* ── SAVE KEY: /api/save-key — writes key to .env and hot-reloads ── */
+  if (pathname === '/api/save-key' && req.method === 'POST') {
+    setCORS(res);
+    let body = '';
+    req.on('data', d => { body += d; });
+    req.on('end', () => {
+      try {
+        const { service, key } = JSON.parse(body);
+        const VALID = { gemini: 'GEMINI_API_KEY', grok: 'GROK_API_KEY', removebg: 'REMOVEBG_API_KEY' };
+        const envKey = VALID[service];
+        if (!envKey || !key || typeof key !== 'string' || key.trim().length < 8) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'Invalid service or key' }));
+          return;
+        }
+        saveKeyToEnv(envKey, key.trim());
+        console.log(`[save-key] ${envKey} updated (length ${key.trim().length})`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, service }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
+  /* ── PROXY: /proxy/grok → Grok (xAI) API (key injected server-side) ── */
+  if (pathname === '/proxy/grok') {
+    if (!GROK_API_KEY) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'GROK_API_KEY not configured on server' }));
+      return;
+    }
+    const target = 'https://api.x.ai/v1/chat/completions';
+    console.log('[proxy] Grok → (key hidden)');
+    proxyRequest(req, res, target, { 'Authorization': `Bearer ${GROK_API_KEY}` });
+    return;
+  }
+
+  /* ── PROXY: /proxy/removebg-account → Remove.bg account ping ── */
+  if (pathname === '/proxy/removebg-account') {
+    if (!REMOVEBG_API_KEY) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'REMOVEBG_API_KEY not configured on server' }));
+      return;
+    }
+    const target = 'https://api.remove.bg/v1.0/account';
+    console.log('[proxy] Remove.bg account ping → (key hidden)');
+    proxyRequest(req, res, target, { 'X-Api-Key': REMOVEBG_API_KEY });
     return;
   }
 
