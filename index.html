@@ -44,12 +44,15 @@
       <button class="btn btn-ghost" onclick="showManualInput()" style="font-size:.8rem;padding:8px 14px">
         ✏️ Manual
       </button>
-      <span class="status-badge" id="statusBadge">No data loaded</span>
+      <span class="status-badge" id="statusBadge">Loading…</span>
+    </div>
+    <div class="news-search-bar" id="newsSearchBar" style="display:none">
+      <input type="text" id="newsSearchInput" placeholder="🔍 Search articles…" oninput="filterNewsList(this.value)" autocomplete="off" />
     </div>
     <div class="news-list" id="newsList">
       <div class="empty-state">
         <div class="icon">🌐</div>
-        <p>Click <strong>Fetch Nepal News</strong><br>to load the latest headlines.</p>
+        <p>Fetching latest Nepal news…</p>
       </div>
     </div>
   </aside>
@@ -470,119 +473,124 @@
 <!-- AI SETTINGS MODAL -->
 <div id="aiSettingsModal">
   <div class="modal-box ai-settings-box">
+
+    <!-- Header -->
     <div class="ai-settings-header">
       <span class="ai-settings-icon">🤖</span>
       <div>
         <h3>AI Setup</h3>
-        <p class="ai-settings-sub">API keys are stored securely in <code>.env</code> on the server — never exposed to the browser</p>
+        <p class="ai-settings-sub">Configure your API keys — stored securely in <code>.env</code> on the server</p>
       </div>
+      <button class="ai-settings-close-btn" onclick="closeAISettings()" title="Close">✕</button>
     </div>
+
+    <!-- Active status banner -->
+    <div id="aiSetupStatusBanner" class="ai-setup-banner"></div>
+
     <div class="ai-settings-body">
 
       <!-- ── AI Provider Selector ── -->
-      <div style="margin-bottom:14px">
-        <label class="ai-key-label" style="display:block;margin-bottom:6px">🔀 Active AI Provider</label>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="ai-provider-pill" data-provider="gemini" onclick="setAIProvider('gemini')"
-            style="flex:1;border-radius:10px;border:2px solid rgba(14,165,233,.4);background:rgba(14,165,233,.08);color:#fff;cursor:pointer;min-width:110px">
-            ✨ Gemini (Google)
-          </button>
-          <button class="ai-provider-pill" data-provider="grok" onclick="setAIProvider('grok')"
-            style="flex:1;border-radius:10px;border:2px solid rgba(168,85,247,.4);background:rgba(168,85,247,.08);color:#fff;cursor:pointer;min-width:110px">
-            ⚡ Grok (xAI / X)
-          </button>
-        </div>
-        <p style="margin-top:5px;font-size:.76rem;color:var(--muted)">Selected provider is used for Hook, Title, Description, Hashtags &amp; Reimagine. Saved automatically.</p>
+      <div class="ai-provider-row">
+        <span class="ai-provider-row-label">🔀 Active text AI:</span>
+        <button class="ai-provider-pill" data-provider="gemini" onclick="setAIProvider('gemini')">✨ Gemini</button>
+        <button class="ai-provider-pill" data-provider="grok"   onclick="setAIProvider('grok')">⚡ Grok</button>
       </div>
 
-      <!-- ── Grok section ── -->
-      <div class="ai-info-box" style="border-color:rgba(168,85,247,.4);background:rgba(168,85,247,.07)">
-        <strong>⚡ Grok AI (xAI) — Premium text rewriting:</strong>
-        <ol>
-          <li>Go to <a href="https://console.x.ai" target="_blank" rel="noopener">console.x.ai</a> and sign in with your X (Twitter) account</li>
-          <li>Click <strong>"API Keys"</strong> → <strong>"Create API Key"</strong></li>
-          <li>Open <code>.env</code> in the project folder and set:<br>
-              <code style="display:block;margin-top:4px;padding:6px 10px;background:rgba(0,0,0,.25);border-radius:6px;font-size:.82rem">GROK_API_KEY=xai-…your-key…</code></li>
-          <li>Restart the server (<code>python server.py</code>)</li>
-        </ol>
-        <p style="margin-top:6px;font-size:.78rem;color:var(--muted)">⭐ Uses <strong>grok-3-mini</strong> — fast &amp; cost-efficient. Requires X Premium subscription.</p>
-      </div>
-      <label class="ai-key-label">Grok AI Status</label>
-      <p id="grokKeyStatus" class="ai-key-hint" style="font-size:.85rem;margin:2px 0 10px">Checking…</p>
+      <!-- ── 3-card row ── -->
+      <div class="ai-cards-row">
 
-      <!-- ── Gemini section ── -->
-      <div class="ai-info-box" style="margin-top:4px">
-        <strong>📌 Gemini AI (Google) — Free text rewriting:</strong>
-        <ol>
-          <li>Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a></li>
-          <li>Sign in with Google (free) → click <strong>"Create API Key"</strong></li>
-          <li>Open <code>.env</code> in the project folder and set:<br>
-              <code style="display:block;margin-top:4px;padding:5px 10px;background:rgba(0,0,0,.25);border-radius:6px;font-size:.78rem">GEMINI_API_KEY=AIzaSy…your-key…</code></li>
-          <li>Restart the server (<code>python server.py</code>)</li>
-        </ol>
-        <p style="margin-top:5px;font-size:.76rem;color:var(--muted)">✅ Free: 15 req/min · 1M tokens/day · No credit card</p>
-      </div>
-      <label class="ai-key-label">Gemini AI Status</label>
-      <p id="geminiKeyStatus" class="ai-key-hint" style="font-size:.85rem;margin:2px 0 10px">Checking…</p>
-
-      <!-- ── Remove.bg section ── -->
-      <div class="ai-info-box" style="margin-top:4px;border-color:rgba(139,92,246,.35);background:rgba(139,92,246,.07)">
-        <strong>🎨 Remove.bg — Free background removal:</strong>
-        <ol>
-          <li>Go to <a href="https://www.remove.bg/api" target="_blank" rel="noopener">remove.bg/api</a></li>
-          <li>Sign up free → go to <strong>API Keys</strong> → copy your key</li>
-          <li>Open <code>.env</code> and set:<br>
-              <code style="display:block;margin-top:4px;padding:5px 10px;background:rgba(0,0,0,.25);border-radius:6px;font-size:.78rem">REMOVEBG_API_KEY=abc123…your-key…</code></li>
-          <li>Restart the server (<code>python server.py</code>)</li>
-        </ol>
-        <p style="margin-top:5px;font-size:.76rem;color:var(--muted)">✅ Free: 50 background removals/month · No credit card needed</p>
-      </div>
-      <label class="ai-key-label">Remove.bg Status</label>
-      <p id="removebgKeyStatus" class="ai-key-hint" style="font-size:.85rem;margin:2px 0 10px">Checking…</p>
-
-      <div class="ai-info-box" style="border-color:rgba(234,179,8,.4);background:rgba(234,179,8,.08);margin-top:16px">
-        <strong>🔒 Security note:</strong>
-        <p style="margin-top:4px;font-size:.82rem">Keys are stored only in <code>.env</code> on the server. They are never sent to the browser, never visible in DevTools, and never stored in <code>localStorage</code>. Make sure <code>.env</code> is listed in <code>.gitignore</code> so it is never committed to Git.</p>
-      </div>
-
-      <!-- ── GitHub Pages / Browser Key Entry (shown only when no server proxy) ── -->
-      <div id="browserKeySection" style="display:none;margin-top:18px">
-        <div class="ai-info-box" style="border-color:rgba(251,191,36,.5);background:rgba(251,191,36,.07)">
-          <strong>🌐 GitHub Pages Mode — Enter Keys in Browser</strong>
-          <p style="margin-top:6px;font-size:.82rem">You are running this app from GitHub Pages (no server). Enter your API keys below — they are saved only in <strong>your browser's localStorage</strong> and never sent anywhere except directly to the respective API services.</p>
-          <p style="margin-top:4px;font-size:.78rem;color:var(--muted)">⚠️ Only use on your own personal device. Clear keys before sharing your device.</p>
-        </div>
-        <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
-          <div>
-            <label class="ai-key-label">Grok API Key (xAI)</label>
-            <input id="inputGrokKey" type="password" placeholder="xai-…your-grok-key…"
-              style="width:100%;padding:9px 12px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.4);border-radius:8px;color:#fff;font-size:.85rem;font-family:monospace;box-sizing:border-box">
+        <!-- CARD 1: Gemini -->
+        <div class="ai-card" id="aiCardGemini">
+          <div class="ai-card-header gemini">
+            <span class="ai-card-icon">✨</span>
+            <div>
+              <div class="ai-card-title">Gemini</div>
+              <div class="ai-card-sub">Google · Free</div>
+            </div>
+            <span id="geminiStatusDot" class="ai-status-dot"></span>
           </div>
-          <div>
-            <label class="ai-key-label">Gemini API Key (Google)</label>
-            <input id="inputGeminiKey" type="password" placeholder="AIzaSy…your-gemini-key…"
-              style="width:100%;padding:9px 12px;background:rgba(14,165,233,.1);border:1px solid rgba(14,165,233,.4);border-radius:8px;color:#fff;font-size:.85rem;font-family:monospace;box-sizing:border-box">
+          <div class="ai-card-body">
+            <p id="geminiKeyStatus" class="ai-card-status">Checking…</p>
+            <label class="ai-key-label" style="margin-top:8px">API Key</label>
+            <input id="inputGeminiKey" type="password" class="ai-key-input"
+              placeholder="AIzaSy…your-key…"
+              autocomplete="off" spellcheck="false">
+            <p class="ai-card-hint">
+              Get free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com</a><br>
+              Add <code>GEMINI_API_KEY=…</code> to <code>.env</code>
+            </p>
           </div>
-          <div>
-            <label class="ai-key-label">Remove.bg API Key</label>
-            <input id="inputRemovebgKey" type="password" placeholder="your-removebg-key…"
-              style="width:100%;padding:9px 12px;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.4);border-radius:8px;color:#fff;font-size:.85rem;font-family:monospace;box-sizing:border-box">
+          <div class="ai-card-footer">
+            <button class="ai-card-btn save" onclick="saveCardKey('gemini')">💾 Save</button>
+            <button class="ai-card-btn test" onclick="testGeminiKey()">🔍 Test</button>
           </div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-          <button class="btn" style="flex:1;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff" onclick="saveBrowserKeys()">💾 Save Keys</button>
-          <button class="btn btn-ghost" style="font-size:.8rem" onclick="clearBrowserKeys()">🗑️ Clear Saved Keys</button>
+
+        <!-- CARD 2: Grok -->
+        <div class="ai-card" id="aiCardGrok">
+          <div class="ai-card-header grok">
+            <span class="ai-card-icon">⚡</span>
+            <div>
+              <div class="ai-card-title">Grok</div>
+              <div class="ai-card-sub">xAI · Premium</div>
+            </div>
+            <span id="grokStatusDot" class="ai-status-dot"></span>
+          </div>
+          <div class="ai-card-body">
+            <p id="grokKeyStatus" class="ai-card-status">Checking…</p>
+            <label class="ai-key-label" style="margin-top:8px">API Key</label>
+            <input id="inputGrokKey" type="password" class="ai-key-input"
+              placeholder="xai-…your-key…"
+              autocomplete="off" spellcheck="false">
+            <p class="ai-card-hint">
+              Get key at <a href="https://console.x.ai" target="_blank" rel="noopener">console.x.ai</a><br>
+              Add <code>GROK_API_KEY=…</code> to <code>.env</code>
+            </p>
+          </div>
+          <div class="ai-card-footer">
+            <button class="ai-card-btn save" onclick="saveCardKey('grok')">💾 Save</button>
+            <button class="ai-card-btn test" onclick="testGrokKey()">⚡ Test</button>
+          </div>
         </div>
-        <div style="margin-top:10px;font-size:.78rem;color:var(--muted)">
-          Keys already saved: 
-          <span id="savedKeysSummary">checking…</span>
+
+        <!-- CARD 3: Remove.bg -->
+        <div class="ai-card" id="aiCardRemovebg">
+          <div class="ai-card-header removebg">
+            <span class="ai-card-icon">🎨</span>
+            <div>
+              <div class="ai-card-title">Remove.bg</div>
+              <div class="ai-card-sub">Background removal</div>
+            </div>
+            <span id="removebgStatusDot" class="ai-status-dot"></span>
+          </div>
+          <div class="ai-card-body">
+            <p id="removebgKeyStatus" class="ai-card-status">Checking…</p>
+            <label class="ai-key-label" style="margin-top:8px">API Key</label>
+            <input id="inputRemovebgKey" type="password" class="ai-key-input"
+              placeholder="abc123…your-key…"
+              autocomplete="off" spellcheck="false">
+            <p class="ai-card-hint">
+              Get free key at <a href="https://www.remove.bg/api" target="_blank" rel="noopener">remove.bg/api</a><br>
+              Add <code>REMOVEBG_API_KEY=…</code> to <code>.env</code>
+            </p>
+          </div>
+          <div class="ai-card-footer">
+            <button class="ai-card-btn save" onclick="saveCardKey('removebg')">💾 Save</button>
+            <button class="ai-card-btn test" onclick="testRemovebgKey()">🎨 Test</button>
+          </div>
         </div>
+
+      </div><!-- end ai-cards-row -->
+
+      <!-- Security note -->
+      <div class="ai-info-box" style="border-color:rgba(234,179,8,.4);background:rgba(234,179,8,.08);margin-top:4px">
+        <strong>🔒 Security:</strong> Keys live only in <code>.env</code> on the server — never sent to the browser or stored in <code>localStorage</code>. Keep <code>.env</code> in <code>.gitignore</code>.
       </div>
+
     </div><!-- end ai-settings-body -->
+
     <div class="ai-settings-footer modal-actions">
       <button class="btn btn-ghost" onclick="closeAISettings()">Close</button>
-      <button class="btn" style="background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff" onclick="testGrokKey()">⚡ Test Grok</button>
-      <button class="btn" style="background:linear-gradient(135deg,#0ea5e9,#0284c7);color:#fff" onclick="testGeminiKey()">🔍 Test Gemini</button>
     </div>
   </div><!-- end ai-settings-box -->
 </div><!-- end aiSettingsModal -->

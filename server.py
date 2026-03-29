@@ -49,6 +49,34 @@ if not REMOVEBG_API_KEY:
 if not GROK_API_KEY:
     print('ℹ️  GROK_API_KEY not set in .env (optional)')
 
+
+def save_key_to_env(key_name, value):
+    """Write or update KEY=VALUE in .env then hot-reload the global."""
+    global GEMINI_API_KEY, REMOVEBG_API_KEY, GROK_API_KEY
+    env_path = os.path.join(BASE_DIR, '.env')
+    content = ''
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    lines = content.split('\n')
+    found = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith(key_name + '=') or stripped.startswith(key_name + ' ='):
+            lines[i] = f'{key_name}={value}'
+            found = True
+            break
+    if not found:
+        lines.append(f'{key_name}={value}')
+    with open(env_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines))
+    # Hot-reload in-process
+    os.environ[key_name] = value
+    if key_name == 'GEMINI_API_KEY':   GEMINI_API_KEY   = value
+    if key_name == 'REMOVEBG_API_KEY': REMOVEBG_API_KEY = value
+    if key_name == 'GROK_API_KEY':     GROK_API_KEY     = value
+    print(f'  [save-key] {key_name} updated (length {len(value)})')
+
 MIME_TYPES = {
     '.html': 'text/html; charset=utf-8',
     '.css':  'text/css; charset=utf-8',
@@ -115,6 +143,47 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(payload)
             return
 
+        # ── Proxy: /proxy/removebg-account → Remove.bg account ping (GET) ──
+        if pathname == '/proxy/removebg-account':
+            if not REMOVEBG_API_KEY:
+                err = json.dumps({'error': 'REMOVEBG_API_KEY not configured on server'}).encode()
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_cors()
+                self.end_headers()
+                self.wfile.write(err)
+                return
+            print('  [proxy] Remove.bg account ping → (key hidden)')
+            try:
+                req = urllib.request.Request(
+                    'https://api.remove.bg/v1.0/account',
+                    headers={'X-Api-Key': REMOVEBG_API_KEY},
+                    method='GET'
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    resp_body = resp.read()
+                    self.send_response(resp.status)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Content-Length', str(len(resp_body)))
+                    self.send_cors()
+                    self.end_headers()
+                    self.wfile.write(resp_body)
+            except urllib.error.HTTPError as e:
+                err_body = e.read()
+                self.send_response(e.code)
+                self.send_header('Content-Type', 'application/json')
+                self.send_cors()
+                self.end_headers()
+                self.wfile.write(err_body)
+            except Exception as e:
+                msg = json.dumps({'error': str(e)}).encode()
+                self.send_response(502)
+                self.send_header('Content-Type', 'application/json')
+                self.send_cors()
+                self.end_headers()
+                self.wfile.write(msg)
+            return
+
         if pathname == '/':
             pathname = '/index.html'
             pathname = '/index.html'
@@ -152,6 +221,43 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         content_len = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_len) if content_len > 0 else b''
+
+        # ── Save key: /api/save-key → writes key to .env and hot-reloads ──
+        if pathname == '/api/save-key':
+            try:
+                data = json.loads(body.decode('utf-8'))
+                service = data.get('service', '')
+                key_val = data.get('key', '').strip()
+                valid_map = {
+                    'gemini':   'GEMINI_API_KEY',
+                    'grok':     'GROK_API_KEY',
+                    'removebg': 'REMOVEBG_API_KEY',
+                }
+                env_key = valid_map.get(service)
+                if not env_key or not key_val or len(key_val) < 8:
+                    err = json.dumps({'ok': False, 'error': 'Invalid service or key'}).encode()
+                    self.send_response(400)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_cors()
+                    self.end_headers()
+                    self.wfile.write(err)
+                    return
+                save_key_to_env(env_key, key_val)
+                resp_body = json.dumps({'ok': True, 'service': service}).encode()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(resp_body)))
+                self.send_cors()
+                self.end_headers()
+                self.wfile.write(resp_body)
+            except Exception as e:
+                err = json.dumps({'ok': False, 'error': str(e)}).encode()
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_cors()
+                self.end_headers()
+                self.wfile.write(err)
+            return
 
         # ── Proxy: /proxy/gemini → Gemini API (key injected server-side) ──
         if pathname == '/proxy/gemini':
