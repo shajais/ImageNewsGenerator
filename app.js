@@ -2217,33 +2217,146 @@ function extractArticleText(html, sourceUrl) {
     const parser = new DOMParser();
     const doc    = parser.parseFromString(html, 'text/html');
 
-    /* Remove noise: scripts, styles, nav, footer, ads, sidebars */
-    ['script','style','nav','footer','header','aside','form',
-     '.advertisement','.ads','.sidebar','.related','.social-share',
-     '.comments','.comment-section','#comments'].forEach(sel => {
-      doc.querySelectorAll(sel).forEach(el => el.remove());
+    /* ── STEP 1: Aggressively remove ALL non-article elements ── */
+    const REMOVE_SELECTORS = [
+      /* Layout chrome */
+      'script','style','noscript','link','meta',
+      'nav','header','footer','aside','form','iframe','object','embed',
+      /* Ads & trackers */
+      '.advertisement','.ads','.ad-slot','.ad-wrapper','.ad-container',
+      '[class*="advertisement"]','[class*="-ad-"]','[id*="google_ad"]',
+      /* Related / recommended content */
+      '.related','.related-articles','.related-news','.related-posts',
+      '[class*="related"]','[class*="recommended"]','[class*="suggestion"]',
+      '[class*="more-news"]','[class*="also-read"]','[class*="trending"]',
+      /* Social share bars */
+      '.social-share','.share-bar','.share-buttons','.sharing',
+      '[class*="social"]','[class*="share-"]',
+      /* Comments & feedback */
+      '.comments','#comments','.comment-section','.comment-form',
+      '.disqus','.fb-comments','[class*="comment"]','[class*="feedback"]',
+      '[class*="reaction"]','[id*="comment"]','[id*="disqus"]',
+      /* Newsletter / subscription */
+      '.newsletter','[class*="newsletter"]','[class*="subscribe"]',
+      '[class*="subscription"]','[class*="signup"]',
+      /* Author bio boxes (usually after article) */
+      '.author-bio','.author-box','.author-info','[class*="author-"]',
+      /* Tags / categories widget */
+      '.tags','.tag-list','.categories','[class*="tag-"]',
+      /* Breadcrumbs, pagination */
+      '.breadcrumb','[class*="breadcrumb"]','.pagination','[class*="paginat"]',
+      /* Cookie / GDPR banners */
+      '.cookie','.gdpr','[class*="cookie"]',
+      /* Sidebar widgets */
+      '.sidebar','.widget','[class*="sidebar"]','[class*="widget"]',
+      /* "Back to top", print, email buttons */
+      '[class*="back-to-top"]','[class*="print-"]','[class*="email-"]',
+    ];
+
+    REMOVE_SELECTORS.forEach(sel => {
+      try { doc.querySelectorAll(sel).forEach(el => el.remove()); } catch {}
     });
 
-    /* Try to find the main article container */
-    const candidates = [
-      doc.querySelector('article'),
-      doc.querySelector('[class*="article-body"]'),
-      doc.querySelector('[class*="post-content"]'),
-      doc.querySelector('[class*="entry-content"]'),
-      doc.querySelector('[class*="news-detail"]'),
-      doc.querySelector('[class*="content-body"]'),
-      doc.querySelector('[class*="story-body"]'),
-      doc.querySelector('main'),
-      doc.body,
-    ].filter(Boolean);
+    /* ── STEP 2: Find the most specific article container ── */
+    /* Priority order — most specific first */
+    const ARTICLE_SELECTORS = [
+      'article[class*="detail"]',
+      'article[class*="news"]',
+      'article[class*="post"]',
+      'article[class*="content"]',
+      '[class*="article-detail"]',
+      '[class*="news-detail"]',
+      '[class*="news-content"]',
+      '[class*="article-content"]',
+      '[class*="article-body"]',
+      '[class*="story-body"]',
+      '[class*="story-content"]',
+      '[class*="post-content"]',
+      '[class*="post-body"]',
+      '[class*="entry-content"]',
+      '[class*="content-body"]',
+      '[class*="content-detail"]',
+      '[class*="main-content"]',
+      '[id*="article-body"]',
+      '[id*="news-detail"]',
+      '[id*="content-area"]',
+      'article',
+      'main',
+    ];
 
-    for (const el of candidates) {
-      const text = (el.innerText || el.textContent || '')
-        .replace(/\s+/g, ' ')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-      if (text.length > 200) return text.slice(0, 5000);
+    let articleEl = null;
+    for (const sel of ARTICLE_SELECTORS) {
+      try {
+        const el = doc.querySelector(sel);
+        if (el) { articleEl = el; break; }
+      } catch {}
     }
+    if (!articleEl) articleEl = doc.body;
+
+    /* ── STEP 3: Remove post-article noise INSIDE the article container ──
+       Some sites inject related/social/comment widgets inside the article div.
+       Remove any block whose text content looks like post-article noise. */
+    const POST_ARTICLE_NOISE = [
+      'blockquote[class*="twitter"]','blockquote[class*="instagram"]',
+      '[class*="inline-ad"]','[class*="in-article"]','[class*="mid-article"]',
+      '[class*="tags"]','[class*="topics"]','[class*="keywords"]',
+    ];
+    POST_ARTICLE_NOISE.forEach(sel => {
+      try { articleEl.querySelectorAll(sel).forEach(el => el.remove()); } catch {}
+    });
+
+    /* ── STEP 4: Extract paragraphs — the gold standard ──
+       Collect only <p> tags that contain real sentence content.
+       This is far more reliable than taking all innerText. */
+    const paragraphs = [...articleEl.querySelectorAll('p')]
+      .map(p => (p.innerText || p.textContent || '').replace(/\s+/g, ' ').trim())
+      .filter(t => {
+        if (t.length < 40) return false;   /* too short — likely a caption or label */
+        /* Skip paragraphs that look like metadata / noise */
+        if (/^(?:share|follow|subscribe|click here|read more|also read|related|advertisement|loading)/i.test(t)) return false;
+        if (/^(?:photo|image|pic|video|source|credit)[:\/]/i.test(t)) return false;
+        /* Skip paragraphs that are just a URL */
+        if (/^https?:\/\/\S+$/.test(t)) return false;
+        return true;
+      });
+
+    if (paragraphs.length >= 2) {
+      /* Got clean paragraphs — join them. Cap at 4000 chars. */
+      return paragraphs.join(' ').slice(0, 4000);
+    }
+
+    /* ── STEP 5: Fallback — use full innerText but cut at first noise signal ──
+       Detect where post-article content starts by looking for noise trigger phrases. */
+    const rawText = (articleEl.innerText || articleEl.textContent || '')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    /* Cut the text at the first line that looks like post-article noise */
+    const CUTOFF_PATTERNS = [
+      /^(?:प्रतिक्रिया|टिप्पणी|comment|feedback|leave a reply|reply)/im,
+      /^(?:सम्बन्धित समाचार|related news|related articles|you may also like|also read|read more)/im,
+      /^(?:tags?|topics?|categories|keywords?|hashtag)/im,
+      /^(?:share this|share on|follow us|subscribe|newsletter)/im,
+      /^(?:advertisement|sponsored|promoted)/im,
+      /(?:सम्पर्क|contact us|about us|privacy policy|terms)/im,
+      /(?:facebook|twitter|instagram|youtube)\s*(?:page|account|channel)/im,
+    ];
+
+    const lines = rawText.split('\n');
+    let cutLine = lines.length;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line.length < 5) continue;
+      if (CUTOFF_PATTERNS.some(rx => rx.test(line))) {
+        cutLine = i;
+        break;
+      }
+    }
+
+    const clipped = lines.slice(0, cutLine).join('\n').trim();
+    if (clipped.length > 200) return clipped.slice(0, 4000);
+
   } catch { /* fall through */ }
   return '';
 }
