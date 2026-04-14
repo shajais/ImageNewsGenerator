@@ -4103,11 +4103,15 @@ async function applyComposite() {
   if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = '⏳ Applying…'; }
   try {
     for (const sp of _sideSprites) {
-      /* Use BG-removed version if available, else fall back to raw */
-      const srcUrl = sp.subjectDataUrl || sp.rawDataUrl;
-      if (!sp.img) {
-        try { sp.img = await loadImageFromSrc(srcUrl); } catch {}
-      }
+      /* ALWAYS use the raw image — BG removal is a separate step via 🚫 Remove BG.
+         If the user already ran Remove BG, subjectDataUrl is set; use that.
+         But if subjectDataUrl was set automatically (e.g. from a previous run),
+         we still honour it only if the user explicitly ran removeBgAllSprites.
+         To keep it clean: use rawDataUrl as the definitive source here. */
+      const srcUrl = sp.rawDataUrl;
+      /* Always reload the img object from rawDataUrl so rotate/flip changes appear */
+      sp.img = null;
+      try { sp.img = await loadImageFromSrc(srcUrl); } catch {}
     }
     /* Set default positions for any sprite that doesn't have one yet */
     _sideSprites.forEach((sp, i) => {
