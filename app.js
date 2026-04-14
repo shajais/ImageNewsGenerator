@@ -2186,7 +2186,7 @@ async function selectArticle(idx) {
     /* Step 3c: Build description (translates + extracts key facts) */
     desc = await buildDescription(nepaliTitle, rawTitle, bestBody, sourceLang);
     /* Step 3d: Hashtags */
-    hashtags = buildHashtags(nepaliTitle + ' ' + rawTitle);
+    hashtags = buildHashtags(nepaliTitle + ' ' + rawTitle, bestBody);
   }
 
   document.getElementById('outHook').textContent   = hook;
@@ -2951,65 +2951,35 @@ async function buildDescription(nepaliTitle, rawTitle, articleBody, sourceLang =
     nepaliBody = await translateBodyToNepali(nepaliBody, sourceLang);
   }
 
-  /* ── STEP 2: Extract key facts from original body (numbers work in any language) ── */
-  const extractedFacts = extractKeyFacts(rawTitle, cleanedBody);
+  /* ── STEP 2: Use the full cleaned body directly — no scoring filter ── */
+  /* Split into sentences, strip pure noise lines, rejoin naturally */
+  const allSentences = (nepaliBody.replace(/\n+/g, ' ').replace(/\s+/g, ' ').match(/[^.!?।]+[.!?।]+/g) || [])
+    .map(s => s.trim())
+    .filter(s => {
+      if (s.length < 25) return false;
+      if (/(?:read more|click here|share this|follow us|subscribe|यो खबर|सम्बन्धित|प्रतिक्रिया दिनुहोस्)/i.test(s)) return false;
+      return true;
+    });
 
-  /* ── STEP 3: Extract up to 8 best informative sentences from Nepali body ── */
-  const bodySentences = extractBestSentences(nepaliBody, nepaliTitle, rawTitle, true, 8);
+  /* If sentence splitting worked, join them; else use body directly */
+  let descText = allSentences.length >= 2
+    ? allSentences.join(' ')
+    : nepaliBody.trim();
 
-  /* ── STEP 4: Assemble description ── */
-  const parts = [];
-  const usedW = new Set();
-
-  const track  = s => s.replace(/[।,.!?]/g, '').split(/\s+/).filter(w => w.length > 3).forEach(w => usedW.add(w));
-  const isDup  = s => {
-    const words = s.replace(/[।,.!?]/g, '').split(/\s+/).filter(w => w.length > 3);
-    return words.length > 0 && words.filter(w => usedW.has(w)).length / words.length > 0.55;
-  };
-  const addPart = s => { if (s && s.trim() && !isDup(s)) { parts.push(s.trim()); track(s); return true; } return false; };
-
-  /* A – All extracted sentences in article order — fill up to 220 words */
-  for (const sent of bodySentences) {
-    if (wordCount(parts.join(' ')) >= 220) break;
-    addPart(sent);
-  }
-
-  /* B – Inject numeric facts if body was thin */
-  if (parts.length < 2) {
-    for (const fact of extractedFacts) {
-      if (wordCount(parts.join(' ')) >= 220) break;
-      addPart(fact);
+  /* ── STEP 3: Fallback if still empty ── */
+  if (!descText || descText.length < 40) {
+    const extractedFacts = extractKeyFacts(rawTitle, cleanedBody);
+    if (extractedFacts.length) {
+      descText = extractedFacts.join(' ');
+    } else {
+      descText = topic
+        ? (DESC_CONTEXT[topic] + ' ' + DESC_IMPACT[topic])
+        : DESC_GENERIC_CONTEXT[Math.floor(Math.random() * DESC_GENERIC_CONTEXT.length)];
     }
   }
 
-  /* C – Fallback to topic context bank only if nothing was extracted */
-  if (parts.length === 0) {
-    const ctx = topic
-      ? DESC_CONTEXT[topic]
-      : DESC_GENERIC_CONTEXT[Math.floor(Math.random() * DESC_GENERIC_CONTEXT.length)];
-    addPart(ctx);
-  }
-
-  /* D – Add impact sentence if still short */
-  if (wordCount(parts.join(' ')) < 80) {
-    const impact = topic
-      ? DESC_IMPACT[topic]
-      : DESC_GENERIC_IMPACT[Math.floor(Math.random() * DESC_GENERIC_IMPACT.length)];
-    addPart(impact);
-  }
-
-  /* ── STEP 5: Final consecutive-duplicate guard ── */
-  const final = parts.length ? [parts[0]] : [];
-  for (let i = 1; i < parts.length; i++) {
-    const prevW = new Set(final[final.length - 1].replace(/[।,.!?]/g, '').split(/\s+/).filter(w => w.length > 3));
-    const currW = parts[i].replace(/[।,.!?]/g, '').split(/\s+/).filter(w => w.length > 3);
-    if (currW.filter(w => prevW.has(w)).length / Math.max(currW.length, 1) < 0.55) {
-      final.push(parts[i]);
-    }
-  }
-
-  /* ── STEP 6: Trim to 150-250 words — full, readable, informative ── */
-  return trimToWordTarget(final.join(' '), 150, 250);
+  /* ── STEP 4: Trim to max 300 words — keep as much as possible, cut at sentence boundary ── */
+  return trimToWordTarget(descText.trim(), 80, 300);
 }
 
 /** Count words in a string (Nepali-aware: split on whitespace) */
@@ -3201,18 +3171,90 @@ const TOPIC_HASHTAGS = {
   tourism    : ['#पर्यटन', '#Tourism', '#VisitNepal'],
 };
 
-function buildHashtags(title) {
-  const lower = title.toLowerCase();
-  let extra = [];
-  for (const [key, tags] of Object.entries(TOPIC_HASHTAGS)) {
-    if (lower.includes(key)) extra = extra.concat(tags);
+/**
+ * Build dynamic hashtags from the actual article content.
+ * Priority:
+ *  1. Named entity tags — proper nouns extracted from title + body
+ *  2. Topic-specific tags — matched from TOPIC_HASHTAGS
+ *  3. Location tags — districts, cities, provinces found in text
+ *  4. Base Nepal tags — fill remaining slots
+ *  Always ends with #ShashiNewsGen
+ */
+function buildHashtags(title, articleBody = '') {
+  const combined = (title + ' ' + articleBody).slice(0, 1200);
+  const lower    = combined.toLowerCase();
+  const tags     = new Set();
+
+  /* ── 1. NAMED ENTITY extraction from title + body ── */
+
+  /* People — capitalized English names (2+ words) or Nepali name-like patterns */
+  const engNames = combined.match(/\b([A-Z][a-z]{2,})\s+([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?)\b/g) || [];
+  engNames.slice(0, 3).forEach(name => {
+    const tag = '#' + name.replace(/\s+/g, '');
+    if (tag.length > 4 && tag.length < 30) tags.add(tag);
+  });
+
+  /* Nepali named words — 3+ Devanagari chars that are title-case in the title portion */
+  const nepTitle = title.replace(/\s+/g, ' ').trim();
+  const nepWords = nepTitle.match(/[\u0900-\u097F]{3,}/g) || [];
+  /* Key content words from title (skip filler words) */
+  const nepaliFiller = new Set(['भएको','गरेको','गर्ने','छ।','हुने','गरी','बाट','लाई','मा','को','र','पनि','भए','भन्ने','गर्दा','गएको','आएको','रहेको','सम्म']);
+  nepWords
+    .filter(w => w.length >= 4 && !nepaliFiller.has(w))
+    .slice(0, 4)
+    .forEach(w => tags.add('#' + w));
+
+  /* ── 2. LOCATION extraction — Nepali districts, cities, provinces ── */
+  const LOCATIONS = [
+    ['काठमाडौं','#काठमाडौं'],['ललितपुर','#ललितपुर'],['भक्तपुर','#भक्तपुर'],
+    ['पोखरा','#पोखरा'],['चितवन','#चितवन'],['बुटवल','#बुटवल'],
+    ['बिराटनगर','#बिराटनगर'],['धरान','#धरान'],['जनकपुर','#जनकपुर'],
+    ['नेपालगन्ज','#नेपालगन्ज'],['सुर्खेत','#सुर्खेत'],['दाङ','#दाङ'],
+    ['कास्की','#कास्की'],['मकवानपुर','#मकवानपुर'],['रुपन्देही','#रुपन्देही'],
+    ['सिन्धुपाल्चोक','#सिन्धुपाल्चोक'],['गण्डकी','#गण्डकी'],['लुम्बिनी','#लुम्बिनी'],
+    ['कर्णाली','#कर्णाली'],['सुदूरपश्चिम','#सुदूरपश्चिम'],['बागमती','#बागमती'],
+    ['Kathmandu','#Kathmandu'],['Pokhara','#Pokhara'],['Chitwan','#Chitwan'],
+    ['Butwal','#Butwal'],['Biratnagar','#Biratnagar'],['Janakpur','#Janakpur'],
+    /* India/International if mentioned */
+    ['भारत','#भारत'],['India','#India'],['Delhi','#Delhi'],['China','#China'],
+    ['चीन','#चीन'],['अमेरिका','#America'],['US ','#USA'],
+  ];
+  LOCATIONS.forEach(([kw, tag]) => {
+    if (combined.includes(kw)) tags.add(tag);
+  });
+
+  /* ── 3. ORGANIZATION extraction ── */
+  const ORGS = [
+    ['सरकार','#नेपालसरकार'],['प्रहरी','#नेपालप्रहरी'],['सेना','#नेपालीसेना'],
+    ['अदालत','#सर्वोच्चअदालत'],['संसद','#संसद'],['राष्ट्रपति','#राष्ट्रपति'],
+    ['प्रधानमन्त्री','#प्रधानमन्त्री'],['मन्त्री','#मन्त्रिपरिषद'],
+    ['आयोग','#आयोग'],['विश्वविद्यालय','#विश्वविद्यालय'],
+    ['राष्ट्र बैंक','#राष्ट्रबैंक'],['बैंक','#NepalBanking'],
+    ['Police','#NepalPolice'],['Government','#NepalGovt'],['Army','#NepalArmy'],
+    ['Court','#SupremeCourt'],['Parliament','#NepalParliament'],
+  ];
+  ORGS.forEach(([kw, tag]) => {
+    if (combined.includes(kw) && tags.size < 8) tags.add(tag);
+  });
+
+  /* ── 4. TOPIC-SPECIFIC tags ── */
+  for (const [key, topicTags] of Object.entries(TOPIC_HASHTAGS)) {
+    if (lower.includes(key) && tags.size < 9) {
+      topicTags.slice(0, 2).forEach(t => tags.add(t));
+    }
   }
-  const topicPick = [...new Set(extra)].slice(0, 4);
-  const basePick  = NEPAL_HASHTAGS.filter(h => !topicPick.includes(h)).slice(0, 6);
-  const chosen    = [...topicPick, ...basePick];
-  if (chosen.length < 4) chosen.push('#NepalNews', '#BreakingNews', '#Nepal', '#नेपाल');
-  /* Always end with brand tag */
-  const filtered = chosen.filter(h => h.toLowerCase() !== '#shashinewsgen').slice(0, 10);
+
+  /* ── 5. Fill remaining slots with base Nepal tags ── */
+  for (const baseTag of NEPAL_HASHTAGS) {
+    if (tags.size >= 10) break;
+    tags.add(baseTag);
+  }
+
+  /* ── 6. Always end with brand tag ── */
+  const filtered = [...tags]
+    .filter(h => h.toLowerCase() !== '#shashinewsgen')
+    .slice(0, 10);
+
   return [...filtered, '#ShashiNewsGen'];
 }
 
@@ -3340,7 +3382,7 @@ Example format: ["#RealTag1","#वास्तविकट्याग2","#Speci
     }
     if (!newTags || newTags.length < 3) {
       /* Fallback: keyword method */
-      newTags = buildHashtags((selectedArticle?.title || '') + ' ' + (generatedPost?.title || ''));
+      newTags = buildHashtags((selectedArticle?.title || '') + ' ' + (generatedPost?.title || ''), selectedArticle?.fullArticleText || selectedArticle?.description || '');
     }
     renderHashtags(newTags);
     toast('✅ Hashtags regenerated!', 'success', 2000);
@@ -3908,8 +3950,56 @@ function _defaultSpritePos(i, img) {
 }
 
 /**
+ * Client-side background removal using canvas pixel manipulation.
+ * Samples the corner pixels to detect the dominant background colour,
+ * then makes pixels within tolerance fully transparent (flood-like).
+ * Works well for solid/light/white backgrounds — portraits, logos, cutouts.
+ * Returns a data-URL (PNG with alpha transparency).
+ */
+async function _localRemoveBackground(dataUrl, tolerance = 38) {
+  const img = await loadImageFromSrc(dataUrl, 10000);
+  const oc  = document.createElement('canvas');
+  oc.width  = img.naturalWidth  || img.width;
+  oc.height = img.naturalHeight || img.height;
+  const octx = oc.getContext('2d');
+  octx.drawImage(img, 0, 0);
+  const { width: W, height: H } = oc;
+  const imgData = octx.getImageData(0, 0, W, H);
+  const d = imgData.data;
+
+  /* Sample the 4 corner regions (5×5 px each) to get background colour */
+  const corners = [
+    [0,0],[W-5,0],[0,H-5],[W-5,H-5],
+  ];
+  let rSum=0, gSum=0, bSum=0, cnt=0;
+  corners.forEach(([cx,cy]) => {
+    for (let py=cy; py<cy+5 && py<H; py++) {
+      for (let px=cx; px<cx+5 && px<W; px++) {
+        const i = (py*W + px) * 4;
+        rSum+=d[i]; gSum+=d[i+1]; bSum+=d[i+2]; cnt++;
+      }
+    }
+  });
+  const bgR = rSum/cnt, bgG = gSum/cnt, bgB = bSum/cnt;
+
+  /* Make pixels close to background colour fully transparent */
+  for (let i=0; i<d.length; i+=4) {
+    const dr = d[i]-bgR, dg = d[i+1]-bgG, db = d[i+2]-bgB;
+    const dist = Math.sqrt(dr*dr + dg*dg + db*db);
+    if (dist < tolerance) {
+      d[i+3] = 0;  /* fully transparent */
+    } else if (dist < tolerance * 1.6) {
+      /* Semi-transparent feathering at edges */
+      d[i+3] = Math.round(255 * (dist - tolerance) / (tolerance * 0.6));
+    }
+  }
+  octx.putImageData(imgData, 0, 0);
+  return oc.toDataURL('image/png');
+}
+
+/**
  * Apply Composite:
- *  1. BG-remove any new sprites
+ *  1. BG-remove any new sprites (Remove.bg API if key available, else canvas-based local removal)
  *  2. Load Image objects
  *  3. Assign default positions for new sprites
  *  4. Redraw
@@ -3923,12 +4013,18 @@ async function applyComposite() {
   try {
     for (const sp of _sideSprites) {
       if (!sp.subjectDataUrl) {
-        toast(`🎨 Removing background for image ${sp.id}…`, 'info', 4000);
-        try {
-          sp.subjectDataUrl = await removeBackground(sp.rawDataUrl);
-        } catch {
-          toast('⚠️ BG removal failed — using original', 'error', 3000);
-          sp.subjectDataUrl = sp.rawDataUrl;
+        const hasRemovebg = _removebgKey || _browserRemovebgKey;
+        if (hasRemovebg) {
+          toast(`🎨 Removing background (Remove.bg) for image ${sp.id}…`, 'info', 4000);
+          try {
+            sp.subjectDataUrl = await removeBackground(sp.rawDataUrl);
+          } catch {
+            toast('⚠️ Remove.bg failed — using smart local removal', 'info', 2500);
+            sp.subjectDataUrl = await _localRemoveBackground(sp.rawDataUrl);
+          }
+        } else {
+          toast(`🎨 Auto-removing background for image ${sp.id}…`, 'info', 3000);
+          sp.subjectDataUrl = await _localRemoveBackground(sp.rawDataUrl);
         }
       }
       if (!sp.img) {
