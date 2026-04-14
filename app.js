@@ -2115,6 +2115,15 @@ async function selectArticle(idx) {
   _renderExtraTextList();
   resetImgAdjust(/* silent */ true);
 
+  /* Disable Share All buttons until new image is generated */
+  ['shareAllBtn', 'shareAllBtn2'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = true;
+    btn.style.opacity = '.45';
+    btn.style.cursor  = 'not-allowed';
+  });
+
   /* Show panel immediately */
   document.getElementById('contentWelcome').style.display = 'none';
   document.getElementById('contentOutput').style.display  = 'block';
@@ -2194,6 +2203,9 @@ async function selectArticle(idx) {
   if (aiUsed) {
     toast(`🤖 ${prov} AI ले मूल लेख पढेर मौलिक सामग्री तयार गर्‍यो!`, 'success', 3500);
   }
+
+  /* ── Auto-generate image now that post is ready — user can regenerate/edit afterwards ── */
+  generateImage();
 }
 
 /* ================================================================
@@ -3133,7 +3145,7 @@ function extractBestSentences(text, nepaliTitle, rawTitle, isNepali, maxSents) {
   });
 
   /* Take only the TOP 3 highest-scoring sentences (key highlights only) */
-  const MAX = Math.min(maxSents, 3);
+  const MAX = Math.min(maxSents, 5);
   scored.sort((a, b) => b.score - a.score);
   const top = scored.slice(0, MAX);
 
@@ -4928,6 +4940,15 @@ async function generateImage() {
   if (_compositeMode && _sideSprites.length > 0) {
     redrawComposite();   // async, but non-blocking — updates canvas after centre is drawn
   }
+
+  /* Enable "Share All" buttons now that the image is ready */
+  ['shareAllBtn', 'shareAllBtn2'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor  = 'pointer';
+  });
 
   toast(newsImg ? '🖼️ Image generated!' : '🎨 Image generated (no photo)', newsImg ? 'success' : 'info');
 }
