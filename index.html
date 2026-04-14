@@ -231,19 +231,21 @@
       <div id="compositeBar" style="padding:10px 18px;border-bottom:1px solid var(--border);background:rgba(139,92,246,.05)">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
           <span style="font-size:.75rem;font-weight:700;color:#a78bfa;letter-spacing:.4px;text-transform:uppercase">🖼️ Multi-Image Composite</span>
-          <span style="font-size:.7rem;color:var(--muted)">Upload side images — toggle BG removal per image, then Apply</span>
+          <span style="font-size:.7rem;color:var(--muted)">Upload side images — rotate/flip each, optionally remove BG, then Apply</span>
         </div>
         <!-- Dynamic thumbnail list — each card shows thumb + per-sprite controls -->
         <div id="sideImageList" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;min-height:0"></div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <!-- + Add Image button -->
           <label style="cursor:pointer">
             <input type="file" id="sideImgInput" accept="image/*" style="display:none" onchange="addSideImage(event)">
             <span class="btn btn-ghost" style="font-size:.75rem;padding:6px 14px;border-color:rgba(167,139,250,.4);color:#a78bfa">＋ Add Image</span>
           </label>
+          <!-- Remove BG — separate from Apply -->
+          <button id="compositeBgBtn" class="btn btn-ghost" style="display:none;font-size:.75rem;padding:6px 14px;border-color:rgba(251,191,36,.45);color:#fbbf24" onclick="removeBgAllSprites()">🚫 Remove BG</button>
           <button id="compositeApplyBtn" class="btn" style="display:none;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-size:.8rem;padding:7px 16px;box-shadow:0 3px 12px rgba(139,92,246,.45)" onclick="applyComposite()">✨ Apply Composite</button>
           <button id="compositeClearBtn" class="btn btn-ghost" style="display:none;font-size:.72rem;padding:5px 12px" onclick="clearAllComposite()">↺ Clear All</button>
-          <span style="font-size:.67rem;color:var(--muted);flex:1;min-width:130px">Each card: toggle BG removal · rotate · flip · remove · then drag/resize/rotate on canvas after Apply</span>
+          <span style="font-size:.67rem;color:var(--muted);flex:1;min-width:130px">Rotate/flip each card · Remove BG (optional) · Apply to place · drag/resize/rotate on canvas</span>
         </div>
       </div>
 
@@ -647,6 +649,6 @@
   </div>
 </div>
 
-<script src="app.js?v=20260414k"></script>
+<script src="app.js?v=20260414l"></script>
 </body>
 </html>

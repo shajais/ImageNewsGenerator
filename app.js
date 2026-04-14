@@ -3953,17 +3953,13 @@ function _renderSideImageList() {
     item.className = 'side-img-item';
     item.dataset.id = sp.id;
 
-    /* Preview thumb — show subject (BG removed) if available, else raw */
+    /* Preview thumb — show BG-removed version if available, else raw */
     const thumbSrc = sp.subjectDataUrl || sp.rawDataUrl;
-    const bgBtnClass = sp.removeBg ? 'bg-on' : 'bg-off';
-    const bgBtnLabel = sp.removeBg ? '🚫 BG: On' : '🖼️ BG: Off';
-    const bgBtnTitle = sp.removeBg ? 'Background removal ON — click to turn off' : 'Background removal OFF — click to turn on';
 
     item.innerHTML = `
       <button class="btn btn-ghost side-img-remove" onclick="removeSideSprite(${sp.id})" title="Remove image">✕</button>
       <img src="${thumbSrc}" class="side-img-thumb" alt="" title="Click Apply to place on canvas">
       <div class="side-img-actions">
-        <button class="side-img-bg-btn ${bgBtnClass}" onclick="toggleSpriteBg(${sp.id})" title="${bgBtnTitle}">${bgBtnLabel}</button>
         <button class="side-img-action-btn" onclick="rotateSpritePreview(${sp.id}, -90)" title="Rotate 90° left">↺</button>
         <button class="side-img-action-btn" onclick="rotateSpritePreview(${sp.id}, 90)" title="Rotate 90° right">↻</button>
         <button class="side-img-action-btn" onclick="flipSpritePreview(${sp.id})" title="Flip horizontal">⇆</button>
@@ -3971,23 +3967,13 @@ function _renderSideImageList() {
     list.appendChild(item);
   });
 
-  /* Show/hide apply+clear buttons */
+  /* Show/hide apply+clear+bg buttons */
   const applyBtn = document.getElementById('compositeApplyBtn');
   const clearBtn = document.getElementById('compositeClearBtn');
+  const bgBtn    = document.getElementById('compositeBgBtn');
   if (applyBtn) applyBtn.style.display = _sideSprites.length ? 'inline-flex' : 'none';
   if (clearBtn) clearBtn.style.display = _sideSprites.length ? 'inline-flex' : 'none';
-}
-
-/** Toggle background removal on/off for a specific sprite */
-function toggleSpriteBg(id) {
-  const sp = _sideSprites.find(s => s.id === id);
-  if (!sp) return;
-  sp.removeBg = !sp.removeBg;
-  /* Invalidate cached subject so applyComposite re-processes it */
-  sp.subjectDataUrl = null;
-  sp.img = null;
-  _renderSideImageList();
-  toast(sp.removeBg ? '🚫 BG removal ON for this image' : '🖼️ BG removal OFF for this image', 'info', 1800);
+  if (bgBtn)    bgBtn.style.display    = _sideSprites.length ? 'inline-flex' : 'none';
 }
 
 /** Rotate a sprite's base image pre-composite (baked into rawDataUrl) */
@@ -4104,42 +4090,23 @@ async function _localRemoveBackground(dataUrl, tolerance = 38) {
 
 /**
  * Apply Composite:
- *  1. BG-remove any new sprites (Remove.bg API if key available, else canvas-based local removal)
- *  2. Load Image objects
- *  3. Assign default positions for new sprites
- *  4. Redraw
+ *  1. Load Image objects for each sprite (using subjectDataUrl if BG was removed, else rawDataUrl)
+ *  2. Assign default positions for new sprites
+ *  3. Redraw
+ *  Note: background removal is handled separately by removeBgAllSprites()
  */
 async function applyComposite() {
   if (_sideSprites.length === 0) {
     toast('⚠️ Upload at least one side image first.', 'error'); return;
   }
   const applyBtn = document.getElementById('compositeApplyBtn');
-  if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = '⏳ Processing…'; }
+  if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = '⏳ Applying…'; }
   try {
     for (const sp of _sideSprites) {
-      if (!sp.subjectDataUrl) {
-        if (sp.removeBg) {
-          /* BG removal is ON for this sprite */
-          const hasRemovebg = _removebgKey || _browserRemovebgKey;
-          if (hasRemovebg) {
-            toast(`🎨 Removing background (Remove.bg) for image ${sp.id}…`, 'info', 4000);
-            try {
-              sp.subjectDataUrl = await removeBackground(sp.rawDataUrl);
-            } catch {
-              toast('⚠️ Remove.bg failed — using smart local removal', 'info', 2500);
-              sp.subjectDataUrl = await _localRemoveBackground(sp.rawDataUrl);
-            }
-          } else {
-            toast(`🎨 Auto-removing background for image ${sp.id}…`, 'info', 3000);
-            sp.subjectDataUrl = await _localRemoveBackground(sp.rawDataUrl);
-          }
-        } else {
-          /* BG removal is OFF — use raw image as-is */
-          sp.subjectDataUrl = sp.rawDataUrl;
-        }
-      }
+      /* Use BG-removed version if available, else fall back to raw */
+      const srcUrl = sp.subjectDataUrl || sp.rawDataUrl;
       if (!sp.img) {
-        try { sp.img = await loadImageFromSrc(sp.subjectDataUrl); } catch {}
+        try { sp.img = await loadImageFromSrc(srcUrl); } catch {}
       }
     }
     /* Set default positions for any sprite that doesn't have one yet */
@@ -4150,11 +4117,50 @@ async function applyComposite() {
     _compositeMode = true;
     _showCompositeHandles(true);
     await redrawComposite();
-    /* Refresh thumbnails to show BG-removed previews */
-    _renderSideImageList();
     toast('✅ Composite ready! Drag · resize · rotate side images freely.', 'success');
   } finally {
     if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = '✨ Apply Composite'; }
+  }
+}
+
+/**
+ * Remove background from ALL side sprites (separate from Apply Composite).
+ * Uses Remove.bg API if a key is set, otherwise canvas-based local removal.
+ * After processing, refreshes thumbnails and redraws the composite.
+ */
+async function removeBgAllSprites() {
+  if (_sideSprites.length === 0) {
+    toast('⚠️ Upload at least one side image first.', 'error'); return;
+  }
+  const bgBtn = document.getElementById('compositeBgBtn');
+  if (bgBtn) { bgBtn.disabled = true; bgBtn.textContent = '⏳ Removing BG…'; }
+  try {
+    for (const sp of _sideSprites) {
+      /* Always redo BG removal when user explicitly clicks the button */
+      const hasRemovebg = _removebgKey || _browserRemovebgKey;
+      if (hasRemovebg) {
+        toast(`🎨 Removing background (Remove.bg) for image ${sp.id}…`, 'info', 4000);
+        try {
+          sp.subjectDataUrl = await removeBackground(sp.rawDataUrl);
+        } catch {
+          toast('⚠️ Remove.bg failed — using smart local removal', 'info', 2500);
+          sp.subjectDataUrl = await _localRemoveBackground(sp.rawDataUrl);
+        }
+      } else {
+        toast(`🎨 Auto-removing background for image ${sp.id}…`, 'info', 3000);
+        sp.subjectDataUrl = await _localRemoveBackground(sp.rawDataUrl);
+      }
+      /* Reload the image object with the new BG-removed version */
+      sp.img = null;
+      try { sp.img = await loadImageFromSrc(sp.subjectDataUrl); } catch {}
+    }
+    /* Refresh thumbnails to show BG-removed previews */
+    _renderSideImageList();
+    /* If composite is already active, redraw with the new processed images */
+    if (_compositeMode) await redrawComposite();
+    toast('✅ Backgrounds removed! Click ✨ Apply Composite to place on canvas.', 'success');
+  } finally {
+    if (bgBtn) { bgBtn.disabled = false; bgBtn.textContent = '🚫 Remove BG'; }
   }
 }
 
