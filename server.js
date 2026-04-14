@@ -77,7 +77,7 @@ const MIME = {
 function setCORS(res) {
   res.setHeader('Access-Control-Allow-Origin',  '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Api-Key');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Api-Key, X-Gemini-Key');
 }
 
 /* ── Proxy helper ─────────────────────────────────────── */
@@ -131,6 +131,25 @@ const server = http.createServer((req, res) => {
     }
     const target = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
     console.log('[proxy] Gemini → (key hidden)');
+    proxyRequest(req, res, target);
+    return;
+  }
+
+  /* ── PROXY: /proxy/gemini-withkey → Gemini API using browser-supplied key ──
+     Used when GEMINI_API_KEY is not in .env but user has entered key in the UI.
+     The key is passed in the X-Gemini-Key header from the browser.
+     This avoids the CORS block that occurs when calling Gemini directly. */
+  if (pathname === '/proxy/gemini-withkey') {
+    const browserKey = req.headers['x-gemini-key'] || '';
+    const keyToUse   = GEMINI_API_KEY || browserKey;
+    if (!keyToUse) {
+      setCORS(res);
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'No Gemini API key available' }));
+      return;
+    }
+    const target = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(keyToUse)}`;
+    console.log('[proxy] Gemini (browser key) →');
     proxyRequest(req, res, target);
     return;
   }
@@ -229,7 +248,11 @@ const server = http.createServer((req, res) => {
     }
     const ext  = path.extname(filePath).toLowerCase();
     const mime = MIME[ext] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': mime });
+    /* Prevent caching of JS/HTML/CSS during development */
+    const noCache = ['.js', '.html', '.css'].includes(ext);
+    const headers = { 'Content-Type': mime };
+    if (noCache) headers['Cache-Control'] = 'no-store';
+    res.writeHead(200, headers);
     fs.createReadStream(filePath).pipe(res);
   });
 });

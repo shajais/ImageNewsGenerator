@@ -28,10 +28,12 @@ const GROK_MODEL     = 'grok-3-mini';   // fast & cost-efficient; swap to 'grok-
    When the file is opened directly (file://) direct URLs are used — note
    that file:// origins are blocked by CORS; always use `node server.js`. */
 const _isLocalhost = location.protocol === 'http:' && (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
-const _geminiProxyBase   = _isLocalhost ? '/proxy/gemini'   : null;
-const _removebgProxyBase = _isLocalhost ? '/proxy/removebg' : null;
-const _fetchProxyBase    = _isLocalhost ? '/proxy/fetch'    : null;
-const _grokProxyBase     = _isLocalhost ? '/proxy/grok'     : null;
+/* True only when running via node server.js on port 3000 — the proxy endpoints exist */
+const _isNodeServer = _isLocalhost && (location.port === '3000' || location.port === '');
+const _geminiProxyBase   = _isNodeServer ? '/proxy/gemini'   : null;
+const _removebgProxyBase = _isNodeServer ? '/proxy/removebg' : null;
+const _fetchProxyBase    = _isNodeServer ? '/proxy/fetch'    : null;
+const _grokProxyBase     = _isNodeServer ? '/proxy/grok'     : null;
 
 /* Key availability flags — populated from /api/key-status on load.
    The actual key strings NEVER exist in the browser when using the local proxy.
@@ -1290,9 +1292,9 @@ function _articleMatchesQuery(a, expansions) {
  * API keys live in .env on the server — the browser never sees them.
  */
 async function loadKeyStatus() {
-  if (!_isLocalhost) {
-    /* ── GitHub Pages / direct file mode ──
-       No server proxy available. Use browser-stored keys from localStorage. */
+  if (!_isNodeServer) {
+    /* ── GitHub Pages / Live Server / direct file mode ──
+       No Node.js proxy available. Use browser-stored keys from localStorage. */
     _geminiKey   = !!_browserGeminiKey;
     _removebgKey = !!_browserRemovebgKey;
     _grokKey     = !!_browserGrokKey;
@@ -1358,8 +1360,8 @@ function openAISettings() {
   /* ── Update status text for each card ── */
   _refreshAICardStatuses();
 
-  /* ── Pre-fill inputs from localStorage when on GitHub Pages ── */
-  if (!_isLocalhost) {
+  /* ── Pre-fill inputs from localStorage when not on Node server ── */
+  if (!_isNodeServer) {
     const gEl  = document.getElementById('inputGeminiKey');
     const rbEl = document.getElementById('inputRemovebgKey');
     const grEl = document.getElementById('inputGrokKey');
@@ -1444,9 +1446,9 @@ async function testGeminiKey() {
   _setCardFeedback('gemini', '', '⏳ Testing connection…');
 
   /* If a raw key was typed, test directly against Gemini; otherwise use proxy */
-  const testUrl = (inputVal && !_isLocalhost)
+  const testUrl = (inputVal && !_isNodeServer)
     ? `${GEMINI_API_URL}?key=${encodeURIComponent(inputVal)}`
-    : (_geminiProxyBase || GEMINI_API_URL);
+    : (_geminiProxyBase || `${GEMINI_API_URL}?key=${encodeURIComponent(inputVal || _browserGeminiKey)}`);
 
   try {
     const res = await fetch(testUrl, {
@@ -1491,7 +1493,7 @@ async function testGrokKey() {
   _setCardFeedback('grok', '', '⏳ Testing connection…');
 
   const testUrl  = _grokProxyBase || GROK_API_URL;
-  const extraHdr = (inputVal && !_isLocalhost) ? { 'Authorization': `Bearer ${inputVal}` } : {};
+  const extraHdr = (inputVal && !_isNodeServer) ? { 'Authorization': `Bearer ${inputVal}` } : {};
   try {
     const res = await fetch(testUrl, {
       method: 'POST',
@@ -1535,14 +1537,14 @@ async function testRemovebgKey() {
   if (btn) { btn.textContent = '⏳…'; btn.disabled = true; }
   _setCardFeedback('removebg', '', '⏳ Testing connection…');
 
-  const accountUrl = _isLocalhost
+  const accountUrl = _isNodeServer
     ? '/proxy/removebg-account'
     : 'https://api.remove.bg/v1.0/account';
 
   try {
     const headers = {};
     const key = inputVal || _browserRemovebgKey;
-    if (!_isLocalhost && key) headers['X-Api-Key'] = key;
+    if (!_isNodeServer && key) headers['X-Api-Key'] = key;
     const res = await fetch(accountUrl, { headers });
 
     if (res.ok || res.status === 200) {
@@ -1595,8 +1597,8 @@ async function saveCardKey(service) {
   const origLabel = saveBtn?.textContent || '💾 Save';
   if (saveBtn) { saveBtn.textContent = '⏳…'; saveBtn.disabled = true; }
 
-  if (_isLocalhost) {
-    /* ── Localhost: write key to .env via server endpoint ── */
+  if (_isNodeServer) {
+    /* ── Node server (port 3000): write key to .env via server endpoint ── */
     try {
       const res = await fetch('/api/save-key', {
         method: 'POST',
@@ -1605,6 +1607,11 @@ async function saveCardKey(service) {
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || 'Server error');
+
+      /* Also cache in localStorage as fallback for direct-API calls */
+      if (service === 'gemini')   { localStorage.setItem(_LS_GEMINI,   value); _browserGeminiKey   = value; }
+      if (service === 'grok')     { localStorage.setItem(_LS_GROK,     value); _browserGrokKey     = value; }
+      if (service === 'removebg') { localStorage.setItem(_LS_REMOVEBG, value); _browserRemovebgKey = value; }
 
       /* Re-fetch key-status so flags (_geminiKey etc.) are updated */
       await _reloadKeyStatus();
@@ -1707,8 +1714,8 @@ function _syncProviderUI() {
  * On localhost this is a no-op — keys come from .env via the server proxy.
  */
 function saveBrowserKeys() {
-  if (_isLocalhost) {
-    toast('ℹ️ Running locally — keys are managed via .env on the server.', 'info', 4000);
+  if (_isNodeServer) {
+    toast('ℹ️ Running via Node server — keys are managed via .env on the server.', 'info', 4000);
     return;
   }
   const g  = (document.getElementById('inputGeminiKey')  ?.value || '').trim();
@@ -1751,82 +1758,78 @@ function clearBrowserKeys() {
  * @param {number} timeoutMs
  */
 async function callGemini(prompt, timeoutMs = 18000) {
-  if (!_geminiKey) throw new Error('NO_KEY: Gemini API key not configured on server');
-  const ctrl = new AbortController();
-  const tid  = setTimeout(() => ctrl.abort(), timeoutMs);
+  const effectiveKey = _browserGeminiKey || (_geminiKey ? '__server__' : '');
+  if (!effectiveKey) throw new Error('NO_KEY: Gemini API key not configured');
 
-  /* On localhost: route through proxy (key injected server-side, never exposed).
-     On GitHub Pages: call the API directly with the browser-stored key. */
-  const fetchUrl = _geminiProxyBase
-    ? `${_geminiProxyBase}`
-    : `${GEMINI_API_URL}?key=${encodeURIComponent(_browserGeminiKey)}`;
-
-  try {
-    const res = await fetch(fetchUrl, {
-      method: 'POST',
-      signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.85,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 1024,
-        },
-      }),
-    });
-    clearTimeout(tid);
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      const msg = errData?.error?.message || res.statusText || res.status;
-      console.error('[Gemini] HTTP error:', res.status, msg);
-      throw new Error(`HTTP_${res.status}: ${msg}`);
-    }
-    const data = await res.json();
-    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    if (!raw) {
-      console.error('[Gemini] empty response:', JSON.stringify(data).slice(0, 300));
-      throw new Error('EMPTY_RESPONSE: Gemini returned no text');
-    }
-
-    console.log('[Gemini] raw response (first 400 chars):', raw.slice(0, 400));
-
-    /* ── Extract JSON from the raw text using multiple strategies ──
-       Try each strategy in order; return as soon as one parses cleanly.
-    */
-
-    // Strategy 1: Raw text IS already valid JSON
-    try { return JSON.parse(raw.trim()); } catch (_) {}
-
-    // Strategy 2: Strip ```json ... ``` code fence
-    const fenced = raw.match(/```json\s*([\s\S]*?)```/i);
-    if (fenced) {
-      try { return JSON.parse(fenced[1].trim()); } catch (_) {}
-    }
-
-    // Strategy 3: Strip any ``` ... ``` code fence
-    const anyFence = raw.match(/```\s*([\s\S]*?)```/i);
-    if (anyFence) {
-      try { return JSON.parse(anyFence[1].trim()); } catch (_) {}
-    }
-
-    // Strategy 4: Find the last { ... } block (greedy — handles nested objects)
-    const firstBrace = raw.indexOf('{');
-    const lastBrace  = raw.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      const block = raw.slice(firstBrace, lastBrace + 1);
-      try { return JSON.parse(block); } catch (_) {}
-    }
-
-    console.error('[Gemini] could not extract JSON. Full raw:', raw);
-    throw new Error('NO_JSON: Could not extract JSON from Gemini response');
-  } catch (e) {
-    clearTimeout(tid);
-    const msg = e.name === 'AbortError' ? 'TIMEOUT: Request timed out' : e.message;
-    console.error('[Gemini] threw:', msg);
-    throw new Error(msg);
+  /* Build the list of URLs to try in order:
+     1. Server proxy with .env key (most secure — key never leaves server)
+     2. Server proxy with browser key via X-Gemini-Key header (fixes CORS on localhost)
+     3. Direct API call (only works on GitHub Pages / non-localhost origins) */
+  const urlsToTry = [];
+  if (_geminiProxyBase && _geminiKey) {
+    urlsToTry.push({ url: _geminiProxyBase, label: 'proxy(.env key)', headers: {} });
   }
+  if (_isNodeServer && _browserGeminiKey) {
+    urlsToTry.push({ url: '/proxy/gemini-withkey', label: 'proxy(browser key)', headers: { 'X-Gemini-Key': _browserGeminiKey } });
+  }
+  if (!_isNodeServer && _browserGeminiKey) {
+    urlsToTry.push({ url: `${GEMINI_API_URL}?key=${encodeURIComponent(_browserGeminiKey)}`, label: 'direct', headers: {} });
+  }
+  if (!urlsToTry.length) throw new Error('NO_KEY: No usable Gemini endpoint');
+
+  const body = JSON.stringify({
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.85, topK: 40, topP: 0.95, maxOutputTokens: 2048 },
+  });
+
+  for (const endpoint of urlsToTry) {
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      console.log(`[Gemini] trying ${endpoint.label}…`);
+      const res = await fetch(endpoint.url, {
+        method: 'POST', signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json', ...endpoint.headers },
+        body,
+      });
+      clearTimeout(tid);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const msg = errData?.error?.message || res.statusText || res.status;
+        console.warn(`[Gemini] ${endpoint.label} HTTP ${res.status}:`, msg);
+        continue; // try next endpoint
+      }
+      const data = await res.json();
+      const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (!raw) { console.warn('[Gemini] empty response from', endpoint.label); continue; }
+
+      console.log('[Gemini] raw response (first 400 chars):', raw.slice(0, 400));
+
+      // Strategy 1: Raw text IS already valid JSON
+      try { return JSON.parse(raw.trim()); } catch (_) {}
+      // Strategy 2: Strip ```json ... ``` code fence
+      const fenced = raw.match(/```json\s*([\s\S]*?)```/i);
+      if (fenced) { try { return JSON.parse(fenced[1].trim()); } catch (_) {} }
+      // Strategy 3: Strip any ``` ... ``` code fence
+      const anyFence = raw.match(/```\s*([\s\S]*?)```/i);
+      if (anyFence) { try { return JSON.parse(anyFence[1].trim()); } catch (_) {} }
+      // Strategy 4: Find the last { ... } block
+      const firstBrace = raw.indexOf('{');
+      const lastBrace  = raw.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        try { return JSON.parse(raw.slice(firstBrace, lastBrace + 1)); } catch (_) {}
+      }
+      console.error('[Gemini] could not extract JSON. Full raw:', raw);
+      throw new Error('NO_JSON: Could not extract JSON from Gemini response');
+    } catch (e) {
+      clearTimeout(tid);
+      if (e.name === 'AbortError') { console.warn('[Gemini] timeout on', endpoint.label); continue; }
+      if (e.message.startsWith('NO_JSON')) throw e; // don't retry parse failures
+      console.warn('[Gemini] error on', endpoint.label, ':', e.message);
+      // continue to next endpoint
+    }
+  }
+  throw new Error('GEMINI_FAILED: All endpoints failed');
 }
 
 /**
@@ -1919,12 +1922,15 @@ async function callGrok(prompt, timeoutMs = 20000) {
  * @param {number} timeoutMs
  */
 async function callAI(prompt, timeoutMs = 22000) {
+  const hasGrok   = _grokKey   || _browserGrokKey;
+  const hasGemini = _geminiKey || _browserGeminiKey;
+  console.log('[AI DEBUG] callAI → hasGrok:', hasGrok, '| hasGemini:', hasGemini, '| provider:', _aiProvider);
   /* Primary: use whichever provider the user has selected */
-  if (_aiProvider === 'grok' && _grokKey)     return callGrok(prompt, timeoutMs);
-  if (_aiProvider === 'gemini' && _geminiKey) return callGemini(prompt, timeoutMs);
+  if (_aiProvider === 'grok'   && hasGrok)   return callGrok(prompt, timeoutMs);
+  if (_aiProvider === 'gemini' && hasGemini) return callGemini(prompt, timeoutMs);
   /* Fallback: try the other provider automatically */
-  if (_grokKey)   return callGrok(prompt, timeoutMs);
-  if (_geminiKey) return callGemini(prompt, timeoutMs);
+  if (hasGrok)   return callGrok(prompt, timeoutMs);
+  if (hasGemini) return callGemini(prompt, timeoutMs);
   throw new Error('NO_KEY: No AI provider configured — add GEMINI_API_KEY or GROK_API_KEY to .env');
 }
 
@@ -1933,14 +1939,27 @@ async function callAI(prompt, timeoutMs = 22000) {
  * Returns { hook, title, description, hashtags } or null on failure.
  */
 async function rewriteWithAI(rawTitle, articleBody, sourceLang) {
-  if (!_grokKey && !_geminiKey) return null;
+  const hasGemini = _geminiKey || _browserGeminiKey;
+  const hasGrok   = _grokKey   || _browserGrokKey;
+
+  console.log('[AI DEBUG] rewriteWithAI called');
+  console.log('[AI DEBUG] _geminiKey:', _geminiKey, '| _browserGeminiKey:', _browserGeminiKey ? _browserGeminiKey.slice(0,8)+'…' : '(empty)');
+  console.log('[AI DEBUG] _grokKey:', _grokKey, '| _browserGrokKey:', _browserGrokKey ? _browserGrokKey.slice(0,8)+'…' : '(empty)');
+  console.log('[AI DEBUG] hasGemini:', hasGemini, '| hasGrok:', hasGrok);
+  console.log('[AI DEBUG] _aiProvider:', _aiProvider);
+  console.log('[AI DEBUG] _isNodeServer:', _isNodeServer, '| _geminiProxyBase:', _geminiProxyBase);
+
+  if (!hasGemini && !hasGrok) {
+    console.warn('[AI DEBUG] No keys found — returning null immediately');
+    return null;
+  }
 
   /* Give AI the richest possible context — up to 3000 chars of actual article body */
   const bodySnippet = (articleBody || '').replace(/\s+/g, ' ').slice(0, 3000).trim();
   const langNote = sourceLang === 'ne' ? 'Nepali' : sourceLang === 'hi' ? 'Hindi' : 'English';
   const hasBody = bodySnippet.length > 100;
 
-  const prompt = `You are an expert Nepali news journalist and viral social media editor.
+  const prompt = `You are an expert Nepali news journalist and viral social media content strategist with deep knowledge of what goes viral on Facebook, Instagram and X (Twitter) in Nepal.
 
 READ THIS NEWS ARTICLE CAREFULLY:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1948,8 +1967,8 @@ HEADLINE (${langNote}): ${rawTitle}
 ${hasBody ? `FULL ARTICLE BODY:\n${bodySnippet}` : '(No article body available — work from headline only)'}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Your job: After reading the article above, write compelling Nepali social media content.
-CRITICAL: Every output field MUST be based on the ACTUAL specific details in this article.
+Your job: Write viral Nepali social media content that will get MAXIMUM shares, comments and reach.
+CRITICAL: Every output field MUST be based on ACTUAL specific details in this article.
 - Use the REAL names of people, places, organisations mentioned
 - Use the REAL numbers (deaths, injuries, amounts, dates) from the article
 - Use the REAL event/action described — do NOT invent or guess details
@@ -1958,55 +1977,74 @@ CRITICAL: Every output field MUST be based on the ACTUAL specific details in thi
 
 {
   "hook": "<ONE punchy viral opening line in Nepali Devanagari>",
-  "title": "<Sharp news headline in Nepali Devanagari>",
-  "description": "<3-4 sentence factual news paragraph in Nepali Devanagari>",
-  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5", "#tag6", "#tag7", "#tag8"]
+  "title": "<Detailed news headline in Nepali Devanagari — around 35-40 words>",
+  "description": "<Compelling news story in Nepali Devanagari — 100 to 200 words across 4-6 sentences>",
+  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5", "#tag6", "#tag7", "#tag8", "#tag9", "#tag10", "#ShashiNewsGen"]
 }
 
 ━━━ RULES FOR EACH FIELD ━━━
 
-HOOK (max 18 words in Nepali):
-• Start with ONE emoji matching the news mood (🔥 anger/controversy, 😱 shock, 💔 tragedy, ⚡ breaking, 🏆 victory, 💰 money/economy, 🚨 urgent, 🗳️ politics/election)
-• Must mention the SPECIFIC subject of THIS news (a real name, place, or event from the article)
-• Make it feel urgent and personal — WHY should a Nepali reader care RIGHT NOW?
+HOOK (max 20 words in Nepali):
+• Start with ONE emoji matching the news mood (🔥 anger/controversy, 😱 shock, 💔 tragedy, ⚡ breaking, 🏆 victory, 💰 money/economy, 🚨 urgent, 🗳️ politics/election, 🌊 disaster, 🏥 health)
+• Mention the SPECIFIC subject of THIS news (a real name, place, or event from the article)
+• Make it feel urgent and emotionally compelling — trigger curiosity, outrage, empathy or pride
+• Use conversational Nepali that a common person would immediately react to and share
 • NEVER write generic phrases like "नेपालमा ठूलो घटना" or "महत्त्वपूर्ण समाचार"
 
-TITLE (max 30 words in Nepali):
-• Must contain the KEY fact: WHO did WHAT (or WHAT happened WHERE)
-• Include the most important name or number from the story
-• SEO-friendly — reads like a newspaper front page headline
-• NEVER start with "नेपालमा" unless the story is specifically about Nepal as a country
+TITLE (35-40 words in Nepali):
+• Write a detailed, informative headline — NOT just a short teaser
+• Must contain: WHO, WHAT happened, WHERE, and the most important number or consequence
+• Include specific real names, places, and key facts from the article
+• Should read like a detailed newspaper front page headline that tells the full story
+• SEO-optimised — naturally include keywords people would search for
 
-DESCRIPTION (60-90 Nepali words total, 3-4 sentences):
-• Sentence 1: State exactly WHAT happened, WHO was involved, WHERE/WHEN (use real names from article)
-• Sentence 2: WHY it happened or KEY details/numbers (death toll, amount, cause)
-• Sentence 3: Reaction, impact, or consequence (who responded, what changed)
-• Sentence 4: Current status or what happens next
+DESCRIPTION (100-200 Nepali words, 4-6 sentences):
+• Sentence 1: State exactly WHAT happened, WHO was involved, WHERE and WHEN (use real names)
+• Sentence 2: HOW it happened and WHY — key cause or background
+• Sentence 3: KEY numbers — death toll, injury count, money amount, vote count, etc.
+• Sentence 4: Who responded? Government, public, experts — what was their reaction?
+• Sentence 5: What is the IMPACT on common Nepali people or the wider situation?
+• Sentence 6 (optional): Current status or what happens next — investigation, legal action, relief efforts
 • Write in formal Nepali journalism style (like Kantipur or Onlinekhabar)
+• Make it feel URGENT and HUMAN — people should feel connected to the story
 • NEVER use vague fillers like "सम्बन्धित निकायले जानकारी दिएको छ"
 
-HASHTAGS (exactly 8):
-• 3-4 must be STORY-SPECIFIC: the real name, place, or event keyword from THIS article
-• Mix: ~4 in Nepali Devanagari, ~4 in English
-• Include relevant trending Nepali news hashtags like #NepalPolitics, #नेपाल_राजनीति, #BreakingNepal etc. ONLY if relevant
-• NO generic tags like #Nepal or #नेपाल unless the story is pan-Nepal
-• No spaces within a hashtag
+HASHTAGS (exactly 11 — the last one MUST be #ShashiNewsGen):
+• Tags 1-3: STORY-SPECIFIC in Nepali Devanagari — the real name, place, or event keyword from THIS article (e.g. #काठमाडौं, #प्रधानमन्त्री, #भूकम्प)
+• Tags 4-6: STORY-SPECIFIC in English — transliterated or translated key terms (e.g. #KTMEarthquake, #NepalPolitics2025)
+• Tags 7-9: TRENDING Nepali news hashtags currently popular on social media — choose from relevant ones like #BreakingNepal, #नेपाल_समाचार, #NepalNews, #नेपाल_राजनीति, #Nepal, #नेपाल, #NepalPolitics, #Kathmandu, #काठमाडौं based on topic relevance
+• Tag 10: ONE broad reach tag like #viral, #trending, #news, or #breakingnews
+• Tag 11: MUST be exactly #ShashiNewsGen (our brand tag — always include this)
+• No spaces within any hashtag
+
+VIRAL WRITING TIPS:
+• Use numbers whenever possible (death tolls, amounts, percentages) — numbers stop the scroll
+• Include emotional language that resonates with Nepali people (family, justice, corruption, poverty, patriotism)
+• The description should make the reader feel they MUST share this with family and friends
+• Avoid passive voice — use active, direct language
 
 LANGUAGE: All hook, title, description text MUST be in Nepali Devanagari script.
 OUTPUT: Raw JSON only — no \`\`\`json, no explanation, nothing else.`;
 
   let result;
   try {
+    console.log('[AI DEBUG] calling callAI…');
     result = await callAI(prompt, 30000);
+    console.log('[AI DEBUG] callAI returned:', JSON.stringify(result)?.slice(0, 200));
   } catch(e) {
     console.warn('[AI Rewrite] callAI threw:', e.message);
     return null;
   }
-  if (!result) return null;
+  if (!result) { console.warn('[AI DEBUG] result is null/undefined after callAI'); return null; }
 
   /* Validate the response has all required fields with Devanagari content */
   const { hook, title, description, hashtags } = result;
   const hasDevanagari = s => /[\u0900-\u097F]{3,}/.test(s || '');
+  console.log('[AI DEBUG] hook:', hook);
+  console.log('[AI DEBUG] title:', title);
+  console.log('[AI DEBUG] description (first 80):', (description||'').slice(0,80));
+  console.log('[AI DEBUG] hashtags:', hashtags);
+  console.log('[AI DEBUG] hook hasDevanagari:', hasDevanagari(hook), '| title:', hasDevanagari(title), '| desc:', hasDevanagari(description));
 
   if (!hasDevanagari(hook) || !hasDevanagari(title) || !hasDevanagari(description)) {
     console.warn('[AI Rewrite] Response missing Devanagari — falling back');
@@ -2017,11 +2055,17 @@ OUTPUT: Raw JSON only — no \`\`\`json, no explanation, nothing else.`;
     return null;
   }
 
+  /* Always ensure #ShashiNewsGen is present as the brand tag */
+  let finalHashtags = hashtags.slice(0, 11).map(h => h.startsWith('#') ? h : '#' + h);
+  if (!finalHashtags.some(h => h.toLowerCase() === '#shashinewsgen')) {
+    finalHashtags = [...finalHashtags.slice(0, 10), '#ShashiNewsGen'];
+  }
+
   return {
     hook:        hook.trim(),
     title:       cleanTitle(title.trim()),
     description: description.trim(),
-    hashtags:    hashtags.slice(0, 8).map(h => h.startsWith('#') ? h : '#' + h),
+    hashtags:    finalHashtags,
   };
 }
 
@@ -5806,7 +5850,7 @@ function _closeEditMode(m) {
 
   /* Retry every 10 seconds if server was offline at startup */
   setInterval(async () => {
-    if (!_serverOnline && _isLocalhost) {
+    if (!_serverOnline && _isNodeServer) {
       await loadKeyStatus();
     }
   }, 10000);
