@@ -2942,8 +2942,9 @@ async function buildDescription(nepaliTitle, rawTitle, articleBody, sourceLang =
   /* ── STEP 2: Extract key facts from original body (numbers work in any language) ── */
   const extractedFacts = extractKeyFacts(rawTitle, cleanedBody);
 
-  /* ── STEP 3: Extract best sentences from Nepali body ── */
-  const bodySentences = extractBestSentences(nepaliBody, nepaliTitle, rawTitle, true, 8);
+  /* ── STEP 3: Extract top 3 KEY-HIGHLIGHT sentences from Nepali body ── */
+  /* maxSents=3 — pick by score only, trimmed to ≤130 chars each, NOT sequential dump */
+  const bodySentences = extractBestSentences(nepaliBody, nepaliTitle, rawTitle, true, 3);
 
   /* ── STEP 4: Assemble description ── */
   const parts = [];
@@ -2952,25 +2953,25 @@ async function buildDescription(nepaliTitle, rawTitle, articleBody, sourceLang =
   const track  = s => s.replace(/[।,.!?]/g, '').split(/\s+/).filter(w => w.length > 3).forEach(w => usedW.add(w));
   const isDup  = s => {
     const words = s.replace(/[।,.!?]/g, '').split(/\s+/).filter(w => w.length > 3);
-    return words.length > 0 && words.filter(w => usedW.has(w)).length / words.length > 0.40;
+    return words.length > 0 && words.filter(w => usedW.has(w)).length / words.length > 0.45;
   };
   const addPart = s => { if (s && s.trim() && !isDup(s)) { parts.push(s.trim()); track(s); return true; } return false; };
 
-  /* A – Best body sentences first (most factual, most contextual) */
+  /* A – Best key-highlight sentences (already scored, trimmed, max 3) */
   for (const sent of bodySentences) {
-    if (wordCount(parts.join(' ')) >= 120) break;
+    if (wordCount(parts.join(' ')) >= 65) break;  /* stop early — we want tight highlights */
     addPart(sent);
   }
 
-  /* B – Inject numeric facts if body was thin */
-  if (parts.length < 2) {
+  /* B – Inject numeric facts if body was thin (article had no strong sentences) */
+  if (parts.length < 1) {
     for (const fact of extractedFacts) {
-      if (wordCount(parts.join(' ')) >= 120) break;
+      if (wordCount(parts.join(' ')) >= 65) break;
       addPart(fact);
     }
   }
 
-  /* C – Fallback to topic context bank */
+  /* C – Fallback to topic context bank only if nothing was extracted */
   if (parts.length === 0) {
     const ctx = topic
       ? DESC_CONTEXT[topic]
@@ -2978,8 +2979,8 @@ async function buildDescription(nepaliTitle, rawTitle, articleBody, sourceLang =
     addPart(ctx);
   }
 
-  /* D – Close with an impact sentence (non-duplicate) */
-  if (wordCount(parts.join(' ')) < 100) {
+  /* D – Add impact sentence only if we're very short on content */
+  if (wordCount(parts.join(' ')) < 30) {
     const impact = topic
       ? DESC_IMPACT[topic]
       : DESC_GENERIC_IMPACT[Math.floor(Math.random() * DESC_GENERIC_IMPACT.length)];
@@ -2987,17 +2988,17 @@ async function buildDescription(nepaliTitle, rawTitle, articleBody, sourceLang =
   }
 
   /* ── STEP 5: Final consecutive-duplicate guard ── */
-  const final = [parts[0]];
+  const final = parts.length ? [parts[0]] : [];
   for (let i = 1; i < parts.length; i++) {
     const prevW = new Set(final[final.length - 1].replace(/[।,.!?]/g, '').split(/\s+/).filter(w => w.length > 3));
     const currW = parts[i].replace(/[।,.!?]/g, '').split(/\s+/).filter(w => w.length > 3);
-    if (currW.filter(w => prevW.has(w)).length / Math.max(currW.length, 1) < 0.40) {
+    if (currW.filter(w => prevW.has(w)).length / Math.max(currW.length, 1) < 0.45) {
       final.push(parts[i]);
     }
   }
 
-  /* ── STEP 6: Trim to target 80-150 Nepali words ── */
-  return trimToWordTarget(final.join(' '), 80, 150);
+  /* ── STEP 6: Trim to target 45-80 words — tight highlights, not an article excerpt ── */
+  return trimToWordTarget(final.join(' '), 45, 80);
 }
 
 /** Count words in a string (Nepali-aware: split on whitespace) */
@@ -3085,64 +3086,75 @@ async function translateBodyToNepali(body, srcLang) {
 function extractBestSentences(text, nepaliTitle, rawTitle, isNepali, maxSents) {
   if (!text || text.trim().length < 60) return [];
 
-  /* Split on Nepali (।) or Latin sentence endings */
-  const raw = text
-    .replace(/\n+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const raw = text.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
 
+  /* Split into sentences on Nepali (।) or Latin endings */
   const sents = (raw.match(/[^.!?।]+[.!?।]+/g) || [])
     .map(s => s.replace(/\s+/g, ' ').trim())
-    .filter(s => s.length > 40 && s.length < 320);
+    .filter(s => {
+      if (s.length < 35 || s.length > 280) return false;
+      /* Skip sentences that are clearly noise */
+      if (/(?:read more|click here|share this|follow us|subscribe|यो खबर|थप जानकारी|सम्बन्धित|प्रतिक्रिया)/i.test(s)) return false;
+      /* Skip sentences that look like metadata (time/date heavy) */
+      if (/[०-९\d]{1,2}:[०-९\d]{2}/.test(s) && s.length < 80) return false;
+      return true;
+    });
 
   if (!sents.length) return [];
 
-  /* Score each sentence */
-  const titleWordsLower = new Set((rawTitle + ' ' + nepaliTitle)
-    .toLowerCase().split(/\s+/).filter(w => w.length > 3));
+  /* Score each sentence for informational value */
+  const titleWordsLower = new Set(
+    (rawTitle + ' ' + nepaliTitle).toLowerCase().split(/\s+/).filter(w => w.length > 3)
+  );
 
-  const scored = sents.map(s => {
+  const scored = sents.map((s, idx) => {
     const sl = s.toLowerCase();
     let score = 0;
 
-    /* Bonus: contains numbers */
-    if (/\d/.test(s)) score += 3;
-    /* Bonus: contains Devanagari numerals */
-    if (/[०-९]/.test(s)) score += 2;
-    /* Bonus: contains money/percentage */
-    if (/रु\.|rs\.|%|crore|lakh|करोड|लाख|अर्ब/i.test(s)) score += 3;
-    /* Bonus: named person keywords */
-    if (/(?:मन्त्री|प्रधानमन्त्री|अध्यक्ष|सचिव|प्रमुख|अधिकारी|पदाधिकारी|minister|president|secretary|chairman|chief|officer)/i.test(s)) score += 4;
-    /* Bonus: organization names */
-    if (/(?:आयोग|समिति|सरकार|मन्त्रालय|प्रहरी|अदालत|commission|committee|government|ministry|court|police)/i.test(s)) score += 3;
-    /* Bonus: causal / factual language */
-    if (/(?:किनभने|कारण|फलस्वरूप|पछि|अनुसार|because|due to|following|after|as a result|according)/i.test(s)) score += 3;
-    /* Bonus: action verbs (arrest, fire, demand, recommend) */
-    if (/(?:पक्राउ|बर्खास्त|सिफारिस|माग|आदेश|गरिएको|गरे|arrested|dismissed|recommended|demanded|ordered|issued)/i.test(s)) score += 4;
-    /* Bonus: specific time markers */
-    if (/(?:आइतबार|सोमबार|मंगलबार|बुधबार|बिहिबार|शुक्रबार|शनिबार|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4})/i.test(s)) score += 2;
-    /* Penalty: too similar to the title */
+    /* ── HIGH-VALUE signals ── */
+    if (/\d/.test(s))                                                            score += 4;  /* numbers = facts */
+    if (/[०-९]/.test(s))                                                         score += 3;  /* Nepali numerals */
+    if (/(?:रु\.|rs\.|%|करोड|लाख|अर्ब|crore|lakh|million|billion)/i.test(s))   score += 4;  /* money/amounts */
+    if (/(?:मृत्यु|घाइते|मारिए|killed|dead|injured|died)/i.test(s))             score += 5;  /* casualties */
+    if (/(?:पक्राउ|गिरफ्तार|बर्खास्त|arrested|dismissed|resign)/i.test(s))     score += 5;  /* key actions */
+    if (/(?:मन्त्री|प्रधानमन्त्री|अध्यक्ष|minister|president|chief)/i.test(s)) score += 4;  /* key persons */
+    if (/(?:आयोग|सरकार|मन्त्रालय|प्रहरी|अदालत|government|court|police)/i.test(s)) score += 3;
+    if (/(?:कारण|फलस्वरूप|अनुसार|because|due to|according|following)/i.test(s)) score += 3; /* causal */
+    if (/(?:सिफारिस|माग|आदेश|demanded|ordered|recommended|issued)/i.test(s))    score += 3;
+
+    /* ── PENALTY signals ── */
     const sentW = new Set(sl.split(/\s+/).filter(w => w.length > 3));
     const titleOverlap = [...sentW].filter(w => titleWordsLower.has(w)).length / Math.max(sentW.size, 1);
-    if (titleOverlap > 0.6) score -= 5;
-    /* Penalty: generic / filler sentences */
-    if (/(?:यो खबर|यस विषयमा|थप जानकारी|read more|click here|share this|follow us|subscribe)/i.test(s)) score -= 10;
-    /* Penalty: very short */
-    if (s.length < 60) score -= 2;
+    if (titleOverlap > 0.55) score -= 6;  /* too similar to title — skip */
+    if (s.length < 50)       score -= 3;  /* very short */
+    if (idx === 0)           score -= 2;  /* first sentence often repeats headline */
 
-    return { s, score };
+    return { s, score, idx };
   });
 
-  /* Sort by score, take top maxSents */
+  /* Take only the TOP 3 highest-scoring sentences (key highlights only) */
+  const MAX = Math.min(maxSents, 3);
   scored.sort((a, b) => b.score - a.score);
-  const top = scored.slice(0, maxSents).map(x => x.s);
+  const top = scored.slice(0, MAX);
 
-  /* Re-order to match original article sequence (preserve story flow) */
-  const order = new Map(sents.map((s, i) => [s, i]));
-  top.sort((a, b) => (order.get(a) ?? 999) - (order.get(b) ?? 999));
+  /* Re-order by original position so it reads naturally */
+  top.sort((a, b) => a.idx - b.idx);
 
-  /* Ensure sentences end with proper punctuation */
-  return top.map(s => /[।.!?]$/.test(s) ? s : s + '।');
+  /* Trim each sentence to its core (max 120 chars) to avoid long copy-paste blocks */
+  return top.map(({ s }) => {
+    let trimmed = s;
+    /* If sentence is very long, cut at a natural break within first 130 chars */
+    if (trimmed.length > 130) {
+      const cutMatch = trimmed.slice(0, 130).match(/^(.*[,،;—–])/);
+      if (cutMatch && cutMatch[1].length > 40) {
+        trimmed = cutMatch[1].trim();
+      } else {
+        /* Cut at last word boundary before 130 chars */
+        trimmed = trimmed.slice(0, 130).replace(/\s+\S*$/, '');
+      }
+    }
+    return /[।.!?]$/.test(trimmed) ? trimmed : trimmed + '।';
+  });
 }
 
 function detectNepaliTopic(text) {
