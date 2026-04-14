@@ -2959,14 +2959,14 @@ async function buildDescription(nepaliTitle, rawTitle, articleBody, sourceLang =
 
   /* A – Best key-highlight sentences (already scored, trimmed, max 3) */
   for (const sent of bodySentences) {
-    if (wordCount(parts.join(' ')) >= 65) break;  /* stop early — we want tight highlights */
+    if (wordCount(parts.join(' ')) >= 160) break;
     addPart(sent);
   }
 
   /* B – Inject numeric facts if body was thin (article had no strong sentences) */
   if (parts.length < 1) {
     for (const fact of extractedFacts) {
-      if (wordCount(parts.join(' ')) >= 65) break;
+      if (wordCount(parts.join(' ')) >= 160) break;
       addPart(fact);
     }
   }
@@ -2979,8 +2979,8 @@ async function buildDescription(nepaliTitle, rawTitle, articleBody, sourceLang =
     addPart(ctx);
   }
 
-  /* D – Add impact sentence only if we're very short on content */
-  if (wordCount(parts.join(' ')) < 30) {
+  /* D – Add impact sentence if still short on content */
+  if (wordCount(parts.join(' ')) < 60) {
     const impact = topic
       ? DESC_IMPACT[topic]
       : DESC_GENERIC_IMPACT[Math.floor(Math.random() * DESC_GENERIC_IMPACT.length)];
@@ -2997,8 +2997,8 @@ async function buildDescription(nepaliTitle, rawTitle, articleBody, sourceLang =
     }
   }
 
-  /* ── STEP 6: Trim to target 45-80 words — tight highlights, not an article excerpt ── */
-  return trimToWordTarget(final.join(' '), 45, 80);
+  /* ── STEP 6: Trim to target 100-200 words ── */
+  return trimToWordTarget(final.join(' '), 100, 200);
 }
 
 /** Count words in a string (Nepali-aware: split on whitespace) */
@@ -3140,17 +3140,17 @@ function extractBestSentences(text, nepaliTitle, rawTitle, isNepali, maxSents) {
   /* Re-order by original position so it reads naturally */
   top.sort((a, b) => a.idx - b.idx);
 
-  /* Trim each sentence to its core (max 120 chars) to avoid long copy-paste blocks */
+  /* Trim each sentence to its core (max 220 chars) to keep enough detail */
   return top.map(({ s }) => {
     let trimmed = s;
-    /* If sentence is very long, cut at a natural break within first 130 chars */
-    if (trimmed.length > 130) {
-      const cutMatch = trimmed.slice(0, 130).match(/^(.*[,،;—–])/);
-      if (cutMatch && cutMatch[1].length > 40) {
+    /* If sentence is very long, cut at a natural break within first 220 chars */
+    if (trimmed.length > 220) {
+      const cutMatch = trimmed.slice(0, 220).match(/^(.*[,،;—–])/);
+      if (cutMatch && cutMatch[1].length > 60) {
         trimmed = cutMatch[1].trim();
       } else {
-        /* Cut at last word boundary before 130 chars */
-        trimmed = trimmed.slice(0, 130).replace(/\s+\S*$/, '');
+        /* Cut at last word boundary before 220 chars */
+        trimmed = trimmed.slice(0, 220).replace(/\s+\S*$/, '');
       }
     }
     return /[।.!?]$/.test(trimmed) ? trimmed : trimmed + '।';
