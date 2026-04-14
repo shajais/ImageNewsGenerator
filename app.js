@@ -5411,7 +5411,7 @@ function buildPostText(post, rawTitle, { includeUrl = true } = {}) {
 }
 
 function getPostText() {
-  return generatedPost ? buildPostText(generatedPost, selectedArticle?.title, { includeUrl: true }) : '';
+  return generatedPost ? buildPostText(generatedPost, selectedArticle?.title, { includeUrl: false }) : '';
 }
 
 /* Share helpers */
@@ -5441,12 +5441,12 @@ function shareOnInstagram() {
    * 1. Download the generated 1080×1080 image.
    * 2. Paste caption (copied to clipboard) when creating the post on mobile.
    */
-  const caption = buildPostText(generatedPost, selectedArticle?.title, { includeUrl: true });
+  const caption = buildPostText(generatedPost, selectedArticle?.title, { includeUrl: false });
   _shareUrl    = 'https://www.instagram.com/';
   _shareTarget = 'instagram';
   openShareModal(
     '📸 Instagram मा साझा गर्नुहोस्',
-    '✅ क्याप्सन क्लिपबोर्डमा कपी भयो!\n\n① तल "Download Image" थिच्नुहोस्।\n② Instagram खुल्नेछ — फोटो छान्नुहोस् र क्याप्सन Paste गर्नुहोस्।\n\n🌐 Shashi News Gen: ' + BRAND_URL,
+    '✅ क्याप्सन क्लिपबोर्डमा कपी भयो!\n\n① तल "Download Image" थिच्नुहोस्।\n② Instagram खुल्नेछ — फोटो छान्नुहोस् र क्याप्सन Paste गर्नुहोस्।',
     caption
   );
 }
@@ -5458,7 +5458,7 @@ function shareOnX() {
    * X (Twitter) limit ≈ 280 chars. We send: hook + title + top 3 hashtags + brand + URL.
    * X natively renders URLs as clickable links in tweets.
    */
-  const tweet = `${post.hook}\n\n📢 ${post.title}\n\n${post.hashtags.slice(0, 3).join(' ')}\n\n— ${BRAND_NAME}\n${BRAND_URL}`;
+  const tweet = `${post.hook}\n\n📢 ${post.title}\n\n${post.hashtags.slice(0, 3).join(' ')}\n\n— ${BRAND_NAME}`;
   _shareUrl    = `https://x.com/intent/tweet?text=${encodeURIComponent(tweet)}`;
   _shareTarget = 'x';
   openShareModal(
