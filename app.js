@@ -3689,8 +3689,8 @@ function _drawSpritesOnCtx(ctx) {
    currently selected sprite. Clicking empty canvas area deselects.
    ══════════════════════════════════════════════════════════════════ */
 
-const HANDLE_R   = 10;
-const ROTATE_GAP = 28;
+const HANDLE_R   = 14;   // slightly larger handles for better visibility
+const ROTATE_GAP = 36;
 
 function _getHandleCanvas() {
   let hc = document.getElementById('compositeHandleCanvas');
@@ -3725,9 +3725,12 @@ function _syncHandleCanvasSize() {
   const mc = document.getElementById('newsCanvas');
   if (!hc || !mc) return;
   /* Internal resolution must match newsCanvas attribute size (1080×1080).
-     The CSS width/max-width rules handle the visual scaling. */
-  hc.width  = mc.width  || CANVAS_W;
-  hc.height = mc.height || CANVAS_H;
+     The CSS width/max-width rules handle the visual scaling.
+     Only update if dimensions differ — setting canvas.width always clears it. */
+  const w = mc.width  || CANVAS_W;
+  const h = mc.height || CANVAS_H;
+  if (hc.width  !== w) hc.width  = w;
+  if (hc.height !== h) hc.height = h;
 }
 
 function _showCompositeHandles(show) {
@@ -3769,22 +3772,30 @@ function _drawCompositeHandles() {
   const mc = document.getElementById('newsCanvas');
   if (!mc) return;
   /* Set internal resolution to match the main canvas (1080×1080).
-     This must match so that sprite coordinates (in 1080-space) line up exactly. */
-  hc.width  = mc.width  || CANVAS_W;
-  hc.height = mc.height || CANVAS_H;
+     Only reset width/height if they actually differ — resetting clears the canvas
+     and is only needed when the main canvas changes size. */
+  const targetW = mc.width  || CANVAS_W;
+  const targetH = mc.height || CANVAS_H;
+  if (hc.width !== targetW)  hc.width  = targetW;
+  if (hc.height !== targetH) hc.height = targetH;
   const ctx = hc.getContext('2d');
   ctx.clearRect(0, 0, hc.width, hc.height);
 
-  const needsOverlay = ((_enhancedMode || _compositeMode) && _mainImgSprite) || (_compositeMode && _sideSprites.length > 0) || _extraTexts.length > 0;
+  const needsOverlay = (_enhancedMode && _mainImgSprite) || (_compositeMode && _sideSprites.length > 0) || _extraTexts.length > 0;
   hc.style.pointerEvents = needsOverlay ? 'auto' : 'none';
+  /* Ensure the handle canvas is visible whenever it has content to show */
+  if (needsOverlay && hc.style.display === 'none') {
+    hc.style.display = 'block';
+    _syncHandleCanvasSize();
+  }
   if (!needsOverlay) return;
 
-  /* Helper: draw selection box + corner handles + rotate grip for any sprite-like object */
+  /* Helper: draw full selection box + corner handles + rotate grip */
   function _drawHandles(sp, color) {
     const corners = [0,1,2,3].map(i => _cornerWorld(sp, i));
     const grip    = _rotGripWorld(sp);
     ctx.save();
-    ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash([10,6]);
+    ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.setLineDash([10,6]);
     ctx.beginPath();
     ctx.moveTo(corners[0].x, corners[0].y);
     corners.forEach(c => ctx.lineTo(c.x, c.y));
@@ -3796,29 +3807,63 @@ function _drawCompositeHandles() {
     corners.forEach(c => {
       ctx.beginPath(); ctx.arc(c.x, c.y, HANDLE_R, 0, Math.PI*2);
       ctx.fillStyle = '#fff'; ctx.fill();
-      ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash([]); ctx.stroke();
+      ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.setLineDash([]); ctx.stroke();
     });
     ctx.beginPath(); ctx.arc(grip.x, grip.y, HANDLE_R, 0, Math.PI*2);
     ctx.fillStyle = color; ctx.fill();
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.stroke();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.setLineDash([]); ctx.stroke();
     ctx.fillStyle = '#fff';
-    ctx.font = `bold ${Math.round(HANDLE_R*1.4)}px sans-serif`;
+    ctx.font = `bold ${Math.round(HANDLE_R*1.5)}px sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('↻', grip.x, grip.y);
   }
 
-  /* Draw main image (enhanced or composite mode) handles */
-  if ((_enhancedMode || _compositeMode) && _mainImgSprite) {
-    _drawHandles(_mainImgSprite, _mainImgSelected ? '#34d399' : 'rgba(52,211,153,0.5)');
+  /* Helper: draw a subtle hover outline for unselected sprites */
+  function _drawUnselectedOutline(sp, color) {
+    const corners = [0,1,2,3].map(i => _cornerWorld(sp, i));
+    ctx.save();
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([6,6]);
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath();
+    ctx.moveTo(corners[0].x, corners[0].y);
+    corners.forEach(c => ctx.lineTo(c.x, c.y));
+    ctx.closePath(); ctx.stroke();
+    /* Small click-me dot in centre */
+    const cx = sp.x + sp.w/2, cy = sp.y + sp.h/2;
+    ctx.globalAlpha = 0.7;
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI*2);
+    ctx.fillStyle = color; ctx.fill();
+    ctx.restore();
   }
 
-  /* Draw selected sprite handles */
-  const selSprite = _sideSprites.find(s => s.id === _selectedSpriteId);
-  if (selSprite && selSprite.img) _drawHandles(selSprite, '#f6ad55');
+  /* Draw main image (enhanced mode only — in composite-only mode it's the background) */
+  if (_enhancedMode && _mainImgSprite) {
+    _drawHandles(_mainImgSprite, _mainImgSelected ? '#34d399' : 'rgba(52,211,153,0.5)');
+  } else if (_compositeMode && _mainImgSprite && _mainImgSelected) {
+    _drawHandles(_mainImgSprite, '#34d399');
+  }
 
-  /* Draw selected text handles */
+  /* Draw ALL side sprites — selected sprite gets full handles, others get subtle outline */
+  if (_compositeMode) {
+    _sideSprites.forEach(sp => {
+      if (!sp.img) return;
+      if (sp.id === _selectedSpriteId) {
+        _drawHandles(sp, '#f6ad55');
+      } else {
+        _drawUnselectedOutline(sp, '#f6ad55');
+      }
+    });
+  }
+
+  /* Draw selected text handles (others are not selectable via canvas) */
   const selText = _extraTexts.find(t => t.id === _selectedTextId);
   if (selText && selText.text.trim()) _drawHandles(selText, '#818cf8');
+  /* Draw unselected text outlines */
+  _extraTexts.forEach(et => {
+    if (et.id === _selectedTextId || !et.text.trim()) return;
+    _drawUnselectedOutline(et, '#818cf8');
+  });
 }
 
 function _hitTestSprite(sp, wx, wy) {
@@ -3885,27 +3930,16 @@ function _hitTestSprite(sp, wx, wy) {
   }
 
   function _onDown(e) {
-    const hasMainImg = (_enhancedMode || _compositeMode) && _mainImgSprite;
+    /* Main image is selectable only in enhanced mode — in composite-only mode it is
+       the background and sprites sit on top of it, so sprites must take priority. */
+    const hasMainImg = _enhancedMode && _mainImgSprite;
     const hasSprites = _compositeMode && _sideSprites.length > 0;
     const hasTexts   = _extraTexts.length > 0;
     if (!hasMainImg && !hasSprites && !hasTexts) return;
 
     const pt = _ptToCanvas(e);
 
-    /* ── 0. Main image (enhanced mode) ── */
-    if (hasMainImg) {
-      const hit = _hitTestSprite(_mainImgSprite, pt.x, pt.y);
-      if (hit) {
-        _mainImgSelected  = true;
-        _selectedSpriteId = null;
-        _selectedTextId   = null;
-        _active = { type: 'mainImg', obj: _mainImgSprite, hit, startPt: pt, startSnap: { ..._mainImgSprite } };
-        _drawCompositeHandles();
-        e.preventDefault(); e.stopPropagation(); return;
-      }
-    }
-
-    /* ── 1. Selected sprite handles ── */
+    /* ── 0. Side sprites — checked FIRST because they sit on top of the background ── */
     if (hasSprites) {
       const sel = _sideSprites.find(s => s.id === _selectedSpriteId);
       if (sel) {
@@ -3926,6 +3960,19 @@ function _hitTestSprite(sp, wx, wy) {
           _drawCompositeHandles();
           e.preventDefault(); e.stopPropagation(); return;
         }
+      }
+    }
+
+    /* ── 1. Main image (enhanced mode only — background in composite-only mode) ── */
+    if (hasMainImg) {
+      const hit = _hitTestSprite(_mainImgSprite, pt.x, pt.y);
+      if (hit) {
+        _mainImgSelected  = true;
+        _selectedSpriteId = null;
+        _selectedTextId   = null;
+        _active = { type: 'mainImg', obj: _mainImgSprite, hit, startPt: pt, startSnap: { ..._mainImgSprite } };
+        _drawCompositeHandles();
+        e.preventDefault(); e.stopPropagation(); return;
       }
     }
 
@@ -3985,15 +4032,7 @@ function _hitTestSprite(sp, wx, wy) {
     const pt = _ptToCanvas(e);
     let cursor = 'default';
 
-    /* Check main image (enhanced or composite mode) */
-    if ((_enhancedMode || _compositeMode) && _mainImgSprite) {
-      const hit = _hitTestSprite(_mainImgSprite, pt.x, pt.y);
-      if      (hit === 'move')   cursor = 'grab';
-      else if (hit === 'rotate') cursor = 'crosshair';
-      else if (hit)              cursor = 'nwse-resize';
-    }
-
-    /* Check sprites */
+    /* Check sprites FIRST — they sit on top of the main background image */
     if (cursor === 'default' && _compositeMode) {
       const sel = _sideSprites.find(s => s.id === _selectedSpriteId);
       if (sel) {
@@ -4007,6 +4046,14 @@ function _hitTestSprite(sp, wx, wy) {
           if (_hitTestSprite(_sideSprites[i], pt.x, pt.y)) { cursor = 'pointer'; break; }
         }
       }
+    }
+
+    /* Check main image — only in enhanced mode (background in composite-only mode) */
+    if (cursor === 'default' && _enhancedMode && _mainImgSprite) {
+      const hit = _hitTestSprite(_mainImgSprite, pt.x, pt.y);
+      if      (hit === 'move')   cursor = 'grab';
+      else if (hit === 'rotate') cursor = 'crosshair';
+      else if (hit)              cursor = 'nwse-resize';
     }
     /* Check texts */
     if (cursor === 'default') {
@@ -4266,6 +4313,9 @@ async function fastRedraw() {
     if (e.button !== 0) return;
     const ito = document.getElementById('inlineTextOverlay');
     if (ito && ito.classList.contains('open')) return;
+    /* In composite or enhanced mode the handle-canvas overlay intercepts pointer events.
+       Clicks that somehow reach newsCanvas should not start a pan drag. */
+    if (_compositeMode || _enhancedMode) return;
     _dragging   = true;
     _dragStartX = e.clientX;
     _dragStartY = e.clientY;
@@ -4310,6 +4360,8 @@ async function fastRedraw() {
   }
 
   function _onTouchStart(e) {
+    /* In composite or enhanced mode the handle canvas handles touch interaction */
+    if (_compositeMode || _enhancedMode) return;
     if (e.touches.length === 2) {
       _pinchDist = _touchDist(e.touches);
     } else if (e.touches.length === 1) {
@@ -5102,82 +5154,88 @@ async function drawTextOverlay(ctx, post, W, H) {
 }
 
 /**
- * Draw circular author avatar + name + email as a watermark.
- * Placed bottom-right, just below the title block.
+ * Draw a horizontal branding strip pinned to the very bottom of the canvas.
+ * Layout (left → right):  [avatar circle]  |  "Shashi News Gen"  ·  URL  ·  email
+ * The strip is always at the canvas bottom regardless of title height.
  */
-async function _drawAuthorWatermark(ctx, W, titleBottom) {
+async function _drawAuthorWatermark(ctx, W, _titleBottom) {
   /* Wait for the avatar image to finish loading if it hasn't yet */
-  if (!_authorImg && _authorImgPromise) {
-    await _authorImgPromise;
-  }
-  const AVATAR_R   = 48;          // circle radius — large enough for face to be clear
-  const AVATAR_D   = AVATAR_R * 2;
-  const PAD_RIGHT  = 28;
-  const PAD_BOTTOM = 10;
-  const cx = W - PAD_RIGHT - AVATAR_R;   // circle centre x
-  const cy = titleBottom + AVATAR_R + PAD_BOTTOM;   // circle centre y
+  if (!_authorImg && _authorImgPromise) await _authorImgPromise;
+
+  const H           = ctx.canvas.height || CANVAS_H;
+  const STRIP_H     = 72;                       // height of the bottom strip
+  const AVATAR_R    = 26;                       // avatar circle radius
+  const AVATAR_D    = AVATAR_R * 2;
+  const PAD_L       = 22;                       // left padding
+  const stripY      = H - STRIP_H;             // strip top-y
 
   ctx.save();
 
-  /* ── Semi-transparent backdrop pill ── */
-  const pillW = 260 + AVATAR_D + 12;
-  const pillH = AVATAR_D + 16;
-  const pillX = W - PAD_RIGHT - pillW;
-  const pillY = cy - pillH / 2;
-  ctx.beginPath();
-  ctx.roundRect(pillX, pillY, pillW, pillH, pillH / 2);
-  ctx.fillStyle = 'rgba(0,0,0,0.50)';
-  ctx.fill();
+  /* ── Semi-transparent dark strip across full width ── */
+  ctx.fillStyle = 'rgba(0,0,0,0.62)';
+  ctx.fillRect(0, stripY, W, STRIP_H);
 
-  /* ── Circular clip for the photo ── */
+  /* ── Thin gold separator line at top of strip ── */
+  ctx.strokeStyle = 'rgba(246,173,85,0.55)';
+  ctx.lineWidth   = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, stripY); ctx.lineTo(W, stripY);
+  ctx.stroke();
+
+  /* ── Avatar circle (left side) ── */
+  const avCX = PAD_L + AVATAR_R;
+  const avCY = stripY + STRIP_H / 2;
+
   ctx.save();
   ctx.beginPath();
-  ctx.arc(cx, cy, AVATAR_R, 0, Math.PI * 2);
+  ctx.arc(avCX, avCY, AVATAR_R, 0, Math.PI * 2);
   ctx.clip();
-
   if (_authorImg) {
-    const srcW = _authorImg.naturalWidth;
-    const srcH = _authorImg.naturalHeight;
-    /* Full face crop: square region covering full width, top 80% of height */
-    const cropSize = Math.min(srcW, srcH * 0.80);  // square side = min(width, 80% height)
-    const cropX = (srcW - cropSize) / 2;            // horizontally centred
-    const cropY = 0;                                // from the very top (hair/head)
-    ctx.drawImage(_authorImg, cropX, cropY, cropSize, cropSize,
-                  cx - AVATAR_R, cy - AVATAR_R, AVATAR_D, AVATAR_D);
+    const srcW = _authorImg.naturalWidth, srcH = _authorImg.naturalHeight;
+    const cropSize = Math.min(srcW, srcH * 0.80);
+    const cropX = (srcW - cropSize) / 2;
+    ctx.drawImage(_authorImg, cropX, 0, cropSize, cropSize,
+                  avCX - AVATAR_R, avCY - AVATAR_R, AVATAR_D, AVATAR_D);
   } else {
-    /* Fallback: solid colour circle with initials */
     ctx.fillStyle = '#c0392b';
-    ctx.fillRect(cx - AVATAR_R, cy - AVATAR_R, AVATAR_D, AVATAR_D);
-    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(avCX - AVATAR_R, avCY - AVATAR_R, AVATAR_D, AVATAR_D);
+    ctx.fillStyle = '#fff';
     ctx.font = `bold ${AVATAR_R}px "Segoe UI",Arial,sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('SJ', cx, cy);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('SJ', avCX, avCY);
   }
   ctx.restore();
 
-  /* ── Gold ring around avatar ── */
+  /* Gold ring around avatar */
   ctx.beginPath();
-  ctx.arc(cx, cy, AVATAR_R + 3, 0, Math.PI * 2);
+  ctx.arc(avCX, avCY, AVATAR_R + 2.5, 0, Math.PI * 2);
   ctx.strokeStyle = '#f6ad55';
-  ctx.lineWidth = 3.5;
+  ctx.lineWidth = 2.5;
   ctx.stroke();
 
-  /* ── Name + email text ── */
-  const textX = cx - AVATAR_R - 14;
-  ctx.textAlign = 'right';
+  /* ── Text block (right of avatar, vertically centred in strip) ── */
+  const textX     = avCX + AVATAR_R + 16;   // start of text area
+  const nameY     = stripY + STRIP_H / 2 - 11;
+  const detailY   = stripY + STRIP_H / 2 + 13;
+
+  ctx.shadowColor = 'rgba(0,0,0,0.95)';
+  ctx.shadowBlur  = 6;
+  ctx.textAlign   = 'left';
   ctx.textBaseline = 'alphabetic';
-  ctx.shadowColor = 'rgba(0,0,0,0.90)';
-  ctx.shadowBlur = 7;
 
-  ctx.font = 'bold 20px "Segoe UI",Arial,sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.92)';
-  ctx.fillText('© Shashi Viral Post Generator', textX, cy - 6);
+  /* Brand name */
+  ctx.font      = 'bold 22px "Segoe UI",Arial,sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.96)';
+  ctx.fillText('Shashi News Gen', textX, nameY);
 
-  ctx.font = '15px "Segoe UI",Arial,sans-serif';
-  ctx.fillStyle = 'rgba(246,173,85,0.88)';
-  ctx.fillText('shashi19.jaiswal@gmail.com', textX, cy + 16);
+  /* URL + separator + email in smaller text */
+  const SITE_URL = 'shajais.github.io/ImageNewsGenerator';
+  const EMAIL    = 'shashi19.jaiswal@gmail.com';
+  ctx.font      = '14px "Segoe UI",Arial,sans-serif';
+  ctx.fillStyle = 'rgba(246,173,85,0.90)';
+  ctx.fillText(`🌐 ${SITE_URL}   ✉ ${EMAIL}`, textX, detailY);
 
+  ctx.shadowBlur = 0;
   ctx.restore();
 }
 
@@ -5341,13 +5399,19 @@ function getNewsIcon(title) {
   return '📰';
 }
 
-function buildPostText(post, rawTitle) {
-  const icon = getNewsIcon(rawTitle || post.title || '');
-  return `${icon} ${post.hook}\n\n📢 ${post.title}\n\n${post.description}\n\n${post.hashtags.join(' ')}\n\n— Shashi News Generator 🇳🇵`;
+const BRAND_NAME = 'Shashi News Gen 🇳🇵';
+const BRAND_URL  = 'https://shajais.github.io/ImageNewsGenerator/';
+
+function buildPostText(post, rawTitle, { includeUrl = true } = {}) {
+  const icon   = getNewsIcon(rawTitle || post.title || '');
+  const credit = includeUrl
+    ? `— ${BRAND_NAME}\n🌐 ${BRAND_URL}`
+    : `— ${BRAND_NAME}`;
+  return `${icon} ${post.hook}\n\n📢 ${post.title}\n\n${post.description}\n\n${post.hashtags.join(' ')}\n\n${credit}`;
 }
 
 function getPostText() {
-  return generatedPost ? buildPostText(generatedPost, selectedArticle?.title) : '';
+  return generatedPost ? buildPostText(generatedPost, selectedArticle?.title, { includeUrl: true }) : '';
 }
 
 /* Share helpers */
@@ -5355,19 +5419,17 @@ let _shareUrl = '', _shareTarget = '';
 
 function shareOnFacebook() {
   if (!generatedPost) { toast('⚠️ पहिले समाचार छान्नुहोस्।','error'); return; }
-  const text = getPostText();
   /*
-   * Facebook's sharer.php only reliably passes a URL — it ignores the `quote`
-   * param in most contexts and the shared URL would point to the source site
-   * (not our content). Best practice for monetised pages:
-   * → Copy our full original text to clipboard, then open the user's own
-   *   FB profile/page composer so they can paste as an original post.
+   * Facebook suppresses posts that contain external links in the text body.
+   * We omit the URL from the copied text — the watermark on the downloaded
+   * image already carries the branding & website URL.
    */
+  const text = buildPostText(generatedPost, selectedArticle?.title, { includeUrl: false });
   _shareUrl    = 'https://www.facebook.com/';
   _shareTarget = 'facebook';
   openShareModal(
     '📘 Facebook मा साझा गर्नुहोस्',
-    '✅ तपाईंको पोस्ट क्लिपबोर्डमा कपी भयो!\n\nFacebook खुल्नेछ — "Write something…" बाकसमा Paste गर्नुहोस् र तस्बिर पनि थप्नुहोस्।',
+    '✅ तपाईंको पोस्ट क्लिपबोर्डमा कपी भयो!\n\nFacebook खुल्नेछ — "Write something…" बाकसमा Paste गर्नुहोस् र तस्बिर पनि थप्नुहोस्।\n\n💡 Image watermark मा website URL छ — by Shashi News Gen',
     text
   );
 }
@@ -5379,12 +5441,12 @@ function shareOnInstagram() {
    * 1. Download the generated 1080×1080 image.
    * 2. Paste caption (copied to clipboard) when creating the post on mobile.
    */
-  const caption = getPostText();
+  const caption = buildPostText(generatedPost, selectedArticle?.title, { includeUrl: true });
   _shareUrl    = 'https://www.instagram.com/';
   _shareTarget = 'instagram';
   openShareModal(
     '📸 Instagram मा साझा गर्नुहोस्',
-    '✅ क्याप्सन क्लिपबोर्डमा कपी भयो!\n\n① तल "Download Image" थिच्नुहोस्।\n② Instagram खुल्नेछ — फोटो छान्नुहोस् र क्याप्सन Paste गर्नुहोस्।',
+    '✅ क्याप्सन क्लिपबोर्डमा कपी भयो!\n\n① तल "Download Image" थिच्नुहोस्।\n② Instagram खुल्नेछ — फोटो छान्नुहोस् र क्याप्सन Paste गर्नुहोस्।\n\n🌐 Shashi News Gen: ' + BRAND_URL,
     caption
   );
 }
@@ -5393,10 +5455,10 @@ function shareOnX() {
   if (!generatedPost) { toast('⚠️ पहिले समाचार छान्नुहोस्।','error'); return; }
   const post = generatedPost;
   /*
-   * X (Twitter) limit ≈ 280 chars. We send: hook + title + top 3 hashtags.
-   * No source URL — this is our original Nepali content.
+   * X (Twitter) limit ≈ 280 chars. We send: hook + title + top 3 hashtags + brand + URL.
+   * X natively renders URLs as clickable links in tweets.
    */
-  const tweet = `${post.hook}\n\n📢 ${post.title}\n\n${post.hashtags.slice(0, 3).join(' ')}\n\n— Shashi News Generator 🇳🇵`;
+  const tweet = `${post.hook}\n\n📢 ${post.title}\n\n${post.hashtags.slice(0, 3).join(' ')}\n\n— ${BRAND_NAME}\n${BRAND_URL}`;
   _shareUrl    = `https://x.com/intent/tweet?text=${encodeURIComponent(tweet)}`;
   _shareTarget = 'x';
   openShareModal(
