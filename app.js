@@ -2263,6 +2263,18 @@ function extractArticleText(html, sourceUrl) {
       '.sidebar','.widget','[class*="sidebar"]','[class*="widget"]',
       /* "Back to top", print, email buttons */
       '[class*="back-to-top"]','[class*="print-"]','[class*="email-"]',
+      /* ── Image / media wrappers — these inject caption noise between paragraphs ── */
+      'figure','figcaption','picture',
+      '[class*="caption"]','[class*="photo-caption"]','[class*="img-caption"]',
+      '[class*="image-caption"]','[class*="figure-"]','[class*="wp-caption"]',
+      '[class*="inline-image"]','[class*="article-image"]','[class*="media-caption"]',
+      '.img-holder','.image-holder','.photo-holder','.photo-wrap',
+      '[class*="media-"]','[class*="gallery"]','[class*="slideshow"]',
+      '[class*="photo-"]','[class*="img-wrap"]','[class*="image-wrap"]',
+      /* ── In-article ad/promo blocks ── */
+      '[class*="inline-ad"]','[class*="in-article"]','[class*="mid-article"]',
+      '[class*="inread"]','[class*="sponsored"]','[class*="promo"]',
+      '[class*="outbrain"]','[class*="taboola"]','[class*="revcontent"]',
     ];
 
     REMOVE_SELECTORS.forEach(sel => {
@@ -2310,7 +2322,6 @@ function extractArticleText(html, sourceUrl) {
        Remove any block whose text content looks like post-article noise. */
     const POST_ARTICLE_NOISE = [
       'blockquote[class*="twitter"]','blockquote[class*="instagram"]',
-      '[class*="inline-ad"]','[class*="in-article"]','[class*="mid-article"]',
       '[class*="tags"]','[class*="topics"]','[class*="keywords"]',
     ];
     POST_ARTICLE_NOISE.forEach(sel => {
@@ -2318,56 +2329,75 @@ function extractArticleText(html, sourceUrl) {
     });
 
     /* ── STEP 4: Extract paragraphs — the gold standard ──
-       Collect only <p> tags that contain real sentence content.
-       This is far more reliable than taking all innerText. */
-    const paragraphs = [...articleEl.querySelectorAll('p')]
-      .map(p => (p.innerText || p.textContent || '').replace(/\s+/g, ' ').trim())
-      .filter(t => {
-        if (t.length < 40) return false;   /* too short — likely a caption or label */
-        /* Skip paragraphs that look like metadata / noise */
-        if (/^(?:share|follow|subscribe|click here|read more|also read|related|advertisement|loading)/i.test(t)) return false;
-        if (/^(?:photo|image|pic|video|source|credit)[:\/]/i.test(t)) return false;
-        /* Skip paragraphs that are just a URL */
-        if (/^https?:\/\/\S+$/.test(t)) return false;
-        return true;
-      });
+       Collect <p> tags AND <div> elements that behave like paragraphs.
+       Many Nepali news sites use <div class="article-para"> instead of <p>.
+       Lower the minimum length to 20 chars (Nepali sentences can be short).
+       Ads/images between paragraphs are already removed in Step 1. */
+    const PARA_NOISE_RE = /^(?:share|follow|subscribe|click here|read more|also read|related|advertisement|loading|tags?|topics?|photo|image|pic|video|source|credit|फोटो|तस्वीर|स्रोत)/i;
 
-    if (paragraphs.length >= 2) {
-      /* Got clean paragraphs — join them. Cap at 4000 chars. */
-      return paragraphs.join(' ').slice(0, 4000);
+    /* Collect both <p> and paragraph-like <div>s */
+    const allParaEls = [...articleEl.querySelectorAll('p, div')].filter(el => {
+      /* For <div>: skip layout/container divs (those that contain other block elements) */
+      if (el.tagName === 'DIV') {
+        if (el.querySelector('div, article, section, nav, ul, ol, table')) return false;
+      }
+      const t = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t.length < 20) return false;                /* too short */
+      if (PARA_NOISE_RE.test(t)) return false;        /* noise label */
+      if (/^https?:\/\/\S+$/.test(t)) return false;  /* bare URL */
+      return true;
+    }).map(el => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim());
+
+    /* Deduplicate — a parent <div> may include the same text as its child <p> */
+    const seen = new Set();
+    const paragraphs = allParaEls.filter(t => {
+      /* Check whether this text is already a substring of something we have */
+      if (seen.has(t)) return false;
+      /* Also check if the new text is fully contained in an already-seen entry */
+      for (const s of seen) { if (s.includes(t) || t.includes(s)) return false; }
+      seen.add(t);
+      return true;
+    });
+
+    if (paragraphs.length >= 1) {
+      /* Got clean paragraphs — join them. Cap at 5000 chars. */
+      return paragraphs.join(' ').slice(0, 5000);
     }
 
-    /* ── STEP 5: Fallback — use full innerText but cut at first noise signal ──
-       Detect where post-article content starts by looking for noise trigger phrases. */
+    /* ── STEP 5: Fallback — use full innerText but cut at definitive noise signal ──
+       Only honor the cutoff AFTER we have accumulated > 300 chars of real content.
+       This prevents mid-article "related news" widgets from chopping the text early. */
     const rawText = (articleEl.innerText || articleEl.textContent || '')
       .replace(/[ \t]+/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
 
-    /* Cut the text at the first line that looks like post-article noise */
     const CUTOFF_PATTERNS = [
-      /^(?:प्रतिक्रिया|टिप्पणी|comment|feedback|leave a reply|reply)/im,
-      /^(?:सम्बन्धित समाचार|related news|related articles|you may also like|also read|read more)/im,
-      /^(?:tags?|topics?|categories|keywords?|hashtag)/im,
-      /^(?:share this|share on|follow us|subscribe|newsletter)/im,
-      /^(?:advertisement|sponsored|promoted)/im,
-      /(?:सम्पर्क|contact us|about us|privacy policy|terms)/im,
-      /(?:facebook|twitter|instagram|youtube)\s*(?:page|account|channel)/im,
+      /^(?:प्रतिक्रिया|टिप्पणी|comment|feedback|leave a reply|reply)/i,
+      /^(?:सम्बन्धित समाचार|related news|related articles|you may also like|also read|read more)/i,
+      /^(?:tags?|topics?|categories|keywords?|hashtag)/i,
+      /^(?:share this|share on|follow us|subscribe|newsletter)/i,
+      /^(?:advertisement|sponsored|promoted)/i,
+      /^(?:सम्पर्क|contact us|about us|privacy policy|terms of)/i,
+      /^(?:facebook|twitter|instagram|youtube)\s*(?:page|account|channel)/i,
     ];
 
     const lines = rawText.split('\n');
     let cutLine = lines.length;
+    let accumulated = 0;
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (line.length < 5) continue;
-      if (CUTOFF_PATTERNS.some(rx => rx.test(line))) {
+      accumulated += line.length;
+      /* Only cut at noise AFTER we have at least 300 chars of real content */
+      if (accumulated > 300 && CUTOFF_PATTERNS.some(rx => rx.test(line))) {
         cutLine = i;
         break;
       }
     }
 
     const clipped = lines.slice(0, cutLine).join('\n').trim();
-    if (clipped.length > 200) return clipped.slice(0, 4000);
+    if (clipped.length > 100) return clipped.slice(0, 5000);
 
   } catch { /* fall through */ }
   return '';
