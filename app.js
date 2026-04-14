@@ -3918,6 +3918,8 @@ function addSideImage(event) {
       subjectDataUrl: null,
       img:            null,
       x: 0, y: 0, w: 0, h: 0, rot: 0,
+      flipH:   false,   /* horizontal flip (pre-composite) */
+      removeBg: true,   /* BG removal toggle — user can turn off per image */
       selected: false,
     });
     _renderSideImageList();
@@ -3950,16 +3952,89 @@ function _renderSideImageList() {
     const item = document.createElement('div');
     item.className = 'side-img-item';
     item.dataset.id = sp.id;
+
+    /* Preview thumb — show subject (BG removed) if available, else raw */
+    const thumbSrc = sp.subjectDataUrl || sp.rawDataUrl;
+    const bgBtnClass = sp.removeBg ? 'bg-on' : 'bg-off';
+    const bgBtnLabel = sp.removeBg ? '🚫 BG: On' : '🖼️ BG: Off';
+    const bgBtnTitle = sp.removeBg ? 'Background removal ON — click to turn off' : 'Background removal OFF — click to turn on';
+
     item.innerHTML = `
-      <img src="${sp.rawDataUrl}" class="side-img-thumb" alt="">
-      <button class="btn btn-ghost side-img-remove" onclick="removeSideSprite(${sp.id})" title="Remove">✕</button>`;
+      <button class="btn btn-ghost side-img-remove" onclick="removeSideSprite(${sp.id})" title="Remove image">✕</button>
+      <img src="${thumbSrc}" class="side-img-thumb" alt="" title="Click Apply to place on canvas">
+      <div class="side-img-actions">
+        <button class="side-img-bg-btn ${bgBtnClass}" onclick="toggleSpriteBg(${sp.id})" title="${bgBtnTitle}">${bgBtnLabel}</button>
+        <button class="side-img-action-btn" onclick="rotateSpritePreview(${sp.id}, -90)" title="Rotate 90° left">↺</button>
+        <button class="side-img-action-btn" onclick="rotateSpritePreview(${sp.id}, 90)" title="Rotate 90° right">↻</button>
+        <button class="side-img-action-btn" onclick="flipSpritePreview(${sp.id})" title="Flip horizontal">⇆</button>
+      </div>`;
     list.appendChild(item);
   });
+
   /* Show/hide apply+clear buttons */
   const applyBtn = document.getElementById('compositeApplyBtn');
   const clearBtn = document.getElementById('compositeClearBtn');
   if (applyBtn) applyBtn.style.display = _sideSprites.length ? 'inline-flex' : 'none';
   if (clearBtn) clearBtn.style.display = _sideSprites.length ? 'inline-flex' : 'none';
+}
+
+/** Toggle background removal on/off for a specific sprite */
+function toggleSpriteBg(id) {
+  const sp = _sideSprites.find(s => s.id === id);
+  if (!sp) return;
+  sp.removeBg = !sp.removeBg;
+  /* Invalidate cached subject so applyComposite re-processes it */
+  sp.subjectDataUrl = null;
+  sp.img = null;
+  _renderSideImageList();
+  toast(sp.removeBg ? '🚫 BG removal ON for this image' : '🖼️ BG removal OFF for this image', 'info', 1800);
+}
+
+/** Rotate a sprite's base image pre-composite (baked into rawDataUrl) */
+function rotateSpritePreview(id, deg) {
+  const sp = _sideSprites.find(s => s.id === id);
+  if (!sp) return;
+  /* Rotate the raw image onto an offscreen canvas */
+  const img = new Image();
+  img.onload = () => {
+    const rad = (deg * Math.PI) / 180;
+    const sin = Math.abs(Math.sin(rad)), cos = Math.abs(Math.cos(rad));
+    const nW = Math.round(img.width * cos + img.height * sin);
+    const nH = Math.round(img.width * sin + img.height * cos);
+    const oc = document.createElement('canvas');
+    oc.width = nW; oc.height = nH;
+    const ctx = oc.getContext('2d');
+    ctx.translate(nW / 2, nH / 2);
+    ctx.rotate(rad);
+    ctx.drawImage(img, -img.width / 2, -img.height / 2);
+    sp.rawDataUrl = oc.toDataURL('image/png');
+    /* Invalidate cached outputs so applyComposite re-processes */
+    sp.subjectDataUrl = null;
+    sp.img = null;
+    _renderSideImageList();
+  };
+  img.src = sp.rawDataUrl;
+}
+
+/** Flip a sprite's base image horizontally pre-composite */
+function flipSpritePreview(id) {
+  const sp = _sideSprites.find(s => s.id === id);
+  if (!sp) return;
+  const img = new Image();
+  img.onload = () => {
+    const oc = document.createElement('canvas');
+    oc.width = img.width; oc.height = img.height;
+    const ctx = oc.getContext('2d');
+    ctx.translate(img.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(img, 0, 0);
+    sp.rawDataUrl = oc.toDataURL('image/png');
+    /* Invalidate cached outputs */
+    sp.subjectDataUrl = null;
+    sp.img = null;
+    _renderSideImageList();
+  };
+  img.src = sp.rawDataUrl;
 }
 
 /** Compute a default position for sprite index i — centred on canvas */
@@ -4043,18 +4118,24 @@ async function applyComposite() {
   try {
     for (const sp of _sideSprites) {
       if (!sp.subjectDataUrl) {
-        const hasRemovebg = _removebgKey || _browserRemovebgKey;
-        if (hasRemovebg) {
-          toast(`🎨 Removing background (Remove.bg) for image ${sp.id}…`, 'info', 4000);
-          try {
-            sp.subjectDataUrl = await removeBackground(sp.rawDataUrl);
-          } catch {
-            toast('⚠️ Remove.bg failed — using smart local removal', 'info', 2500);
+        if (sp.removeBg) {
+          /* BG removal is ON for this sprite */
+          const hasRemovebg = _removebgKey || _browserRemovebgKey;
+          if (hasRemovebg) {
+            toast(`🎨 Removing background (Remove.bg) for image ${sp.id}…`, 'info', 4000);
+            try {
+              sp.subjectDataUrl = await removeBackground(sp.rawDataUrl);
+            } catch {
+              toast('⚠️ Remove.bg failed — using smart local removal', 'info', 2500);
+              sp.subjectDataUrl = await _localRemoveBackground(sp.rawDataUrl);
+            }
+          } else {
+            toast(`🎨 Auto-removing background for image ${sp.id}…`, 'info', 3000);
             sp.subjectDataUrl = await _localRemoveBackground(sp.rawDataUrl);
           }
         } else {
-          toast(`🎨 Auto-removing background for image ${sp.id}…`, 'info', 3000);
-          sp.subjectDataUrl = await _localRemoveBackground(sp.rawDataUrl);
+          /* BG removal is OFF — use raw image as-is */
+          sp.subjectDataUrl = sp.rawDataUrl;
         }
       }
       if (!sp.img) {
@@ -4069,6 +4150,8 @@ async function applyComposite() {
     _compositeMode = true;
     _showCompositeHandles(true);
     await redrawComposite();
+    /* Refresh thumbnails to show BG-removed previews */
+    _renderSideImageList();
     toast('✅ Composite ready! Drag · resize · rotate side images freely.', 'success');
   } finally {
     if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = '✨ Apply Composite'; }
