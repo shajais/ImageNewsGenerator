@@ -5229,7 +5229,7 @@ async function _drawAuthorWatermark(ctx, W, _titleBottom) {
   ctx.fillText('Shashi News Gen', textX, nameY);
 
   /* URL + separator + email in smaller text */
-  const SITE_URL = 'shajais.github.io/ImageNewsGenerator';
+  const SITE_URL = 'shajais.github.io/ShashiNewsGen';
   const EMAIL    = 'shashi19.jaiswal@gmail.com';
   ctx.font      = '14px "Segoe UI",Arial,sans-serif';
   ctx.fillStyle = 'rgba(246,173,85,0.90)';
@@ -5400,7 +5400,7 @@ function getNewsIcon(title) {
 }
 
 const BRAND_NAME = 'Shashi News Gen 🇳🇵';
-const BRAND_URL  = 'https://shajais.github.io/ImageNewsGenerator/';
+const BRAND_URL  = 'https://shajais.github.io/ShashiNewsGen/';
 
 function buildPostText(post, rawTitle, { includeUrl = true } = {}) {
   const icon   = getNewsIcon(rawTitle || post.title || '');
