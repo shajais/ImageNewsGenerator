@@ -1955,7 +1955,7 @@ async function rewriteWithAI(rawTitle, articleBody, sourceLang) {
   }
 
   /* Give AI the richest possible context — up to 3000 chars of actual article body */
-  const bodySnippet = (articleBody || '').replace(/\s+/g, ' ').slice(0, 3000).trim();
+  const bodySnippet = _cleanArticleText(articleBody || '').replace(/\s+/g, ' ').slice(0, 3000).trim();
   const langNote = sourceLang === 'ne' ? 'Nepali' : sourceLang === 'hi' ? 'Hindi' : 'English';
   const hasBody = bodySnippet.length > 100;
 
@@ -2173,7 +2173,7 @@ async function selectArticle(idx) {
     /* Step 3a: Translate title to Nepali */
     nepaliTitle = await buildTitle(rawTitle, sourceLang);
     /* Step 3b: Hook from topic-aware template bank */
-    hook = buildHook(nepaliTitle + ' ' + rawTitle);
+    hook = buildHook(nepaliTitle + ' ' + rawTitle, bestBody);
     /* Step 3c: Build description (translates + extracts key facts) */
     desc = await buildDescription(nepaliTitle, rawTitle, bestBody, sourceLang);
     /* Step 3d: Hashtags */
@@ -2295,20 +2295,96 @@ function detectTopic(text) {
   return null;
 }
 
-function buildHook(rawTitle) {
+/**
+ * Extract key Nepali/English nouns from a title for use in dynamic hooks.
+ * Returns the most meaningful word (proper noun, number, or subject keyword).
+ */
+function _extractHookSubject(rawTitle) {
+  /* Try to find numbers (death toll, amount, count) */
+  const numMatch = rawTitle.match(/\b(\d+)\s*(?:जना|व्यक्ति|killed|dead|injured|crore|lakh|करोड|लाख)/i);
+  if (numMatch) return numMatch[0].trim();
+
+  /* Try to find capitalized proper nouns (English names/places) */
+  const capWords = rawTitle.match(/\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){0,2})\b/g);
+  if (capWords && capWords.length) {
+    /* Skip generic words */
+    const skip = new Set(['Nepal','Nepali','The','This','How','Why','What','When','Where']);
+    const best = capWords.find(w => !skip.has(w));
+    if (best) return best;
+  }
+
+  /* Try to find Devanagari proper nouns (words > 3 chars not in common stop-word list) */
+  const devWords = rawTitle.match(/[\u0900-\u097F]{4,}/g);
+  const stopNe   = new Set(['नेपालमा','नेपालको','नेपाली','भएको','भएकी','गरिएको','गर्ने','गर्छ','भयो','छ।','छन्','हुने','गर्न','गरे','मा','को','ले','र']);
+  if (devWords) {
+    const best = devWords.find(w => !stopNe.has(w));
+    if (best) return best;
+  }
+  return '';
+}
+
+function buildHook(rawTitle, articleBody) {
   const topic = detectTopic(rawTitle);
-  if (topic) return HOOK_BY_TOPIC[topic];
-  /* Extra Devanagari checks */
+  const subject = _extractHookSubject(rawTitle);
+
+  /* Build a dynamic hook using topic + specific subject from THIS article */
+  const EMOJI_MAP = {
+    flood:'🌊', rain:'🌧️', earthquake:'🔴', election:'🗳️',
+    government:'🏛️', politics:'🏛️', health:'🏥', accident:'🚨',
+    education:'📚', police:'🚔', crime:'🚔', cricket:'🏆',
+    football:'⚽', fire:'🔥', road:'🚦', tourism:'🏔️', economy:'💰',
+  };
+
+  const HOOK_TEMPLATES_BY_TOPIC = {
+    flood      : s => s ? `🌊 ${s} — बाढी र पहिरोले नेपाल थर्कायो! यो खबर नपढी नबस्नुस्।` : HOOK_BY_TOPIC['flood'],
+    rain       : s => s ? `🌧️ ${s} — मनसुनी बाढी र पहिरोको खतरा बढ्यो!` : HOOK_BY_TOPIC['rain'] || HOOK_BY_TOPIC['flood'],
+    earthquake : s => s ? `🔴 भूकम्पको झड्का! ${s} — नेपालमा ठूलो भूचाल गयो।` : HOOK_BY_TOPIC['earthquake'],
+    election   : s => s ? `🗳️ ${s} — निर्वाचनमा नाटकीय मोड! हेर्नुस् के भयो।` : HOOK_BY_TOPIC['election'],
+    economy    : s => s ? `💰 ${s} — नेपालको आर्थिक अवस्थामा ठूलो हलचल!` : HOOK_BY_TOPIC['economy'],
+    government : s => s ? `🏛️ ${s} — सरकारको ठूलो निर्णय, नेपाल स्तब्ध!` : HOOK_BY_TOPIC['government'],
+    politics   : s => s ? `🏛️ ${s} — राजनीतिमा भूचाल, नेपाल थर्कायो!` : HOOK_BY_TOPIC['politics'],
+    health     : s => s ? `🏥 ${s} — स्वास्थ्य अलर्ट! नेपालीहरू सतर्क रहनुस्।` : HOOK_BY_TOPIC['health'],
+    accident   : s => s ? `🚨 ${s} — दुर्घटनामा ज्यान गयो! हृदयविदारक घटना।` : HOOK_BY_TOPIC['accident'],
+    police     : s => s ? `🚔 ${s} — प्रहरीको ठूलो कारबाही! अपराधी पक्राउ।` : HOOK_BY_TOPIC['police'],
+    crime      : s => s ? `🚔 ${s} — अपराधको नयाँ अध्याय! नेपाल स्तब्ध।` : HOOK_BY_TOPIC['crime'],
+    education  : s => s ? `📚 ${s} — शिक्षा क्षेत्रमा ठूलो बदलाव! विद्यार्थीहरू सतर्क रहनुस्।` : HOOK_BY_TOPIC['education'],
+    cricket    : s => s ? `🏆 ${s} — नेपाली क्रिकेट इतिहास रच्यो!` : HOOK_BY_TOPIC['cricket'],
+    football   : s => s ? `⚽ ${s} — फुटबल मैदानमा तहल्का मच्यो!` : HOOK_BY_TOPIC['football'],
+    fire       : s => s ? `🔥 ${s} — आगलागीमा ठूलो क्षति! हृदयविदारक दृश्य।` : HOOK_BY_TOPIC['fire'],
+    road       : s => s ? `🚦 ${s} — सडक दुर्घटनामा ज्यान गयो!` : HOOK_BY_TOPIC['road'],
+    tourism    : s => s ? `🏔️ ${s} — नेपाल पर्यटनमा नयाँ इतिहास!` : HOOK_BY_TOPIC['tourism'],
+  };
+
+  /* Extra Devanagari topic checks */
   const t = rawTitle.toLowerCase();
-  if (t.includes('बाढी') || t.includes('पहिरो') || t.includes('वर्षा')) return HOOK_BY_TOPIC['flood'];
-  if (t.includes('भूकम्प'))       return HOOK_BY_TOPIC['earthquake'];
-  if (t.includes('निर्वाचन') || t.includes('मतदान')) return HOOK_BY_TOPIC['election'];
-  if (t.includes('सरकार') || t.includes('प्रधानमन्त्री')) return HOOK_BY_TOPIC['government'];
-  if (t.includes('स्वास्थ्य') || t.includes('अस्पताल')) return HOOK_BY_TOPIC['health'];
-  if (t.includes('दुर्घटना') || t.includes('सडक'))    return HOOK_BY_TOPIC['accident'];
-  if (t.includes('विद्यार्थी') || t.includes('शिक्षा')) return HOOK_BY_TOPIC['education'];
-  if (t.includes('प्रहरी') || t.includes('अपराध'))    return HOOK_BY_TOPIC['police'];
-  if (t.includes('क्रिकेट') || t.includes('खेल'))     return HOOK_BY_TOPIC['cricket'];
+  const devTopic = t.includes('बाढी') || t.includes('पहिरो') ? 'flood'
+    : t.includes('भूकम्प') ? 'earthquake'
+    : t.includes('निर्वाचन') || t.includes('मतदान') ? 'election'
+    : t.includes('सरकार') || t.includes('प्रधानमन्त्री') ? 'government'
+    : t.includes('स्वास्थ्य') || t.includes('अस्पताल') ? 'health'
+    : t.includes('दुर्घटना') ? 'accident'
+    : t.includes('शिक्षा') || t.includes('विद्यार्थी') ? 'education'
+    : t.includes('प्रहरी') || t.includes('अपराध') ? 'police'
+    : t.includes('क्रिकेट') ? 'cricket'
+    : t.includes('फुटबल') ? 'football'
+    : t.includes('आगलागी') ? 'fire'
+    : null;
+
+  const resolvedTopic = topic || devTopic;
+  if (resolvedTopic && HOOK_TEMPLATES_BY_TOPIC[resolvedTopic]) {
+    return HOOK_TEMPLATES_BY_TOPIC[resolvedTopic](subject);
+  }
+
+  /* Generic dynamic hook — use subject if available */
+  if (subject) {
+    const GENERIC_DYNAMIC = [
+      `😱 ${subject} — नेपालमा अहिले यही कुराको चर्चा छ! सबैले पढ्नुस्।`,
+      `⚡ ब्रेकिङ: ${subject} — यो खबरले नेपाल हल्लाउँदैछ!`,
+      `🔥 ${subject} सम्बन्धी ठूलो खुलासा — नेपाली जनता स्तब्ध!`,
+      `📢 ${subject} — सबैले थाहा पाउनुपर्ने जरुरी खबर!`,
+    ];
+    return GENERIC_DYNAMIC[Math.floor(Math.random() * GENERIC_DYNAMIC.length)];
+  }
   return HOOK_GENERIC[Math.floor(Math.random() * HOOK_GENERIC.length)];
 }
 
@@ -2644,22 +2720,63 @@ function transliterateName(en) {
  * @param {string} articleBody  – full article text (or RSS body fallback)
  * @param {string} sourceLang   – 'ne' | 'en' | 'hi' | etc.
  */
+/**
+ * Strip author bylines, dates, timestamps, "Read more" links, and
+ * other article metadata from body text before using it for description.
+ * This prevents the template from outputting "By John Smith | April 14, 2025"
+ * style noise as part of the description.
+ */
+function _cleanArticleText(text) {
+  if (!text) return '';
+  return text
+    /* Remove typical byline patterns: "By John Smith", "Reporter: Name", "Correspondent:" */
+    .replace(/^(?:by|reporter|correspondent|staff|author|written by|posted by)[:\s]+[^\n]{0,80}/gim, '')
+    /* Remove date/time stamps — many formats */
+    .replace(/\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},?\s+\d{4}\b/gi, '')
+    .replace(/\b\d{1,2}\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}\b/gi, '')
+    .replace(/\b\d{4}[-\/]\d{2}[-\/]\d{2}\b/g, '')            /* 2025-04-14 */
+    .replace(/\b\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}\b/g, '')      /* 14/04/2025 */
+    .replace(/\b\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?\b/g, '')      /* 10:30 AM */
+    /* Nepali date/time noise */
+    .replace(/\b(?:बैशाख|जेठ|असार|श्रावण|भाद्र|आश्विन|कार्तिक|मंसिर|पुष|माघ|फाल्गुण|चैत्र)\s+\d+,?\s+\d{4}/g, '')
+    .replace(/\b(?:आइतबार|सोमबार|मंगलबार|बुधबार|बिहिबार|शुक्रबार|शनिबार),?\s+\d+/g, '')
+    /* Remove "Published:", "Updated:", "Last updated:" markers */
+    .replace(/(?:published|updated|last updated|posted|edited)[:\s]+[^\n]{0,60}/gi, '')
+    /* Remove photo/image captions like "(Photo: Reuters)" or "[Image: AP]" */
+    .replace(/[\[\(](?:photo|image|pic|picture|video|source|credit)[:\s][^\]\)]{0,60}[\]\)]/gi, '')
+    /* Remove "Read more:", "Also read:", "Related:" cross-links */
+    .replace(/(?:read more|also read|related|see also)[:\s]+[^\n]{0,120}/gi, '')
+    /* Remove short lines that look like navigation/header artifacts (< 25 chars) */
+    .replace(/^.{1,25}$/gm, '')
+    /* Remove lines with mostly special characters (social share button labels) */
+    .replace(/^[\s\W]{0,5}(?:share|follow|subscribe|like|comment|tweet|whatsapp|facebook|instagram|twitter|youtube)[\s\W]{0,5}$/gim, '')
+    /* Remove URLs */
+    .replace(/https?:\/\/[^\s]+/g, '')
+    /* Collapse multiple blank lines */
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/\s{3,}/g, ' ')
+    .trim();
+}
+
 async function buildDescription(nepaliTitle, rawTitle, articleBody, sourceLang = 'ne') {
+  /* ── STEP 0: Strip author, date, bylines, nav noise from body ── */
+  const cleanedBody = _cleanArticleText(articleBody || '');
+
   const combinedLower = (nepaliTitle + ' ' + rawTitle).toLowerCase();
   const topic = detectTopic(combinedLower) || detectNepaliTopic(nepaliTitle);
-  const bodyIsNepali = /[\u0900-\u097F]{10,}/.test(articleBody || '');
+  const bodyIsNepali = /[\u0900-\u097F]{10,}/.test(cleanedBody);
 
   /* ── STEP 1: Translate body to Nepali if it's in another language ── */
-  let nepaliBody = articleBody || '';
+  let nepaliBody = cleanedBody;
   if (!bodyIsNepali && nepaliBody.trim().length > 50) {
     nepaliBody = await translateBodyToNepali(nepaliBody, sourceLang);
   }
 
   /* ── STEP 2: Extract key facts from original body (numbers work in any language) ── */
-  const extractedFacts = extractKeyFacts(rawTitle, articleBody);
+  const extractedFacts = extractKeyFacts(rawTitle, cleanedBody);
 
   /* ── STEP 3: Extract best sentences from Nepali body ── */
-  const bodySentences = extractBestSentences(nepaliBody, nepaliTitle, rawTitle, true, 6);
+  const bodySentences = extractBestSentences(nepaliBody, nepaliTitle, rawTitle, true, 8);
 
   /* ── STEP 4: Assemble description ── */
   const parts = [];
@@ -2674,14 +2791,14 @@ async function buildDescription(nepaliTitle, rawTitle, articleBody, sourceLang =
 
   /* A – Best body sentences first (most factual, most contextual) */
   for (const sent of bodySentences) {
-    if (wordCount(parts.join(' ')) >= 80) break;
+    if (wordCount(parts.join(' ')) >= 120) break;
     addPart(sent);
   }
 
   /* B – Inject numeric facts if body was thin */
   if (parts.length < 2) {
     for (const fact of extractedFacts) {
-      if (wordCount(parts.join(' ')) >= 80) break;
+      if (wordCount(parts.join(' ')) >= 120) break;
       addPart(fact);
     }
   }
@@ -2695,7 +2812,7 @@ async function buildDescription(nepaliTitle, rawTitle, articleBody, sourceLang =
   }
 
   /* D – Close with an impact sentence (non-duplicate) */
-  if (wordCount(parts.join(' ')) < 90) {
+  if (wordCount(parts.join(' ')) < 100) {
     const impact = topic
       ? DESC_IMPACT[topic]
       : DESC_GENERIC_IMPACT[Math.floor(Math.random() * DESC_GENERIC_IMPACT.length)];
@@ -2712,8 +2829,8 @@ async function buildDescription(nepaliTitle, rawTitle, articleBody, sourceLang =
     }
   }
 
-  /* ── STEP 6: Trim to target 60-100 Nepali words ── */
-  return trimToWordTarget(final.join(' '), 60, 100);
+  /* ── STEP 6: Trim to target 80-150 Nepali words ── */
+  return trimToWordTarget(final.join(' '), 80, 150);
 }
 
 /** Count words in a string (Nepali-aware: split on whitespace) */
@@ -2910,11 +3027,13 @@ function buildHashtags(title) {
   for (const [key, tags] of Object.entries(TOPIC_HASHTAGS)) {
     if (lower.includes(key)) extra = extra.concat(tags);
   }
-  const topicPick = [...new Set(extra)].slice(0, 3);
-  const basePick  = NEPAL_HASHTAGS.filter(h => !topicPick.includes(h)).slice(0, 3);
+  const topicPick = [...new Set(extra)].slice(0, 4);
+  const basePick  = NEPAL_HASHTAGS.filter(h => !topicPick.includes(h)).slice(0, 6);
   const chosen    = [...topicPick, ...basePick];
   if (chosen.length < 4) chosen.push('#NepalNews', '#BreakingNews', '#Nepal', '#नेपाल');
-  return chosen.slice(0, 6);
+  /* Always end with brand tag */
+  const filtered = chosen.filter(h => h.toLowerCase() !== '#shashinewsgen').slice(0, 10);
+  return [...filtered, '#ShashiNewsGen'];
 }
 
 /* ================================================================
@@ -5426,6 +5545,65 @@ function downloadImage() {
 /* ================================================================
    FEATURE 5 – POST TEXT & SHARING
 ================================================================ */
+
+/**
+ * Share the complete post (text + generated image) using the
+ * Web Share API (supported on mobile browsers and some desktop).
+ * Falls back to download + copy if Web Share is not available.
+ */
+async function shareWithImage() {
+  if (!generatedPost) { toast('⚠️ पहिले समाचार छान्नुहोस्।', 'error'); return; }
+
+  const text = buildPostText(generatedPost, selectedArticle?.title, { includeUrl: false });
+  const canvas = document.getElementById('newsCanvas');
+
+  /* Hide handles during export */
+  const prevSelected = _selectedSpriteId;
+  _selectedSpriteId = null;
+  const hc = document.getElementById('compositeHandleCanvas');
+  const hcWasVisible = hc && hc.style.display !== 'none';
+  if (hc) { hc.style.display = 'none'; hc.style.pointerEvents = 'none'; }
+
+  try {
+    /* Convert canvas to blob */
+    const blob = await new Promise((resolve, reject) => {
+      try { canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas empty')), 'image/png'); }
+      catch(e) { reject(e); }
+    });
+
+    const file = new File([blob], 'shashinewsgen-' + Date.now() + '.png', { type: 'image/png' });
+
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      /* ✅ Web Share API with image (mobile/modern desktop) */
+      await navigator.share({ text, files: [file] });
+      toast('✅ साझा गरियो!', 'success');
+    } else if (navigator.share) {
+      /* Web Share without file (older browsers) — share text only */
+      await navigator.share({ text });
+      toast('✅ Text साझा गरियो! Image छुट्टै download गर्नुहोस्।', 'success');
+    } else {
+      /* ❌ No Web Share API — copy text + trigger download */
+      try { await navigator.clipboard.writeText(text); } catch {}
+      /* Trigger download */
+      const link = document.createElement('a');
+      link.download = 'shashinewsgen-' + Date.now() + '.png';
+      link.href = URL.createObjectURL(blob);
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+      toast('✅ Text copied + Image downloaded! Social media मा paste गर्नुहोस्।', 'success', 5000);
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      /* Canvas tainted — fall back to text-only */
+      try { await navigator.clipboard.writeText(text); } catch {}
+      toast('⚠️ Text copied! Image generate गरेपछि पुनः प्रयास गर्नुहोस्।', 'info', 4000);
+    }
+  } finally {
+    _selectedSpriteId = prevSelected;
+    if (hc && hcWasVisible) { hc.style.display = 'block'; hc.style.pointerEvents = 'auto'; }
+    if (_compositeMode) _drawCompositeHandles();
+  }
+}
 function getNewsIcon(title) {
   const t = (title || '').toLowerCase();
   if (t.includes('flood') || t.includes('rain') || t.includes('landslide') || t.includes('बाढी') || t.includes('पहिरो')) return '🌧️';
