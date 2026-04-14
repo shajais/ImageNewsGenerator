@@ -1955,7 +1955,7 @@ async function rewriteWithAI(rawTitle, articleBody, sourceLang) {
   }
 
   /* Give AI the richest possible context — up to 3000 chars of actual article body */
-  const bodySnippet = _cleanArticleText(articleBody || '').replace(/\s+/g, ' ').slice(0, 3000).trim();
+  const bodySnippet = _cleanArticleText(articleBody || '', rawTitle).replace(/\s+/g, ' ').slice(0, 3000).trim();
   const langNote = sourceLang === 'ne' ? 'Nepali' : sourceLang === 'hi' ? 'Hindi' : 'English';
   const hasBody = bodySnippet.length > 100;
 
@@ -2726,41 +2726,95 @@ function transliterateName(en) {
  * This prevents the template from outputting "By John Smith | April 14, 2025"
  * style noise as part of the description.
  */
-function _cleanArticleText(text) {
+function _cleanArticleText(text, rawTitle) {
   if (!text) return '';
-  return text
-    /* Remove typical byline patterns: "By John Smith", "Reporter: Name", "Correspondent:" */
-    .replace(/^(?:by|reporter|correspondent|staff|author|written by|posted by)[:\s]+[^\n]{0,80}/gim, '')
-    /* Remove date/time stamps — many formats */
-    .replace(/\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},?\s+\d{4}\b/gi, '')
-    .replace(/\b\d{1,2}\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}\b/gi, '')
-    .replace(/\b\d{4}[-\/]\d{2}[-\/]\d{2}\b/g, '')            /* 2025-04-14 */
-    .replace(/\b\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}\b/g, '')      /* 14/04/2025 */
-    .replace(/\b\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?\b/g, '')      /* 10:30 AM */
-    /* Nepali date/time noise */
-    .replace(/\b(?:बैशाख|जेठ|असार|श्रावण|भाद्र|आश्विन|कार्तिक|मंसिर|पुष|माघ|फाल्गुण|चैत्र)\s+\d+,?\s+\d{4}/g, '')
-    .replace(/\b(?:आइतबार|सोमबार|मंगलबार|बुधबार|बिहिबार|शुक्रबार|शनिबार),?\s+\d+/g, '')
-    /* Remove "Published:", "Updated:", "Last updated:" markers */
-    .replace(/(?:published|updated|last updated|posted|edited)[:\s]+[^\n]{0,60}/gi, '')
-    /* Remove photo/image captions like "(Photo: Reuters)" or "[Image: AP]" */
-    .replace(/[\[\(](?:photo|image|pic|picture|video|source|credit)[:\s][^\]\)]{0,60}[\]\)]/gi, '')
-    /* Remove "Read more:", "Also read:", "Related:" cross-links */
-    .replace(/(?:read more|also read|related|see also)[:\s]+[^\n]{0,120}/gi, '')
-    /* Remove short lines that look like navigation/header artifacts (< 25 chars) */
-    .replace(/^.{1,25}$/gm, '')
-    /* Remove lines with mostly special characters (social share button labels) */
-    .replace(/^[\s\W]{0,5}(?:share|follow|subscribe|like|comment|tweet|whatsapp|facebook|instagram|twitter|youtube)[\s\W]{0,5}$/gim, '')
-    /* Remove URLs */
-    .replace(/https?:\/\/[^\s]+/g, '')
-    /* Collapse multiple blank lines */
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/\s{3,}/g, ' ')
-    .trim();
+
+  let t = text;
+
+  /* ── 1. Strip the article's own title if it appears at the start of the body ──
+     Nepali news sites often repeat the headline as the first line of the body.
+     Compare first 120 chars of body with the raw title (normalised). */
+  if (rawTitle) {
+    const normTitle = rawTitle.replace(/\s+/g, '').toLowerCase().slice(0, 60);
+    const normBody  = t.replace(/\s+/g, '').toLowerCase().slice(0, 80);
+    if (normBody.startsWith(normTitle.slice(0, 30)) || normTitle.slice(0, 30) && normBody.includes(normTitle.slice(0, 30))) {
+      /* Remove the first sentence/line that matches the title */
+      t = t.replace(/^[^\n।]{0,200}[।\n]/, '');
+    }
+  }
+
+  /* ── 2. Remove Nepali news header block — the single most common noise pattern ──
+     Pattern: [optional section] [title text] [Nepali-month] [digits] [year] [weekday] [time] [city] [colon]
+     Example: "विदेश नीतिश कुमारले दिए राजीनामा… अन्नपूर्ण वैशाख १, २०८३ मंगलबार २१:२१:५९ काठमाडौं :"
+     This entire block up to and including the final colon is metadata — remove it. */
+  const NEPALI_MONTHS  = 'बैशाख|जेठ|असार|श्रावण|भाद्र|आश्विन|कार्तिक|मंसिर|पुष|माघ|फाल्गुण|चैत्र';
+  const NEPALI_WEEKDAYS= 'आइतबार|सोमबार|मंगलबार|बुधबार|बिहिबार|शुक्रबार|शनिबार';
+  const NEPALI_DIGITS  = '[०-९\\d]';
+
+  /* Pattern A: full header up to colon (greedily removes the whole metadata block) */
+  t = t.replace(
+    new RegExp(
+      `[^।\\n]{0,120}(?:${NEPALI_MONTHS})\\s+${NEPALI_DIGITS}+[,،]?\\s*${NEPALI_DIGITS}*\\s*(?:${NEPALI_WEEKDAYS})?\\s*${NEPALI_DIGITS}*[:\\s${NEPALI_DIGITS}]*(?:काठमाडौं|पोखरा|ललितपुर|भक्तपुर|वीरगञ्ज|धरान|विराटनगर|नेपालगञ्ज|बुटवल|हेटौंडा|दाङ|सुर्खेत|जुम्ला|धनगढी|महेन्द्रनगर)?\\s*[:\\-।]?`,
+      'g'
+    ), ''
+  );
+
+  /* Pattern B: standalone Nepali weekday + time (२१:२१:५९) + optional city + colon */
+  t = t.replace(new RegExp(`(?:${NEPALI_WEEKDAYS})\\s*[०-९\\d]{1,2}:[०-९\\d]{2}(?::[०-९\\d]{2})?\\s*(?:[\\u0900-\\u097F]{3,15}\\s*)?[:\\-]?`, 'g'), '');
+
+  /* Pattern C: Nepali month + day + year block anywhere in text */
+  t = t.replace(new RegExp(`(?:${NEPALI_MONTHS})\\s+[०-९\\d]+[,،]?\\s*[०-९\\d]{4}`, 'g'), '');
+
+  /* Pattern D: Nepali 4-digit year alone (e.g. २०८३) */
+  t = t.replace(/[२][०][७-९][०-९]/g, '');
+
+  /* Pattern E: Nepali time pattern HH:MM or HH:MM:SS with Nepali/Arabic digits */
+  t = t.replace(/[०-९\d]{1,2}:[०-९\d]{2}(?::[०-९\d]{2})?\s*(?:AM|PM|am|pm|बजे)?/g, '');
+
+  /* ── 3. Section/category labels that appear as standalone words ──
+     e.g. "विदेश", "राजनीति", "खेलकुद", "अर्थ", "समाज" at line start */
+  t = t.replace(/^(?:विदेश|राजनीति|खेलकुद|अर्थ|समाज|स्वास्थ्य|प्रविधि|मनोरञ्जन|शिक्षा|पर्यटन|वातावरण|कानून|अपराध|दुर्घटना)\s*/gm, '');
+
+  /* ── 4. Remove typical English byline patterns ── */
+  t = t.replace(/^(?:by|reporter|correspondent|staff|author|written by|posted by)[:\s]+[^\n]{0,80}/gim, '');
+
+  /* ── 5. Remove English date/time stamps ── */
+  t = t.replace(/\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},?\s+\d{4}\b/gi, '');
+  t = t.replace(/\b\d{1,2}\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}\b/gi, '');
+  t = t.replace(/\b\d{4}[-\/]\d{2}[-\/]\d{2}\b/g, '');
+  t = t.replace(/\b\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}\b/g, '');
+  t = t.replace(/\b\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?\b/g, '');
+
+  /* ── 6. Remove "Published:", "Updated:" markers ── */
+  t = t.replace(/(?:published|updated|last updated|posted|edited)[:\s]+[^\n]{0,60}/gi, '');
+
+  /* ── 7. Remove photo/image captions ── */
+  t = t.replace(/[\[\(](?:photo|image|pic|picture|video|source|credit|फोटो|तस्वीर)[:\s][^\]\)]{0,80}[\]\)]/gi, '');
+
+  /* ── 8. Remove "Read more:", "Also read:", "Related:" cross-links ── */
+  t = t.replace(/(?:read more|also read|related|see also|यो पनि पढ्नुस्|सम्बन्धित)[:\s]+[^\n]{0,150}/gi, '');
+
+  /* ── 9. Remove social share / nav artifact lines ── */
+  t = t.replace(/^[\s\W]{0,5}(?:share|follow|subscribe|like|comment|tweet|whatsapp|facebook|instagram|twitter|youtube)[\s\W]{0,5}$/gim, '');
+
+  /* ── 10. Remove URLs ── */
+  t = t.replace(/https?:\/\/[^\s]+/g, '');
+
+  /* ── 11. Remove lines shorter than 30 chars (nav items, labels, stray metadata) ── */
+  t = t.replace(/^.{1,30}$/gm, '');
+
+  /* ── 12. Final whitespace cleanup ── */
+  t = t.replace(/\n{3,}/g, '\n\n').replace(/\s{3,}/g, ' ').trim();
+
+  /* ── 13. If the cleaned text still starts with a colon or dash — strip it ── */
+  t = t.replace(/^[\s:।\-–—]+/, '').trim();
+
+  return t;
 }
 
 async function buildDescription(nepaliTitle, rawTitle, articleBody, sourceLang = 'ne') {
   /* ── STEP 0: Strip author, date, bylines, nav noise from body ── */
-  const cleanedBody = _cleanArticleText(articleBody || '');
+  const cleanedBody = _cleanArticleText(articleBody || '', rawTitle);
 
   const combinedLower = (nepaliTitle + ' ' + rawTitle).toLowerCase();
   const topic = detectTopic(combinedLower) || detectNepaliTopic(nepaliTitle);
