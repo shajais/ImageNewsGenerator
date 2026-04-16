@@ -40,19 +40,16 @@ load_env()
 
 GEMINI_API_KEY   = os.environ.get('GEMINI_API_KEY',   '')
 REMOVEBG_API_KEY = os.environ.get('REMOVEBG_API_KEY', '')
-GROK_API_KEY     = os.environ.get('GROK_API_KEY',     '')
 
 if not GEMINI_API_KEY:
     print('⚠️  GEMINI_API_KEY not set in .env')
 if not REMOVEBG_API_KEY:
     print('⚠️  REMOVEBG_API_KEY not set in .env')
-if not GROK_API_KEY:
-    print('ℹ️  GROK_API_KEY not set in .env (optional)')
 
 
 def save_key_to_env(key_name, value):
     """Write or update KEY=VALUE in .env then hot-reload the global."""
-    global GEMINI_API_KEY, REMOVEBG_API_KEY, GROK_API_KEY
+    global GEMINI_API_KEY, REMOVEBG_API_KEY
     env_path = os.path.join(BASE_DIR, '.env')
     content = ''
     if os.path.exists(env_path):
@@ -74,7 +71,6 @@ def save_key_to_env(key_name, value):
     os.environ[key_name] = value
     if key_name == 'GEMINI_API_KEY':   GEMINI_API_KEY   = value
     if key_name == 'REMOVEBG_API_KEY': REMOVEBG_API_KEY = value
-    if key_name == 'GROK_API_KEY':     GROK_API_KEY     = value
     print(f'  [save-key] {key_name} updated (length {len(value)})')
 
 MIME_TYPES = {
@@ -133,7 +129,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             payload = json.dumps({
                 'gemini':   bool(GEMINI_API_KEY),
                 'removebg': bool(REMOVEBG_API_KEY),
-                'grok':     bool(GROK_API_KEY),
             }).encode()
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -230,7 +225,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 key_val = data.get('key', '').strip()
                 valid_map = {
                     'gemini':   'GEMINI_API_KEY',
-                    'grok':     'GROK_API_KEY',
                     'removebg': 'REMOVEBG_API_KEY',
                 }
                 env_key = valid_map.get(service)
@@ -279,21 +273,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
             })
             return
 
-        # ── Proxy: /proxy/grok → xAI Grok API (key injected server-side) ──
-        if pathname == '/proxy/grok':
-            if not GROK_API_KEY:
-                err = json.dumps({'error': 'GROK_API_KEY not configured on server'}).encode()
-                self.send_response(500)
+        # ── Proxy: /proxy/gemini-withkey → Gemini using browser-supplied key ──
+        #    Used when GEMINI_API_KEY is not in .env but user entered key in UI.
+        #    Key is passed via X-Gemini-Key header — avoids CORS block on localhost.
+        if pathname == '/proxy/gemini-withkey':
+            browser_key = self.headers.get('x-gemini-key', '')
+            key_to_use = GEMINI_API_KEY or browser_key
+            if not key_to_use:
+                err = json.dumps({'error': 'No Gemini API key available'}).encode()
+                self.send_response(400)
                 self.send_header('Content-Type', 'application/json')
                 self.send_cors()
                 self.end_headers()
                 self.wfile.write(err)
                 return
-            target = 'https://api.x.ai/v1/chat/completions'
-            print('  [proxy] Grok → (key hidden)')
+            target = (
+                f'https://generativelanguage.googleapis.com/v1beta/models/'
+                f'gemini-2.0-flash:generateContent?key={urllib.parse.quote(key_to_use)}'
+            )
+            print('  [proxy] Gemini (browser key) →')
             self._forward(target, body, {
-                'Content-Type': 'application/json',
-                'Authorization': f'Bearer {GROK_API_KEY}',
+                'Content-Type': self.headers.get('Content-Type', 'application/json'),
             })
             return
 

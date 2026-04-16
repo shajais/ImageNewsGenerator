@@ -18,10 +18,6 @@ const CANVAS_H  = 1080;
 /* ── AI (Gemini) Configuration ──────────────────────────────── */
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
-/* ── AI (Grok / xAI) Configuration ─────────────────────────── */
-const GROK_API_URL   = 'https://api.x.ai/v1/chat/completions';
-const GROK_MODEL     = 'grok-3-mini';   // fast & cost-efficient; swap to 'grok-3' for max quality
-
 /* When running via the local Node server (http://localhost:*) all API calls
    are routed through the built-in proxy endpoints — the browser never sends
    or sees the API keys (they live in .env on the server only).
@@ -33,28 +29,20 @@ const _isNodeServer = _isLocalhost && (location.port === '3000' || location.port
 const _geminiProxyBase   = _isNodeServer ? '/proxy/gemini'   : null;
 const _removebgProxyBase = _isNodeServer ? '/proxy/removebg' : null;
 const _fetchProxyBase    = _isNodeServer ? '/proxy/fetch'    : null;
-const _grokProxyBase     = _isNodeServer ? '/proxy/grok'     : null;
 
 /* Key availability flags — populated from /api/key-status on load.
    The actual key strings NEVER exist in the browser when using the local proxy.
    On GitHub Pages (no server), keys are entered by the user and stored in localStorage. */
-let _geminiKey    = false;   // true = server has key configured
-let _removebgKey  = false;   // true = server has key configured
-let _grokKey      = false;   // true = server has Grok (xAI) key configured
+let _geminiKey    = false;   // true = server has Gemini key configured
+let _removebgKey  = false;   // true = server has Remove.bg key configured
 
 /* ── Browser-side keys for GitHub Pages mode (no server proxy) ──
    On localhost these are always empty — the server proxy handles keys.
    On GitHub Pages the user enters them manually and they are saved to localStorage. */
 const _LS_GEMINI   = 'ghp_gemini_key';
 const _LS_REMOVEBG = 'ghp_removebg_key';
-const _LS_GROK     = 'ghp_grok_key';
 let _browserGeminiKey   = localStorage.getItem(_LS_GEMINI)   || '';
 let _browserRemovebgKey = localStorage.getItem(_LS_REMOVEBG) || '';
-let _browserGrokKey     = localStorage.getItem(_LS_GROK)     || '';
-
-/* Active AI provider: 'gemini' | 'grok'
-   Persisted in localStorage so the user's choice survives page refresh. */
-let _aiProvider = localStorage.getItem('aiProvider') || 'gemini';
 
 /* Background styles for AI image enhancement */
 const BG_STYLES = [
@@ -129,6 +117,105 @@ const RSS_FEEDS = [
   { url: 'https://annapurnapost.com/rss/',           name: 'Annapurna Post',          lang: 'ne' },
   { url: 'https://nagariknews.nagariknetwork.com/feed/', name: 'Nagarik News',        lang: 'ne' },
 ];
+
+/* ── Category-specific RSS feeds ────────────────────────────────────────── */
+
+/* Science, Innovation & Research */
+const RSS_SCIENCE = [
+  { url: 'https://news.google.com/rss/search?q=science+technology+research&hl=en&gl=US&ceid=US:en',
+                                                    name: 'Google Science (EN)',      lang: 'en', cat: 'science' },
+  { url: 'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRFp0Y1RFU0FtVnVHZ0pWVXlnQVAB?hl=en&gl=US&ceid=US:en',
+                                                    name: 'Google Technology',        lang: 'en', cat: 'science' },
+  { url: 'https://feeds.feedburner.com/TechCrunch',  name: 'TechCrunch',             lang: 'en', cat: 'science' },
+  { url: 'https://www.wired.com/feed/rss',           name: 'Wired',                  lang: 'en', cat: 'science' },
+  { url: 'https://feeds.arstechnica.com/arstechnica/index',
+                                                    name: 'Ars Technica',             lang: 'en', cat: 'science' },
+  { url: 'https://www.sciencedaily.com/rss/all.xml', name: 'Science Daily',          lang: 'en', cat: 'science' },
+  { url: 'https://news.google.com/rss/search?q=nepal+technology+innovation&hl=en&gl=NP&ceid=NP:en',
+                                                    name: 'Nepal Tech News',          lang: 'en', cat: 'science' },
+];
+
+/* Nepali Movies & Entertainment (Nepal-sourced only) */
+const RSS_NEPALI_ENT = [
+  /* Nepali Devanagari searches — highest priority */
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%A8%E0%A5%87%E0%A4%AA%E0%A4%BE%E0%A4%B2%E0%A5%80+%E0%A4%9A%E0%A4%B2%E0%A4%9A%E0%A4%BF%E0%A4%A4%E0%A5%8D%E0%A4%B0&hl=ne&gl=NP&ceid=NP:ne',
+                                                    name: 'Google नेपाली चलचित्र',     lang: 'ne', cat: 'nepali-ent' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%A8%E0%A5%87%E0%A4%AA%E0%A4%BE%E0%A4%B2%E0%A5%80+%E0%A4%AE%E0%A4%A8%E0%A5%8B%E0%A4%B0%E0%A4%9E%E0%A5%8D%E0%A4%9C%E0%A4%A8+%E0%A4%95%E0%A4%B2%E0%A4%BE%E0%A4%95%E0%A4%BE%E0%A4%B0&hl=ne&gl=NP&ceid=NP:ne',
+                                                    name: 'Google नेपाली कलाकार',      lang: 'ne', cat: 'nepali-ent' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%A8%E0%A5%87%E0%A4%AA%E0%A4%BE%E0%A4%B2%E0%A5%80+%E0%A4%97%E0%A4%BE%E0%A4%AF%E0%A4%95+%E0%A4%97%E0%A4%BE%E0%A4%AF%E0%A4%BF%E0%A4%95%E0%A4%BE&hl=ne&gl=NP&ceid=NP:ne',
+                                                    name: 'Google नेपाली गायक',        lang: 'ne', cat: 'nepali-ent' },
+  /* Nepal entertainment English-language searches */
+  { url: 'https://news.google.com/rss/search?q=nepali+movie+film+actor+actress+nepal&hl=en&gl=NP&ceid=NP:en',
+                                                    name: 'Google Nepali Film EN',    lang: 'en', cat: 'nepali-ent' },
+  { url: 'https://news.google.com/rss/search?q=nepal+entertainment+celebrity+music+cinema&hl=en&gl=NP&ceid=NP:en',
+                                                    name: 'Google Nepal Celebrity',   lang: 'en', cat: 'nepali-ent' },
+  /* Nepali news outlets — entertainment sections */
+  { url: 'https://www.ratopati.com/category/entertainment/feed',
+                                                    name: 'Ratopati Ent',             lang: 'ne', cat: 'nepali-ent' },
+  { url: 'https://ekantipur.com/rss/entertainment',
+                                                    name: 'Ekantipur Ent',            lang: 'ne', cat: 'nepali-ent' },
+  { url: 'https://www.onlinekhabar.com/content/entertainment/feed',
+                                                    name: 'OnlineKhabar Ent',         lang: 'ne', cat: 'nepali-ent' },
+];
+
+/* Bhojpuri Movies & Entertainment */
+const RSS_BHOJPURI = [
+  /* Devanagari Hindi searches for Bhojpuri content */
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%AD%E0%A5%8B%E0%A4%9C%E0%A4%AA%E0%A5%81%E0%A4%B0%E0%A5%80+%E0%A4%AB%E0%A4%BF%E0%A4%B2%E0%A5%8D%E0%A4%AE&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google भोजपुरी फिल्म',     lang: 'hi', cat: 'bhojpuri' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%AD%E0%A5%8B%E0%A4%9C%E0%A4%AA%E0%A5%81%E0%A4%B0%E0%A5%80+%E0%A4%97%E0%A4%BE%E0%A4%A8%E0%A4%BE+%E0%A4%B8%E0%A5%8D%E0%A4%9F%E0%A4%BE%E0%A4%B0&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google भोजपुरी गाना स्टार', lang: 'hi', cat: 'bhojpuri' },
+  { url: 'https://news.google.com/rss/search?q=pawan+singh+khesari+bhojpuri&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google Pawan-Khesari (HI)',lang: 'hi', cat: 'bhojpuri' },
+  /* English searches */
+  { url: 'https://news.google.com/rss/search?q=bhojpuri+movie+song+actor+actress+2025&hl=en&gl=IN&ceid=IN:en',
+                                                    name: 'Google Bhojpuri (EN)',     lang: 'en', cat: 'bhojpuri' },
+  { url: 'https://news.google.com/rss/search?q=bhojpuri+film+industry+trending+viral&hl=en&gl=IN&ceid=IN:en',
+                                                    name: 'Google Bhojpuri Viral',    lang: 'en', cat: 'bhojpuri' },
+];
+
+/* Hindi / Bollywood Movies & Entertainment */
+const RSS_HINDI_ENT = [
+  /* Devanagari Hindi searches */
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%AC%E0%A5%89%E0%A4%B2%E0%A5%80%E0%A4%B5%E0%A5%81%E0%A4%A1+%E0%A4%AB%E0%A4%BF%E0%A4%B2%E0%A5%8D%E0%A4%AE&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google बॉलीवुड फिल्म',      lang: 'hi', cat: 'hindi-ent' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%B9%E0%A4%BF%E0%A4%82%E0%A4%A6%E0%A5%80+%E0%A4%B8%E0%A4%BF%E0%A4%A8%E0%A5%87%E0%A4%AE%E0%A4%BE+%E0%A4%85%E0%A4%AD%E0%A4%BF%E0%A4%A8%E0%A5%87%E0%A4%A4%E0%A4%BE&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google हिंदी सिनेमा',       lang: 'hi', cat: 'hindi-ent' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%AC%E0%A5%89%E0%A4%B2%E0%A5%80%E0%A4%B5%E0%A5%81%E0%A4%A1+%E0%A4%B8%E0%A4%AE%E0%A4%BE%E0%A4%9A%E0%A4%BE%E0%A4%B0&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google बॉलीवुड समाचार',     lang: 'hi', cat: 'hindi-ent' },
+  /* English searches */
+  { url: 'https://news.google.com/rss/search?q=bollywood+movie+actor+actress+2025&hl=en&gl=IN&ceid=IN:en',
+                                                    name: 'Google Bollywood (EN)',    lang: 'en', cat: 'hindi-ent' },
+  { url: 'https://news.google.com/rss/search?q=bollywood+film+box+office+trending+viral&hl=en&gl=IN&ceid=IN:en',
+                                                    name: 'Google Bollywood Viral',   lang: 'en', cat: 'hindi-ent' },
+  /* Entertainment Google topic */
+  { url: 'https://news.google.com/rss/topics/CAAqIQgKIhtDQkFTRGdvSUwyMHZNRFp1YnpJU0FtaHBLQUFQAQ?hl=en&gl=IN&ceid=IN:en',
+                                                    name: 'Google Entertainment IN',  lang: 'en', cat: 'hindi-ent' },
+];
+
+/* World Top Trending */
+const RSS_WORLD = [
+  { url: 'https://news.google.com/rss/headlines/section/topic/WORLD?hl=en&gl=US&ceid=US:en',
+                                                    name: 'Google World News',        lang: 'en', cat: 'world' },
+  { url: 'https://feeds.bbci.co.uk/news/world/rss.xml',
+                                                    name: 'BBC World',                lang: 'en', cat: 'world' },
+  { url: 'https://www.aljazeera.com/xml/rss/all.xml',
+                                                    name: 'Al Jazeera',               lang: 'en', cat: 'world' },
+  { url: 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
+                                                    name: 'NY Times World',           lang: 'en', cat: 'world' },
+  { url: 'https://trends.google.com/trending/rss?geo=US',
+                                                    name: 'Google Trends US',         lang: 'en', cat: 'world', isTrendsSource: true },
+];
+
+/* ── Active news tab ─────────────────────────────────────────────────────── */
+let _activeNewsTab = 'nepal';   /* 'nepal' | 'science' | 'nepali-ent' | 'bhojpuri' | 'hindi-ent' | 'locations' | 'world' */
+
+/* Per-category article caches (populated on first tab open) */
+const _catArticles = { 'nepal': [], 'science': [], 'nepali-ent': [], 'bhojpuri': [], 'hindi-ent': [], 'world': [] };
+const _catLoaded   = { 'nepal': false, 'science': false, 'nepali-ent': false, 'bhojpuri': false, 'hindi-ent': false, 'world': false };
+
+/* ── Location-based news ─────────────────────────────────────────────────── */
+let _locationFeeds = [];    /* [{ label, countryCode, articles, loaded }] */
 const RSS2JSON = 'https://api.rss2json.com/v1/api.json?rss_url=';
 
 /* Public CORS proxies tried in order when not on localhost.
@@ -460,6 +547,10 @@ async function fetchNews() {
   allItems = [...top2, ...theRest];
 
   articles = allItems;
+  _catArticles['nepal'] = allItems;
+  _catLoaded['nepal']   = true;
+  /* Switch to Nepal tab if not already there */
+  if (_activeNewsTab !== 'nepal') switchNewsTab('nepal');
   renderNewsList();
   document.getElementById('statusBadge').textContent = `${articles.length} articles · ${successCount} sources`;
   toast(`✅ ${articles.length} articles from ${successCount} sources`, 'success');
@@ -626,6 +717,245 @@ function parseRssXml(xml, feed) {
     console.warn('[parseRssXml] failed:', e.message);
     return [];
   }
+}
+
+/* ================================================================
+   CATEGORY NEWS FETCHING
+   Generic fetcher for any array of RSS_* feed configs.
+   Scores articles by recency + viral keywords (simple version).
+================================================================ */
+
+/**
+ * Fetch & score a list of feed configs; returns sorted article array.
+ * Writes results into _catArticles[catKey] and sets _catLoaded[catKey].
+ */
+async function fetchCategoryFeeds(feedList, catKey) {
+  const results = await Promise.allSettled(feedList.map(f => fetchSingleFeed(f)));
+  let allItems = [];
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value.length) allItems.push(...r.value);
+  }
+  /* De-dupe */
+  const seen = new Set();
+  allItems = allItems.filter(a => {
+    const key = a.title.replace(/\s+/g, '').toLowerCase().slice(0, 40);
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+  /* Simple viral score */
+  const now = Date.now();
+  allItems.forEach(a => {
+    const ageH = Math.max(0, (now - new Date(a.pubDate).getTime()) / 3600000);
+    const recency = ageH < 2 ? 1.0 : ageH < 6 ? 0.85 : Math.max(0, (48 - ageH) / 48);
+    const text = (a.title + ' ' + a.description).toLowerCase();
+    const kw = VIRAL_KEYWORDS.filter(k => text.includes(k.toLowerCase())).length;
+    a.viralScore = recency * 0.60 + Math.min(kw / 3, 1.0) * 0.40;
+    a.isTrending = kw >= 2 && ageH < 6;
+    a.isViral    = a.viralScore > 0.55;
+    a._crossCount = 0; a._trendsMatch = false; a._isLatestTop = false;
+  });
+
+  /* ── Same top-2 strategy as fetchNews():
+     TOP 2  : Freshest articles (<6h) with some viral potential, ordered newest-first.
+     REST   : Remaining articles sorted by viralScore descending.
+  ── */
+  const freshCandidates = allItems
+    .filter(a => {
+      const ageH = Math.max(0, (now - new Date(a.pubDate).getTime()) / 3600000);
+      return ageH < 6 && (a.viralScore > 0.25 || a._crossCount >= 1 || ageH < 1);
+    })
+    .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+
+  const allByDate = [...allItems].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  const top2Set = new Set();
+  for (const a of freshCandidates) { if (top2Set.size < 2) top2Set.add(a); }
+  if (top2Set.size < 2) {
+    for (const a of allByDate) { if (!top2Set.has(a) && top2Set.size < 2) top2Set.add(a); }
+  }
+  top2Set.forEach(a => { a._isLatestTop = true; });
+
+  const top2    = [...top2Set].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  const theRest = allItems
+    .filter(a => !top2Set.has(a))
+    .sort((a, b) => b.viralScore - a.viralScore || new Date(b.pubDate) - new Date(a.pubDate));
+
+  allItems = [...top2, ...theRest];
+  if (catKey) {
+    /* Tag each article with its category so AI prompts can adapt */
+    allItems.forEach(a => { a._category = catKey; });
+    _catArticles[catKey] = allItems;
+    _catLoaded[catKey]   = true;
+  }
+  return allItems;
+}
+
+/* ── Location-based feeds ────────────────────────────────────────────── */
+
+function _locationFeedsFor(label) {
+  const q = encodeURIComponent(label + ' news');
+  return [
+    { url: `https://news.google.com/rss/search?q=${q}&hl=en&gl=US&ceid=US:en`, name: 'Google News: ' + label, lang: 'en' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent(label)}&hl=en&gl=US&ceid=US:en`, name: 'Google: ' + label, lang: 'en' },
+  ];
+}
+
+async function addLocation() {
+  const input = document.getElementById('locationInput');
+  const raw   = (input?.value || '').trim();
+  if (!raw) { toast('⚠️ Enter a location name', 'error'); return; }
+  if (_locationFeeds.find(f => f.label.toLowerCase() === raw.toLowerCase())) {
+    toast('⚠️ Location already added', 'error'); return;
+  }
+  input.value = '';
+  const loc = { label: raw, articles: [], loaded: false };
+  _locationFeeds.push(loc);
+  _renderLocationList();
+  _loadLocationArticles(loc);
+}
+
+async function _loadLocationArticles(loc) {
+  const feeds = _locationFeedsFor(loc.label);
+  loc.articles = await fetchCategoryFeeds(feeds, null);
+  loc.loaded   = true;
+  if (_activeNewsTab === 'locations') renderCategoryList('locations');
+}
+
+function removeLocation(label) {
+  _locationFeeds = _locationFeeds.filter(f => f.label !== label);
+  _renderLocationList();
+  if (_activeNewsTab === 'locations') renderCategoryList('locations');
+}
+
+function _renderLocationList() {
+  const c = document.getElementById('locationTagList');
+  if (!c) return;
+  c.innerHTML = _locationFeeds.map(f => `
+    <span class="loc-tag">
+      📍 ${escHtml(f.label)}
+      <button onclick="removeLocation('${escHtml(f.label).replace(/'/g,"\\'")}')">✕</button>
+    </span>`).join('');
+}
+
+/* ── Tab switching ───────────────────────────────────────────────────── */
+
+function switchNewsTab(tab) {
+  _activeNewsTab = tab;
+  /* Update tab button styles */
+  document.querySelectorAll('.news-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  /* Show/hide location input row */
+  const locRow = document.getElementById('locationInputRow');
+  if (locRow) locRow.style.display = tab === 'locations' ? 'flex' : 'none';
+  /* Show/hide main fetch bar (only for nepal tab) */
+  const fetchBar = document.querySelector('.fetch-bar');
+  if (fetchBar) fetchBar.style.display = tab === 'nepal' ? 'flex' : 'none';
+  const searchBar = document.getElementById('newsSearchBar');
+  if (searchBar) searchBar.style.display = tab === 'nepal' && articles.length ? 'block' : 'none';
+
+  if (tab === 'nepal') {
+    renderNewsList();
+    return;
+  }
+  if (tab === 'locations') {
+    renderCategoryList('locations');
+    return;
+  }
+  /* Category tabs — lazy-load on first visit */
+  if (!_catLoaded[tab]) {
+    const feedMap = { science: RSS_SCIENCE, 'nepali-ent': RSS_NEPALI_ENT, bhojpuri: RSS_BHOJPURI, 'hindi-ent': RSS_HINDI_ENT, world: RSS_WORLD };
+    const list = document.getElementById('newsList');
+    list.innerHTML = Array(6).fill(0).map(() => `
+      <div class="news-item">
+        <div class="news-item-thumb-placeholder skeleton" style="width:58px;height:45px"></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+          <div class="skeleton" style="height:13px;border-radius:4px"></div>
+          <div class="skeleton" style="height:13px;width:70%;border-radius:4px"></div>
+        </div>
+      </div>`).join('');
+    document.getElementById('statusBadge').textContent = 'Loading…';
+    fetchCategoryFeeds(feedMap[tab] || [], tab).then(() => {
+      renderCategoryList(tab);
+      document.getElementById('statusBadge').textContent = `${_catArticles[tab].length} articles`;
+    });
+  } else {
+    renderCategoryList(tab);
+    document.getElementById('statusBadge').textContent = `${_catArticles[tab].length} articles`;
+  }
+}
+
+function renderCategoryList(tab) {
+  const list = document.getElementById('newsList');
+  let items = [];
+
+  if (tab === 'locations') {
+    if (!_locationFeeds.length) {
+      list.innerHTML = `<div class="empty-state"><div class="icon">📍</div><p>Add a location above to see trending news from there.</p></div>`;
+      return;
+    }
+    /* Merge all location articles grouped by location */
+    items = [];
+    _locationFeeds.forEach(loc => {
+      const locItems = loc.loaded ? loc.articles.slice(0, 12) : [];
+      locItems.forEach(a => { a._locationLabel = loc.label; });
+      items.push(...locItems);
+    });
+    if (!items.length) {
+      list.innerHTML = `<div class="empty-state"><div class="icon">⏳</div><p>Loading location news…</p></div>`;
+      return;
+    }
+  } else {
+    items = _catArticles[tab] || [];
+    if (!items.length) {
+      list.innerHTML = `<div class="empty-state"><div class="icon">📭</div><p>No articles found.</p></div>`;
+      return;
+    }
+  }
+
+  list.innerHTML = items.map(a => {
+    /* Store in a temporary global pool for selectArticle */
+    const idx = _registerCatArticle(a);
+    const dateStr = a.pubDate
+      ? new Date(a.pubDate).toLocaleString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })
+      : '';
+    let thumbHtml;
+    if (a.imageUrl) {
+      const proxied = `https://images.weserv.nl/?url=${encodeURIComponent(a.imageUrl)}&w=120&h=90&fit=cover&output=jpg`;
+      thumbHtml = `<img class="news-item-thumb" src="${proxied}" alt="" loading="lazy" onerror="this.style.display='none'">`;
+    } else {
+      thumbHtml = `<div class="news-item-thumb-placeholder">🗞️</div>`;
+    }
+    const viralBadge  = a.isTrending ? '<span class="viral-badge trending-badge">🔥 TRENDING</span>'
+                      : a.isViral    ? '<span class="viral-badge">⚡ VIRAL</span>' : '';
+    const latestBadge = a._isLatestTop ? '<span class="viral-badge latest-badge">🆕 LATEST</span>' : '';
+    const locBadge    = a._locationLabel ? `<span class="source-badge" style="background:rgba(16,185,129,.15);color:#34d399;border-color:rgba(16,185,129,.3)">📍 ${escHtml(a._locationLabel)}</span>` : '';
+    const sourceBadge = a.source ? `<span class="source-badge">${escHtml(a.source)}</span>` : '';
+    const openBtn     = a.link ? `<button class="news-open-btn" onclick="event.stopPropagation();window.open('${escHtml(a.link)}','_blank','noopener')">🔗 Open</button>` : '';
+
+    return `
+      <div class="news-item${a.isTrending ? ' trending' : ''}" id="cat-item-${idx}" onclick="selectArticle(${idx})">
+        ${thumbHtml}
+        <div class="news-item-body">
+          <div class="news-item-badges">${latestBadge}${viralBadge}${locBadge}${sourceBadge}</div>
+          <div class="news-item-title">${escHtml(a.title)}</div>
+          <div class="news-item-footer">
+            ${dateStr ? `<div class="news-item-date">🕐 ${dateStr}</div>` : ''}
+            ${openBtn}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  /* Lazily fetch og:image for articles that had no thumbnail in the RSS feed */
+  _lazyLoadCatThumbnails(items);
+}
+
+/* Temporary article pool for category articles (so selectArticle still works) */
+const _catPool = [];
+function _registerCatArticle(a) {
+  /* Reuse existing slot if same title */
+  const existing = _catPool.findIndex(x => x.title === a.title);
+  if (existing >= 0) return existing + 1000000;
+  _catPool.push(a);
+  return (_catPool.length - 1) + 1000000;
 }
 
 /* ================================================================
@@ -924,6 +1254,48 @@ async function _lazyLoadListThumbnails() {
         if (!itemEl) return;
         const placeholder = itemEl.querySelector('.news-item-thumb-placeholder');
         /* Use weserv.nl as an image proxy to avoid CORS issues displaying thumbnails */
+        const proxiedSrc = `https://images.weserv.nl/?url=${encodeURIComponent(ogImg)}&w=120&h=90&fit=cover&output=jpg`;
+        const img = document.createElement('img');
+        img.className = 'news-item-thumb';
+        img.alt = 'news thumbnail';
+        img.loading = 'lazy';
+        img.onerror = () => { img.style.display = 'none'; };
+        img.src = proxiedSrc;
+        if (placeholder) {
+          placeholder.replaceWith(img);
+        } else {
+          itemEl.insertBefore(img, itemEl.firstChild);
+        }
+      } catch { /* silently skip */ }
+    }));
+  }
+}
+
+/**
+ * Same lazy-thumbnail loader for category list items.
+ * Items are keyed by their pool index (id="cat-item-{idx}").
+ */
+async function _lazyLoadCatThumbnails(items) {
+  const missing = items.filter(a => !a.imageUrl && a.link);
+  if (!missing.length) return;
+
+  const BATCH = 6;
+  for (let i = 0; i < missing.length; i += BATCH) {
+    const batch = missing.slice(i, i + BATCH);
+    await Promise.all(batch.map(async (a) => {
+      try {
+        const html = await fetchRawHtml(a.link);
+        if (!html) return;
+        const ogImg = extractOgImage(html);
+        if (!ogImg) return;
+        a.imageUrl = ogImg;  // cache for future renders
+        /* Resolve the pool index to find the DOM element */
+        const poolIdx = _catPool.indexOf(a);
+        if (poolIdx < 0) return;
+        const domId = 'cat-item-' + (poolIdx + 1000000);
+        const itemEl = document.getElementById(domId);
+        if (!itemEl) return;
+        const placeholder = itemEl.querySelector('.news-item-thumb-placeholder');
         const proxiedSrc = `https://images.weserv.nl/?url=${encodeURIComponent(ogImg)}&w=120&h=90&fit=cover&output=jpg`;
         const img = document.createElement('img');
         img.className = 'news-item-thumb';
@@ -1297,7 +1669,6 @@ async function loadKeyStatus() {
        No Node.js proxy available. Use browser-stored keys from localStorage. */
     _geminiKey   = !!_browserGeminiKey;
     _removebgKey = !!_browserRemovebgKey;
-    _grokKey     = !!_browserGrokKey;
     updateAIBadge();
     return;
   }
@@ -1310,7 +1681,6 @@ async function loadKeyStatus() {
       const data = await res.json();
       _geminiKey   = !!data.gemini;
       _removebgKey = !!data.removebg;
-      _grokKey     = !!data.grok;
       _serverOnline = true;
       hideServerDownBanner();
     } else {
@@ -1364,26 +1734,20 @@ function openAISettings() {
   if (!_isNodeServer) {
     const gEl  = document.getElementById('inputGeminiKey');
     const rbEl = document.getElementById('inputRemovebgKey');
-    const grEl = document.getElementById('inputGrokKey');
     if (gEl  && !gEl.value)  gEl.placeholder  = _browserGeminiKey   ? '(saved — paste to update)' : 'AIzaSy…your-key…';
     if (rbEl && !rbEl.value) rbEl.placeholder = _browserRemovebgKey ? '(saved — paste to update)' : 'abc123…your-key…';
-    if (grEl && !grEl.value) grEl.placeholder = _browserGrokKey     ? '(saved — paste to update)' : 'xai-…your-key…';
   }
 
-  /* Sync the provider toggle pills */
-  _syncProviderUI();
   modal.classList.add('open');
 }
 
 /** Refresh all card status texts, dots, and the top banner */
 function _refreshAICardStatuses() {
   const geminiOk   = !!(_geminiKey   || _browserGeminiKey);
-  const grokOk     = !!(_grokKey     || _browserGrokKey);
   const removebgOk = !!(_removebgKey || _browserRemovebgKey);
 
   /* Status text */
   const geminiEl   = document.getElementById('geminiKeyStatus');
-  const grokEl     = document.getElementById('grokKeyStatus');
   const removebgEl = document.getElementById('removebgKeyStatus');
 
   function _setStatus(el, ok) {
@@ -1392,7 +1756,6 @@ function _refreshAICardStatuses() {
     el.className   = 'ai-card-status ' + (ok ? 'ok' : 'err');
   }
   _setStatus(geminiEl,   geminiOk);
-  _setStatus(grokEl,     grokOk);
   _setStatus(removebgEl, removebgOk);
 
   /* Status dots */
@@ -1403,7 +1766,6 @@ function _refreshAICardStatuses() {
     dot.title     = ok ? 'Active' : 'Not configured';
   }
   _setDot('geminiStatusDot',   geminiOk);
-  _setDot('grokStatusDot',     grokOk);
   _setDot('removebgStatusDot', removebgOk);
 
   /* Top banner */
@@ -1411,18 +1773,18 @@ function _refreshAICardStatuses() {
   if (banner) {
     const parts = [];
     if (geminiOk)   parts.push('✨ Gemini');
-    if (grokOk)     parts.push('⚡ Grok');
     if (removebgOk) parts.push('🎨 Remove.bg');
 
-    if (parts.length === 3) {
+    if (parts.length === 2) {
       banner.className   = 'ai-setup-banner active';
-      banner.textContent = `🟢 AI Setup is active for ${parts.join(', ')}`;
+      banner.textContent = `🟢 All AI features active — Gemini + Remove.bg`;
     } else if (parts.length > 0) {
+      const missing = ['✨ Gemini','🎨 Remove.bg'].filter(p => !parts.includes(p));
       banner.className   = 'ai-setup-banner partial';
-      banner.textContent = `🟡 Active: ${parts.join(', ')} · Not configured: ${['✨ Gemini','⚡ Grok','🎨 Remove.bg'].filter(p => !parts.includes(p)).join(', ')}`;
+      banner.textContent = `🟡 Active: ${parts.join(', ')} · Not configured: ${missing.join(', ')}`;
     } else {
       banner.className   = 'ai-setup-banner none';
-      banner.textContent = '🔴 No API keys configured — add keys to .env or enter them below';
+      banner.textContent = '🔴 No API keys configured — add your Gemini key below';
     }
   }
 }
@@ -1445,15 +1807,19 @@ async function testGeminiKey() {
   if (btn) { btn.textContent = '⏳…'; btn.disabled = true; }
   _setCardFeedback('gemini', '', '⏳ Testing connection…');
 
-  /* If a raw key was typed, test directly against Gemini; otherwise use proxy */
-  const testUrl = (inputVal && !_isNodeServer)
-    ? `${GEMINI_API_URL}?key=${encodeURIComponent(inputVal)}`
-    : (_geminiProxyBase || `${GEMINI_API_URL}?key=${encodeURIComponent(inputVal || _browserGeminiKey)}`);
+  /* If on Node server: route through /proxy/gemini-withkey so server forwards the key without CORS block.
+     If on GitHub Pages: call Gemini directly with the key in URL. */
+  const testUrl = _isNodeServer
+    ? '/proxy/gemini-withkey'
+    : `${GEMINI_API_URL}?key=${encodeURIComponent(inputVal || _browserGeminiKey)}`;
+  const testHeaders = _isNodeServer
+    ? { 'Content-Type': 'application/json', 'X-Gemini-Key': inputVal || _browserGeminiKey || '' }
+    : { 'Content-Type': 'application/json' };
 
   try {
     const res = await fetch(testUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: testHeaders,
       body: JSON.stringify({
         contents: [{ parts: [{ text: 'Reply with exactly: {"ok":true}' }] }],
         generationConfig: { maxOutputTokens: 20 }
@@ -1474,51 +1840,6 @@ async function testGeminiKey() {
       : e.message;
     _setCardFeedback('gemini', 'error', `❌ ${msg}`);
     toast(`❌ ${msg}`, 'error', 7000);
-  }
-  if (btn) { btn.textContent = origText; btn.disabled = false; }
-}
-
-/** Test Grok connectivity via the server proxy */
-async function testGrokKey() {
-  const inputVal = document.getElementById('inputGrokKey')?.value.trim() || '';
-  const hasKey   = _grokKey || _browserGrokKey || inputVal;
-  if (!hasKey) {
-    _setCardFeedback('grok', 'error', '⚠️ Enter a key first, then test');
-    toast('⚠️ Paste a Grok key in the field first.', 'error', 4000);
-    return;
-  }
-  const btn = document.querySelector('#aiCardGrok .ai-card-btn.test');
-  const origText = btn ? btn.textContent : '';
-  if (btn) { btn.textContent = '⏳…'; btn.disabled = true; }
-  _setCardFeedback('grok', '', '⏳ Testing connection…');
-
-  const testUrl  = _grokProxyBase || GROK_API_URL;
-  const extraHdr = (inputVal && !_isNodeServer) ? { 'Authorization': `Bearer ${inputVal}` } : {};
-  try {
-    const res = await fetch(testUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...extraHdr },
-      body: JSON.stringify({
-        model: GROK_MODEL,
-        messages: [
-          { role: 'system', content: 'Reply with raw JSON only.' },
-          { role: 'user',   content: 'Reply with exactly: {"ok":true}' }
-        ],
-        max_tokens: 20
-      })
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      const msg = data?.error?.message || `HTTP ${res.status}`;
-      _setCardFeedback('grok', 'error', `❌ ${msg}`);
-      toast(`❌ Grok error: ${msg}`, 'error', 6000);
-    } else {
-      _setCardFeedback('grok', 'ok', '✅ Connection successful!');
-      toast('✅ Grok connection works!', 'success', 5000);
-    }
-  } catch (e) {
-    _setCardFeedback('grok', 'error', `❌ ${e.message}`);
-    toast(`❌ Grok test failed: ${e.message}`, 'error', 7000);
   }
   if (btn) { btn.textContent = origText; btn.disabled = false; }
 }
@@ -1577,14 +1898,12 @@ async function testRemovebgKey() {
 }
 
 /**
- * Save key for a single card (gemini | grok | removebg).
+ * Save key for a single card (gemini | removebg).
  * On localhost: POSTs to /api/save-key which writes to .env (no restart needed).
  * On GitHub Pages: saves to localStorage.
  */
 async function saveCardKey(service) {
-  const inputId = service === 'gemini'   ? 'inputGeminiKey'
-                : service === 'grok'     ? 'inputGrokKey'
-                :                          'inputRemovebgKey';
+  const inputId = service === 'gemini' ? 'inputGeminiKey' : 'inputRemovebgKey';
   const input = document.getElementById(inputId);
   const value = (input?.value || '').trim();
 
@@ -1610,7 +1929,6 @@ async function saveCardKey(service) {
 
       /* Also cache in localStorage as fallback for direct-API calls */
       if (service === 'gemini')   { localStorage.setItem(_LS_GEMINI,   value); _browserGeminiKey   = value; }
-      if (service === 'grok')     { localStorage.setItem(_LS_GROK,     value); _browserGrokKey     = value; }
       if (service === 'removebg') { localStorage.setItem(_LS_REMOVEBG, value); _browserRemovebgKey = value; }
 
       /* Re-fetch key-status so flags (_geminiKey etc.) are updated */
@@ -1626,14 +1944,18 @@ async function saveCardKey(service) {
     }
   } else {
     /* ── GitHub Pages: save to localStorage ── */
-    if (service === 'gemini')   { localStorage.setItem(_LS_GEMINI,   value); _browserGeminiKey   = value; _geminiKey   = true; }
-    if (service === 'grok')     { localStorage.setItem(_LS_GROK,     value); _browserGrokKey     = value; _grokKey     = true; }
-    if (service === 'removebg') { localStorage.setItem(_LS_REMOVEBG, value); _browserRemovebgKey = value; _removebgKey = true; }
-    if (input) input.value = '';
-    _setCardFeedback(service, 'ok', '✅ Key saved in browser!');
-    updateAIBadge();
-    _refreshAICardStatuses();
-    toast(`✅ ${service} key saved!`, 'success', 3000);
+    try {
+      if (service === 'gemini')   { localStorage.setItem(_LS_GEMINI,   value); _browserGeminiKey   = value; _geminiKey   = true; }
+      if (service === 'removebg') { localStorage.setItem(_LS_REMOVEBG, value); _browserRemovebgKey = value; _removebgKey = true; }
+      if (input) input.value = '';
+      _setCardFeedback(service, 'ok', '✅ Key saved in browser!');
+      updateAIBadge();
+      _refreshAICardStatuses();
+      toast(`✅ ${service.charAt(0).toUpperCase()+service.slice(1)} key saved! AI features are now active.`, 'success', 4000);
+    } catch (e) {
+      _setCardFeedback(service, 'error', `❌ Save failed: ${e.message}`);
+      toast(`❌ Could not save key: ${e.message}`, 'error', 5000);
+    }
   }
 
   if (saveBtn) { saveBtn.textContent = origLabel; saveBtn.disabled = false; }
@@ -1650,63 +1972,51 @@ async function _reloadKeyStatus() {
     const data = await res.json();
     _geminiKey   = !!data.gemini;
     _removebgKey = !!data.removebg;
-    _grokKey     = !!data.grok;
   } catch { /* silent — flags stay as-is */ }
 }
 
 /** Show inline feedback text inside a card status element */
+const _cardFeedbackTimers = {};
 function _setCardFeedback(service, type, msg) {
   const cardId = 'aiCard' + service.charAt(0).toUpperCase() + service.slice(1);
   const statusEl = document.querySelector(`#${cardId} .ai-card-status`);
   if (!statusEl) return;
+  /* Cancel any pending auto-revert timer for this card */
+  if (_cardFeedbackTimers[service]) {
+    clearTimeout(_cardFeedbackTimers[service]);
+    delete _cardFeedbackTimers[service];
+  }
   statusEl.textContent = msg;
-  statusEl.className = 'ai-card-status ' + (type === 'ok' ? 'ok' : 'err');
-  /* Auto-revert to proper status after 4s */
-  setTimeout(() => _refreshAICardStatuses(), 4000);
+  statusEl.className = 'ai-card-status ' + (type === 'ok' ? 'ok' : type === 'error' ? 'err' : '');
+  /* Auto-revert: hold success messages longer so user can read them */
+  const delay = type === 'ok' ? 8000 : 5000;
+  _cardFeedbackTimers[service] = setTimeout(() => {
+    delete _cardFeedbackTimers[service];
+    _refreshAICardStatuses();
+  }, delay);
 }
 
 function updateAIBadge() {
   const badge = document.getElementById('aiBadge');
   if (!badge) return;
-  const aiReady = (_aiProvider === 'grok') ? _grokKey : _geminiKey;
-  const providerLabel = (_aiProvider === 'grok') ? 'Grok' : 'Gemini';
-  const both = (_geminiKey || _grokKey) && _removebgKey;
-  const anyAI = _geminiKey || _grokKey;
-  if (aiReady && _removebgKey) {
-    badge.textContent = `🤖 ${providerLabel} + BgRemover`;
+  const geminiOk = _geminiKey || _browserGeminiKey;
+  if (geminiOk && _removebgKey) {
+    badge.textContent = '🤖 Gemini + BgRemover';
     badge.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
-    badge.title = `${providerLabel} AI + Remove.bg active — keys stored securely in .env`;
-  } else if (aiReady) {
-    badge.textContent = `🤖 ${providerLabel} AI`;
+    badge.title = 'Gemini AI + Remove.bg active — keys stored securely in .env';
+  } else if (geminiOk) {
+    badge.textContent = '🤖 Gemini AI';
     badge.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
-    badge.title = `${providerLabel} active — add REMOVEBG_API_KEY to .env for background removal`;
+    badge.title = 'Gemini active — add REMOVEBG_API_KEY to .env for background removal';
   } else if (_removebgKey) {
     badge.textContent = '🎨 BgRemover';
     badge.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
-    badge.title = 'Remove.bg active — add GEMINI_API_KEY or GROK_API_KEY for AI rewriting';
+    badge.title = 'Remove.bg active — add GEMINI_API_KEY for AI rewriting';
   } else {
     badge.textContent = '⚙️ Setup AI';
     badge.style.background = 'linear-gradient(135deg,#6366f1,#4f46e5)';
-    badge.title = 'Add GEMINI_API_KEY or GROK_API_KEY and REMOVEBG_API_KEY to your .env file';
+    badge.title = 'Add GEMINI_API_KEY and REMOVEBG_API_KEY to your .env file';
   }
-}
-
-/** Switch the active AI provider and persist the choice */
-function setAIProvider(provider) {
-  if (provider !== 'gemini' && provider !== 'grok') return;
-  _aiProvider = provider;
-  localStorage.setItem('aiProvider', provider);
-  _syncProviderUI();
-  updateAIBadge();
-  const label = provider === 'grok' ? 'Grok (xAI)' : 'Gemini';
-  toast(`🤖 AI provider switched to ${label}`, 'success', 2500);
-}
-
-/** Keep the pill buttons in the modal in sync with _aiProvider */
-function _syncProviderUI() {
-  document.querySelectorAll('.ai-provider-pill').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.provider === _aiProvider);
-  });
 }
 
 /**
@@ -1720,21 +2030,18 @@ function saveBrowserKeys() {
   }
   const g  = (document.getElementById('inputGeminiKey')  ?.value || '').trim();
   const rb = (document.getElementById('inputRemovebgKey') ?.value || '').trim();
-  const gr = (document.getElementById('inputGrokKey')     ?.value || '').trim();
 
   if (g)  { localStorage.setItem(_LS_GEMINI,   g);  _browserGeminiKey   = g; }
   if (rb) { localStorage.setItem(_LS_REMOVEBG, rb); _browserRemovebgKey = rb; }
-  if (gr) { localStorage.setItem(_LS_GROK,     gr); _browserGrokKey     = gr; }
 
   /* Clear the input fields after saving (don't leave keys visible) */
-  ['inputGeminiKey','inputRemovebgKey','inputGrokKey'].forEach(id => {
+  ['inputGeminiKey','inputRemovebgKey'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
 
   _geminiKey   = !!_browserGeminiKey;
   _removebgKey = !!_browserRemovebgKey;
-  _grokKey     = !!_browserGrokKey;
 
   updateAIBadge();
   _refreshAICardStatuses();
@@ -1743,9 +2050,9 @@ function saveBrowserKeys() {
 
 /** Clear all browser-stored keys */
 function clearBrowserKeys() {
-  [_LS_GEMINI, _LS_REMOVEBG, _LS_GROK].forEach(k => localStorage.removeItem(k));
-  _browserGeminiKey = _browserRemovebgKey = _browserGrokKey = '';
-  _geminiKey = _removebgKey = _grokKey = false;
+  [_LS_GEMINI, _LS_REMOVEBG].forEach(k => localStorage.removeItem(k));
+  _browserGeminiKey = _browserRemovebgKey = '';
+  _geminiKey = _removebgKey = false;
   updateAIBadge();
   _refreshAICardStatuses();
   toast('🗑️ All saved keys cleared.', 'info', 3000);
@@ -1762,15 +2069,15 @@ async function callGemini(prompt, timeoutMs = 18000) {
   if (!effectiveKey) throw new Error('NO_KEY: Gemini API key not configured');
 
   /* Build the list of URLs to try in order:
-     1. Server proxy with .env key (most secure — key never leaves server)
-     2. Server proxy with browser key via X-Gemini-Key header (fixes CORS on localhost)
+     1. Server proxy with browser key (X-Gemini-Key header) — works on localhost even without .env key
+     2. Server proxy with .env key (most secure — key never leaves server)
      3. Direct API call (only works on GitHub Pages / non-localhost origins) */
   const urlsToTry = [];
-  if (_geminiProxyBase && _geminiKey) {
-    urlsToTry.push({ url: _geminiProxyBase, label: 'proxy(.env key)', headers: {} });
-  }
   if (_isNodeServer && _browserGeminiKey) {
     urlsToTry.push({ url: '/proxy/gemini-withkey', label: 'proxy(browser key)', headers: { 'X-Gemini-Key': _browserGeminiKey } });
+  }
+  if (_geminiProxyBase && _geminiKey) {
+    urlsToTry.push({ url: _geminiProxyBase, label: 'proxy(.env key)', headers: {} });
   }
   if (!_isNodeServer && _browserGeminiKey) {
     urlsToTry.push({ url: `${GEMINI_API_URL}?key=${encodeURIComponent(_browserGeminiKey)}`, label: 'direct', headers: {} });
@@ -1833,124 +2140,30 @@ async function callGemini(prompt, timeoutMs = 18000) {
 }
 
 /**
- * Call Grok (xAI) with a structured prompt.
- * Uses the OpenAI-compatible chat/completions endpoint.
- * Returns parsed JSON from the model or throws on failure.
- * @param {string} prompt
- * @param {number} timeoutMs
- */
-async function callGrok(prompt, timeoutMs = 20000) {
-  if (!_grokKey) throw new Error('NO_KEY: Grok API key not configured on server');
-  const ctrl = new AbortController();
-  const tid  = setTimeout(() => ctrl.abort(), timeoutMs);
-
-  /* On localhost: route through proxy.
-     On GitHub Pages: call xAI directly with the browser-stored key. */
-  const fetchUrl = _grokProxyBase || GROK_API_URL;
-  const extraHeaders = _grokProxyBase ? {} : { 'Authorization': `Bearer ${_browserGrokKey}` };
-
-  try {
-    const res = await fetch(fetchUrl, {
-      method: 'POST',
-      signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json', ...extraHeaders },
-      body: JSON.stringify({
-        model: GROK_MODEL,
-        messages: [
-          { role: 'system', content: 'You are a helpful assistant. Always respond with valid raw JSON only — no markdown, no explanation.' },
-          { role: 'user',   content: prompt }
-        ],
-        temperature: 0.85,
-        max_tokens: 1200,
-      }),
-    });
-    clearTimeout(tid);
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      const msg = errData?.error?.message || res.statusText || res.status;
-      console.error('[Grok] HTTP error:', res.status, msg);
-      throw new Error(`HTTP_${res.status}: ${msg}`);
-    }
-    const data = await res.json();
-    const raw = data?.choices?.[0]?.message?.content || '';
-    if (!raw) {
-      console.error('[Grok] empty response:', JSON.stringify(data).slice(0, 300));
-      throw new Error('EMPTY_RESPONSE: Grok returned no text');
-    }
-
-    console.log('[Grok] raw response (first 400 chars):', raw.slice(0, 400));
-
-    // Strategy 1: Raw text IS already valid JSON
-    try { return JSON.parse(raw.trim()); } catch (_) {}
-
-    // Strategy 2: Strip ```json ... ``` code fence
-    const fenced = raw.match(/```json\s*([\s\S]*?)```/i);
-    if (fenced) { try { return JSON.parse(fenced[1].trim()); } catch (_) {} }
-
-    // Strategy 3: Strip any ``` ... ``` code fence
-    const anyFence = raw.match(/```\s*([\s\S]*?)```/i);
-    if (anyFence) { try { return JSON.parse(anyFence[1].trim()); } catch (_) {} }
-
-    // Strategy 4: Find the outermost { ... } block
-    const firstBrace = raw.indexOf('{');
-    const lastBrace  = raw.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      try { return JSON.parse(raw.slice(firstBrace, lastBrace + 1)); } catch (_) {}
-    }
-
-    // Strategy 5: Find a JSON array [ ... ]
-    const firstBrack = raw.indexOf('[');
-    const lastBrack  = raw.lastIndexOf(']');
-    if (firstBrack !== -1 && lastBrack > firstBrack) {
-      try { return JSON.parse(raw.slice(firstBrack, lastBrack + 1)); } catch (_) {}
-    }
-
-    console.error('[Grok] could not extract JSON. Full raw:', raw);
-    throw new Error('NO_JSON: Could not extract JSON from Grok response');
-  } catch (e) {
-    clearTimeout(tid);
-    const msg = e.name === 'AbortError' ? 'TIMEOUT: Request timed out' : e.message;
-    console.error('[Grok] threw:', msg);
-    throw new Error(msg);
-  }
-}
-
-/**
- * Unified AI dispatcher — routes to Grok or Gemini based on _aiProvider.
- * Falls back to the other provider if the selected one has no key.
+ * Unified AI dispatcher — routes to Gemini.
  * @param {string} prompt
  * @param {number} timeoutMs
  */
 async function callAI(prompt, timeoutMs = 22000) {
-  const hasGrok   = _grokKey   || _browserGrokKey;
   const hasGemini = _geminiKey || _browserGeminiKey;
-  console.log('[AI DEBUG] callAI → hasGrok:', hasGrok, '| hasGemini:', hasGemini, '| provider:', _aiProvider);
-  /* Primary: use whichever provider the user has selected */
-  if (_aiProvider === 'grok'   && hasGrok)   return callGrok(prompt, timeoutMs);
-  if (_aiProvider === 'gemini' && hasGemini) return callGemini(prompt, timeoutMs);
-  /* Fallback: try the other provider automatically */
-  if (hasGrok)   return callGrok(prompt, timeoutMs);
-  if (hasGemini) return callGemini(prompt, timeoutMs);
-  throw new Error('NO_KEY: No AI provider configured — add GEMINI_API_KEY or GROK_API_KEY to .env');
+  if (!hasGemini) throw new Error('NO_KEY: No Gemini API key configured — add key via ⚙️ Setup AI');
+  return callGemini(prompt, timeoutMs);
 }
 
 /**
  * AI-rewrite all four content fields in one single API call to save quota.
  * Returns { hook, title, description, hashtags } or null on failure.
  */
-async function rewriteWithAI(rawTitle, articleBody, sourceLang) {
+async function rewriteWithAI(rawTitle, articleBody, sourceLang, category) {
   const hasGemini = _geminiKey || _browserGeminiKey;
-  const hasGrok   = _grokKey   || _browserGrokKey;
 
   console.log('[AI DEBUG] rewriteWithAI called');
   console.log('[AI DEBUG] _geminiKey:', _geminiKey, '| _browserGeminiKey:', _browserGeminiKey ? _browserGeminiKey.slice(0,8)+'…' : '(empty)');
-  console.log('[AI DEBUG] _grokKey:', _grokKey, '| _browserGrokKey:', _browserGrokKey ? _browserGrokKey.slice(0,8)+'…' : '(empty)');
-  console.log('[AI DEBUG] hasGemini:', hasGemini, '| hasGrok:', hasGrok);
-  console.log('[AI DEBUG] _aiProvider:', _aiProvider);
+  console.log('[AI DEBUG] hasGemini:', hasGemini);
   console.log('[AI DEBUG] _isNodeServer:', _isNodeServer, '| _geminiProxyBase:', _geminiProxyBase);
 
-  if (!hasGemini && !hasGrok) {
-    console.warn('[AI DEBUG] No keys found — returning null immediately');
+  if (!hasGemini) {
+    console.warn('[AI DEBUG] No Gemini key found — returning null immediately');
     return null;
   }
 
@@ -1959,71 +2172,136 @@ async function rewriteWithAI(rawTitle, articleBody, sourceLang) {
   const langNote = sourceLang === 'ne' ? 'Nepali' : sourceLang === 'hi' ? 'Hindi' : 'English';
   const hasBody = bodySnippet.length > 100;
 
-  const prompt = `You are an expert Nepali news journalist and viral social media content strategist with deep knowledge of what goes viral on Facebook, Instagram and X (Twitter) in Nepal.
+  /* ── Category-specific prompt configuration ── */
+  const catCfg = {
+    'nepali-ent': {
+      persona:    'expert Nepali entertainment journalist and viral social media content creator who covers Nepali film, music and celebrity news',
+      audience:   'Nepali film fans, music lovers, and entertainment followers in Nepal and the Nepali diaspora',
+      hookEmojis: '🎬 (movie/film), 🎵 (music/song), ⭐ (celebrity), 💫 (star), 🏆 (award/achievement), 💔 (breakup/drama), 🔥 (viral/trending), 😱 (shocking celebrity news)',
+      hookTip:    'Start with a fan-engaging, celebrity-focused line that makes Nepali film lovers want to immediately share it',
+      titleTip:   'Write a detailed Nepali movie/celebrity/music headline with REAL actor/film/song names from the article',
+      descTip:    'Write in Nepali entertainment journalism style (like Setopati or Ratopati entertainment section). Focus on the film/music/celebrity story, fan reaction, box office/streaming numbers if available.',
+      hashtagSeed:'#नेपाली_चलचित्र, #नेपाली_मनोरञ्जन, #NepaliFilm, #NepaliCinema, #नेपाली_कलाकार',
+      langInstruction: 'All hook, title, description MUST be written in Nepali (नेपाली) Devanagari script. Translate/adapt from source language to Nepali.',
+    },
+    'bhojpuri': {
+      persona:    'expert Bhojpuri film and music industry journalist who covers Bhojpuri cinema, songs and celebrity news for Hindi-speaking audiences',
+      audience:   'Bhojpuri film fans across UP, Bihar, Jharkhand, Nepal Terai and the global Bhojpuri diaspora',
+      hookEmojis: '🎬 (film), 🎵 (gana/song), ⭐ (star), 🔥 (viral/trending), 💃 (dance/item number), 🏆 (hit/superhit), 😱 (shocking), 💔 (drama)',
+      hookTip:    'Start with a dramatic, fan-engaging hook that Bhojpuri cinema fans will instantly react to and share',
+      titleTip:   'Write a detailed Bhojpuri entertainment headline with REAL actor/film/song names (e.g. Pawan Singh, Khesari Lal, Akshara Singh) from the article',
+      descTip:    'Write in engaging Hindi entertainment journalism style. Focus on the film/song/celebrity story with box office numbers, release details, or fan reactions. Use energetic language Bhojpuri fans love.',
+      hashtagSeed:'#भोजपुरी_फिल्म, #BhojpuriSong, #BhojpuriCinema, #भोजपुरी_गाना, #PawanSingh',
+      langInstruction: 'All hook, title, description MUST be written in Nepali (नेपाली) Devanagari script, regardless of the source language of the article. Translate/adapt everything to Nepali.',
+    },
+    'hindi-ent': {
+      persona:    'expert Bollywood entertainment journalist and viral social media content creator who covers Hindi films, celebrities and music',
+      audience:   'Bollywood fans across India, Nepal and the South Asian diaspora worldwide',
+      hookEmojis: '🎬 (film/movie), 🌟 (Bollywood star), 🎵 (music/song), 🏆 (box office hit), 💔 (celebrity drama), 🔥 (viral/trending), 😱 (shocking news), 💫 (glamour)',
+      hookTip:    'Start with a punchy Bollywood fan-page style hook that makes fans immediately want to comment and share',
+      titleTip:   'Write a detailed Bollywood headline with REAL actor/film/director names from the article (e.g. Shah Rukh Khan, Deepika Padukone, etc.)',
+      descTip:    'Write in energetic Bollywood entertainment journalism style (like Pinkvilla or Filmfare). Include box office numbers, OTT release info, celebrity quotes or fan reactions. Make it feel like an exciting fan page post.',
+      hashtagSeed:'#बॉलीवुड, #Bollywood, #HindiFilm, #BollywoodNews, #BollywoodMovies',
+      langInstruction: 'All hook, title, description MUST be written in Nepali (नेपाली) Devanagari script, regardless of the source language of the article. Translate/adapt everything to Nepali.',
+    },
+    'science': {
+      persona:    'expert science and technology journalist who makes complex innovations understandable and viral for a Nepali social media audience',
+      audience:   'tech-savvy Nepali youth, students, professionals and science enthusiasts',
+      hookEmojis: '🔬 (science/research), 🚀 (space/future), 💡 (innovation/idea), 🤖 (AI/robots), 🌍 (environment/climate), ⚡ (breakthrough), 🧬 (biology/health), 🔭 (discovery)',
+      hookTip:    'Start with a mind-blowing fact or discovery that makes the reader say "Wow, I had no idea!" — make it feel like the future is here',
+      titleTip:   'Write a detailed science/tech headline that clearly states the breakthrough or innovation and WHY it matters to Nepali readers',
+      descTip:    'Write in clear, exciting science journalism style. Explain WHAT the discovery/invention is, HOW it works in simple terms, and WHY it matters for Nepal or the world. Use analogies where helpful.',
+      hashtagSeed:'#विज्ञान, #प्रविधि, #Science, #Technology, #Innovation',
+      langInstruction: 'All hook, title, description MUST be in Nepali Devanagari script.',
+    },
+    'world': {
+      persona:    'expert international news journalist and viral social media content strategist covering global affairs for Nepali audiences',
+      audience:   'globally-aware Nepali readers who follow international politics, conflicts and world events',
+      hookEmojis: '🌍 (world/global), 🚨 (breaking/urgent), ⚡ (crisis), 💔 (tragedy), 🏆 (victory/milestone), 🗳️ (election/politics), 💰 (economy), 🌊 (disaster)',
+      hookTip:    'Start with an urgent, impactful hook that makes Nepali readers feel this world event directly affects them or is unmissable',
+      titleTip:   'Write a detailed international news headline with REAL country names, leader names, and specific consequences',
+      descTip:    'Write in Nepali international news journalism style. Explain WHAT happened, WHERE, WHO is involved, and WHY Nepali readers should care about this global event.',
+      hashtagSeed:'#विश्व_समाचार, #WorldNews, #BreakingNews, #अन्तर्राष्ट्रिय, #Global',
+      langInstruction: 'All hook, title, description MUST be in Nepali Devanagari script.',
+    },
+  };
 
-READ THIS NEWS ARTICLE CAREFULLY:
+  /* Default = Nepal breaking news (existing behaviour) */
+  const cfg = catCfg[category] || {
+    persona:    'expert Nepali news journalist and viral social media content strategist with deep knowledge of what goes viral on Facebook, Instagram and X (Twitter) in Nepal',
+    audience:   'Nepali social media users across all ages',
+    hookEmojis: '🔥 anger/controversy, 😱 shock, 💔 tragedy, ⚡ breaking, 🏆 victory, 💰 money/economy, 🚨 urgent, 🗳️ politics/election, 🌊 disaster, 🏥 health',
+    hookTip:    'Mention the SPECIFIC subject of THIS news (a real name, place, or event from the article). Make it feel urgent and emotionally compelling.',
+    titleTip:   'Must contain: WHO, WHAT happened, WHERE, and the most important number or consequence',
+    descTip:    'Write in formal Nepali journalism style (like Kantipur or Onlinekhabar). Include WHO, WHAT, WHERE, WHEN, WHY and impact on common people.',
+    hashtagSeed:'#BreakingNepal, #नेपाल_समाचार, #NepalNews, #नेपाल, #Nepal',
+    langInstruction: 'All hook, title, description MUST be in Nepali Devanagari script.',
+  };
+
+  const prompt = `You are an ${cfg.persona}.
+
+Your target audience: ${cfg.audience}
+
+READ THIS ARTICLE CAREFULLY:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HEADLINE (${langNote}): ${rawTitle}
 ${hasBody ? `FULL ARTICLE BODY:\n${bodySnippet}` : '(No article body available — work from headline only)'}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Your job: Write viral Nepali social media content that will get MAXIMUM shares, comments and reach.
+Your job: Write viral social media content that will get MAXIMUM shares, comments and reach.
 CRITICAL: Every output field MUST be based on ACTUAL specific details in this article.
-- Use the REAL names of people, places, organisations mentioned
-- Use the REAL numbers (deaths, injuries, amounts, dates) from the article
+- Use the REAL names of people, places, films, songs, organisations mentioned
+- Use the REAL numbers (box office, awards, dates, figures) from the article
 - Use the REAL event/action described — do NOT invent or guess details
 
 ━━━ OUTPUT FORMAT (strict JSON, no markdown) ━━━
 
 {
-  "hook": "<ONE punchy viral opening line in Nepali Devanagari>",
-  "title": "<Detailed news headline in Nepali Devanagari — around 35-40 words>",
-  "description": "<Compelling news story in Nepali Devanagari — 100 to 200 words across 4-6 sentences>",
+  "hook": "<ONE punchy viral opening line>",
+  "title": "<Detailed headline — around 35-40 words>",
+  "description": "<Compelling story — 100 to 200 words across 4-6 sentences>",
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5", "#tag6", "#tag7", "#tag8", "#tag9", "#tag10", "#ShashiNewsGen"]
 }
 
 ━━━ RULES FOR EACH FIELD ━━━
 
-HOOK (max 20 words in Nepali):
-• Start with ONE emoji matching the news mood (🔥 anger/controversy, 😱 shock, 💔 tragedy, ⚡ breaking, 🏆 victory, 💰 money/economy, 🚨 urgent, 🗳️ politics/election, 🌊 disaster, 🏥 health)
-• Mention the SPECIFIC subject of THIS news (a real name, place, or event from the article)
-• Make it feel urgent and emotionally compelling — trigger curiosity, outrage, empathy or pride
-• Use conversational Nepali that a common person would immediately react to and share
-• NEVER write generic phrases like "नेपालमा ठूलो घटना" or "महत्त्वपूर्ण समाचार"
+HOOK (max 20 words):
+• Start with ONE emoji matching the mood — choose from: ${cfg.hookEmojis}
+• ${cfg.hookTip}
+• Make it feel urgent and emotionally compelling — trigger curiosity, excitement, outrage or pride
+• NEVER write generic phrases like "एउटा ठूलो खबर" or "महत्त्वपूर्ण समाचार" or vague fillers
 
-TITLE (35-40 words in Nepali):
+TITLE (35-40 words):
 • Write a detailed, informative headline — NOT just a short teaser
-• Must contain: WHO, WHAT happened, WHERE, and the most important number or consequence
-• Include specific real names, places, and key facts from the article
-• Should read like a detailed newspaper front page headline that tells the full story
+• ${cfg.titleTip}
+• Should read like a detailed front-page headline that tells the full story
 • SEO-optimised — naturally include keywords people would search for
 
-DESCRIPTION (100-200 Nepali words, 4-6 sentences):
+DESCRIPTION (100-200 words, 4-6 sentences):
 • Sentence 1: State exactly WHAT happened, WHO was involved, WHERE and WHEN (use real names)
-• Sentence 2: HOW it happened and WHY — key cause or background
-• Sentence 3: KEY numbers — death toll, injury count, money amount, vote count, etc.
-• Sentence 4: Who responded? Government, public, experts — what was their reaction?
-• Sentence 5: What is the IMPACT on common Nepali people or the wider situation?
-• Sentence 6 (optional): Current status or what happens next — investigation, legal action, relief efforts
-• Write in formal Nepali journalism style (like Kantipur or Onlinekhabar)
-• Make it feel URGENT and HUMAN — people should feel connected to the story
-• NEVER use vague fillers like "सम्बन्धित निकायले जानकारी दिएको छ"
+• Sentence 2: HOW it happened and WHY — key cause, background or context
+• Sentence 3: KEY numbers — box office, awards, injuries, amounts, dates, etc.
+• Sentence 4: Reaction — fans, critics, co-stars, government, public — what did they say/do?
+• Sentence 5: What is the IMPACT or significance of this story?
+• Sentence 6 (optional): Current status or what happens next
+• ${cfg.descTip}
+• NEVER use vague fillers
 
 HASHTAGS (exactly 11 — the last one MUST be #ShashiNewsGen):
-• Tags 1-3: STORY-SPECIFIC in Nepali Devanagari — the real name, place, or event keyword from THIS article (e.g. #काठमाडौं, #प्रधानमन्त्री, #भूकम्प)
-• Tags 4-6: STORY-SPECIFIC in English — transliterated or translated key terms (e.g. #KTMEarthquake, #NepalPolitics2025)
-• Tags 7-9: TRENDING Nepali news hashtags currently popular on social media — choose from relevant ones like #BreakingNepal, #नेपाल_समाचार, #NepalNews, #नेपाल_राजनीति, #Nepal, #नेपाल, #NepalPolitics, #Kathmandu, #काठमाडौं based on topic relevance
+• Tags 1-3: STORY-SPECIFIC in Devanagari script — the real name, film, song, place or event keyword from THIS article
+• Tags 4-6: STORY-SPECIFIC in English — transliterated or translated key terms
+• Tags 7-9: Category-relevant trending hashtags — choose from: ${cfg.hashtagSeed}, #viral, #trending, #NepalNews, #ShashiNews
 • Tag 10: ONE broad reach tag like #viral, #trending, #news, or #breakingnews
-• Tag 11: MUST be exactly #ShashiNewsGen (our brand tag — always include this)
+• Tag 11: MUST be exactly #ShashiNewsGen
 • No spaces within any hashtag
 
 VIRAL WRITING TIPS:
-• Use numbers whenever possible (death tolls, amounts, percentages) — numbers stop the scroll
-• Include emotional language that resonates with Nepali people (family, justice, corruption, poverty, patriotism)
-• The description should make the reader feel they MUST share this with family and friends
-• Avoid passive voice — use active, direct language
+• Use specific numbers whenever possible (box office crores, award counts, dates, figures)
+• Include emotional language that resonates with the audience
+• The description should make the reader feel they MUST share this
+• Use active, direct language — avoid passive voice
 
-LANGUAGE: All hook, title, description text MUST be in Nepali Devanagari script.
+LANGUAGE: ${cfg.langInstruction}
 OUTPUT: Raw JSON only — no \`\`\`json, no explanation, nothing else.`;
 
   let result;
@@ -2075,7 +2353,12 @@ OUTPUT: Raw JSON only — no \`\`\`json, no explanation, nothing else.`;
 async function selectArticle(idx) {
   document.querySelectorAll('.news-item').forEach(el => el.classList.remove('active'));
   document.getElementById('item-' + idx)?.classList.add('active');
-  selectedArticle = articles[idx];
+  /* Category articles use idx >= 1000000 — look them up in the cat pool */
+  if (idx >= 1000000) {
+    selectedArticle = _catPool[idx - 1000000] || null;
+  } else {
+    selectedArticle = articles[idx];
+  }
   /* New article = new image — clear ALL uploaded images and composite state */
   customImageDataUrl   = null;
   _subjectDataUrl      = null;
@@ -2153,8 +2436,8 @@ async function selectArticle(idx) {
   const bestBody = fullArticleText || selectedArticle.description || '';
 
   /* ── Step 2: Show AI indicator in spinners if any AI key is set ── */
-  const aiReady = _geminiKey || _grokKey;
-  const aiLabel = _aiProvider === 'grok' ? '⚡ Grok' : '✨ Gemini';
+  const aiReady = _geminiKey || _browserGeminiKey;
+  const aiLabel = '✨ Gemini';
   if (aiReady) {
     document.getElementById('outHook').innerHTML =
       `<span class="spinner" style="border-color:rgba(139,92,246,.3);border-top-color:#a78bfa"></span> 🤖 ${aiLabel} AI ले hook लेख्दैछ…`;
@@ -2168,7 +2451,7 @@ async function selectArticle(idx) {
   let hook, nepaliTitle, desc, hashtags;
   let aiUsed = false;
 
-  const aiResult = await rewriteWithAI(rawTitle, bestBody, sourceLang);
+  const aiResult = await rewriteWithAI(rawTitle, bestBody, sourceLang, selectedArticle._category || _activeNewsTab);
 
   if (aiResult) {
     /* ✅ AI succeeded — use fully original AI-generated content */
@@ -2197,7 +2480,7 @@ async function selectArticle(idx) {
   renderHashtags(hashtags);
 
   /* ── Update AI/Template badges on all content fields ── */
-  const prov = _aiProvider === 'grok' ? '⚡ Grok' : '✨ Gemini';
+  const prov = '✨ Gemini';
   setGenBadges(aiUsed, aiUsed ? prov : '');
 
   if (aiUsed) {
@@ -2563,7 +2846,19 @@ function _offlineTitleFallback(raw) {
   if (l.match(/fire|blaze|आगलागी/))                             return 'नेपालमा आगलागी, क्षतिको जानकारी आउँदै';
   if (l.match(/tourism|trekk|पर्यटन/))                          return 'नेपालको पर्यटन क्षेत्रमा नयाँ समाचार';
   if (l.match(/human.rights|rights.commission|मानवअधिकार|आयोग/)) return 'मानवअधिकार उल्लङ्घनमा कारबाहीको माग';
-  return 'नेपालबाट महत्त्वपूर्ण समाचार';
+  /* Bollywood / Nepali film / Bhojpuri */
+  if (l.match(/bollywood|फिल्म|movie|film|cinema|चलचित्र/))    return 'मनोरञ्जन जगतमा नयाँ हलचल — चलचित्र समाचार';
+  if (l.match(/bhojpuri|भोजपुरी/))                              return 'भोजपुरी सिनेमामा नयाँ धमाका';
+  if (l.match(/song|music|album|singer|गाना|गायक|गायिका/))     return 'संगीत जगतमा नयाँ समाचार';
+  if (l.match(/actor|actress|star|celebrity|कलाकार|अभिनेता|अभिनेत्री/)) return 'मनोरञ्जन क्षेत्रमा चर्चामा रहेका कलाकार';
+  /* World / international news */
+  if (l.match(/war|conflict|attack|bomb|युद्ध|आक्रमण/))         return 'विश्वमा तनाव बढ्दो, अन्तर्राष्ट्रिय समाचार';
+  if (l.match(/trump|biden|modi|president|prime.minister/i))   return 'विश्वका नेताहरूसम्बन्धी महत्त्वपूर्ण खबर';
+  if (l.match(/climate|environment|global.warm|वातावरण/))       return 'वातावरण परिवर्तनसम्बन्धी महत्त्वपूर्ण अपडेट';
+  /* Science / tech */
+  if (l.match(/science|research|discovery|invention|space|ai |artificial/i)) return 'विज्ञान तथा प्रविधिमा नयाँ खोज';
+  if (l.match(/nasa|isro|rocket|satellite|space/i))             return 'अन्तरिक्ष विज्ञानमा नयाँ उपलब्धि';
+  return 'महत्त्वपूर्ण समाचार — थप विवरण भित्र';
 }
 
 /**
@@ -2578,8 +2873,10 @@ async function buildTitle(raw, sourceLang) {
   /* If input is very long (pasted article body), extract a headline-length snippet */
   const titleInput = extractHeadlineFromBody(cleaned);
 
-  /* Already Nepali — clean, SEO-rephrase and return */
-  if (/[\u0900-\u097F]{5,}/.test(titleInput)) {
+  /* Already Nepali (sourceLang='ne' AND has Devanagari) — clean and rephrase, no translation needed.
+     NOTE: Hindi also uses the same Devanagari Unicode block (U+0900–U+097F), so we MUST check
+     sourceLang to avoid treating a Hindi title as Nepali and skipping translation. */
+  if (sourceLang === 'ne' && /[\u0900-\u097F]{5,}/.test(titleInput)) {
     return cleanTitle(rephraseNepaliTitle(titleInput));
   }
 
@@ -2587,7 +2884,9 @@ async function buildTitle(raw, sourceLang) {
   if (_titleCache.has(cacheKey)) return _titleCache.get(cacheKey);
 
   /* Determine translation pair: auto-detect source → Nepali */
-  const langpair = sourceLang === 'hi' ? 'hi|ne' : 'en|ne';
+  const langpair = sourceLang === 'hi' ? 'hi|ne'
+                 : sourceLang === 'ne' ? 'ne|ne'   /* fallback: ne source treated as already done above but just in case */
+                 : 'en|ne';
 
   try {
     const apiUrl = 'https://api.mymemory.translated.net/get?q='
@@ -3375,7 +3674,7 @@ async function regenerateHashtags() {
 
   try {
     let newTags;
-    if ((_grokKey || _geminiKey) && selectedArticle) {
+    if ((_geminiKey || _browserGeminiKey) && selectedArticle) {
       const articleBody = (selectedArticle.fullArticleText || selectedArticle.description || '').replace(/\s+/g, ' ').slice(0, 800);
       const prompt = `You are a Nepali social media expert who knows trending hashtags.
 
@@ -4090,10 +4389,10 @@ async function _localRemoveBackground(dataUrl, tolerance = 38) {
 
 /**
  * Apply Composite:
- *  1. Load Image objects for each sprite (using subjectDataUrl if BG was removed, else rawDataUrl)
- *  2. Assign default positions for new sprites
- *  3. Redraw
- *  Note: background removal is handled separately by removeBgAllSprites()
+ *  1. Clears any stale BG-removed cache (subjectDataUrl) on each sprite.
+ *  2. Loads Image objects from rawDataUrl (original, with background).
+ *  3. Assigns default positions for new sprites, then redraws.
+ *  Background removal is a SEPARATE step — use the 🚫 Remove BG button.
  */
 async function applyComposite() {
   if (_sideSprites.length === 0) {
@@ -4104,14 +4403,11 @@ async function applyComposite() {
   try {
     for (const sp of _sideSprites) {
       /* ALWAYS use the raw image — BG removal is a separate step via 🚫 Remove BG.
-         If the user already ran Remove BG, subjectDataUrl is set; use that.
-         But if subjectDataUrl was set automatically (e.g. from a previous run),
-         we still honour it only if the user explicitly ran removeBgAllSprites.
-         To keep it clean: use rawDataUrl as the definitive source here. */
-      const srcUrl = sp.rawDataUrl;
-      /* Always reload the img object from rawDataUrl so rotate/flip changes appear */
+         Clear subjectDataUrl so no downstream code accidentally uses a stale
+         BG-removed version from a previous removeBgAllSprites() call. */
+      sp.subjectDataUrl = null;   // ← clear stale BG-removed cache
       sp.img = null;
-      try { sp.img = await loadImageFromSrc(srcUrl); } catch {}
+      try { sp.img = await loadImageFromSrc(sp.rawDataUrl); } catch {}
     }
     /* Set default positions for any sprite that doesn't have one yet */
     _sideSprites.forEach((sp, i) => {
@@ -4119,6 +4415,24 @@ async function applyComposite() {
       if (sp.w === 0) Object.assign(sp, _defaultSpritePos(i, sp.img));
     });
     _compositeMode = true;
+
+    /* ── CRITICAL: Apply Composite works on the NEWS CANVAS (real background).
+       If AI enhanced mode is active it would swap in an AI background instead of
+       the news photo — force-exit it so the real image stays as the base. */
+    _enhancedMode    = false;
+    _mainImgSprite   = null;
+    _mainImgSelected = false;
+    /* Redraw the main canvas from scratch with the real news/custom image */
+    if (_cachedNewsImg) {
+      const canvas = document.getElementById('newsCanvas');
+      const ctx    = canvas.getContext('2d');
+      canvas.width  = CANVAS_W;
+      canvas.height = CANVAS_H;
+      drawNewsImage(ctx, _cachedNewsImg, CANVAS_W, CANVAS_H);
+      _drawNewsBanner(ctx, CANVAS_W);
+      if (generatedPost) await drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+    }
+
     _showCompositeHandles(true);
     await redrawComposite();
     toast('✅ Composite ready! Drag · resize · rotate side images freely.', 'success');
@@ -6183,7 +6497,7 @@ function startEdit(field) {
 /**
  * Update the AI/Template generation badges on each content field.
  * @param {boolean} aiUsed  - true = AI generated, false = template/fallback
- * @param {string}  providerLabel - e.g. '✨ Gemini' or '⚡ Grok'
+ * @param {string}  providerLabel - e.g. '✨ Gemini'
  */
 function setGenBadges(aiUsed, providerLabel) {
   const fields = ['Hook', 'Title', 'Desc', 'Hashtags'];
@@ -6192,14 +6506,13 @@ function setGenBadges(aiUsed, providerLabel) {
     if (!badge) continue;
     badge.style.display = '';
     if (aiUsed) {
-      const isGrok = (providerLabel || '').includes('Grok');
-      badge.className = 'gen-badge ' + (isGrok ? 'gen-badge-grok' : 'gen-badge-ai');
-      badge.textContent = isGrok ? '⚡ Grok AI' : '✨ Gemini AI';
-      badge.title = 'Content generated by ' + (isGrok ? 'Grok' : 'Gemini') + ' AI — specific to this article';
+      badge.className = 'gen-badge gen-badge-ai';
+      badge.textContent = '✨ Gemini AI';
+      badge.title = 'Content generated by Gemini AI — specific to this article';
     } else {
       badge.className = 'gen-badge gen-badge-template';
       badge.textContent = '📋 Template';
-      badge.title = 'No AI key set — content generated using smart template system. Add Gemini/Grok key for AI-generated content.';
+      badge.title = 'No AI key set — content generated using smart template system. Add Gemini API key for AI-generated content.';
     }
   }
 }
@@ -6209,18 +6522,17 @@ function _setFieldBadgeAI(field) {
   const idMap = { hook: 'badgeHook', title: 'badgeTitle', desc: 'badgeDesc' };
   const badge = document.getElementById(idMap[field]);
   if (!badge) return;
-  const isGrok = _aiProvider === 'grok';
   badge.style.display = '';
-  badge.className = 'gen-badge ' + (isGrok ? 'gen-badge-grok' : 'gen-badge-ai');
-  badge.textContent = isGrok ? '⚡ Grok AI' : '✨ Gemini AI';
-  badge.title = 'Reimagined by ' + (isGrok ? 'Grok' : 'Gemini') + ' AI';
+  badge.className = 'gen-badge gen-badge-ai';
+  badge.textContent = '✨ Gemini AI';
+  badge.title = 'Reimagined by Gemini AI';
 }
 
 async function reimagineField(field) {
   if (!generatedPost || !selectedArticle) {
     toast('⚠️ Please select an article first.', 'error'); return;
   }
-  if (!_grokKey && !_geminiKey) {
+  if (!_geminiKey && !_browserGeminiKey) {
     toast('⚙️ Setup your AI key first — click the AI button in the header.', 'error', 5000); return;
   }
 
@@ -6310,7 +6622,7 @@ Return ONLY this JSON (no markdown, no explanation):
   }
 
   try {
-    console.log(`[Reimagine] calling ${_aiProvider} for field="${field}", jsonKey="${jsonKey}"`);
+    console.log(`[Reimagine] calling Gemini for field="${field}", jsonKey="${jsonKey}"`);
     const result = await callAI(prompt, 22000);
 
     /* callGemini now throws on any failure — if we get here, result is a parsed object */
