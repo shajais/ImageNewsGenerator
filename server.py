@@ -15,6 +15,7 @@ import sys
 import mimetypes
 import json
 from io import BytesIO
+from socketserver import ThreadingMixIn
 
 PORT = 3000
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -387,7 +388,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     os.chdir(BASE_DIR)
-    server = http.server.HTTPServer(('localhost', PORT), Handler)
+
+    class ThreadingHTTPServer(ThreadingMixIn, http.server.HTTPServer):
+        daemon_threads = True  # threads die when main thread exits
+
+    server = ThreadingHTTPServer(('localhost', PORT), Handler)
     print(f'\n✅  Nepal Viral News Generator is running!')
     print(f'👉  Open in browser: http://localhost:{PORT}\n')
     try:

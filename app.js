@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    Nepal Viral News Generator — Application Logic
    app.js
 ================================================================ */
@@ -259,7 +259,8 @@ let _cachedNewsImg = null;
    _compositeMode = true when at least one sprite is active.
    ──────────────────────────────────────────────────────────────── */
 let _sideSprites   = [];        // dynamic array of sprite objects
-let _compositeMode = false;     // true when _sideSprites.length > 0
+let _compositeMode  = false;     // true w
+let _circleClipMode = false;     // clip composite sprites to circle shapehen _sideSprites.length > 0
 let _nextSpriteId  = 1;         // auto-increment id
 let _selectedSpriteId = null;   // which sprite has handles shown
 
@@ -315,7 +316,7 @@ let _authorImgPromise = null;
 
 /* Text overlay customisation (editable via the Text Editor modal) */
 let _textOpts = {
-  bannerText:  '🚨  BREAKING NEWS',
+  bannerText:  '🗞️  NEWS UPDATE',
   bannerColor: '#c0392b',
   titleColor:  '#ffffff',
   titleSize:   62,
@@ -388,6 +389,8 @@ async function fetchNews() {
     </div>`).join('');
 
   document.getElementById('statusBadge').textContent = `Fetching ${RSS_FEEDS.length} sources…`;
+
+  try {
 
   /* Fetch all feeds in parallel — collect whatever succeeds */
   const results = await Promise.allSettled(
@@ -555,6 +558,12 @@ async function fetchNews() {
   document.getElementById('statusBadge').textContent = `${articles.length} articles · ${successCount} sources`;
   toast(`✅ ${articles.length} articles from ${successCount} sources`, 'success');
   setFetchState(false);
+  } catch (err) {
+    console.error('[fetchNews] CRASH:', err);
+    setFetchState(false);
+    document.getElementById('statusBadge').textContent = 'Error — check console';
+    toast('❌ fetchNews crashed: ' + err.message, 'error', 8000);
+  }
 }
 
 async function fetchSingleFeed(feed) {
@@ -2473,10 +2482,14 @@ async function selectArticle(idx) {
   }
 
   document.getElementById('outHook').textContent   = hook;
-  document.getElementById('outTitle').textContent  = nepaliTitle;
+
+  /* Merge hook as a punchy first line only when AI generated it — template titles stay clean */
+  const hookyTitle = (aiUsed && hook) ? hook + '\n' + nepaliTitle : nepaliTitle;
+  document.getElementById('outTitle').textContent  = hookyTitle;
   document.getElementById('outDesc').textContent   = desc;
 
-  generatedPost = { hook, title: nepaliTitle, description: desc, hashtags, link: selectedArticle.link || '' };
+  /* generatedPost keeps hook + title separate so sharing still uses correct fields */
+  generatedPost = { hook, title: hookyTitle, description: desc, hashtags, link: selectedArticle.link || '' };
   renderHashtags(hashtags);
 
   /* ── Update AI/Template badges on all content fields ── */
@@ -4267,12 +4280,14 @@ function _renderSideImageList() {
   });
 
   /* Show/hide apply+clear+bg buttons */
-  const applyBtn = document.getElementById('compositeApplyBtn');
-  const clearBtn = document.getElementById('compositeClearBtn');
-  const bgBtn    = document.getElementById('compositeBgBtn');
-  if (applyBtn) applyBtn.style.display = _sideSprites.length ? 'inline-flex' : 'none';
-  if (clearBtn) clearBtn.style.display = _sideSprites.length ? 'inline-flex' : 'none';
-  if (bgBtn)    bgBtn.style.display    = _sideSprites.length ? 'inline-flex' : 'none';
+  const applyBtn  = document.getElementById('compositeApplyBtn');
+  const clearBtn  = document.getElementById('compositeClearBtn');
+  const bgBtn     = document.getElementById('compositeBgBtn');
+  const circleBtn = document.getElementById('compositeCircleBtn');
+  if (applyBtn)  applyBtn.style.display  = _sideSprites.length ? 'inline-flex' : 'none';
+  if (clearBtn)  clearBtn.style.display  = _sideSprites.length ? 'inline-flex' : 'none';
+  if (bgBtn)     bgBtn.style.display     = _sideSprites.length ? 'inline-flex' : 'none';
+  if (circleBtn) circleBtn.style.display = _sideSprites.length ? 'inline-flex' : 'none';
 }
 
 /** Rotate a sprite's base image pre-composite (baked into rawDataUrl) */
@@ -4341,12 +4356,11 @@ function _defaultSpritePos(i, img) {
 
 /**
  * Client-side background removal using canvas pixel manipulation.
- * Samples the corner pixels to detect the dominant background colour,
- * then makes pixels within tolerance fully transparent (flood-like).
- * Works well for solid/light/white backgrounds — portraits, logos, cutouts.
+ * Samples the BORDER edge pixels to detect dominant background colour,
+ * then removes pixels within tolerance — preserving skin tones and faces.
  * Returns a data-URL (PNG with alpha transparency).
  */
-async function _localRemoveBackground(dataUrl, tolerance = 38) {
+async function _localRemoveBackground(dataUrl, tolerance = 32) {
   const img = await loadImageFromSrc(dataUrl, 10000);
   const oc  = document.createElement('canvas');
   oc.width  = img.naturalWidth  || img.width;
@@ -4357,30 +4371,40 @@ async function _localRemoveBackground(dataUrl, tolerance = 38) {
   const imgData = octx.getImageData(0, 0, W, H);
   const d = imgData.data;
 
-  /* Sample the 4 corner regions (5×5 px each) to get background colour */
-  const corners = [
-    [0,0],[W-5,0],[0,H-5],[W-5,H-5],
-  ];
+  /* Sample the full outer border (top+bottom rows + left+right cols) to find BG colour */
   let rSum=0, gSum=0, bSum=0, cnt=0;
-  corners.forEach(([cx,cy]) => {
-    for (let py=cy; py<cy+5 && py<H; py++) {
-      for (let px=cx; px<cx+5 && px<W; px++) {
-        const i = (py*W + px) * 4;
-        rSum+=d[i]; gSum+=d[i+1]; bSum+=d[i+2]; cnt++;
-      }
-    }
-  });
+  const addPx = (px, py) => {
+    const i = (py * W + px) * 4;
+    rSum += d[i]; gSum += d[i+1]; bSum += d[i+2]; cnt++;
+  };
+  for (let x = 0; x < W; x++) { addPx(x, 0); addPx(x, H-1); }
+  for (let y = 1; y < H-1; y++) { addPx(0, y); addPx(W-1, y); }
   const bgR = rSum/cnt, bgG = gSum/cnt, bgB = bSum/cnt;
 
-  /* Make pixels close to background colour fully transparent */
-  for (let i=0; i<d.length; i+=4) {
-    const dr = d[i]-bgR, dg = d[i+1]-bgG, db = d[i+2]-bgB;
+  /* Helper: is a pixel likely a skin tone? Preserve these from removal. */
+  function isSkinTone(r, g, b) {
+    // Fitzpatrick scale heuristic: skin tones have warm cast, R > G > B in various ranges
+    return r > 60 && g > 30 && b > 15 &&
+           r > g && g > b * 0.7 &&
+           Math.abs(r - g) < 80 &&
+           r < 255 && g < 240;
+  }
+
+  /* Make pixels close to background colour transparent — skip skin tones */
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i+1], b = d[i+2];
+    const dr = r - bgR, dg = g - bgG, db = b - bgB;
     const dist = Math.sqrt(dr*dr + dg*dg + db*db);
     if (dist < tolerance) {
-      d[i+3] = 0;  /* fully transparent */
-    } else if (dist < tolerance * 1.6) {
-      /* Semi-transparent feathering at edges */
-      d[i+3] = Math.round(255 * (dist - tolerance) / (tolerance * 0.6));
+      /* Don't remove if it looks like skin (protects faces/hands) */
+      if (!isSkinTone(r, g, b)) {
+        d[i+3] = 0;  // fully transparent
+      }
+    } else if (dist < tolerance * 1.8) {
+      /* Feathered edge — also skip if skin */
+      if (!isSkinTone(r, g, b)) {
+        d[i+3] = Math.round(255 * (dist - tolerance) / (tolerance * 0.8));
+      }
     }
   }
   octx.putImageData(imgData, 0, 0);
@@ -4535,26 +4559,77 @@ async function redrawComposite() {
 }
 
 /** Draw all side sprites onto any ctx */
+/** Toggle circle-clip mode for all composite sprites */
+function toggleCircleClip() {
+  _circleClipMode = !_circleClipMode;
+  const btn = document.getElementById('compositeCircleBtn');
+  if (btn) {
+    btn.style.background   = _circleClipMode ? 'linear-gradient(135deg,#4f46e5,#818cf8)' : '';
+    btn.style.color        = _circleClipMode ? '#fff' : '#818cf8';
+    btn.textContent        = _circleClipMode ? '⭕ Circle ON' : '⭕ Circle Clip';
+  }
+  if (_compositeMode) redrawComposite();
+  toast(_circleClipMode ? '⭕ Circle clip ON — images shown as circular icons' : '⬜ Circle clip OFF', 'info', 2000);
+}
+
 function _drawSpritesOnCtx(ctx) {
   _sideSprites.forEach(sp => {
     if (!sp.img) return;
     const cx = sp.x + sp.w / 2, cy = sp.y + sp.h / 2;
-    /* depth glow */
-    const grd = ctx.createRadialGradient(cx, cy + sp.h * 0.3, sp.w * 0.1, cx, cy, sp.w * 0.8);
-    grd.addColorStop(0, 'rgba(0,0,0,0.45)');
-    grd.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
-    ctx.fillStyle = grd; ctx.fillRect(-sp.w * 0.6, -sp.h * 0.6, sp.w * 1.2, sp.h * 1.2);
-    ctx.restore();
-    /* image */
-    ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
-    ctx.drawImage(sp.img, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
-    ctx.restore();
-    /* accent line */
-    ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
-    ctx.fillStyle = 'rgba(246,173,85,0.8)';
-    ctx.fillRect(-sp.w / 2, sp.h / 2, sp.w, 3);
-    ctx.restore();
+    const r  = Math.min(sp.w, sp.h) / 2;
+
+    if (_circleClipMode) {
+      /* ── Circle clip mode: draw as circular icon ── */
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(sp.rot);
+
+      /* Shadow/glow behind circle */
+      ctx.shadowColor = 'rgba(0,0,0,0.55)';
+      ctx.shadowBlur  = 18;
+
+      /* Circle clip */
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(sp.img, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
+      ctx.shadowBlur = 0;
+      ctx.restore();
+
+      /* Ring border */
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(sp.rot);
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      const ringGrad = ctx.createLinearGradient(-r, -r, r, r);
+      ringGrad.addColorStop(0,   '#f59e0b');
+      ringGrad.addColorStop(0.5, '#ef4444');
+      ringGrad.addColorStop(1,   '#a855f7');
+      ctx.strokeStyle = ringGrad;
+      ctx.lineWidth   = Math.max(3, r * 0.06);
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      /* ── Normal rectangular mode ── */
+      /* Depth glow */
+      const grd = ctx.createRadialGradient(cx, cy + sp.h * 0.3, sp.w * 0.1, cx, cy, sp.w * 0.8);
+      grd.addColorStop(0, 'rgba(0,0,0,0.45)');
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
+      ctx.fillStyle = grd; ctx.fillRect(-sp.w * 0.6, -sp.h * 0.6, sp.w * 1.2, sp.h * 1.2);
+      ctx.restore();
+      /* Image */
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
+      ctx.drawImage(sp.img, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
+      ctx.restore();
+      /* Accent line at bottom */
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
+      ctx.fillStyle = 'rgba(246,173,85,0.8)';
+      ctx.fillRect(-sp.w / 2, sp.h / 2, sp.w, 3);
+      ctx.restore();
+    }
   });
 }
 
@@ -5909,48 +5984,121 @@ function drawNewsImage(ctx, img, W, H) {
 }
 
 function _drawNewsBanner(ctx, W) {
-  const bannerColor = _textOpts.bannerColor || '#c0392b';
-  const BANNER_H = 114;   // full height from y=0 → always covers the very top edge
-  /* Red banner bar — starts flush at y=0 */
-  ctx.fillStyle = bannerColor;
+  const BANNER_H = 118;
+
+  /* ── Vivid gradient banner (deep crimson → bright orange-red) ── */
+  const bannerGrad = ctx.createLinearGradient(0, 0, W, 0);
+  const baseColor  = _textOpts.bannerColor || '#c0392b';
+  bannerGrad.addColorStop(0,   baseColor === '#c0392b' ? '#b91c1c' : baseColor);
+  bannerGrad.addColorStop(0.4, baseColor === '#c0392b' ? '#dc2626' : baseColor);
+  bannerGrad.addColorStop(0.7, baseColor === '#c0392b' ? '#ef4444' : baseColor);
+  bannerGrad.addColorStop(1,   baseColor === '#c0392b' ? '#f97316' : baseColor);
+  ctx.fillStyle = bannerGrad;
   ctx.fillRect(0, 0, W, BANNER_H);
-  /* Left accent stripe */
-  ctx.fillStyle = '#f6ad55';
-  ctx.fillRect(0, 0, 10, BANNER_H);
-  /* Banner text — vertically centred in the bar */
-  ctx.font = 'bold 56px "Segoe UI",Arial,sans-serif';
-  ctx.fillStyle = '#ffffff';
+
+  /* ── Shiny gloss overlay (top half highlight) ── */
+  const gloss = ctx.createLinearGradient(0, 0, 0, BANNER_H * 0.55);
+  gloss.addColorStop(0, 'rgba(255,255,255,0.18)');
+  gloss.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gloss;
+  ctx.fillRect(0, 0, W, BANNER_H * 0.55);
+
+  /* ── Left gold accent bar (wider + gradient) ── */
+  const accentGrad = ctx.createLinearGradient(0, 0, 0, BANNER_H);
+  accentGrad.addColorStop(0, '#fde68a');
+  accentGrad.addColorStop(0.5, '#f59e0b');
+  accentGrad.addColorStop(1, '#d97706');
+  ctx.fillStyle = accentGrad;
+  ctx.fillRect(0, 0, 12, BANNER_H);
+
+  /* ── Banner text with glow ── */
+  const bannerLabel = _textOpts.bannerText || '🗞️  NEWS UPDATE';
+  ctx.font = 'bold 52px "Segoe UI",Arial,sans-serif';
   ctx.textAlign = 'center';
-  ctx.shadowColor = 'rgba(0,0,0,0.7)';
-  ctx.shadowBlur = 8;
-  ctx.fillText(_textOpts.bannerText || '🚨  BREAKING NEWS', W / 2, 72);
-  ctx.shadowBlur = 0;
-  /* Bottom rule */
-  ctx.fillStyle = 'rgba(246,173,85,0.6)';
-  ctx.fillRect(0, BANNER_H, W, 2);
-  /* Date stamp */
+  /* Glow layer */
+  ctx.shadowColor = 'rgba(255,120,0,0.9)';
+  ctx.shadowBlur  = 22;
+  ctx.fillStyle   = '#fff7ed';
+  ctx.fillText(bannerLabel, W / 2, 70);
+  /* Crisp top layer */
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur  = 6;
+  ctx.fillStyle   = '#ffffff';
+  ctx.fillText(bannerLabel, W / 2, 70);
+  ctx.shadowBlur  = 0;
+
+  /* ── Bottom glowing rule ── */
+  const ruleGrad = ctx.createLinearGradient(0, 0, W, 0);
+  ruleGrad.addColorStop(0,   'rgba(253,230,138,0)');
+  ruleGrad.addColorStop(0.2, 'rgba(253,230,138,0.9)');
+  ruleGrad.addColorStop(0.8, 'rgba(253,230,138,0.9)');
+  ruleGrad.addColorStop(1,   'rgba(253,230,138,0)');
+  ctx.fillStyle = ruleGrad;
+  ctx.fillRect(12, BANNER_H, W - 12, 3);
+
+  /* ── Date stamp ── */
   const dateStr = new Date().toLocaleDateString('ne-NP', { year:'numeric', month:'short', day:'numeric' });
-  ctx.font = '22px "Segoe UI",Arial,sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.font      = '20px "Segoe UI",Arial,sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
   ctx.textAlign = 'right';
-  ctx.fillText(dateStr, W - 28, 100);
+  ctx.fillText(dateStr, W - 20, 104);
   ctx.textAlign = 'center';
 }
 
 function drawBackground(ctx, W, H) {
+  /* ── Rich deep gradient background (dark navy → deep maroon → dark slate) ── */
   const grad = ctx.createLinearGradient(0, 0, W, H);
-  grad.addColorStop(0, '#0a0e1a'); grad.addColorStop(.4, '#1a0a0a'); grad.addColorStop(1, '#0d1829');
-  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+  grad.addColorStop(0,    '#0f172a');
+  grad.addColorStop(0.35, '#1e0a0a');
+  grad.addColorStop(0.65, '#150e1f');
+  grad.addColorStop(1,    '#0a1628');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
 
-  ctx.strokeStyle = 'rgba(229,62,62,0.06)'; ctx.lineWidth = 1;
-  for (let x = 0; x < W; x += 60) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
-  for (let y = 0; y < H; y += 60) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  /* ── Subtle diagonal grid lines ── */
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,60,60,0.05)';
+  ctx.lineWidth = 1;
+  for (let x = -H; x < W + H; x += 55) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + H, H); ctx.stroke();
+  }
+  ctx.restore();
 
-  ctx.fillStyle = '#e53e3e'; ctx.fillRect(0, 0, W, 14); ctx.fillRect(0, H-14, W, 14);
+  /* ── Vivid radial glow — top-right crimson ── */
+  const glow1 = ctx.createRadialGradient(W * 0.85, H * 0.1, 20, W * 0.85, H * 0.1, 320);
+  glow1.addColorStop(0, 'rgba(220, 38, 38, 0.28)');
+  glow1.addColorStop(1, 'rgba(220, 38, 38, 0)');
+  ctx.fillStyle = glow1;
+  ctx.fillRect(0, 0, W, H);
 
-  const circ = ctx.createRadialGradient(W*.8, H*.2, 40, W*.8, H*.2, 280);
-  circ.addColorStop(0, 'rgba(229,62,62,0.15)'); circ.addColorStop(1, 'rgba(229,62,62,0)');
-  ctx.fillStyle = circ; ctx.fillRect(0, 0, W, H);
+  /* ── Secondary glow — bottom-left violet/indigo ── */
+  const glow2 = ctx.createRadialGradient(W * 0.15, H * 0.9, 10, W * 0.15, H * 0.9, 280);
+  glow2.addColorStop(0, 'rgba(99, 38, 180, 0.22)');
+  glow2.addColorStop(1, 'rgba(99, 38, 180, 0)');
+  ctx.fillStyle = glow2;
+  ctx.fillRect(0, 0, W, H);
+
+  /* ── Bottom accent glow — warm amber ── */
+  const glow3 = ctx.createRadialGradient(W * 0.5, H, 0, W * 0.5, H, 260);
+  glow3.addColorStop(0, 'rgba(245, 158, 11, 0.15)');
+  glow3.addColorStop(1, 'rgba(245, 158, 11, 0)');
+  ctx.fillStyle = glow3;
+  ctx.fillRect(0, 0, W, H);
+
+  /* ── Top & bottom accent bars (vivid) ── */
+  const topBar = ctx.createLinearGradient(0, 0, W, 0);
+  topBar.addColorStop(0,   '#b91c1c');
+  topBar.addColorStop(0.5, '#ef4444');
+  topBar.addColorStop(1,   '#f97316');
+  ctx.fillStyle = topBar;
+  ctx.fillRect(0, 0, W, 10);
+
+  const botBar = ctx.createLinearGradient(0, 0, W, 0);
+  botBar.addColorStop(0,   '#f97316');
+  botBar.addColorStop(0.5, '#ef4444');
+  botBar.addColorStop(1,   '#b91c1c');
+  ctx.fillStyle = botBar;
+  ctx.fillRect(0, H - 10, W, 10);
 
   /* Banner drawn separately after all image layers — do NOT call here */
 }
@@ -6005,18 +6153,23 @@ async function drawTextOverlay(ctx, post, W, H) {
   const blockH = TOP_PAD + titleLineCount * TITLE_LINE_H + 18 + BRAND_H + BOTTOM_PAD;
   const blockY = Math.max(BANNER_BOTTOM + 20, H - blockH);
 
-  /* ── Gradient overlay — fades up from bottom ── */
-  const grad = ctx.createLinearGradient(0, blockY - 120, 0, H);
+  /* ── Gradient overlay — rich deep fade from bottom with warm tint ── */
+  const grad = ctx.createLinearGradient(0, blockY - 140, 0, H);
   grad.addColorStop(0,    'rgba(0,0,0,0)');
-  grad.addColorStop(0.15, 'rgba(0,0,0,0.72)');
-  grad.addColorStop(0.4,  'rgba(0,0,0,0.90)');
-  grad.addColorStop(1,    'rgba(0,0,0,0.97)');
+  grad.addColorStop(0.12, 'rgba(10,5,20,0.65)');
+  grad.addColorStop(0.35, 'rgba(15,5,10,0.88)');
+  grad.addColorStop(0.7,  'rgba(10,2,8,0.96)');
+  grad.addColorStop(1,    'rgba(5,0,5,0.99)');
   ctx.fillStyle = grad;
-  ctx.fillRect(0, blockY - 120, W, blockH + 120);
+  ctx.fillRect(0, blockY - 140, W, blockH + 140);
 
-  /* Left accent bar */
-  ctx.fillStyle = '#e53e3e';
-  ctx.fillRect(0, blockY, 8, blockH);
+  /* Left accent bar — vivid gradient */
+  const accentBar = ctx.createLinearGradient(0, blockY, 0, blockY + blockH);
+  accentBar.addColorStop(0,   '#f97316');
+  accentBar.addColorStop(0.5, '#ef4444');
+  accentBar.addColorStop(1,   '#dc2626');
+  ctx.fillStyle = accentBar;
+  ctx.fillRect(0, blockY, 10, blockH);
 
   let y = blockY + TOP_PAD;
 
@@ -6024,7 +6177,11 @@ async function drawTextOverlay(ctx, post, W, H) {
   ctx.font = `bold ${titleSize}px "Segoe UI",Arial,sans-serif`;
   ctx.fillStyle = titleColor;
   ctx.textAlign = 'center';
-  ctx.shadowColor = 'rgba(0,0,0,1)'; ctx.shadowBlur = 16;
+  /* Warm glow pass */
+  ctx.shadowColor = 'rgba(249,115,22,0.35)'; ctx.shadowBlur = 20;
+  wrapText(ctx, rawTitle, W / 2, y, maxW, TITLE_LINE_H, titleLineCount);
+  /* Crisp white pass */
+  ctx.shadowColor = 'rgba(0,0,0,1)'; ctx.shadowBlur = 14;
   const drawnLines = wrapText(ctx, rawTitle, W / 2, y, maxW, TITLE_LINE_H, titleLineCount);
   y += drawnLines * TITLE_LINE_H + 18;
   ctx.shadowBlur = 0;
@@ -6753,3 +6910,662 @@ function _closeEditMode(m) {
     }
   }, 10000);
 })();
+
+/* ================================================================
+   MEME STUDIO  (global scope — called from HTML onclick handlers)
+   v2  — Live trending from headlines + article-URL input
+       — Canvas matches news image format:
+           dark gradient BG · red top "😂 MEME" banner · avatar watermark strip
+       — Gemini AI generates meme text; local templates as fallback
+       — Images: Unsplash Source CDN + upload + solid BG
+       — Download / copy / share
+================================================================ */
+
+/* ── State ── */
+let _memeImgObj     = null;
+let _memeTextColor  = '#ffffff';
+let _memeFontFamily = 'Impact';
+let _memeCanvasW    = 600;
+let _memeCanvasH    = 600;
+
+/* ── Evergreen Nepal meme topics (shown when live fetch unavailable) ── */
+const MEME_NEPAL_TOPICS_FALLBACK = [
+  { emoji:'⚡', label:'Load Shedding फेरि आयो',    hint:'Nepal बिजुली कटौती र जनताको दुःख' },
+  { emoji:'🚦', label:'काठमाडौं ट्राफिक जाम',       hint:'काठमाडौंको ट्राफिक र ढिलाई' },
+  { emoji:'🏛️', label:'नेताको खाली वाचा',            hint:'Nepal को राजनीतिज्ञको खाली वाचा र जनताको हालत' },
+  { emoji:'💸', label:'तलब र महँगी',                 hint:'Nepal मा महँगी र कम तलब' },
+  { emoji:'🛂', label:'खाडी जाने नेपाली',            hint:'बिदेश जाने नेपाली कामदार' },
+  { emoji:'📶', label:'Nepal Internet Speed',         hint:'नेपालको ढिलो इन्टरनेट speed' },
+  { emoji:'🏥', label:'सरकारी अस्पताल',               hint:'सरकारी अस्पतालको अवस्था र सेवा' },
+  { emoji:'🎓', label:'Board Exam Tension',           hint:'SEE र NEB exam को tension र preparation' },
+  { emoji:'🌧️', label:'Monsoon र पहिरो',              hint:'Nepal को बाढी पहिरो र सरकारी तयारी' },
+  { emoji:'🏔️', label:'Everest Tourist',              hint:'हिमाल पर्यटन र garbage' },
+  { emoji:'🎬', label:'नेपाली चलचित्र',               hint:'नेपाली फिल्म र कलाकार' },
+  { emoji:'🗳️', label:'Election को वाचा',             hint:'चुनाव वाचा र जनताको अपेक्षा' },
+  { emoji:'🍜', label:'Dal Bhat Power',               hint:'नेपाली खाना dal bhat संस्कृति' },
+  { emoji:'📱', label:'TikTok र नेपाली युवा',         hint:'नेपाली युवा र social media addiction' },
+  { emoji:'🚗', label:'Traffic नियम जरिवाना',         hint:'नेपाल ट्राफिक नियम र जरिवाना' },
+  { emoji:'⚽', label:'Nepal Football',               hint:'नेपाली फुटबल टिम र ANFA' },
+];
+
+/* Emojis to assign dynamically to live headline chips */
+const _LIVE_TOPIC_EMOJIS = ['🔥','📰','💥','🎭','🗞️','⚡','📢','🏛️','😮','🌐'];
+
+/* ── News Studio / Meme Studio tab switching ── */
+function openNewsStudio() {
+  /* Close Meme Studio, show the main News Explorer container */
+  const mainContainer = document.querySelector('.container');
+  const modal         = document.getElementById('memeStudioModal');
+  if (modal)         modal.style.display  = 'none';
+  if (mainContainer) mainContainer.style.display = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  /* Active state on buttons */
+  const nb = document.getElementById('newsStudioBtn');
+  const mb = document.getElementById('memeStudioBtn');
+  if (nb) nb.classList.add('active-studio-btn');
+  if (mb) mb.classList.remove('active-studio-btn');
+}
+
+/* ── Open / close ── */
+function openMemeStudio() {
+  /* Hide the main News Explorer container, show only Meme Studio */
+  const mainContainer = document.querySelector('.container');
+  const modal         = document.getElementById('memeStudioModal');
+  if (mainContainer) mainContainer.style.display = 'none';
+  modal.style.display = 'block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  /* Active state on buttons */
+  const nb = document.getElementById('newsStudioBtn');
+  const mb = document.getElementById('memeStudioBtn');
+  if (nb) nb.classList.remove('active-studio-btn');
+  if (mb) mb.classList.add('active-studio-btn');
+
+  /* Ensure canvas has correct dimensions before drawing */
+  const canvas = document.getElementById('memeCanvas');
+  if (canvas && (!canvas.width || canvas.width < 100)) {
+    canvas.width  = 600;
+    canvas.height = 600;
+  }
+
+  _loadMemeTrendingTopics();
+  /* Short delay so canvas is visible/sized before drawing */
+  setTimeout(() => renderMemeCanvas(), 80);
+}
+function closeMemeStudio() {
+  /* Restore the main News Explorer container */
+  const mainContainer = document.querySelector('.container');
+  const modal         = document.getElementById('memeStudioModal');
+  modal.style.display = 'none';
+  if (mainContainer) mainContainer.style.display = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  /* Reset button states */
+  const nb = document.getElementById('newsStudioBtn');
+  const mb = document.getElementById('memeStudioBtn');
+  if (nb) nb.classList.add('active-studio-btn');
+  if (mb) mb.classList.remove('active-studio-btn');
+}
+
+/* ── Live trending topics from loaded articles + fallback ── */
+async function _loadMemeTrendingTopics() {
+  const grid = document.getElementById('memeTrendingGrid');
+  if (!grid) return;
+  /* Reset every time so re-opening always refreshes */
+  grid.innerHTML = '<span style="color:var(--muted);font-size:.8rem;padding:4px">⏳ Loading live topics…</span>';
+
+  let liveTopics = [];
+
+  /* Pull topics from the app's cached articles if available */
+  try {
+    /* `articles` is the global array loaded by the main app */
+    if (typeof articles !== 'undefined' && Array.isArray(articles) && articles.length > 0) {
+      const seen = new Set();
+      for (const a of articles) {
+        const title = (a.title || a.headline || '').trim();
+        if (!title || seen.has(title)) continue;
+        seen.add(title);
+        /* Short chip label: first ~5 words */
+        const words = title.split(/\s+/);
+        const label = words.slice(0, 5).join(' ') + (words.length > 5 ? '…' : '');
+        liveTopics.push({
+          emoji: _LIVE_TOPIC_EMOJIS[liveTopics.length % _LIVE_TOPIC_EMOJIS.length],
+          label,
+          hint: title,
+          live: true
+        });
+        if (liveTopics.length >= 10) break;
+      }
+    }
+  } catch (e) { console.warn('[MemeTopics] articles read error', e); }
+
+  /* Merge live + fallback (live first) */
+  const merged = [...liveTopics, ...MEME_NEPAL_TOPICS_FALLBACK];
+  _renderMemeTrendingGrid(merged);
+}
+
+function _renderMemeTrendingGrid(topics) {
+  const grid = document.getElementById('memeTrendingGrid');
+  if (!grid) return;
+  grid.innerHTML = topics.map((t, i) =>
+    `<button class="meme-topic-chip${t.live ? ' live' : ''}" data-idx="${i}">${t.emoji} ${escHtml(t.label)}</button>`
+  ).join('');
+  grid.querySelectorAll('.meme-topic-chip').forEach((btn, i) => {
+    btn.addEventListener('click', () => memeClickTopic(topics[i].hint, topics[i].label));
+  });
+}
+
+function memeClickTopic(hint, label) {
+  document.getElementById('memeTopicInput').value = hint;
+  document.getElementById('memeTopText').value    = '';
+  document.getElementById('memeBottomText').value = '';
+  memeSetStatus('⏳ ' + label + ' मिम तयार गर्दैछ…');
+  memeGenerateAI();
+}
+function memeSetStatus(msg) {
+  const el = document.getElementById('memeStatusMsg');
+  if (el) el.textContent = msg;
+}
+function _memeArticleStatus(msg) {
+  const el = document.getElementById('memeArticleStatus');
+  if (el) el.textContent = msg;
+}
+
+/* ── Load meme from a news article URL or pasted headline ── */
+async function memeFromArticle() {
+  const raw = (document.getElementById('memeArticleUrl') ? document.getElementById('memeArticleUrl').value : '').trim();
+  if (!raw) { toast('⚠️ URL वा headline text लेख्नुस्', 'error'); return; }
+
+  /* If it looks like a URL, fetch article HTML and extract title + OG image */
+  if (/^https?:\/\//i.test(raw)) {
+    _memeArticleStatus('⏳ Article fetch गर्दैछ…');
+    try {
+      const html  = await fetchArticleHtml(raw);
+      const title = extractPageTitle(html) || raw;
+      const ogImg = extractOgImage(html);
+
+      document.getElementById('memeTopicInput').value = title;
+      _memeArticleStatus('✅ Article loaded: ' + title.slice(0, 60) + (title.length > 60 ? '…' : ''));
+
+      /* Auto-populate image search or load OG image */
+      if (ogImg) {
+        _memeArticleStatus('✅ Article + image loaded');
+        memeSetStatus('⏳ Article image load हुँदैछ…');
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload  = () => { _memeImgObj = img; renderMemeCanvas(); memeSetStatus('✅ Article image ready'); };
+        img.onerror = () => {
+          /* If OG image fails, fall back to keyword image search */
+          memeSetStatus('ℹ️ Fallback image search…');
+          const q = title.split(/\s+/).slice(0, 3).join(' ');
+          document.getElementById('memeImgQuery').value = q;
+          switchMemeImgSrc('search');
+          searchMemeImages();
+        };
+        img.src = ogImg;
+      } else {
+        const q = title.split(/\s+/).slice(0, 3).join(' ');
+        document.getElementById('memeImgQuery').value = q;
+        switchMemeImgSrc('search');
+        searchMemeImages();
+      }
+      /* Now auto-generate meme text from the title */
+      memeGenerateAI();
+    } catch (e) {
+      _memeArticleStatus('❌ Fetch failed: ' + e.message);
+    }
+  } else {
+    /* Treat as plain headline text */
+    document.getElementById('memeTopicInput').value = raw;
+    _memeArticleStatus('✅ Headline set — AI generate गर्नुस्');
+    memeGenerateAI();
+  }
+}
+
+/* ── Image source tabs ── */
+function switchMemeImgSrc(src) {
+  ['search','upload','blank'].forEach(s => {
+    const panel = document.getElementById('memeSrc' + s.charAt(0).toUpperCase() + s.slice(1));
+    if (panel) panel.style.display = (s === src) ? 'block' : 'none';
+  });
+  document.querySelectorAll('.meme-src-tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.src === src));
+}
+
+/* ── Image search (Unsplash Source — free, no API key) ── */
+async function searchMemeImages() {
+  const q    = (document.getElementById('memeImgQuery').value || '').trim();
+  const grid = document.getElementById('memeImgResults');
+  if (!q) { toast('⚠️ Search keyword लेख्नुस्', 'error'); return; }
+  grid.innerHTML = '<span style="color:var(--muted);font-size:.8rem">🔍 Searching…</span>';
+  const now = Date.now();
+  const srcs = [
+    `https://source.unsplash.com/300x300/?${encodeURIComponent(q)}&sig=${now}`,
+    `https://source.unsplash.com/300x300/?${encodeURIComponent(q + ',nepal')}&sig=${now+1}`,
+    `https://source.unsplash.com/300x300/?${encodeURIComponent(q + ',funny')}&sig=${now+2}`,
+    `https://picsum.photos/seed/${encodeURIComponent(q)}/300/300`,
+    `https://picsum.photos/seed/${encodeURIComponent(q+'2')}/300/300`,
+  ];
+  grid.innerHTML = srcs.map(src =>
+    `<img class="meme-img-thumb" src="${src}" loading="lazy"
+       onclick="selectMemeImage(this,'${src}')"
+       onerror="this.style.opacity='.15'" title="Click to use">`
+  ).join('');
+}
+
+function selectMemeImage(el, src) {
+  document.querySelectorAll('.meme-img-thumb').forEach(i => i.classList.remove('selected'));
+  el.classList.add('selected');
+  memeSetStatus('⏳ Image load हुँदैछ…');
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload  = () => { _memeImgObj = img; renderMemeCanvas(); memeSetStatus('✅ Image loaded'); };
+  img.onerror = () => memeSetStatus('❌ Image load भएन — अर्को select गर्नुस्');
+  img.src = src;
+}
+
+/* ── Upload ── */
+function memeLoadUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => { _memeImgObj = img; renderMemeCanvas(); memeSetStatus('✅ Image uploaded'); };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+/* ── Solid colour ── */
+function memeApplyBgColor() {
+  _memeImgObj = null;
+  renderMemeCanvas();
+  memeSetStatus('🎨 Solid background set');
+}
+
+/* ── Style setters ── */
+function setMemeTextColor(color, btn) {
+  _memeTextColor = color;
+  document.querySelectorAll('.meme-color-swatch').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderMemeCanvas();
+}
+function setMemeFont(font, btn) {
+  _memeFontFamily = font;
+  document.querySelectorAll('.meme-font-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderMemeCanvas();
+}
+function setMemeSize(w, h, btn) {
+  _memeCanvasW = w; _memeCanvasH = h;
+  const canvas = document.getElementById('memeCanvas');
+  canvas.width = w; canvas.height = h;
+  document.querySelectorAll('.meme-size-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderMemeCanvas();
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   CANVAS RENDER — matches news image format:
+     • Dark gradient BG with subtle red grid lines
+     • Red top banner 110px: "😂 MEME" bold white, gold rule, date stamp
+     • Meme text block in middle zone (Impact, stroke, auto-wrap)
+     • _drawAuthorWatermark strip pinned to very bottom
+   ───────────────────────────────────────────────────────────────── */
+async function renderMemeCanvas() {
+  const canvas = document.getElementById('memeCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  /* ── 1. Background ── */
+  if (_memeImgObj) {
+    ctx.clearRect(0, 0, W, H);
+    const iw = _memeImgObj.naturalWidth, ih = _memeImgObj.naturalHeight;
+    const scale = Math.max(W / iw, H / ih);
+    const dw = iw * scale, dh = ih * scale;
+    ctx.drawImage(_memeImgObj, (W - dw) / 2, (H - dh) / 2, dw, dh);
+
+    /* Subtle dark gradient overlay so text & banner are readable */
+    const ov = ctx.createLinearGradient(0, 0, 0, H);
+    ov.addColorStop(0,   'rgba(0,0,0,0.55)');
+    ov.addColorStop(0.30,'rgba(0,0,0,0.25)');
+    ov.addColorStop(0.70,'rgba(0,0,0,0.30)');
+    ov.addColorStop(1,   'rgba(0,0,0,0.72)');
+    ctx.fillStyle = ov; ctx.fillRect(0, 0, W, H);
+  } else {
+    /* Rich dark gradient background matching news image style */
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    const bgCol = document.getElementById('memeBgColor') ? document.getElementById('memeBgColor').value : '#0f172a';
+    bg.addColorStop(0,    bgCol);
+    bg.addColorStop(0.35, _shadeColor(bgCol, -20));
+    bg.addColorStop(0.65, _shadeColor(bgCol, -40));
+    bg.addColorStop(1,    _shadeColor(bgCol, -60));
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+    /* Diagonal grid pattern (like news image) */
+    ctx.save();
+    ctx.strokeStyle = 'rgba(192,57,43,0.07)';
+    ctx.lineWidth   = 1;
+    const STEP = Math.round(W / 10);
+    for (let x = -H; x < W + H; x += STEP) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + H, H); ctx.stroke();
+    }
+    ctx.restore();
+
+    /* Radial crimson glow top-right */
+    const glow1 = ctx.createRadialGradient(W*0.85, H*0.1, 20, W*0.85, H*0.1, 260);
+    glow1.addColorStop(0, 'rgba(220,38,38,0.22)'); glow1.addColorStop(1, 'rgba(220,38,38,0)');
+    ctx.fillStyle = glow1; ctx.fillRect(0, 0, W, H);
+
+    /* Radial violet glow bottom-left */
+    const glow2 = ctx.createRadialGradient(W*0.15, H*0.9, 10, W*0.15, H*0.9, 220);
+    glow2.addColorStop(0, 'rgba(99,38,180,0.18)'); glow2.addColorStop(1, 'rgba(99,38,180,0)');
+    ctx.fillStyle = glow2; ctx.fillRect(0, 0, W, H);
+  }
+
+  /* ── 2. Vivid gradient banner (matches news image style) ── */
+  const BANNER_H = Math.round(H * 0.165);   // ~99px at 600 height
+
+  /* Gradient: deep crimson → bright orange-red */
+  const bannerGrad = ctx.createLinearGradient(0, 0, W, 0);
+  bannerGrad.addColorStop(0,   '#b91c1c');
+  bannerGrad.addColorStop(0.4, '#dc2626');
+  bannerGrad.addColorStop(0.7, '#ef4444');
+  bannerGrad.addColorStop(1,   '#f97316');
+  ctx.fillStyle = bannerGrad;
+  ctx.fillRect(0, 0, W, BANNER_H);
+
+  /* Gloss highlight on top half */
+  const gloss = ctx.createLinearGradient(0, 0, 0, BANNER_H * 0.55);
+  gloss.addColorStop(0, 'rgba(255,255,255,0.18)');
+  gloss.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gloss;
+  ctx.fillRect(0, 0, W, BANNER_H * 0.55);
+
+  /* Gold accent bar on left */
+  const accentGrad = ctx.createLinearGradient(0, 0, 0, BANNER_H);
+  accentGrad.addColorStop(0,   '#fde68a');
+  accentGrad.addColorStop(0.5, '#f59e0b');
+  accentGrad.addColorStop(1,   '#d97706');
+  ctx.fillStyle = accentGrad;
+  ctx.fillRect(0, 0, 12, BANNER_H);
+
+  /* Gold glowing rule at banner bottom */
+  const ruleGrad = ctx.createLinearGradient(0, 0, W, 0);
+  ruleGrad.addColorStop(0,   'rgba(253,230,138,0)');
+  ruleGrad.addColorStop(0.2, 'rgba(253,230,138,0.9)');
+  ruleGrad.addColorStop(0.8, 'rgba(253,230,138,0.9)');
+  ruleGrad.addColorStop(1,   'rgba(253,230,138,0)');
+  ctx.fillStyle = ruleGrad;
+  ctx.fillRect(12, BANNER_H, W - 12, 3);
+
+  /* "😂 MEME" text — glow + crisp */
+  ctx.save();
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${Math.round(BANNER_H * 0.48)}px Impact, "Arial Black", sans-serif`;
+  ctx.shadowColor = 'rgba(255,120,0,0.9)'; ctx.shadowBlur = 20;
+  ctx.fillStyle = '#fff7ed';
+  ctx.fillText('😂  MEME', W / 2, BANNER_H / 2 + 2);
+  ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 6;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('😂  MEME', W / 2, BANNER_H / 2 + 2);
+  ctx.restore();
+
+  /* Date stamp top-right */
+  const dateStr = new Date().toLocaleDateString('ne-NP', { year:'numeric', month:'short', day:'numeric' });
+  ctx.save();
+  ctx.font         = `bold ${Math.round(W * 0.025)}px "Segoe UI",Arial,sans-serif`;
+  ctx.fillStyle    = 'rgba(255,255,255,0.80)';
+  ctx.textAlign    = 'right';
+  ctx.textBaseline = 'top';
+  ctx.fillText(dateStr, W - 12, 8);
+  ctx.restore();
+
+  /* Left red accent bar (decorative, like news card) */
+  ctx.fillStyle = 'rgba(192,57,43,0.90)';
+  ctx.fillRect(0, BANNER_H + 2, 5, H - BANNER_H - 74);
+
+  /* ── 3. Meme text block ── */
+  const fontSize  = parseInt(document.getElementById('memeFontSize') ? document.getElementById('memeFontSize').value : 42);
+  const useStroke = document.getElementById('memeStroke') ? document.getElementById('memeStroke').checked : true;
+  const topText   = (document.getElementById('memeTopText')    ? document.getElementById('memeTopText').value    : '').toUpperCase();
+  const botText   = (document.getElementById('memeBottomText') ? document.getElementById('memeBottomText').value : '').toUpperCase();
+
+  /* Text zone: between bottom of banner and top of watermark strip */
+  const STRIP_H   = 72;
+  const textZoneT = BANNER_H + 12;
+  const textZoneB = H - STRIP_H - 8;
+
+  ctx.textAlign = 'center';
+  ctx.font = `900 ${fontSize}px "${_memeFontFamily}", Impact, "Arial Black", sans-serif`;
+
+  function drawMemeText(text, yAnchor, baseline) {
+    if (!text) return;
+    ctx.font         = `900 ${fontSize}px "${_memeFontFamily}", Impact, "Arial Black", sans-serif`;
+    ctx.textBaseline = baseline;
+    const maxW  = W * 0.88;
+    const words = text.split(' ');
+    const lines = [];
+    let line = '';
+    for (const w of words) {
+      const test = line ? line + ' ' + w : w;
+      if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+      else line = test;
+    }
+    if (line) lines.push(line);
+    const lineH  = fontSize * 1.22;
+    const totalH = lines.length * lineH;
+    const startY = baseline === 'bottom' ? yAnchor - totalH + lineH : yAnchor;
+    lines.forEach((l, i) => {
+      const y = startY + i * lineH;
+      if (useStroke) {
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 4;
+        ctx.lineWidth   = Math.max(3, fontSize * 0.12);
+        ctx.strokeStyle = '#000';
+        ctx.lineJoin    = 'round';
+        ctx.strokeText(l, W / 2, y);
+        ctx.restore();
+      }
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 6;
+      ctx.fillStyle   = _memeTextColor;
+      ctx.fillText(l, W / 2, y);
+      ctx.restore();
+    });
+  }
+
+  drawMemeText(topText, textZoneT + 6, 'top');
+  drawMemeText(botText, textZoneB - 6, 'bottom');
+
+  /* ── 4. Author watermark strip (avatar + name + URL) ── */
+  const showWatermark = document.getElementById('memeWatermark') ? document.getElementById('memeWatermark').checked : true;
+  if (showWatermark) {
+    await _drawAuthorWatermark(ctx, W, 0);
+  }
+}
+
+/* Helper: darken/lighten a hex colour by `amount` (negative = darker) */
+function _shadeColor(hex, amount) {
+  try {
+    let c = parseInt(hex.replace('#',''), 16);
+    let r = Math.min(255, Math.max(0, (c >> 16) + amount));
+    let g = Math.min(255, Math.max(0, ((c >> 8) & 0xff) + amount));
+    let b = Math.min(255, Math.max(0, (c & 0xff) + amount));
+    return '#' + ((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1);
+  } catch { return hex; }
+}
+
+/* ── AI meme text via Gemini ── */
+async function memeGenerateAI() {
+  const topic = (document.getElementById('memeTopicInput') ? document.getElementById('memeTopicInput').value : '').trim();
+  if (!topic) { toast('⚠️ Step 2 मा topic लेख्नुस्', 'error'); return; }
+  const hasAI = typeof _geminiKey !== 'undefined' ? (_geminiKey || _browserGeminiKey) : false;
+  if (!hasAI) {
+    toast('ℹ️ AI key छैन — template प्रयोग गर्दैछ', 'info', 3000);
+    memeGenerateTemplate();
+    return;
+  }
+
+  /* Show spinner */
+  const spinner = document.getElementById('memeCanvasSpinner');
+  if (spinner) spinner.style.display = 'flex';
+  memeSetStatus('🤖 Gemini AI ले meme text तयार गर्दैछ…');
+
+  const prompt = `You are a master Nepali viral meme creator. Create a funny, highly shareable two-line meme for Nepal's social media (Facebook, TikTok, Instagram, Twitter).
+
+TOPIC: ${topic}
+
+RULES:
+- Write naturally in Nepali Devanagari script (mixing English words is totally fine and even encouraged for punchlines)
+- TOP TEXT: sets up situation, expectation, or context — max 8 words, punchy
+- BOTTOM TEXT: delivers the punchline or subverted expectation — max 8 words, HILARIOUS
+- Style: deeply RELATABLE Nepal everyday life humor — real situations Nepali people face daily (load shedding, traffic, expensive prices, government promises, board exams, abroad dreams, TikTok addiction). Use exaggeration, irony, self-deprecating humor, mild political satire, or "expectation vs reality" format.
+- The meme MUST feel like something a Nepali person would immediately share saying "यो त मेरो कुरो हो!" (this is so me!)
+- Avoid anything offensive, harmful, or targeting specific individuals
+- Image search query: 3-4 English words describing a FUNNY, RELATABLE, or VISUALLY EXPRESSIVE image perfectly matching the meme vibe (e.g. "confused student books", "traffic jam car honk", "empty wallet sad", "politician pointing crowd"). Choose an image that makes the meme funnier or more relatable when seen with the text.
+- Caption: 1-2 fun sentences (Nepali + English mix) that explain the relatable situation + exactly 8 relevant hashtags ending with #ShashiNewsGen
+
+Output ONLY valid JSON (no markdown, no extra text):
+{"top":"<TOP TEXT>","bottom":"<BOTTOM TEXT>","img":"<image search query>","caption":"<caption with hashtags>"}`;
+
+  try {
+    const result = await callAI(prompt, 22000);
+    if (spinner) spinner.style.display = 'none';
+    if (result && result.top && result.bottom) {
+      document.getElementById('memeTopText').value    = result.top;
+      document.getElementById('memeBottomText').value = result.bottom;
+      if (result.caption) document.getElementById('memeCaptionText').value = result.caption;
+      /* Auto-search a relevant image and switch to search tab before rendering */
+      const imgQ = result.img || topic.split(' ').slice(0,3).join(' ');
+      document.getElementById('memeImgQuery').value = imgQ;
+      switchMemeImgSrc('search');
+      searchMemeImages();
+      await renderMemeCanvas();
+      memeSetStatus('✅ AI मिम तयार भयो! 😂');
+      toast('😂 AI Meme ready! Image पनि search गर्दैछ…', 'success', 3500);
+    } else {
+      throw new Error('Bad AI response');
+    }
+  } catch (e) {
+    if (spinner) spinner.style.display = 'none';
+    console.warn('[MemeAI]', e.message);
+    memeSetStatus('⚠️ AI failed — template प्रयोग गर्दैछ');
+    memeGenerateTemplate();
+  }
+}
+
+/* ── Template fallback bank ── */
+const _MEME_TEMPLATES_BY_KW = [
+  { kw:['light','बिजुली','load shed'],   top:'जब LOAD SHEDDING आउँछ',       bottom:'र EXAM ठिक भोलि छ 🕯️😩',      img:'candle dark studying night' },
+  { kw:['traffic','ट्राफिक','जाम'],      top:'काठमाडौं ट्राफिक:',            bottom:'1 KM = 1 घण्टा ⏰🚦',           img:'traffic jam car stress' },
+  { kw:['नेता','election','वाचा','vote'], top:'ELECTION मा नेताको PROMISE:',  bottom:'5 साल पछि: "अर्को TERM मा" 🗳️😭', img:'politician pointing crowd promises' },
+  { kw:['exam','board','see','neb'],      top:'EXAM को आगाडिको रात:',         bottom:'"भोलि बिहानै पढ्छु" 📚😬',      img:'student procrastinating phone bed' },
+  { kw:['internet','net','speed','wifi'], top:'NEPAL INTERNET SPEED:',        bottom:'☕ चिया खाएर आउँछु, तबसम्म LOADING… 😴', img:'buffering loading slow internet frustrated' },
+  { kw:['महँगी','price','महंगाई'],         top:'बजार जाँदा POCKET:',           bottom:'घर फर्कँदा POCKET: EMPTY 💸😭', img:'empty wallet sad shopping' },
+  { kw:['abroad','खाडी','foreign','bidesh'], top:'ABROAD जाने PLAN:',         bottom:'Reality: फेरि Nepal ✈️😢',      img:'person suitcase airport sad leaving' },
+  { kw:['dal bhat','दाल भात','खाना','food'], top:'नेपालीको LIFE HACK:',       bottom:'जे PROBLEM होस्, DAL BHAT खा 💪😄', img:'dal bhat nepali food bowl happy' },
+  { kw:['football','cricket','sport','खेल'], top:'NEPAL SPORTS:',             bottom:'"NEXT TIME जित्छौं" 😭⚽',       img:'sport fan disappointed watching tv' },
+  { kw:['tiktok','social media','reels','youtube'], top:'1 VIDEO हेर्छु भनेर:',  bottom:'3 घण्टा पछि: 😵📱',            img:'person phone scrolling addicted bed' },
+  { kw:['salary','तलब','payday'],         top:'PAYDAY:',                       bottom:'Bills तिरेपछि: BROKE AGAIN 😂💸', img:'empty wallet bills payday broke' },
+  { kw:['rain','पानी','flood','बाढी'],    top:'Nepal मा पानी पर्‍यो भने:',    bottom:'सरकार: "RESCUE SOON आउँछ" 🌧️😒', img:'rain flood umbrella nepal village' },
+  { kw:['petrol','fuel','diesel','gas'],  top:'PETROL PRICE बढ्यो:',          bottom:'बाइक धकेलेर जाने भयो 🛵😭',    img:'motorcycle pushing bike empty fuel' },
+  { kw:['hospital','अस्पताल','doctor','health'], top:'सरकारी HOSPITAL मा:',   bottom:'QUEUE: 8 घण्टा, Doctor: 5 मिनेट 🏥😑', img:'hospital queue waiting long line' },
+];
+const _MEME_GENERIC = [
+  { top:'EXPECTATION:',               bottom:'REALITY: NEPAL 😭',                     img:'expectation vs reality funny' },
+  { top:'सरकारको PLAN:',              bottom:'जनताको HAAL: 🤦😅',                      img:'politician plan confused people' },
+  { top:'जब PROBLEM आउँछ:',          bottom:'नेपाली: "चिया खाउँ अनि सोच्छौं" ☕😂',   img:'tea cup thinking problem relax' },
+  { top:'NEPALI MAN को 3 DREAMS:',   bottom:'BIDESH, BIDESH, BIDESH 🛫😂',            img:'airplane airport dreaming travel' },
+  { top:'आमाले सोध्नुभयो:',           bottom:'"पढ्दैछु" 📱😅 (MOBILE HERDING THO)', img:'teenager phone caught studying lie' },
+  { top:'FRIDAY रात:',                bottom:'SATURDAY बिहान: 😴💀',                  img:'tired sleeping weekend morning funny' },
+];
+
+function memeGenerateTemplate() {
+  const topic = document.getElementById('memeTopicInput') ? document.getElementById('memeTopicInput').value.toLowerCase() : '';
+  let tmpl = _MEME_GENERIC[Math.floor(Math.random() * _MEME_GENERIC.length)];
+  for (const t of _MEME_TEMPLATES_BY_KW) {
+    if (t.kw.some(k => topic.includes(k))) { tmpl = t; break; }
+  }
+  document.getElementById('memeTopText').value    = tmpl.top;
+  document.getElementById('memeBottomText').value = tmpl.bottom;
+  const capEl = document.getElementById('memeCaptionText');
+  if (capEl && !capEl.value) {
+    capEl.value = `${tmpl.top} ${tmpl.bottom} 😂😂\n#NepalMeme #नेपाली_मिम #ShashiNewsGen #viral #trending #nepal #funnynepal #meme`;
+  }
+  /* Auto-search matching image for this template */
+  const imgQ = tmpl.img || (topic.split(/\s+/).slice(0, 3).join(' ') || 'funny relatable meme');
+  document.getElementById('memeImgQuery').value = imgQ;
+  switchMemeImgSrc('search');
+  searchMemeImages();
+  renderMemeCanvas();
+  memeSetStatus('⚡ Template meme ready!');
+}
+
+/* ── AI caption ── */
+async function memeGenerateCaption() {
+  const top = document.getElementById('memeTopText')    ? document.getElementById('memeTopText').value    : '';
+  const bot = document.getElementById('memeBottomText') ? document.getElementById('memeBottomText').value : '';
+  if (!top && !bot) { toast('⚠️ पहिले meme text लेख्नुस्', 'error'); return; }
+  const hasAI = typeof _geminiKey !== 'undefined' ? (_geminiKey || _browserGeminiKey) : false;
+  if (!hasAI) {
+    document.getElementById('memeCaptionText').value =
+      `${top} ${bot} 😂😂\n#NepalMeme #नेपाली_मिम #ShashiNewsGen #viral #trending #nepal #funnynepal #meme`;
+    return;
+  }
+  memeSetStatus('✨ Caption तयार गर्दैछ…');
+  try {
+    const result = await callAI(
+      `Write a short funny Nepali social media caption (1-2 fun Nepali sentences mixing Nepali + English) and exactly 8 hashtags for this meme:\nTop: "${top}"\nBottom: "${bot}"\nOutput plain text only.`,
+      15000
+    );
+    const txt = typeof result === 'string' ? result : (result && result.caption ? result.caption : '');
+    if (txt) document.getElementById('memeCaptionText').value = txt;
+    memeSetStatus('✅ Caption ready!');
+  } catch { memeSetStatus('⚠️ Caption AI failed'); }
+}
+
+/* ── Download ── */
+function downloadMeme() {
+  const canvas = document.getElementById('memeCanvas');
+  const a = document.createElement('a');
+  a.download = 'ShashiMeme_' + Date.now() + '.png';
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+  toast('💾 Meme downloaded!', 'success', 2500);
+}
+
+/* ── Copy to clipboard ── */
+async function memeCopyImage() {
+  const canvas = document.getElementById('memeCanvas');
+  try {
+    await new Promise((res, rej) =>
+      canvas.toBlob(async blob => {
+        try { await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]); res(); }
+        catch (e) { rej(e); }
+      })
+    );
+    toast('📋 Meme copied!', 'success', 2500);
+  } catch { toast('⚠️ Clipboard copy failed — download गर्नुस्', 'error', 3000); }
+}
+
+/* ── Share ── */
+function shareMeme(platform) {
+  const caption = (document.getElementById('memeCaptionText') ? document.getElementById('memeCaptionText').value : '😂 Nepal Meme!') +
+    '\n\nCreate yours → https://shajais.github.io/ShashiNewsGen/';
+  const encoded  = encodeURIComponent(caption);
+  const siteEnc  = encodeURIComponent('https://shajais.github.io/ShashiNewsGen/');
+  const urls = {
+    facebook : 'https://www.facebook.com/sharer/sharer.php?u=' + siteEnc + '&quote=' + encoded,
+    twitter  : 'https://twitter.com/intent/tweet?text=' + encoded,
+    whatsapp : 'https://api.whatsapp.com/send?text=' + encoded,
+  };
+  if (platform === 'instagram') {
+    downloadMeme();
+    toast('📸 Downloaded! Instagram app खोलेर Story/Post गर्नुस्', 'info', 7000);
+    return;
+  }
+  if (urls[platform]) window.open(urls[platform], '_blank', 'noopener,width=620,height=520');
+  setTimeout(downloadMeme, 400);
+}

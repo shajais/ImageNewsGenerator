@@ -4,18 +4,13 @@
 		{
 			"label": "Start Local Server",
 			"type": "shell",
-			"command": "node server.js",
-			"isBackground": true,
-			"problemMatcher": [],
-			"group": "build"
-		},
-		{
-			"label": "Start Python Server",
-			"type": "shell",
 			"command": "python server.py",
 			"isBackground": true,
 			"problemMatcher": [],
-			"group": "build"
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
 		}
 	]
 }
