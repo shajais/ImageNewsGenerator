@@ -1941,6 +1941,23 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
   transform: scale(1.04);
 }
 
+/* ── Puzzle Studio nav button ── */
+.puzzle-nav-btn {
+  background: linear-gradient(135deg,#7c3aed,#5b21b6);
+  color: #fff;
+  font-weight: 800;
+  font-size: .82rem;
+  padding: 8px 16px;
+  border-radius: 20px;
+  box-shadow: 0 3px 12px rgba(124,58,237,.40);
+  transition: all .2s;
+}
+.puzzle-nav-btn:hover, .puzzle-nav-btn.active-studio-btn {
+  background: linear-gradient(135deg,#a855f7,#7c3aed);
+  box-shadow: 0 3px 18px rgba(168,85,247,.65);
+  transform: scale(1.04);
+}
+
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-12px); }
   to   { opacity: 1; transform: translateY(0); }
