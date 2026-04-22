@@ -7446,7 +7446,7 @@ async function renderMemeCanvas() {
   }
 
   /* ── 2. Vivid gradient banner (matches news image style) ── */
-  const BANNER_H = Math.round(H * 0.165);   // ~99px at 600 height
+  const BANNER_H = Math.round(H * 0.09);   // slim banner ~54px at 600 height
 
   /* Gradient: deep crimson → bright orange-red */
   const bannerGrad = ctx.createLinearGradient(0, 0, W, 0);
@@ -7780,3 +7780,391 @@ function shareMeme(platform) {
   if (urls[platform]) window.open(urls[platform], '_blank', 'noopener,width=620,height=520');
   setTimeout(downloadMeme, 400);
 }
+
+/* ================================================================
+   PUZZLE STUDIO
+   Viral math puzzles with Einstein photo, custom text, themes.
+================================================================ */
+
+const EINSTEIN_PHOTOS = [
+  { id:'e1', label:'Classic Portrait',    emoji:'🧑‍🔬',
+    url:'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d3/Albert_Einstein_Head.jpg/440px-Albert_Einstein_Head.jpg' },
+  { id:'e2', label:'Patent Office',       emoji:'🔬',
+    url:'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/Einstein_patentoffice.jpg/440px-Einstein_patentoffice.jpg' },
+  { id:'e3', label:'1947 Portrait',       emoji:'📋',
+    url:'https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Albert_Einstein_1947.jpg/440px-Albert_Einstein_1947.jpg' },
+];
+
+const PUZZLE_THEMES = [
+  { id:'viral',  label:'🔴 Viral Red',    bg:'#1a0000', accent:'#dc2626', text:'#ffffff', subtext:'#fca5a5', expr:'#ffffff',  badge:'#dc2626' },
+  { id:'genius', label:'🟣 Genius Purple',bg:'#0f0020', accent:'#7c3aed', text:'#ffffff', subtext:'#c4b5fd', expr:'#f0e6ff', badge:'#7c3aed' },
+  { id:'dark',   label:'⚫ Dark Classic', bg:'#0a0a0f', accent:'#f59e0b', text:'#ffffff', subtext:'#fde68a', expr:'#ffffff',  badge:'#f59e0b' },
+  { id:'navy',   label:'🔵 Deep Navy',    bg:'#020617', accent:'#3b82f6', text:'#ffffff', subtext:'#93c5fd', expr:'#dbeafe', badge:'#3b82f6' },
+  { id:'forest', label:'🟢 Forest',       bg:'#021007', accent:'#22c55e', text:'#ffffff', subtext:'#86efac', expr:'#dcfce7', badge:'#22c55e' },
+  { id:'gold',   label:'🟡 Gold',         bg:'#1a1000', accent:'#eab308', text:'#ffffff', subtext:'#fef08a', expr:'#fefce8', badge:'#eab308' },
+];
+
+const PUZZLE_PRESETS = [
+  { expr:'3 - 3×6 + 2 = ??',      answer:'-13' },
+  { expr:'6 ÷ 2(1+2) = ??',        answer:'9'   },
+  { expr:'1 + 1 + 1 + 1 × 0 = ??', answer:'3'   },
+  { expr:'8 ÷ 2(2+2) = ??',        answer:'16'  },
+  { expr:'5 + 5 × 5 - 5 = ??',     answer:'25'  },
+  { expr:'2² + 2 × 2 - 2 = ??',    answer:'6'   },
+  { expr:'10 - 1 - 2 × 3 = ??',    answer:'3'   },
+  { expr:'√9 + 3² - 5 = ??',       answer:'7'   },
+  { expr:'100 ÷ 4 × 0 + 8 = ??',   answer:'8'   },
+  { expr:'4 + 4 ÷ 4 + 4 × 4 = ??', answer:'21'  },
+];
+
+let _puzzleTheme      = 'viral';
+let _puzzleEinsteinId = null;
+let _puzzleImgCache   = {};
+let _puzzleCanvasW    = 600;
+let _puzzleCanvasH    = 600;
+let _puzzleInited     = false;
+
+function openPuzzleStudio() {
+  document.querySelector('.container').style.display        = 'none';
+  document.getElementById('memeStudioModal').style.display  = 'none';
+  document.getElementById('puzzleStudioModal').style.display = 'block';
+  window.scrollTo({ top:0, behavior:'smooth' });
+  ['newsStudioBtn','memeStudioBtn','puzzleStudioBtn'].forEach(id => {
+    document.getElementById(id)?.classList.remove('active-studio-btn');
+  });
+  document.getElementById('puzzleStudioBtn')?.classList.add('active-studio-btn');
+  const canvas = document.getElementById('puzzleCanvas');
+  if (canvas) { canvas.width = _puzzleCanvasW; canvas.height = _puzzleCanvasH; }
+  if (!_puzzleInited) { _buildEinsteinGrid(); _buildPuzzleThemeGrid(); _buildPuzzlePresetGrid(); _puzzleInited = true; }
+  if (!_puzzleEinsteinId) {
+    const r = EINSTEIN_PHOTOS[Math.floor(Math.random() * EINSTEIN_PHOTOS.length)];
+    _selectEinsteinPhoto(r.id);
+  } else { renderPuzzleCanvas(); }
+}
+
+function closePuzzleStudio() {
+  document.getElementById('puzzleStudioModal').style.display = 'none';
+  document.querySelector('.container').style.display = '';
+  window.scrollTo({ top:0, behavior:'smooth' });
+  document.getElementById('newsStudioBtn')?.classList.add('active-studio-btn');
+  document.getElementById('puzzleStudioBtn')?.classList.remove('active-studio-btn');
+}
+
+/* Patch openMemeStudio + openNewsStudio to also hide puzzle modal */
+const _ps_origOpenMeme = openMemeStudio;
+openMemeStudio = function() {
+  document.getElementById('puzzleStudioModal').style.display = 'none';
+  document.getElementById('puzzleStudioBtn')?.classList.remove('active-studio-btn');
+  _ps_origOpenMeme();
+};
+const _ps_origOpenNews = openNewsStudio;
+openNewsStudio = function() {
+  document.getElementById('puzzleStudioModal').style.display = 'none';
+  document.getElementById('puzzleStudioBtn')?.classList.remove('active-studio-btn');
+  _ps_origOpenNews();
+};
+
+function _buildEinsteinGrid() {
+  const grid = document.getElementById('einsteinPhotoGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  EINSTEIN_PHOTOS.forEach(p => {
+    const btn = document.createElement('button');
+    btn.id = 'einsteinBtn_' + p.id;
+    btn.title = p.label;
+    btn.style.cssText = 'background:var(--card2);border:3px solid var(--border);border-radius:10px;padding:4px;cursor:pointer;transition:all .2s;width:80px;display:flex;flex-direction:column;align-items:center;gap:4px';
+    btn.innerHTML = `<img src="${p.url}" alt="${p.label}" crossorigin="anonymous" style="width:72px;height:72px;object-fit:cover;border-radius:6px" onerror="this.parentElement.style.display='none'"><span style="font-size:.65rem;color:var(--muted);text-align:center;line-height:1.2">${p.emoji} ${p.label}</span>`;
+    btn.onclick = () => _selectEinsteinPhoto(p.id);
+    grid.appendChild(btn);
+    _preloadEinsteinImg(p);
+  });
+}
+
+function _preloadEinsteinImg(p) {
+  if (_puzzleImgCache[p.id]) return;
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload  = () => { _puzzleImgCache[p.id] = img; if (_puzzleEinsteinId === p.id) renderPuzzleCanvas(); };
+  img.onerror = () => console.warn('[Puzzle] Einstein load failed:', p.url);
+  img.src = p.url;
+}
+
+function _selectEinsteinPhoto(id) {
+  _puzzleEinsteinId = id;
+  EINSTEIN_PHOTOS.forEach(p => {
+    const btn = document.getElementById('einsteinBtn_' + p.id);
+    if (btn) btn.style.borderColor = (p.id === id) ? '#7c3aed' : 'var(--border)';
+  });
+  if (!_puzzleImgCache[id]) _preloadEinsteinImg(EINSTEIN_PHOTOS.find(p => p.id === id));
+  renderPuzzleCanvas();
+}
+
+function _buildPuzzleThemeGrid() {
+  const grid = document.getElementById('puzzleThemeGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  PUZZLE_THEMES.forEach(t => {
+    const btn = document.createElement('button');
+    btn.id = 'puzzleThemeBtn_' + t.id;
+    btn.textContent = t.label;
+    btn.style.cssText = `padding:5px 12px;border-radius:20px;border:2px solid ${t.accent};background:${t.bg};color:${t.text};font-size:.75rem;font-weight:700;cursor:pointer;transition:all .2s;opacity:${_puzzleTheme===t.id?1:.65}`;
+    btn.onclick = () => {
+      _puzzleTheme = t.id;
+      PUZZLE_THEMES.forEach(tt => {
+        const b = document.getElementById('puzzleThemeBtn_'+tt.id);
+        if (b) b.style.opacity = (tt.id===t.id)?'1':'0.65';
+      });
+      renderPuzzleCanvas();
+    };
+    grid.appendChild(btn);
+  });
+}
+
+function _buildPuzzlePresetGrid() {
+  const grid = document.getElementById('puzzlePresetGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  PUZZLE_PRESETS.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'meme-trending-chip';
+    btn.style.fontSize = '.72rem';
+    btn.textContent = p.expr;
+    btn.onclick = () => {
+      document.getElementById('puzzleExpr').value   = p.expr;
+      document.getElementById('puzzleAnswer').value = p.answer;
+      renderPuzzleCanvas();
+    };
+    grid.appendChild(btn);
+  });
+}
+
+function setPuzzleSize(val) {
+  const [w,h] = val.split('x').map(Number);
+  _puzzleCanvasW = w; _puzzleCanvasH = h;
+  const canvas = document.getElementById('puzzleCanvas');
+  if (canvas) { canvas.width = w; canvas.height = h; }
+  const lbl = document.getElementById('puzzleCanvasDims');
+  if (lbl) lbl.textContent = `${w} × ${h}`;
+  renderPuzzleCanvas();
+}
+
+function puzzleRandomize() {
+  const p = PUZZLE_PRESETS[Math.floor(Math.random()*PUZZLE_PRESETS.length)];
+  const photo = EINSTEIN_PHOTOS[Math.floor(Math.random()*EINSTEIN_PHOTOS.length)];
+  const theme = PUZZLE_THEMES[Math.floor(Math.random()*PUZZLE_THEMES.length)];
+  const positions = ['left','right','center','top-left','top-right'];
+  document.getElementById('puzzleExpr').value   = p.expr;
+  document.getElementById('puzzleAnswer').value = p.answer;
+  document.getElementById('puzzlePhotoPos').value = positions[Math.floor(Math.random()*positions.length)];
+  _puzzleTheme = theme.id;
+  PUZZLE_THEMES.forEach(t => {
+    const b = document.getElementById('puzzleThemeBtn_'+t.id);
+    if (b) b.style.opacity = (t.id===theme.id)?'1':'0.65';
+  });
+  _selectEinsteinPhoto(photo.id);
+  toast('🎲 Random puzzle!', 'success', 2000);
+}
+
+function renderPuzzleCanvas() {
+  const canvas = document.getElementById('puzzleCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const theme = PUZZLE_THEMES.find(t => t.id === _puzzleTheme) || PUZZLE_THEMES[0];
+
+  const expr       = (document.getElementById('puzzleExpr')?.value       || '3 - 3×6 + 2 = ??').trim();
+  const answer     = (document.getElementById('puzzleAnswer')?.value     || '').trim();
+  const showAnswer = document.getElementById('puzzleShowAnswer')?.checked;
+  const topText    = (document.getElementById('puzzleTopText')?.value    || 'Can you solve it ??').trim();
+  const subText    = (document.getElementById('puzzleSubText')?.value    || '90 % fail').trim();
+  const bottomText = (document.getElementById('puzzleBottomText')?.value || 'Only for genius ??').trim();
+  const photoPos   = document.getElementById('puzzlePhotoPos')?.value    || 'right';
+  const photoSzPct = parseInt(document.getElementById('puzzlePhotoSize')?.value || 55) / 100;
+  const fontSize   = parseInt(document.getElementById('puzzleFontSize')?.value  || 68);
+  const watermark  = document.getElementById('puzzleWatermark')?.checked !== false;
+
+  /* ── Background ── */
+  const grad = ctx.createLinearGradient(0,0,W,H);
+  grad.addColorStop(0, theme.bg);
+  grad.addColorStop(0.5, _pzLighten(theme.bg, 15));
+  grad.addColorStop(1, theme.bg);
+  ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+
+  /* Grid lines */
+  ctx.save();
+  ctx.strokeStyle = theme.accent + '18'; ctx.lineWidth = 1;
+  for (let x=0; x<W; x+=40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for (let y=0; y<H; y+=40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  ctx.restore();
+
+  /* ── Einstein photo ── */
+  const eImg = _puzzleImgCache[_puzzleEinsteinId] || null;
+  const photoW = Math.round(W * photoSzPct * 0.55);
+  const photoH = eImg ? Math.round(photoW * (eImg.naturalHeight / eImg.naturalWidth)) : photoW;
+  let photoX, photoY;
+  switch (photoPos) {
+    case 'left':     photoX = -Math.round(photoW*0.1); photoY = H-photoH+Math.round(photoH*0.12); break;
+    case 'center':   photoX = (W-photoW)/2;             photoY = H-photoH+Math.round(photoH*0.12); break;
+    case 'top-left': photoX = Math.round(W*0.02);       photoY = Math.round(H*0.18); break;
+    case 'top-right':photoX = W-photoW-Math.round(W*0.02); photoY = Math.round(H*0.18); break;
+    default:         photoX = W-photoW+Math.round(photoW*0.1); photoY = H-photoH+Math.round(photoH*0.12);
+  }
+  if (eImg) {
+    ctx.save();
+    ctx.drawImage(eImg, photoX, photoY, photoW, photoH);
+    const vg = ctx.createLinearGradient(photoX, photoY+photoH*0.6, photoX, photoY+photoH);
+    vg.addColorStop(0,'transparent'); vg.addColorStop(1, theme.bg+'dd');
+    ctx.fillStyle = vg; ctx.fillRect(photoX, photoY, photoW, photoH);
+    ctx.restore();
+  } else {
+    ctx.save();
+    ctx.fillStyle = theme.accent+'30'; ctx.fillRect(photoX, photoY, photoW, photoH);
+    ctx.fillStyle = theme.accent+'80'; ctx.font = `${Math.round(photoW*0.4)}px sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('🧑‍🔬', photoX+photoW/2, photoY+photoH/2);
+    ctx.restore();
+  }
+
+  /* ── Top badge ── */
+  const badgeH = Math.round(H*0.1), badgeY = Math.round(H*0.04);
+  ctx.save();
+  ctx.fillStyle = theme.badge;
+  _pzRoundRect(ctx, W*0.05, badgeY, W*0.9, badgeH, 12); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = `800 ${Math.round(badgeH*0.48)}px Impact,Arial Black,sans-serif`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.shadowColor='rgba(0,0,0,.5)'; ctx.shadowBlur=6;
+  ctx.fillText(topText, W/2, badgeY+badgeH/2);
+  ctx.restore();
+
+  /* ── Sub-hook ── */
+  const subY = badgeY + badgeH + Math.round(H*0.025);
+  ctx.save();
+  ctx.fillStyle = theme.subtext;
+  ctx.font = `700 ${Math.round(H*0.042)}px Arial,sans-serif`;
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.shadowColor='rgba(0,0,0,.6)'; ctx.shadowBlur=4;
+  ctx.fillText(subText, W/2, subY);
+  ctx.restore();
+
+  /* ── "Only for genius" ── */
+  const geniusY = subY + Math.round(H*0.055);
+  ctx.save();
+  ctx.fillStyle = theme.text;
+  ctx.font = `italic 700 ${Math.round(H*0.046)}px Georgia,serif`;
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.shadowColor=theme.accent; ctx.shadowBlur=8;
+  ctx.fillText(bottomText, W/2, geniusY);
+  ctx.restore();
+
+  /* ── Puzzle expression box ── */
+  const exprY = geniusY + Math.round(H*0.08);
+  const pad   = Math.round(W*0.05);
+  const boxH  = Math.round(H*0.16);
+  ctx.save();
+  ctx.shadowColor=theme.accent; ctx.shadowBlur=20;
+  ctx.fillStyle=theme.accent+'22';
+  _pzRoundRect(ctx, pad, exprY, W-pad*2, boxH, 16); ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.strokeStyle=theme.accent+'99'; ctx.lineWidth=2;
+  _pzRoundRect(ctx, pad, exprY, W-pad*2, boxH, 16); ctx.stroke();
+  ctx.shadowColor=theme.accent; ctx.shadowBlur=12;
+  ctx.fillStyle=theme.expr;
+  let fs = fontSize;
+  ctx.font = `900 ${fs}px Impact,Arial Black,sans-serif`;
+  while (ctx.measureText(expr).width > (W-pad*2-20) && fs>20) { fs-=2; ctx.font=`900 ${fs}px Impact,Arial Black,sans-serif`; }
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(expr, W/2, exprY+boxH/2);
+  ctx.restore();
+
+  /* ── Optional answer ── */
+  if (showAnswer && answer) {
+    const ansY = H - (watermark ? Math.round(H*0.07) : Math.round(H*0.02));
+    ctx.save();
+    ctx.fillStyle=theme.accent+'cc';
+    ctx.font=`700 ${Math.round(H*0.028)}px Arial,sans-serif`;
+    ctx.textAlign='left'; ctx.textBaseline='bottom';
+    ctx.fillText(`Ans: ${answer}`, Math.round(W*0.04), ansY);
+    ctx.restore();
+  }
+
+  /* ── Watermark ── */
+  if (watermark) {
+    const stripH = Math.round(H*0.055);
+    ctx.save();
+    ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(0,H-stripH,W,stripH);
+    ctx.fillStyle=theme.accent;
+    ctx.font=`700 ${Math.round(stripH*0.48)}px Arial,sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('🧩 Shashi News Gen — Puzzle Studio', W/2, H-stripH/2);
+    ctx.restore();
+  }
+}
+
+function _pzRoundRect(ctx,x,y,w,h,r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+
+function _pzLighten(hex,amt) {
+  const h=hex.replace('#','');
+  if(h.length!==6) return hex;
+  return '#'+[0,2,4].map(i=>Math.min(255,parseInt(h.slice(i,i+2),16)+amt).toString(16).padStart(2,'0')).join('');
+}
+
+function downloadPuzzle() {
+  const canvas = document.getElementById('puzzleCanvas');
+  const expr   = (document.getElementById('puzzleExpr')?.value||'puzzle').replace(/[^\w]/g,'_').slice(0,20);
+  const a = document.createElement('a');
+  a.download = `puzzle_${expr}_${Date.now()}.png`;
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+  toast('⬇️ Puzzle downloaded!','success',2500);
+}
+
+async function puzzleCopyImage() {
+  const canvas = document.getElementById('puzzleCanvas');
+  try {
+    await new Promise((res,rej)=>canvas.toBlob(async blob=>{
+      try{await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);res();}
+      catch(e){rej(e);}
+    }));
+    toast('📋 Puzzle copied!','success',2500);
+  } catch { toast('⚠️ Copy failed — download गर्नुस्','error',3000); }
+}
+
+function sharePuzzle(platform) {
+  const expr    = document.getElementById('puzzleExpr')?.value||'Math Puzzle';
+  const caption = `🧩 Can you solve it??\n\n${expr}\n\n90% fail! Only for genius 🧠\n\nCreate yours → https://shajais.github.io/ShashiNewsGen/`;
+  const encoded = encodeURIComponent(caption);
+  const siteEnc = encodeURIComponent('https://shajais.github.io/ShashiNewsGen/');
+  if (platform==='instagram') { downloadPuzzle(); toast('📸 Downloaded! Instagram app खोलेर Post गर्नुस्','info',7000); return; }
+  const urls = {
+    facebook:'https://www.facebook.com/sharer/sharer.php?u='+siteEnc+'&quote='+encoded,
+    twitter :'https://twitter.com/intent/tweet?text='+encoded,
+    whatsapp:'https://api.whatsapp.com/send?text='+encoded,
+  };
+  if (urls[platform]) window.open(urls[platform],'_blank','noopener,width=620,height=520');
+  setTimeout(downloadPuzzle, 400);
+}
+
+/* ── Puzzle Studio live-render bindings ── */
+document.addEventListener('DOMContentLoaded', () => {
+  ['puzzleExpr','puzzleAnswer','puzzleTopText','puzzleSubText','puzzleBottomText',
+   'puzzleFontSize','puzzlePhotoSize'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', renderPuzzleCanvas);
+  });
+  ['puzzlePhotoPos','puzzleSize'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', () => {
+      if (id==='puzzleSize') setPuzzleSize(document.getElementById(id).value);
+      else renderPuzzleCanvas();
+    });
+  });
+  ['puzzleShowAnswer','puzzleWatermark'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', renderPuzzleCanvas);
+  });
+});
+
