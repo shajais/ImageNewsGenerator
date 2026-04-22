@@ -7787,12 +7787,9 @@ function shareMeme(platform) {
 ================================================================ */
 
 const EINSTEIN_PHOTOS = [
-  { id:'e1', label:'Classic Portrait',    emoji:'🧑‍🔬',
-    url:'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d3/Albert_Einstein_Head.jpg/440px-Albert_Einstein_Head.jpg' },
-  { id:'e2', label:'Patent Office',       emoji:'🔬',
-    url:'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/Einstein_patentoffice.jpg/440px-Einstein_patentoffice.jpg' },
-  { id:'e3', label:'1947 Portrait',       emoji:'📋',
-    url:'https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Albert_Einstein_1947.jpg/440px-Albert_Einstein_1947.jpg' },
+  { id:'e1', label:'Einstein Classic',  emoji:'🧑‍🔬', url:'einstein3.jpg' },
+  { id:'e2', label:'Einstein Brain 1',  emoji:'🧠',   url:'einstein_brain1.jpg' },
+  { id:'e3', label:'Einstein Brain 2',  emoji:'�',   url:'einstein_brain2.jpg' },
 ];
 
 const PUZZLE_THEMES = [
@@ -7949,13 +7946,11 @@ function setPuzzleSize(val) {
 }
 
 function puzzleRandomize() {
-  const p = PUZZLE_PRESETS[Math.floor(Math.random()*PUZZLE_PRESETS.length)];
+  const p     = PUZZLE_PRESETS[Math.floor(Math.random()*PUZZLE_PRESETS.length)];
   const photo = EINSTEIN_PHOTOS[Math.floor(Math.random()*EINSTEIN_PHOTOS.length)];
   const theme = PUZZLE_THEMES[Math.floor(Math.random()*PUZZLE_THEMES.length)];
-  const positions = ['left','right','center','top-left','top-right'];
   document.getElementById('puzzleExpr').value   = p.expr;
   document.getElementById('puzzleAnswer').value = p.answer;
-  document.getElementById('puzzlePhotoPos').value = positions[Math.floor(Math.random()*positions.length)];
   _puzzleTheme = theme.id;
   PUZZLE_THEMES.forEach(t => {
     const b = document.getElementById('puzzleThemeBtn_'+t.id);
@@ -7976,127 +7971,212 @@ function renderPuzzleCanvas() {
   const answer     = (document.getElementById('puzzleAnswer')?.value     || '').trim();
   const showAnswer = document.getElementById('puzzleShowAnswer')?.checked;
   const topText    = (document.getElementById('puzzleTopText')?.value    || 'Can you solve it ??').trim();
-  const subText    = (document.getElementById('puzzleSubText')?.value    || '90 % fail').trim();
-  const bottomText = (document.getElementById('puzzleBottomText')?.value || 'Only for genius ??').trim();
-  const photoPos   = document.getElementById('puzzlePhotoPos')?.value    || 'right';
-  const photoSzPct = parseInt(document.getElementById('puzzlePhotoSize')?.value || 55) / 100;
-  const fontSize   = parseInt(document.getElementById('puzzleFontSize')?.value  || 68);
+  const subText    = (document.getElementById('puzzleSubText')?.value    || '90% fail this!').trim();
+  const bottomText = (document.getElementById('puzzleBottomText')?.value || '🧠 Only for genius').trim();
+  const fontSize   = parseInt(document.getElementById('puzzleFontSize')?.value || 68);
   const watermark  = document.getElementById('puzzleWatermark')?.checked !== false;
 
-  /* ── Background ── */
-  const grad = ctx.createLinearGradient(0,0,W,H);
-  grad.addColorStop(0, theme.bg);
-  grad.addColorStop(0.5, _pzLighten(theme.bg, 15));
-  grad.addColorStop(1, theme.bg);
-  ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+  /* ─── Layout constants ─── */
+  const GUTTER    = Math.round(W * 0.04);          // outer padding
+  const TEXT_W    = Math.round(W * 0.56);          // left text column width
+  const IMG_W     = W - TEXT_W;                    // right image column width
+  const IMG_X     = TEXT_W;                        // image starts here
+  const WM_H      = watermark ? Math.round(H * 0.055) : 0;
+  const TEXT_AREA_H = H - WM_H;
 
-  /* Grid lines */
+  /* ── 1. Dark background gradient ── */
+  const grad = ctx.createLinearGradient(0, 0, W, H);
+  grad.addColorStop(0,   theme.bg);
+  grad.addColorStop(0.5, _pzLighten(theme.bg, 18));
+  grad.addColorStop(1,   theme.bg);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  /* ── 2. Subtle grid texture (left panel only) ── */
   ctx.save();
-  ctx.strokeStyle = theme.accent + '18'; ctx.lineWidth = 1;
-  for (let x=0; x<W; x+=40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
-  for (let y=0; y<H; y+=40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  ctx.strokeStyle = theme.accent + '1a';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < TEXT_W; x += 36) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = 0; y < H; y += 36)      { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(TEXT_W, y); ctx.stroke(); }
   ctx.restore();
 
-  /* ── Einstein photo ── */
+  /* ── 3. Einstein photo — right panel, bottom-anchored, fills column ── */
   const eImg = _puzzleImgCache[_puzzleEinsteinId] || null;
-  const photoW = Math.round(W * photoSzPct * 0.55);
-  const photoH = eImg ? Math.round(photoW * (eImg.naturalHeight / eImg.naturalWidth)) : photoW;
-  let photoX, photoY;
-  switch (photoPos) {
-    case 'left':     photoX = -Math.round(photoW*0.1); photoY = H-photoH+Math.round(photoH*0.12); break;
-    case 'center':   photoX = (W-photoW)/2;             photoY = H-photoH+Math.round(photoH*0.12); break;
-    case 'top-left': photoX = Math.round(W*0.02);       photoY = Math.round(H*0.18); break;
-    case 'top-right':photoX = W-photoW-Math.round(W*0.02); photoY = Math.round(H*0.18); break;
-    default:         photoX = W-photoW+Math.round(photoW*0.1); photoY = H-photoH+Math.round(photoH*0.12);
-  }
   if (eImg) {
+    /* Fit image into right column keeping aspect ratio, anchored to bottom */
+    const aspect = eImg.naturalWidth / eImg.naturalHeight;
+    let iW = IMG_W, iH = Math.round(iW / aspect);
+    if (iH > H) { iH = H; iW = Math.round(iH * aspect); }
+    const iX = IMG_X + Math.round((IMG_W - iW) / 2);
+    const iY = H - iH;               // bottom-anchor
+
     ctx.save();
-    ctx.drawImage(eImg, photoX, photoY, photoW, photoH);
-    const vg = ctx.createLinearGradient(photoX, photoY+photoH*0.6, photoX, photoY+photoH);
-    vg.addColorStop(0,'transparent'); vg.addColorStop(1, theme.bg+'dd');
-    ctx.fillStyle = vg; ctx.fillRect(photoX, photoY, photoW, photoH);
+    /* Clip to right column so image never bleeds left */
+    ctx.beginPath();
+    ctx.rect(IMG_X, 0, IMG_W, H);
+    ctx.clip();
+    ctx.drawImage(eImg, iX, iY, iW, iH);
+
+    /* Gradient fade: left edge blends into dark bg */
+    const fadeW = Math.round(IMG_W * 0.45);
+    const leftFade = ctx.createLinearGradient(IMG_X, 0, IMG_X + fadeW, 0);
+    leftFade.addColorStop(0, theme.bg);
+    leftFade.addColorStop(1, 'transparent');
+    ctx.fillStyle = leftFade;
+    ctx.fillRect(IMG_X, 0, fadeW, H);
+
+    /* Gradient fade: bottom for watermark legibility */
+    if (WM_H) {
+      const btmFade = ctx.createLinearGradient(0, H - WM_H * 2, 0, H);
+      btmFade.addColorStop(0, 'transparent');
+      btmFade.addColorStop(1, 'rgba(0,0,0,0.75)');
+      ctx.fillStyle = btmFade;
+      ctx.fillRect(IMG_X, H - WM_H * 2, IMG_W, WM_H * 2);
+    }
     ctx.restore();
   } else {
+    /* Placeholder when image not yet loaded */
     ctx.save();
-    ctx.fillStyle = theme.accent+'30'; ctx.fillRect(photoX, photoY, photoW, photoH);
-    ctx.fillStyle = theme.accent+'80'; ctx.font = `${Math.round(photoW*0.4)}px sans-serif`;
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('🧑‍🔬', photoX+photoW/2, photoY+photoH/2);
+    ctx.fillStyle = theme.accent + '25';
+    ctx.fillRect(IMG_X, 0, IMG_W, H);
+    ctx.font = `${Math.round(IMG_W * 0.35)}px sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('🧑‍🔬', IMG_X + IMG_W / 2, H / 2);
     ctx.restore();
   }
 
-  /* ── Top badge ── */
-  const badgeH = Math.round(H*0.1), badgeY = Math.round(H*0.04);
+  /* ── 4. Thin accent separator line ── */
   ctx.save();
-  ctx.fillStyle = theme.badge;
-  _pzRoundRect(ctx, W*0.05, badgeY, W*0.9, badgeH, 12); ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.font = `800 ${Math.round(badgeH*0.48)}px Impact,Arial Black,sans-serif`;
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.shadowColor='rgba(0,0,0,.5)'; ctx.shadowBlur=6;
-  ctx.fillText(topText, W/2, badgeY+badgeH/2);
+  const sepGrad = ctx.createLinearGradient(TEXT_W - 1, 0, TEXT_W - 1, H);
+  sepGrad.addColorStop(0,   'transparent');
+  sepGrad.addColorStop(0.3, theme.accent + 'cc');
+  sepGrad.addColorStop(0.7, theme.accent + 'cc');
+  sepGrad.addColorStop(1,   'transparent');
+  ctx.strokeStyle = sepGrad;
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(TEXT_W - 1, 0); ctx.lineTo(TEXT_W - 1, H); ctx.stroke();
   ctx.restore();
 
-  /* ── Sub-hook ── */
-  const subY = badgeY + badgeH + Math.round(H*0.025);
-  ctx.save();
-  ctx.fillStyle = theme.subtext;
-  ctx.font = `700 ${Math.round(H*0.042)}px Arial,sans-serif`;
-  ctx.textAlign='center'; ctx.textBaseline='top';
-  ctx.shadowColor='rgba(0,0,0,.6)'; ctx.shadowBlur=4;
-  ctx.fillText(subText, W/2, subY);
-  ctx.restore();
+  /* ── 5. LEFT TEXT PANEL — stacked, no overlap ──
+     Y positions are computed top-down with fixed spacing.
+     Total text height is checked to stay inside TEXT_AREA_H.         */
+  const textPad  = GUTTER;
+  const textMaxW = TEXT_W - textPad * 2;
 
-  /* ── "Only for genius" ── */
-  const geniusY = subY + Math.round(H*0.055);
-  ctx.save();
-  ctx.fillStyle = theme.text;
-  ctx.font = `italic 700 ${Math.round(H*0.046)}px Georgia,serif`;
-  ctx.textAlign='center'; ctx.textBaseline='top';
-  ctx.shadowColor=theme.accent; ctx.shadowBlur=8;
-  ctx.fillText(bottomText, W/2, geniusY);
-  ctx.restore();
+  /* Helper: draw text centered in left panel, return line bottom */
+  function _pzText(text, font, color, shadow, y) {
+    ctx.save();
+    ctx.font = font; ctx.fillStyle = color;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    if (shadow) { ctx.shadowColor = shadow; ctx.shadowBlur = 10; }
+    /* Auto-shrink if too wide */
+    const origFont = font;
+    let curSize = parseInt(font);
+    while (ctx.measureText(text).width > textMaxW && curSize > 11) {
+      curSize -= 1;
+      ctx.font = origFont.replace(/^\d+/, curSize);
+    }
+    ctx.fillText(text, TEXT_W / 2, y);
+    const metrics = ctx.measureText(text);
+    const lineH = curSize * 1.25;
+    ctx.restore();
+    return y + lineH;
+  }
 
-  /* ── Puzzle expression box ── */
-  const exprY = geniusY + Math.round(H*0.08);
-  const pad   = Math.round(W*0.05);
-  const boxH  = Math.round(H*0.16);
-  ctx.save();
-  ctx.shadowColor=theme.accent; ctx.shadowBlur=20;
-  ctx.fillStyle=theme.accent+'22';
-  _pzRoundRect(ctx, pad, exprY, W-pad*2, boxH, 16); ctx.fill();
-  ctx.shadowBlur=0;
-  ctx.strokeStyle=theme.accent+'99'; ctx.lineWidth=2;
-  _pzRoundRect(ctx, pad, exprY, W-pad*2, boxH, 16); ctx.stroke();
-  ctx.shadowColor=theme.accent; ctx.shadowBlur=12;
-  ctx.fillStyle=theme.expr;
-  let fs = fontSize;
-  ctx.font = `900 ${fs}px Impact,Arial Black,sans-serif`;
-  while (ctx.measureText(expr).width > (W-pad*2-20) && fs>20) { fs-=2; ctx.font=`900 ${fs}px Impact,Arial Black,sans-serif`; }
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(expr, W/2, exprY+boxH/2);
-  ctx.restore();
+  let curY = Math.round(TEXT_AREA_H * 0.04);
 
-  /* ── Optional answer ── */
+  /* 5a. TOP badge pill */
+  {
+    const badgeH = Math.round(H * 0.09);
+    ctx.save();
+    ctx.shadowColor = theme.accent; ctx.shadowBlur = 16;
+    ctx.fillStyle = theme.badge;
+    _pzRoundRect(ctx, textPad, curY, textMaxW, badgeH, Math.round(badgeH * 0.4));
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#fff';
+    let bfs = Math.round(badgeH * 0.44);
+    ctx.font = `900 ${bfs}px Impact,Arial Black,sans-serif`;
+    while (ctx.measureText(topText).width > textMaxW - 16 && bfs > 11) {
+      bfs--; ctx.font = `900 ${bfs}px Impact,Arial Black,sans-serif`;
+    }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(topText, TEXT_W / 2, curY + badgeH / 2);
+    ctx.restore();
+    curY += badgeH + Math.round(H * 0.025);
+  }
+
+  /* 5b. Sub-hook text */
+  {
+    const fs = Math.round(H * 0.042);
+    curY = _pzText(subText, `700 ${fs}px Arial,sans-serif`, theme.subtext, 'rgba(0,0,0,0.7)', curY);
+    curY += Math.round(H * 0.012);
+  }
+
+  /* 5c. "Only for genius" italic */
+  {
+    const fs = Math.round(H * 0.040);
+    curY = _pzText(bottomText, `italic 700 ${fs}px Georgia,serif`, theme.text, theme.accent, curY);
+    curY += Math.round(H * 0.022);
+  }
+
+  /* 5d. Puzzle expression box — key focal element */
+  {
+    const boxH    = Math.round(H * 0.18);
+    const boxY    = curY;
+    /* Glow border */
+    ctx.save();
+    ctx.shadowColor = theme.accent; ctx.shadowBlur = 22;
+    ctx.strokeStyle = theme.accent; ctx.lineWidth = 3;
+    _pzRoundRect(ctx, textPad, boxY, textMaxW, boxH, 16); ctx.stroke();
+    ctx.shadowBlur = 0;
+    /* Fill */
+    ctx.fillStyle = theme.accent + '28';
+    _pzRoundRect(ctx, textPad, boxY, textMaxW, boxH, 16); ctx.fill();
+    /* Expression text */
+    ctx.shadowColor = theme.accent; ctx.shadowBlur = 10;
+    ctx.fillStyle = theme.expr;
+    let fs = fontSize;
+    ctx.font = `900 ${fs}px Impact,Arial Black,sans-serif`;
+    while (ctx.measureText(expr).width > textMaxW - 16 && fs > 16) {
+      fs -= 2; ctx.font = `900 ${fs}px Impact,Arial Black,sans-serif`;
+    }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(expr, TEXT_W / 2, boxY + boxH / 2);
+    ctx.restore();
+    curY = boxY + boxH + Math.round(H * 0.022);
+  }
+
+  /* 5e. Answer (optional) */
   if (showAnswer && answer) {
-    const ansY = H - (watermark ? Math.round(H*0.07) : Math.round(H*0.02));
+    const fs = Math.round(H * 0.038);
+    const ansLabel = `✅  Answer: ${answer}`;
     ctx.save();
-    ctx.fillStyle=theme.accent+'cc';
-    ctx.font=`700 ${Math.round(H*0.028)}px Arial,sans-serif`;
-    ctx.textAlign='left'; ctx.textBaseline='bottom';
-    ctx.fillText(`Ans: ${answer}`, Math.round(W*0.04), ansY);
+    ctx.fillStyle = theme.accent + 'dd';
+    ctx.font = `800 ${fs}px Arial,sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 6;
+    ctx.fillText(ansLabel, TEXT_W / 2, curY);
     ctx.restore();
+    curY += Math.round(fs * 1.4) + Math.round(H * 0.012);
   }
 
-  /* ── Watermark ── */
+  /* 5f. "Comment your answer ↓" micro CTA */
+  {
+    const fs = Math.round(H * 0.028);
+    curY = _pzText('💬 Comment your answer ↓', `600 ${fs}px Arial,sans-serif`, theme.subtext + 'bb', null, curY);
+  }
+
+  /* ── 6. Watermark strip ── */
   if (watermark) {
-    const stripH = Math.round(H*0.055);
     ctx.save();
-    ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(0,H-stripH,W,stripH);
-    ctx.fillStyle=theme.accent;
-    ctx.font=`700 ${Math.round(stripH*0.48)}px Arial,sans-serif`;
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('🧩 Shashi News Gen — Puzzle Studio', W/2, H-stripH/2);
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(0, H - WM_H, W, WM_H);
+    ctx.fillStyle = theme.accent;
+    const wmFs = Math.round(WM_H * 0.46);
+    ctx.font = `700 ${wmFs}px Arial,sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('🧩 Shashi News Gen — Puzzle Studio', W / 2, H - WM_H / 2);
     ctx.restore();
   }
 }
