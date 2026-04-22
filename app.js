@@ -6450,7 +6450,7 @@ async function _drawAuthorWatermark(ctx, W, _titleBottom) {
   /* Brand name */
   ctx.font      = 'bold 22px "Segoe UI",Arial,sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.96)';
-  ctx.fillText('Shashi News Gen', textX, nameY);
+  ctx.fillText('Shashi Creator Studio', textX, nameY);
 
   /* URL + separator + email in smaller text */
   const SITE_URL = 'shajais.github.io/ShashiNewsGen';
@@ -6682,7 +6682,7 @@ function getNewsIcon(title) {
   return '📰';
 }
 
-const BRAND_NAME = 'Shashi News Gen 🇳🇵';
+const BRAND_NAME = 'Shashi Creator Studio 🇳🇵';
 const BRAND_URL  = 'https://shajais.github.io/ShashiNewsGen/';
 
 function buildPostText(post, rawTitle, { includeUrl = true } = {}) {
@@ -7481,28 +7481,25 @@ async function renderMemeCanvas() {
   ctx.fillStyle = ruleGrad;
   ctx.fillRect(12, BANNER_H, W - 12, 3);
 
-  /* "😂 MEME" text — glow + crisp */
+  /* "😂 MEME" text — clean crisp with nice font, no heavy glow */
   ctx.save();
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = `900 ${Math.round(BANNER_H * 0.48)}px Impact, "Arial Black", sans-serif`;
-  ctx.shadowColor = 'rgba(255,120,0,0.9)'; ctx.shadowBlur = 20;
-  ctx.fillStyle = '#fff7ed';
-  ctx.fillText('😂  MEME', W / 2, BANNER_H / 2 + 2);
-  ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 6;
+  const memeBannerFs = Math.round(BANNER_H * 0.52);
+  /* Shadow layer for depth */
+  ctx.shadowColor = 'rgba(0,0,0,0.45)';
+  ctx.shadowBlur  = 8;
+  ctx.shadowOffsetY = 2;
+  ctx.font = `800 ${memeBannerFs}px "Segoe UI","Helvetica Neue",Arial,sans-serif`;
+  ctx.fillStyle = '#ffe4c4';
+  ctx.fillText('😂  MEME', W / 2, BANNER_H / 2);
+  /* Crisp white top layer */
+  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
   ctx.fillStyle = '#ffffff';
-  ctx.fillText('😂  MEME', W / 2, BANNER_H / 2 + 2);
+  ctx.fillText('😂  MEME', W / 2, BANNER_H / 2);
   ctx.restore();
 
-  /* Date stamp top-right */
-  const dateStr = new Date().toLocaleDateString('ne-NP', { year:'numeric', month:'short', day:'numeric' });
-  ctx.save();
-  ctx.font         = `bold ${Math.round(W * 0.025)}px "Segoe UI",Arial,sans-serif`;
-  ctx.fillStyle    = 'rgba(255,255,255,0.80)';
-  ctx.textAlign    = 'right';
-  ctx.textBaseline = 'top';
-  ctx.fillText(dateStr, W - 12, 8);
-  ctx.restore();
+  /* No date stamp */
 
   /* Left red accent bar (decorative, like news card) */
   ctx.fillStyle = 'rgba(192,57,43,0.90)';
@@ -8151,14 +8148,23 @@ function renderPuzzleCanvas() {
     return y + sz * 1.3;
   }
 
-  /* Vertical layout: figure out total height of right content, then top-align from ~15% into middle zone */
+  /* Vertical layout: figure out total height of right content, then
+     vertically centre the whole block relative to the middle zone          */
   const geniusFs  = Math.round(H * 0.052);
   const exprBoxH  = Math.round(MID_H * 0.38);
   const ansFs     = Math.round(H * 0.034);
   const ctaFs     = Math.round(H * 0.026);
   const spacing   = Math.round(H * 0.018);
 
-  let rightY = MID_Y + Math.round(MID_H * 0.08);
+  /* Pre-calculate total block height so we can centre it */
+  const geniusLabelH  = geniusFs * 1.3 + spacing;
+  const underlineH    = spacing;
+  const answerBlockH  = (showAnswer && answer) ? (ansFs * 1.4 + spacing * 0.5) : 0;
+  const ctaBlockH     = ctaFs * 1.3;
+  const totalBlockH   = geniusLabelH + underlineH + exprBoxH + spacing + answerBlockH + ctaBlockH;
+  /* Start Y so the block is vertically centred in the middle zone */
+  let rightY = MID_Y + Math.round((MID_H - totalBlockH) / 2);
+  if (rightY < MID_Y + spacing) rightY = MID_Y + spacing;   // safety clamp
 
   /* 4a. "ONLY FOR GENIUS" label */
   {
@@ -8190,24 +8196,25 @@ function renderPuzzleCanvas() {
   /* 4b. Puzzle expression box */
   {
     const boxY = rightY;
-    /* Glow + fill */
     ctx.save();
-    ctx.shadowColor = theme.accent; ctx.shadowBlur = 24;
-    ctx.fillStyle = theme.accent + '25';
+    /* Box fill — subtle tinted background */
+    ctx.fillStyle = theme.accent + '20';
     _pzRoundRect(ctx, rxX, boxY, rxW, exprBoxH, 18); ctx.fill();
-    ctx.shadowBlur = 0;
+    /* Crisp solid border — no shadow/blur */
+    ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
     ctx.strokeStyle = theme.accent; ctx.lineWidth = 3;
     _pzRoundRect(ctx, rxX, boxY, rxW, exprBoxH, 18); ctx.stroke();
 
-    /* Expression text — auto-shrink */
+    /* Expression text — NO shadow/blur at all, pure crisp */
     let fs = fontSize;
-    ctx.font = `900 ${fs}px Impact,Arial Black,sans-serif`;
-    while (ctx.measureText(expr).width > rxW - 20 && fs > 14) {
-      fs -= 2; ctx.font = `900 ${fs}px Impact,Arial Black,sans-serif`;
+    ctx.font = `900 ${fs}px Impact,"Arial Black",sans-serif`;
+    while (ctx.measureText(expr).width > rxW - 24 && fs > 14) {
+      fs -= 2; ctx.font = `900 ${fs}px Impact,"Arial Black",sans-serif`;
     }
-    ctx.fillStyle = theme.expr;
-    ctx.shadowColor = theme.accent; ctx.shadowBlur = 12;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowBlur  = 0;
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle   = theme.expr;
+    ctx.textAlign   = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(expr, rxX + rxW / 2, boxY + exprBoxH / 2);
     ctx.restore();
     rightY = boxY + exprBoxH + spacing;
@@ -8238,7 +8245,7 @@ function renderPuzzleCanvas() {
     ctx.font = `700 ${wmFs}px Arial,sans-serif`;
     ctx.fillStyle = theme.accent;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('🧩 Shashi News Gen — Puzzle Studio', W / 2, H - WM_H / 2);
+    ctx.fillText('🧩 Shashi Creator Studio — Puzzle', W / 2, H - WM_H / 2);
     ctx.restore();
   }
 }
