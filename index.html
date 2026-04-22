@@ -565,6 +565,63 @@
 
       </div><!-- end ai-cards-row -->
 
+      <!-- ── Groq + HuggingFace row ── -->
+      <div class="ai-cards-row" style="margin-top:12px">
+
+        <!-- CARD 3: Groq -->
+        <div class="ai-card" id="aiCardGroq">
+          <div class="ai-card-header" style="background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(217,119,6,.08))">
+            <span class="ai-card-icon">⚡</span>
+            <div>
+              <div class="ai-card-title">Groq AI</div>
+              <div class="ai-card-sub">LLaMA3 · Fast fallback</div>
+            </div>
+            <span id="groqStatusDot" class="ai-status-dot inactive"></span>
+          </div>
+          <div class="ai-card-body">
+            <p id="groqKeyStatus" class="ai-card-status err">❌ Not configured</p>
+            <label class="ai-key-label" style="margin-top:8px">API Key</label>
+            <input id="inputGroqKey" type="password" class="ai-key-input"
+              placeholder="gsk_…your-groq-key…"
+              autocomplete="off" spellcheck="false">
+            <p class="ai-card-hint">
+              Free at <a href="https://console.groq.com" target="_blank" rel="noopener">console.groq.com</a><br>
+              Used as fallback when Gemini is unavailable
+            </p>
+          </div>
+          <div class="ai-card-footer">
+            <button class="ai-card-btn save" onclick="saveCardKey('groq')">💾 Save</button>
+          </div>
+        </div>
+
+        <!-- CARD 4: HuggingFace -->
+        <div class="ai-card" id="aiCardHf">
+          <div class="ai-card-header" style="background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(79,70,229,.08))">
+            <span class="ai-card-icon">🤗</span>
+            <div>
+              <div class="ai-card-title">HuggingFace</div>
+              <div class="ai-card-sub">FLUX image · Meme Studio</div>
+            </div>
+            <span id="hfStatusDot" class="ai-status-dot inactive"></span>
+          </div>
+          <div class="ai-card-body">
+            <p id="hfKeyStatus" class="ai-card-status err">❌ Not configured</p>
+            <label class="ai-key-label" style="margin-top:8px">Access Token</label>
+            <input id="inputHFKey" type="password" class="ai-key-input"
+              placeholder="hf_…your-token…"
+              autocomplete="off" spellcheck="false">
+            <p class="ai-card-hint">
+              Free at <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">huggingface.co/settings/tokens</a><br>
+              Generates AI meme images via FLUX.1-schnell
+            </p>
+          </div>
+          <div class="ai-card-footer">
+            <button class="ai-card-btn save" onclick="saveCardKey('hf')">💾 Save</button>
+          </div>
+        </div>
+
+      </div><!-- end groq+hf row -->
+
       <!-- Security note -->
       <div class="ai-info-box" style="border-color:rgba(234,179,8,.4);background:rgba(234,179,8,.08);margin-top:4px">
         <strong>🔒 Security:</strong> Keys live only in <code>.env</code> on the server — never sent to the browser or stored in <code>localStorage</code>. Keep <code>.env</code> in <code>.gitignore</code>.

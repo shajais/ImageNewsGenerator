@@ -44,6 +44,12 @@ const _LS_REMOVEBG = 'ghp_removebg_key';
 let _browserGeminiKey   = localStorage.getItem(_LS_GEMINI)   || '';
 let _browserRemovebgKey = localStorage.getItem(_LS_REMOVEBG) || '';
 
+/* ── Groq + HuggingFace keys (GitHub Pages / browser mode) ── */
+const _LS_GROQ = 'ghp_groq_key';
+const _LS_HF   = 'ghp_hf_key';
+let _browserGroqKey = localStorage.getItem(_LS_GROQ) || '';
+let _browserHFKey   = localStorage.getItem(_LS_HF)   || '';
+
 /* Background styles for AI image enhancement */
 const BG_STYLES = [
   { id: 'newsroom',    label: '📺 News Studio',       desc: 'Dark broadcast studio with red accents' },
@@ -1743,8 +1749,12 @@ function openAISettings() {
   if (!_isNodeServer) {
     const gEl  = document.getElementById('inputGeminiKey');
     const rbEl = document.getElementById('inputRemovebgKey');
-    if (gEl  && !gEl.value)  gEl.placeholder  = _browserGeminiKey   ? '(saved — paste to update)' : 'AIzaSy…your-key…';
-    if (rbEl && !rbEl.value) rbEl.placeholder = _browserRemovebgKey ? '(saved — paste to update)' : 'abc123…your-key…';
+    const grEl = document.getElementById('inputGroqKey');
+    const hfEl = document.getElementById('inputHFKey');
+    if (gEl)  gEl.placeholder  = _browserGeminiKey   ? '(saved — paste to update)' : 'AIzaSy…your-key…';
+    if (rbEl) rbEl.placeholder = _browserRemovebgKey ? '(saved — paste to update)' : 'abc123…your-key…';
+    if (grEl) grEl.placeholder = _browserGroqKey     ? '(saved — paste to update)' : 'gsk_…your-groq-key…';
+    if (hfEl) hfEl.placeholder = _browserHFKey       ? '(saved — paste to update)' : 'hf_…your-token…';
   }
 
   modal.classList.add('open');
@@ -1754,20 +1764,19 @@ function openAISettings() {
 function _refreshAICardStatuses() {
   const geminiOk   = !!(_geminiKey   || _browserGeminiKey);
   const removebgOk = !!(_removebgKey || _browserRemovebgKey);
-
-  /* Status text */
-  const geminiEl   = document.getElementById('geminiKeyStatus');
-  const removebgEl = document.getElementById('removebgKeyStatus');
+  const groqOk     = !!_browserGroqKey;
+  const hfOk       = !!_browserHFKey;
 
   function _setStatus(el, ok) {
     if (!el) return;
     el.textContent = ok ? '✅ Active & configured' : '❌ Not configured';
     el.className   = 'ai-card-status ' + (ok ? 'ok' : 'err');
   }
-  _setStatus(geminiEl,   geminiOk);
-  _setStatus(removebgEl, removebgOk);
+  _setStatus(document.getElementById('geminiKeyStatus'),   geminiOk);
+  _setStatus(document.getElementById('removebgKeyStatus'), removebgOk);
+  _setStatus(document.getElementById('groqKeyStatus'),     groqOk);
+  _setStatus(document.getElementById('hfKeyStatus'),       hfOk);
 
-  /* Status dots */
   function _setDot(id, ok) {
     const dot = document.getElementById(id);
     if (!dot) return;
@@ -1776,24 +1785,27 @@ function _refreshAICardStatuses() {
   }
   _setDot('geminiStatusDot',   geminiOk);
   _setDot('removebgStatusDot', removebgOk);
+  _setDot('groqStatusDot',     groqOk);
+  _setDot('hfStatusDot',       hfOk);
 
   /* Top banner */
   const banner = document.getElementById('aiSetupStatusBanner');
   if (banner) {
     const parts = [];
     if (geminiOk)   parts.push('✨ Gemini');
+    if (groqOk)     parts.push('⚡ Groq');
     if (removebgOk) parts.push('🎨 Remove.bg');
+    if (hfOk)       parts.push('🤗 HuggingFace');
 
-    if (parts.length === 2) {
+    if (parts.length === 4) {
       banner.className   = 'ai-setup-banner active';
-      banner.textContent = `🟢 All AI features active — Gemini + Remove.bg`;
+      banner.textContent = '🟢 All AI features active — Gemini + Groq + Remove.bg + HuggingFace';
     } else if (parts.length > 0) {
-      const missing = ['✨ Gemini','🎨 Remove.bg'].filter(p => !parts.includes(p));
       banner.className   = 'ai-setup-banner partial';
-      banner.textContent = `🟡 Active: ${parts.join(', ')} · Not configured: ${missing.join(', ')}`;
+      banner.textContent = `🟡 Active: ${parts.join(', ')}`;
     } else {
       banner.className   = 'ai-setup-banner none';
-      banner.textContent = '🔴 No API keys configured — add your Gemini key below';
+      banner.textContent = '🔴 No API keys configured — add Gemini or Groq key below';
     }
   }
 }
@@ -1912,8 +1924,10 @@ async function testRemovebgKey() {
  * On GitHub Pages: saves to localStorage.
  */
 async function saveCardKey(service) {
-  const inputId = service === 'gemini' ? 'inputGeminiKey' : 'inputRemovebgKey';
-  const input = document.getElementById(inputId);
+  const inputMap = { gemini: 'inputGeminiKey', removebg: 'inputRemovebgKey', groq: 'inputGroqKey', hf: 'inputHFKey' };
+  const cardMap  = { gemini: 'aiCardGemini',   removebg: 'aiCardRemovebg',   groq: 'aiCardGroq',   hf: 'aiCardHf'   };
+  const inputId  = inputMap[service];
+  const input    = document.getElementById(inputId);
   const value = (input?.value || '').trim();
 
   if (!value) {
@@ -1921,7 +1935,8 @@ async function saveCardKey(service) {
     return;
   }
 
-  const saveBtn = document.querySelector(`#aiCard${service.charAt(0).toUpperCase()+service.slice(1)} .ai-card-btn.save`);
+  const cardId  = cardMap[service] || ('aiCard' + service.charAt(0).toUpperCase() + service.slice(1));
+  const saveBtn = document.querySelector(`#${cardId} .ai-card-btn.save`);
   const origLabel = saveBtn?.textContent || '💾 Save';
   if (saveBtn) { saveBtn.textContent = '⏳…'; saveBtn.disabled = true; }
 
@@ -1939,6 +1954,8 @@ async function saveCardKey(service) {
       /* Also cache in localStorage as fallback for direct-API calls */
       if (service === 'gemini')   { localStorage.setItem(_LS_GEMINI,   value); _browserGeminiKey   = value; }
       if (service === 'removebg') { localStorage.setItem(_LS_REMOVEBG, value); _browserRemovebgKey = value; }
+      if (service === 'groq')     { localStorage.setItem(_LS_GROQ,     value); _browserGroqKey     = value; }
+      if (service === 'hf')       { localStorage.setItem(_LS_HF,       value); _browserHFKey       = value; }
 
       /* Re-fetch key-status so flags (_geminiKey etc.) are updated */
       await _reloadKeyStatus();
@@ -1956,6 +1973,8 @@ async function saveCardKey(service) {
     try {
       if (service === 'gemini')   { localStorage.setItem(_LS_GEMINI,   value); _browserGeminiKey   = value; _geminiKey   = true; }
       if (service === 'removebg') { localStorage.setItem(_LS_REMOVEBG, value); _browserRemovebgKey = value; _removebgKey = true; }
+      if (service === 'groq')     { localStorage.setItem(_LS_GROQ,     value); _browserGroqKey     = value; }
+      if (service === 'hf')       { localStorage.setItem(_LS_HF,       value); _browserHFKey       = value; }
       if (input) input.value = '';
       _setCardFeedback(service, 'ok', '✅ Key saved in browser!');
       updateAIBadge();
@@ -1987,7 +2006,8 @@ async function _reloadKeyStatus() {
 /** Show inline feedback text inside a card status element */
 const _cardFeedbackTimers = {};
 function _setCardFeedback(service, type, msg) {
-  const cardId = 'aiCard' + service.charAt(0).toUpperCase() + service.slice(1);
+  const _cmap = { gemini: 'aiCardGemini', removebg: 'aiCardRemovebg', groq: 'aiCardGroq', hf: 'aiCardHf' };
+  const cardId   = _cmap[service] || ('aiCard' + service.charAt(0).toUpperCase() + service.slice(1));
   const statusEl = document.querySelector(`#${cardId} .ai-card-status`);
   if (!statusEl) return;
   /* Cancel any pending auto-revert timer for this card */
@@ -2008,23 +2028,35 @@ function _setCardFeedback(service, type, msg) {
 function updateAIBadge() {
   const badge = document.getElementById('aiBadge');
   if (!badge) return;
-  const geminiOk = _geminiKey || _browserGeminiKey;
-  if (geminiOk && _removebgKey) {
+  const geminiOk   = !!(_geminiKey || _browserGeminiKey);
+  const groqOk     = !!_browserGroqKey;
+  const removebgOk = !!(_removebgKey || _browserRemovebgKey);
+  const hfOk       = !!_browserHFKey;
+
+  if (geminiOk && groqOk && removebgOk && hfOk) {
+    badge.textContent = '🤖 All AI Active';
+    badge.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
+    badge.title = 'Gemini + Groq + Remove.bg + HuggingFace all active';
+  } else if (geminiOk && removebgOk) {
     badge.textContent = '🤖 Gemini + BgRemover';
     badge.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
-    badge.title = 'Gemini AI + Remove.bg active — keys stored securely in .env';
+    badge.title = 'Gemini AI + Remove.bg active';
   } else if (geminiOk) {
     badge.textContent = '🤖 Gemini AI';
     badge.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
-    badge.title = 'Gemini active — add REMOVEBG_API_KEY to .env for background removal';
-  } else if (_removebgKey) {
+    badge.title = 'Gemini active' + (groqOk ? ' + Groq fallback' : '');
+  } else if (groqOk) {
+    badge.textContent = '⚡ Groq AI';
+    badge.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
+    badge.title = 'Groq AI active — add Gemini key for best results';
+  } else if (removebgOk) {
     badge.textContent = '🎨 BgRemover';
     badge.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
-    badge.title = 'Remove.bg active — add GEMINI_API_KEY for AI rewriting';
+    badge.title = 'Remove.bg active — add Gemini or Groq key for AI rewriting';
   } else {
     badge.textContent = '⚙️ Setup AI';
     badge.style.background = 'linear-gradient(135deg,#6366f1,#4f46e5)';
-    badge.title = 'Add GEMINI_API_KEY and REMOVEBG_API_KEY to your .env file';
+    badge.title = 'Add API keys via Setup AI';
   }
 }
 
@@ -2039,12 +2071,16 @@ function saveBrowserKeys() {
   }
   const g  = (document.getElementById('inputGeminiKey')  ?.value || '').trim();
   const rb = (document.getElementById('inputRemovebgKey') ?.value || '').trim();
+  const gr = (document.getElementById('inputGroqKey')     ?.value || '').trim();
+  const hf = (document.getElementById('inputHFKey')       ?.value || '').trim();
 
   if (g)  { localStorage.setItem(_LS_GEMINI,   g);  _browserGeminiKey   = g; }
   if (rb) { localStorage.setItem(_LS_REMOVEBG, rb); _browserRemovebgKey = rb; }
+  if (gr) { localStorage.setItem(_LS_GROQ,     gr); _browserGroqKey     = gr; }
+  if (hf) { localStorage.setItem(_LS_HF,       hf); _browserHFKey       = hf; }
 
   /* Clear the input fields after saving (don't leave keys visible) */
-  ['inputGeminiKey','inputRemovebgKey'].forEach(id => {
+  ['inputGeminiKey','inputRemovebgKey','inputGroqKey','inputHFKey'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -2059,8 +2095,8 @@ function saveBrowserKeys() {
 
 /** Clear all browser-stored keys */
 function clearBrowserKeys() {
-  [_LS_GEMINI, _LS_REMOVEBG].forEach(k => localStorage.removeItem(k));
-  _browserGeminiKey = _browserRemovebgKey = '';
+  [_LS_GEMINI, _LS_REMOVEBG, _LS_GROQ, _LS_HF].forEach(k => localStorage.removeItem(k));
+  _browserGeminiKey = _browserRemovebgKey = _browserGroqKey = _browserHFKey = '';
   _geminiKey = _removebgKey = false;
   updateAIBadge();
   _refreshAICardStatuses();
@@ -2155,8 +2191,105 @@ async function callGemini(prompt, timeoutMs = 18000) {
  */
 async function callAI(prompt, timeoutMs = 22000) {
   const hasGemini = _geminiKey || _browserGeminiKey;
-  if (!hasGemini) throw new Error('NO_KEY: No Gemini API key configured — add key via ⚙️ Setup AI');
-  return callGemini(prompt, timeoutMs);
+  const hasGroq   = !!_browserGroqKey;
+
+  /* Try Gemini first */
+  if (hasGemini) {
+    try {
+      return await callGemini(prompt, timeoutMs);
+    } catch (e) {
+      console.warn('[callAI] Gemini failed:', e.message, hasGroq ? '— trying Groq fallback…' : '');
+      if (!hasGroq) throw e;
+    }
+  }
+
+  /* Groq fallback */
+  if (hasGroq) {
+    try {
+      return await callGroq(prompt, timeoutMs);
+    } catch (e) {
+      throw new Error('Both Gemini and Groq failed: ' + e.message);
+    }
+  }
+
+  throw new Error('NO_KEY: No AI key configured — add Gemini or Groq key via ⚙️ Setup AI');
+}
+
+/* ================================================================
+   GROQ AI — LLaMA3 fast text AI, fallback when Gemini unavailable
+================================================================ */
+async function callGroq(prompt, timeoutMs = 20000) {
+  const key = _browserGroqKey;
+  if (!key) throw new Error('NO_GROQ_KEY');
+
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'llama3-8b-8192',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 1024,
+        temperature: 0.8
+      })
+    });
+    clearTimeout(tid);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`Groq API error ${res.status}: ${err?.error?.message || res.statusText}`);
+    }
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content || '';
+    if (!text) throw new Error('Groq returned empty response');
+    /* Parse JSON if response contains it */
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) { try { return JSON.parse(jsonMatch[0]); } catch {} }
+    return text;
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
+/* ================================================================
+   HUGGINGFACE — FLUX.1-schnell image generation for Meme Studio
+================================================================ */
+async function fetchHuggingFaceImage(query, timeoutMs = 35000) {
+  const key = _browserHFKey;
+  if (!key) throw new Error('NO_HF_KEY');
+
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), timeoutMs);
+  const enhancedPrompt = `${query}, high quality, vibrant colors, expressive faces, photorealistic, funny meme style`;
+
+  try {
+    const res = await fetch('https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ inputs: enhancedPrompt })
+    });
+    clearTimeout(tid);
+    /* Model still loading — wait and retry once */
+    if (res.status === 503) {
+      await new Promise(r => setTimeout(r, 9000));
+      return fetchHuggingFaceImage(query, timeoutMs);
+    }
+    if (!res.ok) throw new Error(`HuggingFace error ${res.status}`);
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  } finally {
+    clearTimeout(tid);
+  }
 }
 
 /**
@@ -2165,16 +2298,16 @@ async function callAI(prompt, timeoutMs = 22000) {
  */
 async function rewriteWithAI(rawTitle, articleBody, sourceLang, category) {
   const hasGemini = _geminiKey || _browserGeminiKey;
+  const hasGroq   = !!_browserGroqKey;
 
-  console.log('[AI DEBUG] rewriteWithAI called');
-  console.log('[AI DEBUG] _geminiKey:', _geminiKey, '| _browserGeminiKey:', _browserGeminiKey ? _browserGeminiKey.slice(0,8)+'…' : '(empty)');
-  console.log('[AI DEBUG] hasGemini:', hasGemini);
-  console.log('[AI DEBUG] _isNodeServer:', _isNodeServer, '| _geminiProxyBase:', _geminiProxyBase);
+  console.log('[AI DEBUG] rewriteWithAI called — Gemini:', !!hasGemini, '| Groq:', hasGroq);
 
-  if (!hasGemini) {
-    console.warn('[AI DEBUG] No Gemini key found — returning null immediately');
+  if (!hasGemini && !hasGroq) {
+    console.warn('[AI DEBUG] No AI key found — returning null immediately');
     return null;
   }
+
+  const aiLabel = hasGemini ? '✨ Gemini' : '⚡ Groq';
 
   /* Give AI the richest possible context — up to 3000 chars of actual article body */
   const bodySnippet = _cleanArticleText(articleBody || '', rawTitle).replace(/\s+/g, ' ').slice(0, 3000).trim();
@@ -2445,8 +2578,8 @@ async function selectArticle(idx) {
   const bestBody = fullArticleText || selectedArticle.description || '';
 
   /* ── Step 2: Show AI indicator in spinners if any AI key is set ── */
-  const aiReady = _geminiKey || _browserGeminiKey;
-  const aiLabel = '✨ Gemini';
+  const aiReady = _geminiKey || _browserGeminiKey || _browserGroqKey;
+  const aiLabel = (_geminiKey || _browserGeminiKey) ? '✨ Gemini' : '⚡ Groq';
   if (aiReady) {
     document.getElementById('outHook').innerHTML =
       `<span class="spinner" style="border-color:rgba(139,92,246,.3);border-top-color:#a78bfa"></span> 🤖 ${aiLabel} AI ले hook लेख्दैछ…`;
@@ -2493,7 +2626,7 @@ async function selectArticle(idx) {
   renderHashtags(hashtags);
 
   /* ── Update AI/Template badges on all content fields ── */
-  const prov = '✨ Gemini';
+  const prov = (_geminiKey || _browserGeminiKey) ? '✨ Gemini' : '⚡ Groq';
   setGenBadges(aiUsed, aiUsed ? prov : '');
 
   if (aiUsed) {
@@ -7401,17 +7534,20 @@ function _shadeColor(hex, amount) {
 async function memeGenerateAI() {
   const topic = (document.getElementById('memeTopicInput') ? document.getElementById('memeTopicInput').value : '').trim();
   if (!topic) { toast('⚠️ Step 2 मा topic लेख्नुस्', 'error'); return; }
-  const hasAI = typeof _geminiKey !== 'undefined' ? (_geminiKey || _browserGeminiKey) : false;
+
+  const hasAI = (_geminiKey || _browserGeminiKey || _browserGroqKey);
   if (!hasAI) {
     toast('ℹ️ AI key छैन — template प्रयोग गर्दैछ', 'info', 3000);
     memeGenerateTemplate();
     return;
   }
 
+  const aiLabel = (_geminiKey || _browserGeminiKey) ? '✨ Gemini' : '⚡ Groq';
+
   /* Show spinner */
   const spinner = document.getElementById('memeCanvasSpinner');
   if (spinner) spinner.style.display = 'flex';
-  memeSetStatus('🤖 Gemini AI ले meme text तयार गर्दैछ…');
+  memeSetStatus(`🤖 ${aiLabel} AI ले meme text तयार गर्दैछ…`);
 
   const prompt = `You are a master Nepali viral meme creator. Create a funny, highly shareable two-line meme for Nepal's social media (Facebook, TikTok, Instagram, Twitter).
 
@@ -7437,14 +7573,40 @@ Output ONLY valid JSON (no markdown, no extra text):
       document.getElementById('memeTopText').value    = result.top;
       document.getElementById('memeBottomText').value = result.bottom;
       if (result.caption) document.getElementById('memeCaptionText').value = result.caption;
-      /* Auto-search a relevant image and switch to search tab before rendering */
+
       const imgQ = result.img || topic.split(' ').slice(0,3).join(' ');
-      document.getElementById('memeImgQuery').value = imgQ;
-      switchMemeImgSrc('search');
-      searchMemeImages();
-      await renderMemeCanvas();
-      memeSetStatus('✅ AI मिम तयार भयो! 😂');
-      toast('😂 AI Meme ready! Image पनि search गर्दैछ…', 'success', 3500);
+
+      /* ── Try HuggingFace FLUX image generation first ── */
+      if (_browserHFKey) {
+        memeSetStatus('🎨 HuggingFace AI ले meme image बनाउँदैछ…');
+        try {
+          const hfUrl = await fetchHuggingFaceImage(imgQ);
+          const img   = new Image();
+          img.crossOrigin = 'anonymous';
+          await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = hfUrl; });
+          _memeImgObj = img;
+          await renderMemeCanvas();
+          memeSetStatus('✅ AI मिम + HuggingFace image तयार भयो! 🎨😂');
+          toast(`🎨 ${aiLabel} text + HuggingFace AI image — Meme ready!`, 'success', 4000);
+        } catch (hfErr) {
+          console.warn('[MemeHF] HuggingFace failed:', hfErr.message, '— falling back to web search');
+          memeSetStatus('ℹ️ HF image failed — web search प्रयोग गर्दैछ…');
+          document.getElementById('memeImgQuery').value = imgQ;
+          switchMemeImgSrc('search');
+          searchMemeImages();
+          await renderMemeCanvas();
+          memeSetStatus('✅ AI मिम तयार भयो! 😂');
+          toast(`😂 ${aiLabel} Meme ready! (web image fallback)`, 'success', 3500);
+        }
+      } else {
+        /* No HF key — use web image search as before */
+        document.getElementById('memeImgQuery').value = imgQ;
+        switchMemeImgSrc('search');
+        searchMemeImages();
+        await renderMemeCanvas();
+        memeSetStatus('✅ AI मिम तयार भयो! 😂');
+        toast(`😂 ${aiLabel} Meme ready! Image पनि search गर्दैछ…`, 'success', 3500);
+      }
     } else {
       throw new Error('Bad AI response');
     }
