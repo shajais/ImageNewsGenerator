@@ -2237,13 +2237,11 @@ async function callGroq(prompt, timeoutMs = 20000) {
 
   console.log('[Groq] calling API, key prefix:', key.slice(0, 8) + '…');
 
-  /* On localhost use the server proxy to avoid CORS; on GitHub Pages call directly */
-  const groqEndpoint = _isNodeServer
-    ? '/proxy/groq'
-    : 'https://api.groq.com/openai/v1/chat/completions';
-  const groqHeaders = _isNodeServer
-    ? { 'X-Groq-Key': key, 'Content-Type': 'application/json' }
-    : { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' };
+  /* Always call Groq directly from the browser.
+     On localhost, the server proxy may be intercepted by corporate firewalls;
+     direct browser fetch is identical and works on GitHub Pages too. */
+  const groqEndpoint = 'https://api.groq.com/openai/v1/chat/completions';
+  const groqHeaders = { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' };
 
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), timeoutMs);
