@@ -1940,6 +1940,19 @@ async function saveCardKey(service) {
   const origLabel = saveBtn?.textContent || '💾 Save';
   if (saveBtn) { saveBtn.textContent = '⏳…'; saveBtn.disabled = true; }
 
+  /* Groq + HuggingFace are browser-only keys — always save to localStorage regardless of server mode */
+  if (service === 'groq' || service === 'hf') {
+    if (service === 'groq') { localStorage.setItem(_LS_GROQ, value); _browserGroqKey = value; }
+    if (service === 'hf')   { localStorage.setItem(_LS_HF,   value); _browserHFKey   = value; }
+    if (input) input.value = '';
+    _setCardFeedback(service, 'ok', `✅ ${service === 'hf' ? 'HuggingFace' : 'Groq'} key saved!`);
+    updateAIBadge();
+    _refreshAICardStatuses();
+    if (saveBtn) { saveBtn.textContent = origLabel; saveBtn.disabled = false; }
+    toast(`✅ ${service === 'hf' ? 'HuggingFace' : 'Groq'} key saved! Ready to use.`, 'success', 4000);
+    return;
+  }
+
   if (_isNodeServer) {
     /* ── Node server (port 3000): write key to .env via server endpoint ── */
     try {
