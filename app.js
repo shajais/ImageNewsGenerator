@@ -2235,6 +2235,8 @@ async function callGroq(prompt, timeoutMs = 20000) {
   const key = _browserGroqKey;
   if (!key) throw new Error('NO_GROQ_KEY');
 
+  console.log('[Groq] calling API, key prefix:', key.slice(0, 8) + '…');
+
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -2248,23 +2250,33 @@ async function callGroq(prompt, timeoutMs = 20000) {
       },
       body: JSON.stringify({
         model: 'llama3-8b-8192',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 1024,
-        temperature: 0.8
+        messages: [
+          { role: 'system', content: 'You are a helpful assistant that always responds with valid JSON only. No markdown, no explanation, no code fences — just raw JSON.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 2048,
+        temperature: 0.7
       })
     });
     clearTimeout(tid);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(`Groq API error ${res.status}: ${err?.error?.message || res.statusText}`);
+      const msg = err?.error?.message || res.statusText;
+      console.error('[Groq] API error', res.status, msg);
+      throw new Error(`Groq API error ${res.status}: ${msg}`);
     }
     const data = await res.json();
     const text = data.choices?.[0]?.message?.content || '';
+    console.log('[Groq] raw response (first 400):', text.slice(0, 400));
     if (!text) throw new Error('Groq returned empty response');
-    /* Parse JSON if response contains it */
+    /* Parse JSON — try several strategies */
+    try { return JSON.parse(text.trim()); } catch (_) {}
+    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced) { try { return JSON.parse(fenced[1].trim()); } catch (_) {} }
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) { try { return JSON.parse(jsonMatch[0]); } catch {} }
-    return text;
+    if (jsonMatch) { try { return JSON.parse(jsonMatch[0]); } catch (_) {} }
+    console.error('[Groq] could not parse JSON from response:', text.slice(0, 300));
+    throw new Error('Groq: could not extract JSON from response');
   } finally {
     clearTimeout(tid);
   }
@@ -2459,10 +2471,20 @@ VIRAL WRITING TIPS:
 LANGUAGE: ${cfg.langInstruction}
 OUTPUT: Raw JSON only — no \`\`\`json, no explanation, nothing else.`;
 
+  /* For Groq (LLaMA3), use a shorter, more direct prompt to avoid token issues */
+  const usingGroqModel = !(_geminiKey || _browserGeminiKey) && !!_browserGroqKey;
+  const finalPrompt = usingGroqModel ? `You are a Nepali news journalist. Write viral social media content in Nepali (नेपाली Devanagari script) for this news article.
+
+HEADLINE: ${rawTitle}
+${bodySnippet ? `ARTICLE BODY: ${bodySnippet.slice(0, 1000)}` : ''}
+
+Write in Nepali Devanagari script. Return ONLY this JSON (no markdown, no explanation):
+{"hook":"<1 punchy Nepali sentence, max 15 words>","title":"<detailed Nepali headline with real names/places/numbers>","description":"<3-4 sentence Nepali news paragraph with WHO WHAT WHERE WHEN WHY>","hashtags":["#नेपाल","#BreakingNews","#Nepal","#viral","#trending","#नेपाल_समाचार","#NepaliNews","#ShashiNewsGen"]}` : prompt;
+
   let result;
   try {
-    console.log('[AI DEBUG] calling callAI…');
-    result = await callAI(prompt, 30000);
+    console.log('[AI DEBUG] calling callAI… model:', usingGroqModel ? 'Groq' : 'Gemini');
+    result = await callAI(finalPrompt, 30000);
     console.log('[AI DEBUG] callAI returned:', JSON.stringify(result)?.slice(0, 200));
   } catch(e) {
     console.warn('[AI Rewrite] callAI threw:', e.message);
@@ -2479,16 +2501,20 @@ OUTPUT: Raw JSON only — no \`\`\`json, no explanation, nothing else.`;
   console.log('[AI DEBUG] hashtags:', hashtags);
   console.log('[AI DEBUG] hook hasDevanagari:', hasDevanagari(hook), '| title:', hasDevanagari(title), '| desc:', hasDevanagari(description));
 
-  /* For Groq/LLaMA responses, be more lenient — only require title to have Devanagari.
-     Gemini responses are stricter. If no Devanagari at all, fall back. */
-  const usingGroq = !(_geminiKey || _browserGeminiKey) && !!_browserGroqKey;
-  const devanagariOk = usingGroq
-    ? (hasDevanagari(title) || hasDevanagari(description))   // lenient for Groq
-    : (hasDevanagari(hook) && hasDevanagari(title) && hasDevanagari(description)); // strict for Gemini
-
-  if (!devanagariOk) {
-    console.warn('[AI Rewrite] Response missing Devanagari — falling back');
+  /* Validate fields exist and are non-empty strings */
+  if (!hook || !title || !description) {
+    console.warn('[AI Rewrite] Missing required fields — hook:', !!hook, 'title:', !!title, 'desc:', !!description);
     return null;
+  }
+
+  /* For Gemini: require Devanagari. For Groq: accept any non-empty response */
+  const usingGroqOnly = !(_geminiKey || _browserGeminiKey) && !!_browserGroqKey;
+  if (!usingGroqOnly) {
+    const hasDevanagariStrict = hasDevanagari(title) && hasDevanagari(description);
+    if (!hasDevanagariStrict) {
+      console.warn('[AI Rewrite] Gemini response missing Devanagari — falling back');
+      return null;
+    }
   }
   if (!Array.isArray(hashtags) || hashtags.length < 3) {
     console.warn('[AI Rewrite] Invalid hashtags array — falling back');
