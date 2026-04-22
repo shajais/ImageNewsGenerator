@@ -90,7 +90,7 @@ MIME_TYPES = {
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Api-Key',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Api-Key, X-Gemini-Key, X-Groq-Key',
 }
 
 
@@ -295,6 +295,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
             print('  [proxy] Gemini (browser key) →')
             self._forward(target, body, {
                 'Content-Type': self.headers.get('Content-Type', 'application/json'),
+            })
+            return
+
+        # ── Proxy: /proxy/groq → Groq API (browser-supplied key via X-Groq-Key header) ──
+        #    Used on localhost to avoid CORS blocks when calling api.groq.com directly.
+        if pathname == '/proxy/groq':
+            groq_key = self.headers.get('x-groq-key', '')
+            if not groq_key:
+                err = json.dumps({'error': 'No Groq API key supplied in X-Groq-Key header'}).encode()
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.send_cors()
+                self.end_headers()
+                self.wfile.write(err)
+                return
+            target = 'https://api.groq.com/openai/v1/chat/completions'
+            print(f'  [proxy] Groq → (key prefix: {groq_key[:8]}…)')
+            self._forward(target, body, {
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {groq_key}',
             })
             return
 
