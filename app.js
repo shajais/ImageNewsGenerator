@@ -7970,211 +7970,273 @@ function renderPuzzleCanvas() {
   const expr       = (document.getElementById('puzzleExpr')?.value       || '3 - 3×6 + 2 = ??').trim();
   const answer     = (document.getElementById('puzzleAnswer')?.value     || '').trim();
   const showAnswer = document.getElementById('puzzleShowAnswer')?.checked;
-  const topText    = (document.getElementById('puzzleTopText')?.value    || 'Can you solve it ??').trim();
-  const subText    = (document.getElementById('puzzleSubText')?.value    || '90% fail this!').trim();
-  const bottomText = (document.getElementById('puzzleBottomText')?.value || '🧠 Only for genius').trim();
+  const topText    = (document.getElementById('puzzleTopText')?.value    || 'CAN YOU SOLVE IT?').trim();
+  const subText    = (document.getElementById('puzzleSubText')?.value    || '90% FAIL THIS!').trim();
+  const bottomText = (document.getElementById('puzzleBottomText')?.value || 'ONLY FOR GENIUS').trim();
   const fontSize   = parseInt(document.getElementById('puzzleFontSize')?.value || 68);
   const watermark  = document.getElementById('puzzleWatermark')?.checked !== false;
 
-  /* ─── Layout constants ─── */
-  const GUTTER    = Math.round(W * 0.04);          // outer padding
-  const TEXT_W    = Math.round(W * 0.56);          // left text column width
-  const IMG_W     = W - TEXT_W;                    // right image column width
-  const IMG_X     = TEXT_W;                        // image starts here
-  const WM_H      = watermark ? Math.round(H * 0.055) : 0;
-  const TEXT_AREA_H = H - WM_H;
+  /* ════════════════════════════════════════════════════════
+     LAYOUT  (all measurements relative to W / H)
+     ┌──────────────────────────────────────────────────┐
+     │          TOP BAR  (full width, ~18% H)           │
+     │   "Can you solve it?" — big bold pill            │
+     │   "90% Fail this!"   — sub line                  │
+     ├─────────────────────┬────────────────────────────┤
+     │                     │  "ONLY FOR GENIUS"  label  │
+     │   Einstein photo    │  ┌──────────────────────┐  │
+     │   (middle-left,     │  │   math puzzle expr   │  │
+     │    vertically       │  └──────────────────────┘  │
+     │    centred)         │  answer (if shown)          │
+     │                     │  💬 comment CTA            │
+     ├─────────────────────┴────────────────────────────┤
+     │              WATERMARK  (full width)             │
+     └──────────────────────────────────────────────────┘
+     ════════════════════════════════════════════════════ */
 
-  /* ── 1. Dark background gradient ── */
-  const grad = ctx.createLinearGradient(0, 0, W, H);
+  const PAD    = Math.round(W * 0.035);
+  const WM_H   = watermark ? Math.round(H * 0.06) : 0;
+  const TOP_H  = Math.round(H * 0.20);          // top header zone
+  const MID_H  = H - TOP_H - WM_H;              // middle content zone
+  const MID_Y  = TOP_H;                          // where middle zone starts
+  const HALF   = Math.round(W * 0.5);            // vertical split point (50/50)
+
+  /* ═══════════════════════════════════════════════════════
+     STEP 1 — Full-canvas dark background
+     ═══════════════════════════════════════════════════════ */
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
   grad.addColorStop(0,   theme.bg);
-  grad.addColorStop(0.5, _pzLighten(theme.bg, 18));
+  grad.addColorStop(0.5, _pzLighten(theme.bg, 20));
   grad.addColorStop(1,   theme.bg);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
 
-  /* ── 2. Subtle grid texture (left panel only) ── */
+  /* Subtle dot/grid texture across whole canvas */
   ctx.save();
-  ctx.strokeStyle = theme.accent + '1a';
+  ctx.strokeStyle = theme.accent + '15';
   ctx.lineWidth = 1;
-  for (let x = 0; x < TEXT_W; x += 36) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-  for (let y = 0; y < H; y += 36)      { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(TEXT_W, y); ctx.stroke(); }
+  for (let gx = 0; gx < W; gx += 38) { ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke(); }
+  for (let gy = 0; gy < H; gy += 38) { ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
   ctx.restore();
 
-  /* ── 3. Einstein photo — right panel, bottom-anchored, fills column ── */
-  const eImg = _puzzleImgCache[_puzzleEinsteinId] || null;
-  if (eImg) {
-    /* Fit image into right column keeping aspect ratio, anchored to bottom */
-    const aspect = eImg.naturalWidth / eImg.naturalHeight;
-    let iW = IMG_W, iH = Math.round(iW / aspect);
-    if (iH > H) { iH = H; iW = Math.round(iH * aspect); }
-    const iX = IMG_X + Math.round((IMG_W - iW) / 2);
-    const iY = H - iH;               // bottom-anchor
+  /* ═══════════════════════════════════════════════════════
+     STEP 2 — TOP HEADER BAR (full width)
+     ═══════════════════════════════════════════════════════ */
+  /* Solid accent fill */
+  ctx.save();
+  ctx.fillStyle = theme.badge;
+  _pzRoundRect(ctx, 0, 0, W, TOP_H, 0); ctx.fill();
+  /* Subtle inner glow at bottom edge */
+  const topEdge = ctx.createLinearGradient(0, TOP_H - 6, 0, TOP_H);
+  topEdge.addColorStop(0, 'transparent');
+  topEdge.addColorStop(1, 'rgba(255,255,255,0.12)');
+  ctx.fillStyle = topEdge;
+  ctx.fillRect(0, 0, W, TOP_H);
+  ctx.restore();
 
+  /* Line 1: "CAN YOU SOLVE IT?" — big, full width, Impact */
+  {
     ctx.save();
-    /* Clip to right column so image never bleeds left */
+    const line1Y = Math.round(TOP_H * 0.08);
+    const line1H = Math.round(TOP_H * 0.52);
+    let fs1 = Math.round(line1H * 0.78);
+    ctx.font = `900 ${fs1}px Impact,Arial Black,sans-serif`;
+    while (ctx.measureText(topText).width > W - PAD * 2 && fs1 > 12) {
+      fs1--; ctx.font = `900 ${fs1}px Impact,Arial Black,sans-serif`;
+    }
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 8;
+    ctx.fillText(topText, W / 2, line1Y);
+    ctx.restore();
+  }
+
+  /* Line 2: "90% FAIL THIS!" — slightly smaller, accent colour */
+  {
+    ctx.save();
+    const line2Y = Math.round(TOP_H * 0.58);
+    const line2H = Math.round(TOP_H * 0.36);
+    let fs2 = Math.round(line2H * 0.72);
+    ctx.font = `800 ${fs2}px Arial Black,Impact,sans-serif`;
+    while (ctx.measureText(subText).width > W - PAD * 4 && fs2 > 10) {
+      fs2--; ctx.font = `800 ${fs2}px Arial Black,Impact,sans-serif`;
+    }
+    ctx.fillStyle = '#ffffffcc';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 5;
+    ctx.fillText(subText, W / 2, line2Y);
+    ctx.restore();
+  }
+
+  /* Thin accent bottom border on header */
+  ctx.save();
+  ctx.fillStyle = theme.accent;
+  ctx.fillRect(0, TOP_H - 4, W, 4);
+  ctx.restore();
+
+  /* ═══════════════════════════════════════════════════════
+     STEP 3 — MIDDLE-LEFT: Einstein photo
+     Vertically centred in the middle zone, left half
+     ═══════════════════════════════════════════════════════ */
+  const eImg = _puzzleImgCache[_puzzleEinsteinId] || null;
+  const imgZoneX = 0;
+  const imgZoneW = HALF;
+  const imgZoneY = MID_Y;
+  const imgZoneH = MID_H;
+
+  if (eImg) {
+    ctx.save();
+    /* Clip to left-half middle zone */
     ctx.beginPath();
-    ctx.rect(IMG_X, 0, IMG_W, H);
+    ctx.rect(imgZoneX, imgZoneY, imgZoneW, imgZoneH);
     ctx.clip();
+
+    /* Fit image maintaining aspect ratio, centre in zone */
+    const aspect = eImg.naturalWidth / eImg.naturalHeight;
+    let iW = imgZoneW, iH = Math.round(iW / aspect);
+    if (iH > imgZoneH) { iH = imgZoneH; iW = Math.round(iH * aspect); }
+    const iX = imgZoneX + Math.round((imgZoneW - iW) / 2);
+    const iY = imgZoneY + Math.round((imgZoneH - iH) / 2);   // vertically centred
+
     ctx.drawImage(eImg, iX, iY, iW, iH);
 
-    /* Gradient fade: left edge blends into dark bg */
-    const fadeW = Math.round(IMG_W * 0.45);
-    const leftFade = ctx.createLinearGradient(IMG_X, 0, IMG_X + fadeW, 0);
-    leftFade.addColorStop(0, theme.bg);
-    leftFade.addColorStop(1, 'transparent');
-    ctx.fillStyle = leftFade;
-    ctx.fillRect(IMG_X, 0, fadeW, H);
+    /* Right-edge fade so photo blends into right text area */
+    const rFade = ctx.createLinearGradient(HALF - Math.round(imgZoneW * 0.35), 0, HALF, 0);
+    rFade.addColorStop(0, 'transparent');
+    rFade.addColorStop(1, theme.bg);
+    ctx.fillStyle = rFade;
+    ctx.fillRect(imgZoneX, imgZoneY, imgZoneW, imgZoneH);
 
-    /* Gradient fade: bottom for watermark legibility */
+    /* Bottom-edge fade into watermark */
     if (WM_H) {
-      const btmFade = ctx.createLinearGradient(0, H - WM_H * 2, 0, H);
-      btmFade.addColorStop(0, 'transparent');
-      btmFade.addColorStop(1, 'rgba(0,0,0,0.75)');
-      ctx.fillStyle = btmFade;
-      ctx.fillRect(IMG_X, H - WM_H * 2, IMG_W, WM_H * 2);
+      const bFade = ctx.createLinearGradient(0, H - WM_H * 2.5, 0, H - WM_H);
+      bFade.addColorStop(0, 'transparent');
+      bFade.addColorStop(1, 'rgba(0,0,0,0.65)');
+      ctx.fillStyle = bFade;
+      ctx.fillRect(imgZoneX, H - WM_H * 2.5, imgZoneW, WM_H * 2.5);
     }
     ctx.restore();
   } else {
-    /* Placeholder when image not yet loaded */
+    /* Placeholder */
     ctx.save();
-    ctx.fillStyle = theme.accent + '25';
-    ctx.fillRect(IMG_X, 0, IMG_W, H);
-    ctx.font = `${Math.round(IMG_W * 0.35)}px sans-serif`;
+    ctx.fillStyle = theme.accent + '22';
+    ctx.fillRect(imgZoneX, imgZoneY, imgZoneW, imgZoneH);
+    ctx.font = `${Math.round(imgZoneW * 0.3)}px sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('🧑‍🔬', IMG_X + IMG_W / 2, H / 2);
+    ctx.fillText('🧑‍🔬', imgZoneX + imgZoneW / 2, imgZoneY + imgZoneH / 2);
     ctx.restore();
   }
 
-  /* ── 4. Thin accent separator line ── */
-  ctx.save();
-  const sepGrad = ctx.createLinearGradient(TEXT_W - 1, 0, TEXT_W - 1, H);
-  sepGrad.addColorStop(0,   'transparent');
-  sepGrad.addColorStop(0.3, theme.accent + 'cc');
-  sepGrad.addColorStop(0.7, theme.accent + 'cc');
-  sepGrad.addColorStop(1,   'transparent');
-  ctx.strokeStyle = sepGrad;
-  ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(TEXT_W - 1, 0); ctx.lineTo(TEXT_W - 1, H); ctx.stroke();
-  ctx.restore();
+  /* ═══════════════════════════════════════════════════════
+     STEP 4 — MIDDLE-RIGHT: "Only for Genius" + Puzzle box
+     ═══════════════════════════════════════════════════════ */
+  const rxPad  = PAD;
+  const rxX    = HALF + rxPad;                      // right text zone x-start
+  const rxW    = W - HALF - rxPad * 2;              // right text zone width
+  const rxMidY = MID_Y + Math.round(MID_H / 2);    // vertical centre of middle zone
 
-  /* ── 5. LEFT TEXT PANEL — stacked, no overlap ──
-     Y positions are computed top-down with fixed spacing.
-     Total text height is checked to stay inside TEXT_AREA_H.         */
-  const textPad  = GUTTER;
-  const textMaxW = TEXT_W - textPad * 2;
-
-  /* Helper: draw text centered in left panel, return line bottom */
-  function _pzText(text, font, color, shadow, y) {
+  /* Helper: auto-shrink font to fit rxW, draw centred in right zone */
+  function _pzR(text, font, color, shadow, y, align) {
     ctx.save();
     ctx.font = font; ctx.fillStyle = color;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.textAlign = align || 'center'; ctx.textBaseline = 'top';
     if (shadow) { ctx.shadowColor = shadow; ctx.shadowBlur = 10; }
-    /* Auto-shrink if too wide */
-    const origFont = font;
-    let curSize = parseInt(font);
-    while (ctx.measureText(text).width > textMaxW && curSize > 11) {
-      curSize -= 1;
-      ctx.font = origFont.replace(/^\d+/, curSize);
+    let sz = parseInt(font);
+    const cx = align === 'left' ? rxX : rxX + rxW / 2;
+    while (ctx.measureText(text).width > rxW && sz > 10) {
+      sz--; ctx.font = font.replace(/^\d+/, sz);
     }
-    ctx.fillText(text, TEXT_W / 2, y);
-    const metrics = ctx.measureText(text);
-    const lineH = curSize * 1.25;
+    ctx.fillText(text, cx, y);
     ctx.restore();
-    return y + lineH;
+    return y + sz * 1.3;
   }
 
-  let curY = Math.round(TEXT_AREA_H * 0.04);
+  /* Vertical layout: figure out total height of right content, then top-align from ~15% into middle zone */
+  const geniusFs  = Math.round(H * 0.052);
+  const exprBoxH  = Math.round(MID_H * 0.38);
+  const ansFs     = Math.round(H * 0.034);
+  const ctaFs     = Math.round(H * 0.026);
+  const spacing   = Math.round(H * 0.018);
 
-  /* 5a. TOP badge pill */
+  let rightY = MID_Y + Math.round(MID_H * 0.08);
+
+  /* 4a. "ONLY FOR GENIUS" label */
   {
-    const badgeH = Math.round(H * 0.09);
     ctx.save();
-    ctx.shadowColor = theme.accent; ctx.shadowBlur = 16;
-    ctx.fillStyle = theme.badge;
-    _pzRoundRect(ctx, textPad, curY, textMaxW, badgeH, Math.round(badgeH * 0.4));
-    ctx.fill();
+    ctx.font = `italic 900 ${geniusFs}px Georgia,serif`;
+    ctx.fillStyle = theme.accent;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.shadowColor = theme.accent; ctx.shadowBlur = 14;
+    let sz = geniusFs;
+    while (ctx.measureText(bottomText).width > rxW && sz > 12) {
+      sz--; ctx.font = `italic 900 ${sz}px Georgia,serif`;
+    }
+    ctx.fillText(bottomText, rxX + rxW / 2, rightY);
+    ctx.restore();
+    rightY += geniusFs * 1.3 + spacing;
+  }
+
+  /* Thin accent underline below genius label */
+  ctx.save();
+  ctx.strokeStyle = theme.accent + 'aa';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(rxX, rightY - spacing * 0.5);
+  ctx.lineTo(rxX + rxW, rightY - spacing * 0.5);
+  ctx.stroke();
+  ctx.restore();
+  rightY += spacing * 0.5;
+
+  /* 4b. Puzzle expression box */
+  {
+    const boxY = rightY;
+    /* Glow + fill */
+    ctx.save();
+    ctx.shadowColor = theme.accent; ctx.shadowBlur = 24;
+    ctx.fillStyle = theme.accent + '25';
+    _pzRoundRect(ctx, rxX, boxY, rxW, exprBoxH, 18); ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.fillStyle = '#fff';
-    let bfs = Math.round(badgeH * 0.44);
-    ctx.font = `900 ${bfs}px Impact,Arial Black,sans-serif`;
-    while (ctx.measureText(topText).width > textMaxW - 16 && bfs > 11) {
-      bfs--; ctx.font = `900 ${bfs}px Impact,Arial Black,sans-serif`;
-    }
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(topText, TEXT_W / 2, curY + badgeH / 2);
-    ctx.restore();
-    curY += badgeH + Math.round(H * 0.025);
-  }
-
-  /* 5b. Sub-hook text */
-  {
-    const fs = Math.round(H * 0.042);
-    curY = _pzText(subText, `700 ${fs}px Arial,sans-serif`, theme.subtext, 'rgba(0,0,0,0.7)', curY);
-    curY += Math.round(H * 0.012);
-  }
-
-  /* 5c. "Only for genius" italic */
-  {
-    const fs = Math.round(H * 0.040);
-    curY = _pzText(bottomText, `italic 700 ${fs}px Georgia,serif`, theme.text, theme.accent, curY);
-    curY += Math.round(H * 0.022);
-  }
-
-  /* 5d. Puzzle expression box — key focal element */
-  {
-    const boxH    = Math.round(H * 0.18);
-    const boxY    = curY;
-    /* Glow border */
-    ctx.save();
-    ctx.shadowColor = theme.accent; ctx.shadowBlur = 22;
     ctx.strokeStyle = theme.accent; ctx.lineWidth = 3;
-    _pzRoundRect(ctx, textPad, boxY, textMaxW, boxH, 16); ctx.stroke();
-    ctx.shadowBlur = 0;
-    /* Fill */
-    ctx.fillStyle = theme.accent + '28';
-    _pzRoundRect(ctx, textPad, boxY, textMaxW, boxH, 16); ctx.fill();
-    /* Expression text */
-    ctx.shadowColor = theme.accent; ctx.shadowBlur = 10;
-    ctx.fillStyle = theme.expr;
+    _pzRoundRect(ctx, rxX, boxY, rxW, exprBoxH, 18); ctx.stroke();
+
+    /* Expression text — auto-shrink */
     let fs = fontSize;
     ctx.font = `900 ${fs}px Impact,Arial Black,sans-serif`;
-    while (ctx.measureText(expr).width > textMaxW - 16 && fs > 16) {
+    while (ctx.measureText(expr).width > rxW - 20 && fs > 14) {
       fs -= 2; ctx.font = `900 ${fs}px Impact,Arial Black,sans-serif`;
     }
+    ctx.fillStyle = theme.expr;
+    ctx.shadowColor = theme.accent; ctx.shadowBlur = 12;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(expr, TEXT_W / 2, boxY + boxH / 2);
+    ctx.fillText(expr, rxX + rxW / 2, boxY + exprBoxH / 2);
     ctx.restore();
-    curY = boxY + boxH + Math.round(H * 0.022);
+    rightY = boxY + exprBoxH + spacing;
   }
 
-  /* 5e. Answer (optional) */
+  /* 4c. Answer (optional) */
   if (showAnswer && answer) {
-    const fs = Math.round(H * 0.038);
-    const ansLabel = `✅  Answer: ${answer}`;
-    ctx.save();
-    ctx.fillStyle = theme.accent + 'dd';
-    ctx.font = `800 ${fs}px Arial,sans-serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 6;
-    ctx.fillText(ansLabel, TEXT_W / 2, curY);
-    ctx.restore();
-    curY += Math.round(fs * 1.4) + Math.round(H * 0.012);
+    rightY = _pzR(`✅  Answer: ${answer}`, `800 ${ansFs}px Arial,sans-serif`,
+                  theme.accent + 'ee', 'rgba(0,0,0,0.6)', rightY);
+    rightY += spacing * 0.5;
   }
 
-  /* 5f. "Comment your answer ↓" micro CTA */
-  {
-    const fs = Math.round(H * 0.028);
-    curY = _pzText('💬 Comment your answer ↓', `600 ${fs}px Arial,sans-serif`, theme.subtext + 'bb', null, curY);
-  }
+  /* 4d. CTA */
+  _pzR('💬 Comment your answer ↓', `600 ${ctaFs}px Arial,sans-serif`,
+       theme.subtext + 'aa', null, rightY);
 
-  /* ── 6. Watermark strip ── */
+  /* ═══════════════════════════════════════════════════════
+     STEP 5 — WATERMARK STRIP (full width, bottom)
+     ═══════════════════════════════════════════════════════ */
   if (watermark) {
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillStyle = 'rgba(0,0,0,0.78)';
     ctx.fillRect(0, H - WM_H, W, WM_H);
+    /* Accent top-border on watermark */
     ctx.fillStyle = theme.accent;
-    const wmFs = Math.round(WM_H * 0.46);
+    ctx.fillRect(0, H - WM_H, W, 3);
+    const wmFs = Math.round(WM_H * 0.44);
     ctx.font = `700 ${wmFs}px Arial,sans-serif`;
+    ctx.fillStyle = theme.accent;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('🧩 Shashi News Gen — Puzzle Studio', W / 2, H - WM_H / 2);
     ctx.restore();
