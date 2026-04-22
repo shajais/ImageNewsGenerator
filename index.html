@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Shashi News Gen</title>
+  <title>Shashi Creator Studio</title>
   <link rel="stylesheet" href="style.css?v=20260422a" />
 </head>
 <body>
@@ -15,10 +15,10 @@
 
 <!-- HEADER -->
 <header>
-  <div class="header-icon">📰</div>
+  <div class="header-icon">🎨</div>
   <div>
-    <h1>Shashi News Gen</h1>
-    <p>Fetch breaking news · Generate viral content · Download shareable images</p>
+    <h1>Shashi Creator Studio</h1>
+    <p>Create viral news images · Memes · Math puzzles · Share everywhere</p>
   </div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-shrink:0">
     <button class="btn news-studio-nav-btn" id="newsStudioBtn" onclick="openNewsStudio()" title="News Explorer">🗞️ News Studio</button>
@@ -967,6 +967,10 @@
             <div>
               <label class="meme-label">Puzzle expression (the question)</label>
               <input id="puzzleExpr" class="meme-input" value="3 - 3×6 + 2 = ??" placeholder="e.g. 3 - 3×6 + 2 = ??" oninput="renderPuzzleCanvas()">
+              <div style="display:flex;gap:6px;margin-top:6px">
+                <button class="btn" style="flex:1;font-size:.75rem;padding:6px 10px;background:linear-gradient(135deg,#0891b2,#0e7490);border-radius:8px;border:none;color:#fff;cursor:pointer;font-weight:700" onclick="puzzleGenerateRandom()">🎲 Random Equation</button>
+                <button class="btn" style="flex:1;font-size:.75rem;padding:6px 10px;background:linear-gradient(135deg,#059669,#047857);border-radius:8px;border:none;color:#fff;cursor:pointer;font-weight:700" onclick="puzzleGenerateRandomAny()">🔀 Any Random Math</button>
+              </div>
             </div>
             <div>
               <label class="meme-label">Answer (shown optionally in corner)</label>

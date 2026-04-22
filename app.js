@@ -7957,6 +7957,99 @@ function puzzleRandomize() {
   toast('🎲 Random puzzle!', 'success', 2000);
 }
 
+/* ── Generate a random ORDER-OF-OPERATIONS equation (whole numbers, ??  answer) ── */
+function puzzleGenerateRandom() {
+  const ops = ['+', '-', '×', '÷'];
+  const styles = [
+    /* a OP b OP c = ?? */
+    () => {
+      const a = _rn(1,20), b = _rn(1,10), c = _rn(1,10);
+      const op1 = ops[Math.floor(Math.random()*4)];
+      const op2 = ops[Math.floor(Math.random()*4)];
+      const expr = `${a} ${op1} ${b} ${op2} ${c} = ??`;
+      const ans  = _evalExpr(a, op1, _evalExpr(b, op2, c, true), false) ??
+                   _solveLeft(a, op1, b, op2, c);
+      return { expr, answer: _fmt(ans) };
+    },
+    /* a OP b × c = ?? (BODMAS trap) */
+    () => {
+      const a = _rn(1,15), b = _rn(2,8), c = _rn(2,8);
+      const op = ops[Math.floor(Math.random()*2)];   // + or -
+      const ans = _evalJS(`${a}${op === '+' ? '+' : '-'}${b}*${c}`);
+      return { expr: `${a} ${op} ${b} × ${c} = ??`, answer: _fmt(ans) };
+    },
+    /* a ÷ b(c+d) = ?? */
+    () => {
+      const c = _rn(1,5), d = _rn(1,5);
+      const b = _rn(1,4);
+      const a = b*(c+d)*_rn(1,3);
+      return { expr: `${a} ÷ ${b}(${c}+${d}) = ??`, answer: _fmt(a/(b*(c+d))) };
+    },
+    /* a + a + a + a × 0 = ?? */
+    () => {
+      const a = _rn(1,9);
+      return { expr: `${a} + ${a} + ${a} + ${a} × 0 = ??`, answer: `${a+a+a}` };
+    },
+    /* √a + b² - c = ?? */
+    () => {
+      const sq = [1,4,9,16,25,36,49,64,81,100];
+      const a  = sq[Math.floor(Math.random()*sq.length)];
+      const b  = _rn(2,7), c = _rn(1,10);
+      return { expr: `√${a} + ${b}² - ${c} = ??`, answer: _fmt(Math.sqrt(a)+b*b-c) };
+    },
+    /* a² + a × a - a = ?? */
+    () => {
+      const a = _rn(2,8);
+      return { expr: `${a}² + ${a} × ${a} - ${a} = ??`, answer: _fmt(a*a+a*a-a) };
+    },
+  ];
+  const { expr, answer } = styles[Math.floor(Math.random()*styles.length)]();
+  document.getElementById('puzzleExpr').value   = expr;
+  document.getElementById('puzzleAnswer').value = answer;
+  renderPuzzleCanvas();
+  toast('🎲 New random equation!', 'success', 1800);
+}
+
+/* ── Generate ANY wild random math (bigger numbers, mixed ops) ── */
+function puzzleGenerateRandomAny() {
+  const templates = [
+    () => { const a=_rn(10,99),b=_rn(10,99),c=_rn(2,9); return { expr:`${a} + ${b} - ${c} × ${_rn(1,5)} = ??`, answer:_fmt(a+b-c*_rn(1,5)) }; },
+    () => { const a=_rn(2,12),b=_rn(2,12); return { expr:`${a}² × ${b} - ${_rn(1,20)} = ??`, answer:_fmt(a*a*b-_rn(1,20)) }; },
+    () => { const a=_rn(50,200),b=_rn(2,10); return { expr:`${a} ÷ ${b} + ${_rn(1,30)} = ??`, answer:_fmt(a/b+_rn(1,30)) }; },
+    () => { const [a,b,c,d]=[_rn(1,9),_rn(1,9),_rn(1,9),_rn(1,9)]; return { expr:`${a} + ${b} + ${c} + ${d} × 0 + ${_rn(1,5)} = ??`, answer:`${a+b+c+_rn(1,5)}` }; },
+    () => { const a=_rn(2,9),b=_rn(2,9); return { expr:`(${a} + ${b}) × (${a} - ${_rn(1,a-1)||1}) = ??`, answer:_fmt((a+b)*(a-(_rn(1,a-1)||1))) }; },
+    () => { const sq=[4,9,16,25,36,49,64,81,100,121,144]; const a=sq[Math.floor(Math.random()*sq.length)]; const b=_rn(1,10); return { expr:`√${a} × ${b} + ${_rn(1,15)} = ??`, answer:_fmt(Math.sqrt(a)*b+_rn(1,15)) }; },
+    () => { const a=_rn(1,5),b=_rn(1,5),c=_rn(1,5); return { expr:`${a}³ + ${b}² - ${c} = ??`, answer:_fmt(a*a*a+b*b-c) }; },
+    () => { const a=_rn(10,50); return { expr:`${a} × 0 + ${_rn(1,20)} × ${_rn(1,10)} = ??`, answer:_fmt(_rn(1,20)*_rn(1,10)) }; },
+  ];
+  // Pick and immediately evaluate with fresh random numbers
+  const idx = Math.floor(Math.random()*templates.length);
+  const { expr, answer } = templates[idx]();
+  document.getElementById('puzzleExpr').value   = expr;
+  document.getElementById('puzzleAnswer').value = isNaN(parseFloat(answer)) ? '??' : _fmt(parseFloat(answer));
+  renderPuzzleCanvas();
+  toast('🔀 Wild math generated!', 'success', 1800);
+}
+
+/* Helpers */
+function _rn(min, max) { return Math.floor(Math.random()*(max-min+1))+min; }
+function _fmt(n) {
+  if (n === null || n === undefined || isNaN(n)) return '??';
+  const r = Math.round(n * 1000) / 1000;
+  return Number.isInteger(r) ? String(r) : r.toFixed(2).replace(/\.?0+$/, '');
+}
+function _evalJS(expr) {
+  try { return Function('"use strict";return (' + expr + ')')(); } catch { return null; }
+}
+function _evalExpr(a, op, b) {
+  switch(op) { case '+': return a+b; case '-': return a-b; case '×': return a*b; case '÷': return b!==0?a/b:null; }
+  return null;
+}
+function _solveLeft(a, op1, b, op2, c) {
+  const right = _evalExpr(b, op2, c);
+  return right !== null ? _evalExpr(a, op1, right) : null;
+}
+
 function renderPuzzleCanvas() {
   const canvas = document.getElementById('puzzleCanvas');
   if (!canvas) return;
@@ -8316,4 +8409,3 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById(id)?.addEventListener('change', renderPuzzleCanvas);
   });
 });
-
