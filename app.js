@@ -7825,14 +7825,10 @@ let _puzzleCanvasH    = 600;
 let _puzzleInited     = false;
 
 /* ── Einstein photo drag / resize state ── */
-let _puzzlePhotoX     = null;   // null = auto-centre (default)
-let _puzzlePhotoY     = null;   // null = auto-centre (default)
-let _puzzlePhotoScale = 0.55;   // fraction of canvas width
-let _puzzleDragging   = false;
-let _puzzleDragStartX = 0;
-let _puzzleDragStartY = 0;
-let _puzzlePhotoStartX= 0;
-let _puzzlePhotoStartY= 0;
+let _puzzlePhotoScale    = 0.55;   // fraction of canvas width (controls size)
+let _puzzleDragging      = false;
+let _puzzleDragStartY    = 0;
+let _puzzleScaleAtDragStart = 0.55;
 
 function openPuzzleStudio() {
   document.querySelector('.container').style.display        = 'none';
@@ -7901,9 +7897,7 @@ function _preloadEinsteinImg(p) {
 
 function _selectEinsteinPhoto(id) {
   _puzzleEinsteinId = id;
-  /* Reset position to auto-centre when a new photo is chosen */
-  _puzzlePhotoX = null;
-  _puzzlePhotoY = null;
+  /* Reset size to default when a new photo is chosen */
   _puzzlePhotoScale = 0.55;
   EINSTEIN_PHOTOS.forEach(p => {
     const btn = document.getElementById('einsteinBtn_' + p.id);
@@ -7959,9 +7953,8 @@ function setPuzzleSize(val) {
   if (canvas) { canvas.width = w; canvas.height = h; }
   const lbl = document.getElementById('puzzleCanvasDims');
   if (lbl) lbl.textContent = `${w} × ${h}`;
-  /* Reset photo position so it re-centres to the new canvas size */
-  _puzzlePhotoX = null;
-  _puzzlePhotoY = null;
+  /* Reset photo size to default for new canvas dimensions */
+  _puzzlePhotoScale = 0.55;
   renderPuzzleCanvas();
 }
 
@@ -8219,8 +8212,9 @@ async function renderPuzzleCanvas() {
   ctx.restore();
 
   /* ═══════════════════════════════════════════════════════
-     STEP 3 — Einstein photo (freely draggable / scalable)
-     Default: centred in left half of the middle zone
+     STEP 3 — Einstein photo
+     Always centred in the left half of the middle zone.
+     Drag up/down on canvas to resize (up = grow, down = shrink).
      ═══════════════════════════════════════════════════════ */
   const eImg = _puzzleImgCache[_puzzleEinsteinId] || null;
 
@@ -8229,11 +8223,9 @@ async function renderPuzzleCanvas() {
     const photoW = Math.round(W * _puzzlePhotoScale);
     const photoH = Math.round(photoW / aspect);
 
-    /* Default: centred in left half, vertically centred in middle zone */
-    const defaultX = Math.round((HALF - photoW) / 2);
-    const defaultY = MID_Y + Math.round((MID_H - photoH) / 2);
-    const drawX = _puzzlePhotoX !== null ? _puzzlePhotoX : defaultX;
-    const drawY = _puzzlePhotoY !== null ? _puzzlePhotoY : defaultY;
+    /* Always centred in left half, vertically centred in middle zone */
+    const drawX = Math.round((HALF - photoW) / 2);
+    const drawY = MID_Y + Math.round((MID_H - photoH) / 2);
 
     ctx.save();
     ctx.drawImage(eImg, drawX, drawY, photoW, photoH);
@@ -8430,40 +8422,23 @@ function _puzzleCanvasScale() {
 
 function puzzlePhotoDragStart(e) {
   e.preventDefault();
-  _puzzleDragging   = true;
-  const ratio = _puzzleCanvasScale();
-  _puzzleDragStartX = e.clientX * ratio;
-  _puzzleDragStartY = e.clientY * ratio;
-
-  /* Capture current photo position (resolve default if null) */
-  const canvas = document.getElementById('puzzleCanvas');
-  if (!canvas) return;
-  const W = canvas.width, H = canvas.height;
-  const PAD   = Math.round(W * 0.035);
-  const WM_H  = document.getElementById('puzzleWatermark')?.checked !== false ? Math.round(H * 0.06) : 0;
-  const TOP_H = Math.round(H * 0.20);
-  const MID_H = H - TOP_H - WM_H;
-  const MID_Y = TOP_H;
-  const HALF  = Math.round(W * 0.5);
-  const eImg  = _puzzleImgCache[_puzzleEinsteinId];
-  if (eImg) {
-    const photoW = Math.round(W * _puzzlePhotoScale);
-    const photoH = Math.round(photoW / (eImg.naturalWidth / eImg.naturalHeight));
-    if (_puzzlePhotoX === null) _puzzlePhotoX = Math.round((HALF - photoW) / 2);
-    if (_puzzlePhotoY === null) _puzzlePhotoY = MID_Y + Math.round((MID_H - photoH) / 2);
-  }
-  _puzzlePhotoStartX = _puzzlePhotoX || 0;
-  _puzzlePhotoStartY = _puzzlePhotoY || 0;
+  _puzzleDragging          = true;
+  const ratio              = _puzzleCanvasScale();
+  _puzzleDragStartY        = e.clientY * ratio;
+  _puzzleScaleAtDragStart  = _puzzlePhotoScale;
 }
 
 function puzzlePhotoDragMove(e) {
   if (!_puzzleDragging) return;
   e.preventDefault();
-  const ratio = _puzzleCanvasScale();
-  const dx = e.clientX * ratio - _puzzleDragStartX;
-  const dy = e.clientY * ratio - _puzzleDragStartY;
-  _puzzlePhotoX = _puzzlePhotoStartX + dx;
-  _puzzlePhotoY = _puzzlePhotoStartY + dy;
+  const ratio   = _puzzleCanvasScale();
+  /* dy in canvas pixels — drag UP (negative dy) = grow, drag DOWN = shrink */
+  const dy      = e.clientY * ratio - _puzzleDragStartY;
+  const canvas  = document.getElementById('puzzleCanvas');
+  const H       = canvas ? canvas.height : 600;
+  /* Map vertical drag distance to scale change (full canvas height = ±0.7 scale) */
+  const delta   = -(dy / H) * 0.7;
+  _puzzlePhotoScale = Math.min(1.2, Math.max(0.15, _puzzleScaleAtDragStart + delta));
   renderPuzzleCanvas();
 }
 
@@ -8481,14 +8456,14 @@ function puzzlePhotoWheel(e) {
 function puzzlePhotoTouchStart(e) {
   if (e.touches.length === 1) {
     const t = e.touches[0];
-    puzzlePhotoDragStart({ clientX: t.clientX, clientY: t.clientY, preventDefault: () => e.preventDefault() });
+    puzzlePhotoDragStart({ clientY: t.clientY, preventDefault: () => e.preventDefault() });
   }
 }
 
 function puzzlePhotoTouchMove(e) {
   if (e.touches.length === 1) {
     const t = e.touches[0];
-    puzzlePhotoDragMove({ clientX: t.clientX, clientY: t.clientY, preventDefault: () => e.preventDefault() });
+    puzzlePhotoDragMove({ clientY: t.clientY, preventDefault: () => e.preventDefault() });
   } else if (e.touches.length === 2) {
     /* Pinch to resize */
     e.preventDefault();
