@@ -2237,17 +2237,22 @@ async function callGroq(prompt, timeoutMs = 20000) {
 
   console.log('[Groq] calling API, key prefix:', key.slice(0, 8) + '…');
 
+  /* On localhost use the server proxy to avoid CORS; on GitHub Pages call directly */
+  const groqEndpoint = _isNodeServer
+    ? '/proxy/groq'
+    : 'https://api.groq.com/openai/v1/chat/completions';
+  const groqHeaders = _isNodeServer
+    ? { 'X-Groq-Key': key, 'Content-Type': 'application/json' }
+    : { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' };
+
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const res = await fetch(groqEndpoint, {
       method: 'POST',
       signal: controller.signal,
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json'
-      },
+      headers: groqHeaders,
       body: JSON.stringify({
         model: 'llama3-8b-8192',
         messages: [

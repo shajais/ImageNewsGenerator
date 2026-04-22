@@ -202,6 +202,22 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  /* ── PROXY: /proxy/groq → Groq API (browser-supplied key via X-Groq-Key header) ──
+     Used on localhost to avoid CORS blocks when calling api.groq.com directly. */
+  if (pathname === '/proxy/groq') {
+    const groqKey = req.headers['x-groq-key'] || '';
+    if (!groqKey) {
+      setCORS(res);
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'No Groq API key supplied in X-Groq-Key header' }));
+      return;
+    }
+    const target = 'https://api.groq.com/openai/v1/chat/completions';
+    console.log('[proxy] Groq → (key prefix:', groqKey.slice(0, 8) + '…)');
+    proxyRequest(req, res, target, { 'Authorization': `Bearer ${groqKey}` });
+    return;
+  }
+
   /* ── PROXY: /proxy/removebg-account → Remove.bg account ping ── */
   if (pathname === '/proxy/removebg-account') {
     if (!REMOVEBG_API_KEY) {
