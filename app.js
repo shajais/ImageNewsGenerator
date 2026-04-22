@@ -6382,7 +6382,7 @@ async function drawTextOverlay(ctx, post, W, H) {
  * Layout (left → right):  [avatar circle]  |  "Shashi News Gen"  ·  URL  ·  email
  * The strip is always at the canvas bottom regardless of title height.
  */
-async function _drawAuthorWatermark(ctx, W, _titleBottom) {
+async function _drawAuthorWatermark(ctx, W, _titleBottom, label = 'News') {
   /* Wait for the avatar image to finish loading if it hasn't yet */
   if (!_authorImg && _authorImgPromise) await _authorImgPromise;
 
@@ -6416,9 +6416,12 @@ async function _drawAuthorWatermark(ctx, W, _titleBottom) {
   ctx.clip();
   if (_authorImg) {
     const srcW = _authorImg.naturalWidth, srcH = _authorImg.naturalHeight;
-    const cropSize = Math.min(srcW, srcH * 0.80);
+    const cropSize = Math.min(srcW, srcH);
     const cropX = (srcW - cropSize) / 2;
-    ctx.drawImage(_authorImg, cropX, 0, cropSize, cropSize,
+    const cropY = (srcH - cropSize) / 2;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(_authorImg, cropX, cropY, cropSize, cropSize,
                   avCX - AVATAR_R, avCY - AVATAR_R, AVATAR_D, AVATAR_D);
   } else {
     ctx.fillStyle = '#c0392b';
@@ -6450,7 +6453,7 @@ async function _drawAuthorWatermark(ctx, W, _titleBottom) {
   /* Brand name */
   ctx.font      = 'bold 22px "Segoe UI",Arial,sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.96)';
-  ctx.fillText('Shashi Creator Studio', textX, nameY);
+  ctx.fillText(`Shashi Creator Studio — ${label}`, textX, nameY);
 
   /* URL + separator + email in smaller text */
   const SITE_URL = 'shajais.github.io/ShashiNewsGen';
@@ -7561,7 +7564,7 @@ async function renderMemeCanvas() {
   /* ── 4. Author watermark strip (avatar + name + URL) ── */
   const showWatermark = document.getElementById('memeWatermark') ? document.getElementById('memeWatermark').checked : true;
   if (showWatermark) {
-    await _drawAuthorWatermark(ctx, W, 0);
+    await _drawAuthorWatermark(ctx, W, 0, 'Meme');
   }
 }
 
@@ -8050,7 +8053,7 @@ function _solveLeft(a, op1, b, op2, c) {
   return right !== null ? _evalExpr(a, op1, right) : null;
 }
 
-function renderPuzzleCanvas() {
+async function renderPuzzleCanvas() {
   const canvas = document.getElementById('puzzleCanvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -8328,18 +8331,7 @@ function renderPuzzleCanvas() {
      STEP 5 — WATERMARK STRIP (full width, bottom)
      ═══════════════════════════════════════════════════════ */
   if (watermark) {
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.78)';
-    ctx.fillRect(0, H - WM_H, W, WM_H);
-    /* Accent top-border on watermark */
-    ctx.fillStyle = theme.accent;
-    ctx.fillRect(0, H - WM_H, W, 3);
-    const wmFs = Math.round(WM_H * 0.44);
-    ctx.font = `700 ${wmFs}px Arial,sans-serif`;
-    ctx.fillStyle = theme.accent;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('🧩 Shashi Creator Studio — Puzzle', W / 2, H - WM_H / 2);
-    ctx.restore();
+    await _drawAuthorWatermark(ctx, W, 0, 'Puzzle');
   }
 }
 
