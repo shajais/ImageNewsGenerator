@@ -481,6 +481,10 @@
           <button class="btn btn-green" onclick="downloadImage()"><span></span> Download Image</button>
           <button class="btn" id="shareAllBtn2" disabled style="background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;box-shadow:0 3px 12px rgba(124,58,237,.45);font-weight:600;opacity:.45;cursor:not-allowed" onclick="shareWithImage()" title="Share complete post (text + image)">📤 Share All</button>
           <button class="btn btn-blue"  onclick="generateImage()"><span></span> Regenerate</button>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:var(--muted);cursor:pointer;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.04)" title="Show/hide the Shashi Creator Studio watermark on the news image">
+            <input type="checkbox" id="newsWatermark" checked style="accent-color:#f59e0b;width:15px;height:15px" onchange="generateImage()">
+            Watermark
+          </label>
         </div>
       </div>
     </div>
@@ -686,7 +690,7 @@
   </div>
 </div>
 
-<script src="app.js?v=20260422a"></script>
+<script src="app.js?v=20260422d"></script>
 
 <!-- ══════════════════════════════════════════════════════════════
      NEWS STUDIO MODAL
@@ -1056,8 +1060,8 @@
               </div>
             </div>
             <div style="display:flex;gap:8px;align-items:center">
-              <label class="meme-label" style="margin:0">Watermark:</label>
-              <input type="checkbox" id="puzzleWatermark" checked onchange="renderPuzzleCanvas()" style="accent-color:#7c3aed;width:16px;height:16px">
+              <label class="meme-label" style="margin:0;opacity:.55" title="Watermark is always included on puzzle images">Watermark:</label>
+              <input type="checkbox" id="puzzleWatermark" checked disabled style="accent-color:#7c3aed;width:16px;height:16px;cursor:not-allowed;opacity:.55">
               <span style="font-size:.78rem;color:var(--muted)">Shashi News Gen branding</span>
             </div>
           </div>

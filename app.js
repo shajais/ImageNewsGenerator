@@ -6369,7 +6369,10 @@ async function drawTextOverlay(ctx, post, W, H) {
   ctx.shadowBlur = 0;
 
   /* ── Branding watermark ── */
-  await _drawAuthorWatermark(ctx, W, y);
+  const showNewsWatermark = document.getElementById('newsWatermark') ? document.getElementById('newsWatermark').checked : true;
+  if (showNewsWatermark) {
+    await _drawAuthorWatermark(ctx, W, y);
+  }
 
   ctx.shadowBlur = 0;
   ctx.textAlign = 'center';
@@ -7962,74 +7965,105 @@ function puzzleRandomize() {
 
 /* ── Generate a random ORDER-OF-OPERATIONS equation (whole numbers, ??  answer) ── */
 function puzzleGenerateRandom() {
+  /* Convert × ÷ to JS operators for safe eval */
+  const toJS = op => op === '×' ? '*' : op === '÷' ? '/' : op;
   const ops = ['+', '-', '×', '÷'];
   const styles = [
-    /* a OP b OP c = ?? */
+    /* a OP b OP c = ??  (evaluated with proper BODMAS via JS eval) */
     () => {
       const a = _rn(1,20), b = _rn(1,10), c = _rn(1,10);
       const op1 = ops[Math.floor(Math.random()*4)];
       const op2 = ops[Math.floor(Math.random()*4)];
-      const expr = `${a} ${op1} ${b} ${op2} ${c} = ??`;
-      const ans  = _evalExpr(a, op1, _evalExpr(b, op2, c, true), false) ??
-                   _solveLeft(a, op1, b, op2, c);
-      return { expr, answer: _fmt(ans) };
+      // Avoid division by zero
+      if ((op1 === '÷' && b === 0) || (op2 === '÷' && c === 0)) return null;
+      const ans = _evalJS(`${a}${toJS(op1)}${b}${toJS(op2)}${c}`);
+      return { expr: `${a} ${op1} ${b} ${op2} ${c} = ??`, answer: _fmt(ans) };
     },
     /* a OP b × c = ?? (BODMAS trap) */
     () => {
       const a = _rn(1,15), b = _rn(2,8), c = _rn(2,8);
-      const op = ops[Math.floor(Math.random()*2)];   // + or -
-      const ans = _evalJS(`${a}${op === '+' ? '+' : '-'}${b}*${c}`);
+      const op = _rn(0,1) ? '+' : '-';
+      const ans = _evalJS(`${a}${toJS(op)}${b}*${c}`);
       return { expr: `${a} ${op} ${b} × ${c} = ??`, answer: _fmt(ans) };
     },
     /* a ÷ b(c+d) = ?? */
     () => {
-      const c = _rn(1,5), d = _rn(1,5);
-      const b = _rn(1,4);
-      const a = b*(c+d)*_rn(1,3);
-      return { expr: `${a} ÷ ${b}(${c}+${d}) = ??`, answer: _fmt(a/(b*(c+d))) };
+      const c = _rn(1,5), d = _rn(1,5), b = _rn(1,4), k = _rn(1,3);
+      const a = b * (c + d) * k;
+      return { expr: `${a} ÷ ${b}(${c}+${d}) = ??`, answer: _fmt(a / (b * (c + d))) };
     },
     /* a + a + a + a × 0 = ?? */
     () => {
       const a = _rn(1,9);
-      return { expr: `${a} + ${a} + ${a} + ${a} × 0 = ??`, answer: `${a+a+a}` };
+      return { expr: `${a} + ${a} + ${a} + ${a} × 0 = ??`, answer: `${a + a + a}` };
     },
     /* √a + b² - c = ?? */
     () => {
       const sq = [1,4,9,16,25,36,49,64,81,100];
-      const a  = sq[Math.floor(Math.random()*sq.length)];
+      const a  = sq[Math.floor(Math.random() * sq.length)];
       const b  = _rn(2,7), c = _rn(1,10);
-      return { expr: `√${a} + ${b}² - ${c} = ??`, answer: _fmt(Math.sqrt(a)+b*b-c) };
+      return { expr: `√${a} + ${b}² - ${c} = ??`, answer: _fmt(Math.sqrt(a) + b*b - c) };
     },
     /* a² + a × a - a = ?? */
     () => {
       const a = _rn(2,8);
-      return { expr: `${a}² + ${a} × ${a} - ${a} = ??`, answer: _fmt(a*a+a*a-a) };
+      return { expr: `${a}² + ${a} × ${a} - ${a} = ??`, answer: _fmt(a*a + a*a - a) };
     },
   ];
-  const { expr, answer } = styles[Math.floor(Math.random()*styles.length)]();
-  document.getElementById('puzzleExpr').value   = expr;
-  document.getElementById('puzzleAnswer').value = answer;
+  let result = null;
+  // Retry if a style returns null (e.g. division by zero edge case)
+  for (let i = 0; i < 10 && !result; i++) {
+    result = styles[Math.floor(Math.random() * styles.length)]();
+  }
+  if (!result) return;
+  document.getElementById('puzzleExpr').value   = result.expr;
+  document.getElementById('puzzleAnswer').value = result.answer;
   renderPuzzleCanvas();
   toast('🎲 New random equation!', 'success', 1800);
 }
 
 /* ── Generate ANY wild random math (bigger numbers, mixed ops) ── */
 function puzzleGenerateRandomAny() {
+  const sq = [4,9,16,25,36,49,64,81,100,121,144];
   const templates = [
-    () => { const a=_rn(10,99),b=_rn(10,99),c=_rn(2,9); return { expr:`${a} + ${b} - ${c} × ${_rn(1,5)} = ??`, answer:_fmt(a+b-c*_rn(1,5)) }; },
-    () => { const a=_rn(2,12),b=_rn(2,12); return { expr:`${a}² × ${b} - ${_rn(1,20)} = ??`, answer:_fmt(a*a*b-_rn(1,20)) }; },
-    () => { const a=_rn(50,200),b=_rn(2,10); return { expr:`${a} ÷ ${b} + ${_rn(1,30)} = ??`, answer:_fmt(a/b+_rn(1,30)) }; },
-    () => { const [a,b,c,d]=[_rn(1,9),_rn(1,9),_rn(1,9),_rn(1,9)]; return { expr:`${a} + ${b} + ${c} + ${d} × 0 + ${_rn(1,5)} = ??`, answer:`${a+b+c+_rn(1,5)}` }; },
-    () => { const a=_rn(2,9),b=_rn(2,9); return { expr:`(${a} + ${b}) × (${a} - ${_rn(1,a-1)||1}) = ??`, answer:_fmt((a+b)*(a-(_rn(1,a-1)||1))) }; },
-    () => { const sq=[4,9,16,25,36,49,64,81,100,121,144]; const a=sq[Math.floor(Math.random()*sq.length)]; const b=_rn(1,10); return { expr:`√${a} × ${b} + ${_rn(1,15)} = ??`, answer:_fmt(Math.sqrt(a)*b+_rn(1,15)) }; },
-    () => { const a=_rn(1,5),b=_rn(1,5),c=_rn(1,5); return { expr:`${a}³ + ${b}² - ${c} = ??`, answer:_fmt(a*a*a+b*b-c) }; },
-    () => { const a=_rn(10,50); return { expr:`${a} × 0 + ${_rn(1,20)} × ${_rn(1,10)} = ??`, answer:_fmt(_rn(1,20)*_rn(1,10)) }; },
+    /* pre-compute ALL random values so expr and answer use the SAME numbers */
+    () => {
+      const a=_rn(10,99), b=_rn(10,99), c=_rn(2,9), d=_rn(1,5);
+      return { expr:`${a} + ${b} - ${c} × ${d} = ??`, answer:_fmt(a+b-c*d) };
+    },
+    () => {
+      const a=_rn(2,12), b=_rn(2,12), e=_rn(1,20);
+      return { expr:`${a}² × ${b} - ${e} = ??`, answer:_fmt(a*a*b-e) };
+    },
+    () => {
+      const a=_rn(2,10)*_rn(2,10), b=_rn(2,10), e=_rn(1,30); // ensure clean division
+      const divisor = Math.gcd ? Math.gcd(a,b) : b;
+      return { expr:`${a} ÷ ${b} + ${e} = ??`, answer:_fmt(a/b+e) };
+    },
+    () => {
+      const a=_rn(1,9), b=_rn(1,9), c=_rn(1,9), d=_rn(1,9), e=_rn(1,5);
+      return { expr:`${a} + ${b} + ${c} + ${d} × 0 + ${e} = ??`, answer:`${a+b+c+e}` };
+    },
+    () => {
+      const a=_rn(3,9), b=_rn(2,9), f=_rn(1,a-1);
+      return { expr:`(${a} + ${b}) × (${a} - ${f}) = ??`, answer:_fmt((a+b)*(a-f)) };
+    },
+    () => {
+      const a=sq[Math.floor(Math.random()*sq.length)], b=_rn(1,10), e=_rn(1,15);
+      return { expr:`√${a} × ${b} + ${e} = ??`, answer:_fmt(Math.sqrt(a)*b+e) };
+    },
+    () => {
+      const a=_rn(1,5), b=_rn(1,5), c=_rn(1,5);
+      return { expr:`${a}³ + ${b}² - ${c} = ??`, answer:_fmt(a*a*a+b*b-c) };
+    },
+    () => {
+      const a=_rn(10,50), e=_rn(1,20), f=_rn(1,10);
+      return { expr:`${a} × 0 + ${e} × ${f} = ??`, answer:_fmt(e*f) };
+    },
   ];
-  // Pick and immediately evaluate with fresh random numbers
-  const idx = Math.floor(Math.random()*templates.length);
-  const { expr, answer } = templates[idx]();
+  const { expr, answer } = templates[Math.floor(Math.random()*templates.length)]();
   document.getElementById('puzzleExpr').value   = expr;
-  document.getElementById('puzzleAnswer').value = isNaN(parseFloat(answer)) ? '??' : _fmt(parseFloat(answer));
+  document.getElementById('puzzleAnswer').value = answer;
   renderPuzzleCanvas();
   toast('🔀 Wild math generated!', 'success', 1800);
 }
