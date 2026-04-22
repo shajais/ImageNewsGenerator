@@ -6654,7 +6654,7 @@ function buildPostText(post, rawTitle, { includeUrl = true } = {}) {
   const credit = includeUrl
     ? `— ${BRAND_NAME}\n🌐 ${BRAND_URL}`
     : `— ${BRAND_NAME}`;
-  return `${icon} ${post.hook}\n\n📢 ${post.title}\n\n${post.description}\n\n${post.hashtags.join(' ')}\n\n${credit}`;
+  return `${icon} ${post.title}\n\n${post.description}\n\n${post.hashtags.join(' ')}\n\n${credit}`;
 }
 
 function getPostText() {
@@ -6705,7 +6705,7 @@ function shareOnX() {
    * X (Twitter) limit ≈ 280 chars. We send: hook + title + top 3 hashtags + brand + URL.
    * X natively renders URLs as clickable links in tweets.
    */
-  const tweet = `${post.hook}\n\n📢 ${post.title}\n\n${post.hashtags.slice(0, 3).join(' ')}\n\n— ${BRAND_NAME}`;
+  const tweet = `📢 ${post.title}\n\n${post.hashtags.slice(0, 3).join(' ')}\n\n— ${BRAND_NAME}`;
   _shareUrl    = `https://x.com/intent/tweet?text=${encodeURIComponent(tweet)}`;
   _shareTarget = 'x';
   openShareModal(
