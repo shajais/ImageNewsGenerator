@@ -1107,14 +1107,54 @@
 </div><!-- end puzzleStudioModal -->
 
 <!-- ── Site Footer ── -->
-<footer style="text-align:center;padding:18px 0 12px;border-top:1px solid rgba(255,255,255,.07);margin-top:8px">
-  <a href="https://hits.seeyoufarm.com" target="_blank" rel="noopener" title="Today / Total visits" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;opacity:.55;transition:opacity .2s" onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='.55'">
-    <span style="font-size:1rem">👁️</span>
-    <img src="https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fshajais.github.io%2FShashiNewsGen&count_bg=%237C3AED&title_bg=%231f2937&icon=eye.svg&icon_color=%23ffffff&title=&edge_flat=true"
-         alt="visits today / total"
-         style="height:20px;border-radius:6px;vertical-align:middle">
-  </a>
+<footer style="text-align:center;padding:14px 0 10px;border-top:1px solid rgba(255,255,255,.07);margin-top:8px">
+  <div id="visitCounter"
+       style="display:inline-flex;align-items:center;gap:7px;background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.3);border-radius:20px;padding:5px 14px;font-size:.78rem;color:rgba(255,255,255,.55)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.7;flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+    <span id="visitCountToday" style="color:#a78bfa;font-weight:700;font-size:.82rem">—</span>
+    <span style="opacity:.45">today</span>
+    <span style="opacity:.25">|</span>
+    <span id="visitCountTotal" style="color:#c4b5fd;font-weight:600">—</span>
+    <span style="opacity:.45">total</span>
+  </div>
 </footer>
+<script>
+(function() {
+  const KEY_TODAY = '_vc_day';
+  const KEY_TOTAL = '_vc_total';
+  const TODAY     = new Date().toISOString().slice(0,10);   // "2026-04-22"
+
+  /* ── Local counts (instant, works offline) ── */
+  let storedDay   = localStorage.getItem(KEY_TODAY);
+  let todayCount, totalCount;
+
+  if (storedDay === TODAY) {
+    todayCount = parseInt(localStorage.getItem(KEY_TODAY + '_n') || '0') + 1;
+  } else {
+    todayCount = 1;
+  }
+  totalCount = parseInt(localStorage.getItem(KEY_TOTAL) || '0') + 1;
+
+  localStorage.setItem(KEY_TODAY,       TODAY);
+  localStorage.setItem(KEY_TODAY + '_n', todayCount);
+  localStorage.setItem(KEY_TOTAL,        totalCount);
+
+  function fmt(n) { return Number(n).toLocaleString(); }
+
+  document.getElementById('visitCountToday').textContent = fmt(todayCount);
+  document.getElementById('visitCountTotal').textContent  = fmt(totalCount);
+
+  /* ── Remote count (real cross-user total via free CounterAPI) ── */
+  fetch('https://api.counterapi.dev/v1/shajais-ShashiNewsGen/hits/up')
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      if (d && d.count) {
+        document.getElementById('visitCountTotal').textContent = fmt(d.count);
+      }
+    })
+    .catch(() => { /* silently use local count */ });
+})();
+</script>
 
 </body>
 </html>
