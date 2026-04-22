@@ -7824,6 +7824,16 @@ let _puzzleCanvasW    = 600;
 let _puzzleCanvasH    = 600;
 let _puzzleInited     = false;
 
+/* ── Einstein photo drag / resize state ── */
+let _puzzlePhotoX     = null;   // null = auto-centre (default)
+let _puzzlePhotoY     = null;   // null = auto-centre (default)
+let _puzzlePhotoScale = 0.55;   // fraction of canvas width
+let _puzzleDragging   = false;
+let _puzzleDragStartX = 0;
+let _puzzleDragStartY = 0;
+let _puzzlePhotoStartX= 0;
+let _puzzlePhotoStartY= 0;
+
 function openPuzzleStudio() {
   document.querySelector('.container').style.display        = 'none';
   document.getElementById('memeStudioModal').style.display  = 'none';
@@ -7891,6 +7901,10 @@ function _preloadEinsteinImg(p) {
 
 function _selectEinsteinPhoto(id) {
   _puzzleEinsteinId = id;
+  /* Reset position to auto-centre when a new photo is chosen */
+  _puzzlePhotoX = null;
+  _puzzlePhotoY = null;
+  _puzzlePhotoScale = 0.55;
   EINSTEIN_PHOTOS.forEach(p => {
     const btn = document.getElementById('einsteinBtn_' + p.id);
     if (btn) btn.style.borderColor = (p.id === id) ? '#7c3aed' : 'var(--border)';
@@ -7945,6 +7959,9 @@ function setPuzzleSize(val) {
   if (canvas) { canvas.width = w; canvas.height = h; }
   const lbl = document.getElementById('puzzleCanvasDims');
   if (lbl) lbl.textContent = `${w} × ${h}`;
+  /* Reset photo position so it re-centres to the new canvas size */
+  _puzzlePhotoX = null;
+  _puzzlePhotoY = null;
   renderPuzzleCanvas();
 }
 
@@ -8202,37 +8219,31 @@ async function renderPuzzleCanvas() {
   ctx.restore();
 
   /* ═══════════════════════════════════════════════════════
-     STEP 3 — MIDDLE-LEFT: Einstein photo
-     Vertically centred in the middle zone, left half
+     STEP 3 — Einstein photo (freely draggable / scalable)
+     Default: centred in left half of the middle zone
      ═══════════════════════════════════════════════════════ */
   const eImg = _puzzleImgCache[_puzzleEinsteinId] || null;
-  const imgZoneX = 0;
-  const imgZoneW = HALF;
-  const imgZoneY = MID_Y;
-  const imgZoneH = MID_H;
 
   if (eImg) {
-    ctx.save();
-    /* Clip to left-half middle zone */
-    ctx.beginPath();
-    ctx.rect(imgZoneX, imgZoneY, imgZoneW, imgZoneH);
-    ctx.clip();
-
-    /* Fit image maintaining aspect ratio, centre in zone */
     const aspect = eImg.naturalWidth / eImg.naturalHeight;
-    let iW = imgZoneW, iH = Math.round(iW / aspect);
-    if (iH > imgZoneH) { iH = imgZoneH; iW = Math.round(iH * aspect); }
-    const iX = imgZoneX + Math.round((imgZoneW - iW) / 2);
-    const iY = imgZoneY + Math.round((imgZoneH - iH) / 2);   // vertically centred
+    const photoW = Math.round(W * _puzzlePhotoScale);
+    const photoH = Math.round(photoW / aspect);
 
-    ctx.drawImage(eImg, iX, iY, iW, iH);
+    /* Default: centred in left half, vertically centred in middle zone */
+    const defaultX = Math.round((HALF - photoW) / 2);
+    const defaultY = MID_Y + Math.round((MID_H - photoH) / 2);
+    const drawX = _puzzlePhotoX !== null ? _puzzlePhotoX : defaultX;
+    const drawY = _puzzlePhotoY !== null ? _puzzlePhotoY : defaultY;
+
+    ctx.save();
+    ctx.drawImage(eImg, drawX, drawY, photoW, photoH);
 
     /* Right-edge fade so photo blends into right text area */
-    const rFade = ctx.createLinearGradient(HALF - Math.round(imgZoneW * 0.35), 0, HALF, 0);
+    const rFade = ctx.createLinearGradient(HALF - Math.round(W * 0.18), 0, HALF + Math.round(W * 0.04), 0);
     rFade.addColorStop(0, 'transparent');
     rFade.addColorStop(1, theme.bg);
     ctx.fillStyle = rFade;
-    ctx.fillRect(imgZoneX, imgZoneY, imgZoneW, imgZoneH);
+    ctx.fillRect(drawX, drawY, photoW, photoH);
 
     /* Bottom-edge fade into watermark */
     if (WM_H) {
@@ -8240,17 +8251,17 @@ async function renderPuzzleCanvas() {
       bFade.addColorStop(0, 'transparent');
       bFade.addColorStop(1, 'rgba(0,0,0,0.65)');
       ctx.fillStyle = bFade;
-      ctx.fillRect(imgZoneX, H - WM_H * 2.5, imgZoneW, WM_H * 2.5);
+      ctx.fillRect(drawX, drawY, photoW, photoH);
     }
     ctx.restore();
   } else {
     /* Placeholder */
     ctx.save();
     ctx.fillStyle = theme.accent + '22';
-    ctx.fillRect(imgZoneX, imgZoneY, imgZoneW, imgZoneH);
-    ctx.font = `${Math.round(imgZoneW * 0.3)}px sans-serif`;
+    ctx.fillRect(0, MID_Y, HALF, MID_H);
+    ctx.font = `${Math.round(HALF * 0.3)}px sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('🧑‍🔬', imgZoneX + imgZoneW / 2, imgZoneY + imgZoneH / 2);
+    ctx.fillText('🧑‍🔬', HALF / 2, MID_Y + MID_H / 2);
     ctx.restore();
   }
 
@@ -8404,6 +8415,94 @@ async function puzzleCopyImage() {
   } catch { toast('⚠️ Copy failed — download गर्नुस्','error',3000); }
 }
 
+/* ── Puzzle Einstein photo — drag / resize handlers ────────────
+   The canvas element has onmousedown/move/up/leave and onwheel
+   handlers wired in index.html. These functions implement free
+   drag-to-reposition and scroll-to-resize behaviour.
+   ──────────────────────────────────────────────────────────── */
+function _puzzleCanvasScale() {
+  /* Returns the CSS-to-canvas pixel ratio for the puzzle canvas */
+  const canvas = document.getElementById('puzzleCanvas');
+  if (!canvas) return 1;
+  const rect = canvas.getBoundingClientRect();
+  return canvas.width / rect.width;
+}
+
+function puzzlePhotoDragStart(e) {
+  e.preventDefault();
+  _puzzleDragging   = true;
+  const ratio = _puzzleCanvasScale();
+  _puzzleDragStartX = e.clientX * ratio;
+  _puzzleDragStartY = e.clientY * ratio;
+
+  /* Capture current photo position (resolve default if null) */
+  const canvas = document.getElementById('puzzleCanvas');
+  if (!canvas) return;
+  const W = canvas.width, H = canvas.height;
+  const PAD   = Math.round(W * 0.035);
+  const WM_H  = document.getElementById('puzzleWatermark')?.checked !== false ? Math.round(H * 0.06) : 0;
+  const TOP_H = Math.round(H * 0.20);
+  const MID_H = H - TOP_H - WM_H;
+  const MID_Y = TOP_H;
+  const HALF  = Math.round(W * 0.5);
+  const eImg  = _puzzleImgCache[_puzzleEinsteinId];
+  if (eImg) {
+    const photoW = Math.round(W * _puzzlePhotoScale);
+    const photoH = Math.round(photoW / (eImg.naturalWidth / eImg.naturalHeight));
+    if (_puzzlePhotoX === null) _puzzlePhotoX = Math.round((HALF - photoW) / 2);
+    if (_puzzlePhotoY === null) _puzzlePhotoY = MID_Y + Math.round((MID_H - photoH) / 2);
+  }
+  _puzzlePhotoStartX = _puzzlePhotoX || 0;
+  _puzzlePhotoStartY = _puzzlePhotoY || 0;
+}
+
+function puzzlePhotoDragMove(e) {
+  if (!_puzzleDragging) return;
+  e.preventDefault();
+  const ratio = _puzzleCanvasScale();
+  const dx = e.clientX * ratio - _puzzleDragStartX;
+  const dy = e.clientY * ratio - _puzzleDragStartY;
+  _puzzlePhotoX = _puzzlePhotoStartX + dx;
+  _puzzlePhotoY = _puzzlePhotoStartY + dy;
+  renderPuzzleCanvas();
+}
+
+function puzzlePhotoDragEnd(e) {
+  _puzzleDragging = false;
+}
+
+function puzzlePhotoWheel(e) {
+  e.preventDefault();
+  const delta = e.deltaY < 0 ? 0.03 : -0.03;
+  _puzzlePhotoScale = Math.min(1.2, Math.max(0.15, _puzzlePhotoScale + delta));
+  renderPuzzleCanvas();
+}
+
+function puzzlePhotoTouchStart(e) {
+  if (e.touches.length === 1) {
+    const t = e.touches[0];
+    puzzlePhotoDragStart({ clientX: t.clientX, clientY: t.clientY, preventDefault: () => e.preventDefault() });
+  }
+}
+
+function puzzlePhotoTouchMove(e) {
+  if (e.touches.length === 1) {
+    const t = e.touches[0];
+    puzzlePhotoDragMove({ clientX: t.clientX, clientY: t.clientY, preventDefault: () => e.preventDefault() });
+  } else if (e.touches.length === 2) {
+    /* Pinch to resize */
+    e.preventDefault();
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (!puzzlePhotoTouchMove._lastDist) { puzzlePhotoTouchMove._lastDist = dist; return; }
+    const ratio = dist / puzzlePhotoTouchMove._lastDist;
+    _puzzlePhotoScale = Math.min(1.2, Math.max(0.15, _puzzlePhotoScale * ratio));
+    puzzlePhotoTouchMove._lastDist = dist;
+    renderPuzzleCanvas();
+  }
+}
+
 function sharePuzzle(platform) {
   const expr    = document.getElementById('puzzleExpr')?.value||'Math Puzzle';
   const caption = `🧩 Can you solve it??\n\n${expr}\n\n90% fail! Only for genius 🧠\n\nCreate yours → https://shajais.github.io/ShashiNewsGen/`;
@@ -8422,10 +8521,10 @@ function sharePuzzle(platform) {
 /* ── Puzzle Studio live-render bindings ── */
 document.addEventListener('DOMContentLoaded', () => {
   ['puzzleExpr','puzzleAnswer','puzzleTopText','puzzleSubText','puzzleBottomText',
-   'puzzleFontSize','puzzlePhotoSize'].forEach(id => {
+   'puzzleFontSize'].forEach(id => {
     document.getElementById(id)?.addEventListener('input', renderPuzzleCanvas);
   });
-  ['puzzlePhotoPos','puzzleSize'].forEach(id => {
+  ['puzzleSize'].forEach(id => {
     document.getElementById(id)?.addEventListener('change', () => {
       if (id==='puzzleSize') setPuzzleSize(document.getElementById(id).value);
       else renderPuzzleCanvas();

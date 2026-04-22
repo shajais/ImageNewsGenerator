@@ -1003,7 +1003,7 @@
             </div>
             <div>
               <label class="meme-label">Sub-hook text</label>
-              <input id="puzzleSubText" class="meme-input" value="90 % fail" oninput="renderPuzzleCanvas()">
+              <input id="puzzleSubText" class="meme-input" value="90% fail" oninput="renderPuzzleCanvas()">
             </div>
             <div>
               <label class="meme-label">Bottom challenge text</label>
@@ -1016,23 +1016,7 @@
         <div class="meme-section">
           <div class="meme-section-title">🧑‍🔬 Step 3 — Einstein Photo</div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px" id="einsteinPhotoGrid"></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div>
-              <label class="meme-label">Photo position</label>
-              <select id="puzzlePhotoPos" class="meme-input" onchange="renderPuzzleCanvas()">
-                <option value="left">↙ Bottom-left</option>
-                <option value="right" selected>↘ Bottom-right</option>
-                <option value="center">⬇ Bottom-center</option>
-                <option value="top-left">↖ Top-left</option>
-                <option value="top-right">↗ Top-right</option>
-              </select>
-            </div>
-            <div>
-              <label class="meme-label">Photo size</label>
-              <input type="range" id="puzzlePhotoSize" min="30" max="90" value="55" style="width:100%;margin-top:6px" oninput="document.getElementById('puzzlePhotoSizeVal').textContent=this.value+'%';renderPuzzleCanvas()">
-              <span id="puzzlePhotoSizeVal" style="font-size:.75rem;color:var(--muted)">55%</span>
-            </div>
-          </div>
+          <p style="font-size:.75rem;color:var(--muted);margin:0">🖱️ Drag photo on canvas to reposition · Scroll to resize</p>
         </div>
 
         <!-- Step 4: Style -->
@@ -1046,10 +1030,11 @@
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
               <div>
                 <label class="meme-label">Canvas size</label>
-                <select id="puzzleSize" class="meme-input" onchange="setPuzzleSize(this.value)">
+                <select id="puzzleSize" class="meme-input" style="background:#1e1b4b;color:#e0d7ff;border-color:#7c3aed" onchange="setPuzzleSize(this.value)">
                   <option value="600x600" selected>Square 600×600</option>
                   <option value="1080x1080">Instagram 1080×1080</option>
                   <option value="1080x1350">Portrait 1080×1350</option>
+                  <option value="1080x1920">Story / Reel 1080×1920</option>
                   <option value="600x400">Landscape 600×400</option>
                 </select>
               </div>
@@ -1093,7 +1078,15 @@
           </div>
           <div style="display:flex;justify-content:center;background:#0a0a0f;border-radius:12px;padding:12px;border:1px solid var(--border)">
             <canvas id="puzzleCanvas" width="600" height="600"
-              style="max-width:100%;border-radius:8px;box-shadow:0 8px 32px rgba(124,58,237,.3)"></canvas>
+              style="max-width:100%;border-radius:8px;box-shadow:0 8px 32px rgba(124,58,237,.3);cursor:grab"
+              onmousedown="puzzlePhotoDragStart(event)"
+              onmousemove="puzzlePhotoDragMove(event)"
+              onmouseup="puzzlePhotoDragEnd(event)"
+              onmouseleave="puzzlePhotoDragEnd(event)"
+              ontouchstart="puzzlePhotoTouchStart(event)"
+              ontouchmove="puzzlePhotoTouchMove(event)"
+              ontouchend="puzzlePhotoDragEnd(event)"
+              onwheel="puzzlePhotoWheel(event)"></canvas>
           </div>
           <div style="margin-top:12px;display:flex;gap:8px;justify-content:center">
             <button class="btn btn-primary" style="font-size:.85rem;padding:10px 24px;background:linear-gradient(135deg,#7c3aed,#db2777)" onclick="downloadPuzzle()">⬇️ Download Puzzle</button>
