@@ -2479,7 +2479,14 @@ OUTPUT: Raw JSON only — no \`\`\`json, no explanation, nothing else.`;
   console.log('[AI DEBUG] hashtags:', hashtags);
   console.log('[AI DEBUG] hook hasDevanagari:', hasDevanagari(hook), '| title:', hasDevanagari(title), '| desc:', hasDevanagari(description));
 
-  if (!hasDevanagari(hook) || !hasDevanagari(title) || !hasDevanagari(description)) {
+  /* For Groq/LLaMA responses, be more lenient — only require title to have Devanagari.
+     Gemini responses are stricter. If no Devanagari at all, fall back. */
+  const usingGroq = !(_geminiKey || _browserGeminiKey) && !!_browserGroqKey;
+  const devanagariOk = usingGroq
+    ? (hasDevanagari(title) || hasDevanagari(description))   // lenient for Groq
+    : (hasDevanagari(hook) && hasDevanagari(title) && hasDevanagari(description)); // strict for Gemini
+
+  if (!devanagariOk) {
     console.warn('[AI Rewrite] Response missing Devanagari — falling back');
     return null;
   }
@@ -3833,7 +3840,7 @@ async function regenerateHashtags() {
 
   try {
     let newTags;
-    if ((_geminiKey || _browserGeminiKey) && selectedArticle) {
+    if ((_geminiKey || _browserGeminiKey || _browserGroqKey) && selectedArticle) {
       const articleBody = (selectedArticle.fullArticleText || selectedArticle.description || '').replace(/\s+/g, ' ').slice(0, 800);
       const prompt = `You are a Nepali social media expert who knows trending hashtags.
 
@@ -6835,7 +6842,7 @@ async function reimagineField(field) {
   if (!generatedPost || !selectedArticle) {
     toast('⚠️ Please select an article first.', 'error'); return;
   }
-  if (!_geminiKey && !_browserGeminiKey) {
+  if (!_geminiKey && !_browserGeminiKey && !_browserGroqKey) {
     toast('⚙️ Setup your AI key first — click the AI button in the header.', 'error', 5000); return;
   }
 
@@ -7683,7 +7690,7 @@ async function memeGenerateCaption() {
   const top = document.getElementById('memeTopText')    ? document.getElementById('memeTopText').value    : '';
   const bot = document.getElementById('memeBottomText') ? document.getElementById('memeBottomText').value : '';
   if (!top && !bot) { toast('⚠️ पहिले meme text लेख्नुस्', 'error'); return; }
-  const hasAI = typeof _geminiKey !== 'undefined' ? (_geminiKey || _browserGeminiKey) : false;
+  const hasAI = (_geminiKey || _browserGeminiKey || _browserGroqKey);
   if (!hasAI) {
     document.getElementById('memeCaptionText').value =
       `${top} ${bot} 😂😂\n#NepalMeme #नेपाली_मिम #ShashiNewsGen #viral #trending #nepal #funnynepal #meme`;
