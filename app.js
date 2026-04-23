@@ -8322,18 +8322,18 @@ function _memeCanvasCoords(e) {
   return { x: (src.clientX - rect.left) * scaleX, y: (src.clientY - rect.top) * scaleY };
 }
 
-/* Returns bounding box of a text label on the canvas */
+/* Returns bounding box of a text label on the canvas.
+   For top/bot text we return null since those are now in ribbons (not draggable floats). */
 function _memeTextBBox(key, W, H, BANNER_H, STRIP_H, fontSize) {
+  if (key === 'top' || key === 'bot') return null; // handled by ribbons
   const pos = _memeTextPositions[key];
   const textZoneT = BANNER_H + 12;
   const textZoneB = H - STRIP_H - 8;
   const fs = (pos.fontSize > 0 ? pos.fontSize : fontSize);
 
   let defaultY;
-  if (key === 'top')      defaultY = textZoneT + fs;
-  else if (key === 'mid1') defaultY = Math.round((textZoneT + textZoneB) / 2) - Math.round(fs * 0.6);
-  else if (key === 'mid2') defaultY = Math.round((textZoneT + textZoneB) / 2) + Math.round(fs * 0.8);
-  else                     defaultY = textZoneB - 8;
+  if (key === 'mid1') defaultY = Math.round((textZoneT + textZoneB) / 2) - Math.round(fs * 0.6);
+  else                defaultY = Math.round((textZoneT + textZoneB) / 2) + Math.round(fs * 0.8);
 
   const cx  = pos.x != null ? pos.x : W / 2;
   const cy  = pos.y != null ? pos.y : defaultY;
@@ -8615,77 +8615,108 @@ async function renderMemeCanvas() {
     ctx.fillStyle = glow2; ctx.fillRect(0, 0, W, H);
   }
 
-  /* ── 2. Vivid gradient banner (matches news image style) ── */
-  const BANNER_H = Math.round(H * 0.09);   // slim banner ~54px at 600 height
+  /* ── 2. Top & Bottom TEXT RIBBONS (replace old static banner & bot text) ──
+     • Top ribbon  = dark semi-transparent band at very top, height fits topText
+     • Bottom ribbon = same style at bottom, above watermark strip, fits botText
+     • If no text, ribbons collapse to a thin accent line only              ── */
+  const ribbonFont     = _memeFontFamily || 'Impact';
+  const ribbonFontSize = parseInt(document.getElementById('memeFontSize')?.value || 42);
+  const ribbonStroke   = document.getElementById('memeStroke')?.checked ?? true;
+  const ribbonColor    = _memeTextColor || '#ffffff';
+  const ribbonBgColor  = 'rgba(0,0,0,0.72)';
+  const ACCENT_H       = 5;   // thin gold accent line height when ribbon is empty
+  const PAD_V          = 14;  // vertical padding inside ribbon
+  const PAD_H          = 18;  // horizontal padding inside ribbon
 
-  /* Gradient: deep crimson → bright orange-red */
-  const bannerGrad = ctx.createLinearGradient(0, 0, W, 0);
-  bannerGrad.addColorStop(0,   '#b91c1c');
-  bannerGrad.addColorStop(0.4, '#dc2626');
-  bannerGrad.addColorStop(0.7, '#ef4444');
-  bannerGrad.addColorStop(1,   '#f97316');
-  ctx.fillStyle = bannerGrad;
-  ctx.fillRect(0, 0, W, BANNER_H);
+  const topText   = (document.getElementById('memeTopText')    ?.value || '').toUpperCase().trim();
+  const mid1Text  = (document.getElementById('memeMiddleText1')?.value || '').toUpperCase().trim();
+  const mid2Text  = (document.getElementById('memeMiddleText2')?.value || '').toUpperCase().trim();
+  const botText   = (document.getElementById('memeBottomText') ?.value || '').toUpperCase().trim();
+  const fontSize  = ribbonFontSize;
+  const useStroke = ribbonStroke;
 
-  /* Gloss highlight on top half */
-  const gloss = ctx.createLinearGradient(0, 0, 0, BANNER_H * 0.55);
-  gloss.addColorStop(0, 'rgba(255,255,255,0.18)');
-  gloss.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = gloss;
-  ctx.fillRect(0, 0, W, BANNER_H * 0.55);
+  /* Helper: measure wrapped lines for a text at a given font size */
+  function measureRibbonLines(text, fs) {
+    if (!text) return { lines: [], lineH: fs * 1.28, totalH: 0 };
+    ctx.font = `900 ${fs}px "${ribbonFont}", Impact, "Arial Black", sans-serif`;
+    const maxW = W - PAD_H * 2;
+    const words = text.split(' ');
+    const lines = [];
+    let line = '';
+    for (const w of words) {
+      const test = line ? line + ' ' + w : w;
+      if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+      else line = test;
+    }
+    if (line) lines.push(line);
+    const lineH = fs * 1.28;
+    return { lines, lineH, totalH: lines.length * lineH };
+  }
 
-  /* Gold accent bar on left */
-  const accentGrad = ctx.createLinearGradient(0, 0, 0, BANNER_H);
-  accentGrad.addColorStop(0,   '#fde68a');
-  accentGrad.addColorStop(0.5, '#f59e0b');
-  accentGrad.addColorStop(1,   '#d97706');
-  ctx.fillStyle = accentGrad;
-  ctx.fillRect(0, 0, 12, BANNER_H);
+  /* Helper: draw a ribbon band */
+  function drawRibbon(text, fs, bandY, bandH, textBaseline) {
+    /* Background */
+    ctx.fillStyle = ribbonBgColor;
+    ctx.fillRect(0, bandY, W, bandH);
+    /* Gold left accent bar */
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(0, bandY, 7, bandH);
+    /* Gold top/bottom rule */
+    ctx.fillStyle = 'rgba(245,158,11,0.6)';
+    if (textBaseline === 'top')    ctx.fillRect(7, bandY + bandH - 2, W - 7, 2);
+    else                           ctx.fillRect(7, bandY, W - 7, 2);
 
-  /* Gold glowing rule at banner bottom */
-  const ruleGrad = ctx.createLinearGradient(0, 0, W, 0);
-  ruleGrad.addColorStop(0,   'rgba(253,230,138,0)');
-  ruleGrad.addColorStop(0.2, 'rgba(253,230,138,0.9)');
-  ruleGrad.addColorStop(0.8, 'rgba(253,230,138,0.9)');
-  ruleGrad.addColorStop(1,   'rgba(253,230,138,0)');
-  ctx.fillStyle = ruleGrad;
-  ctx.fillRect(12, BANNER_H, W - 12, 3);
+    if (!text) return;
+    const { lines, lineH, totalH } = measureRibbonLines(text, fs);
+    ctx.font         = `900 ${fs}px "${ribbonFont}", Impact, "Arial Black", sans-serif`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'alphabetic';
 
-  /* "😂 MEME" text — clean crisp with nice font, no heavy glow */
-  ctx.save();
-  ctx.textAlign    = 'center';
-  ctx.textBaseline = 'middle';
-  const memeBannerFs = Math.round(BANNER_H * 0.52);
-  /* Shadow layer for depth */
-  ctx.shadowColor = 'rgba(0,0,0,0.45)';
-  ctx.shadowBlur  = 8;
-  ctx.shadowOffsetY = 2;
-  ctx.font = `800 ${memeBannerFs}px "Segoe UI","Helvetica Neue",Arial,sans-serif`;
-  ctx.fillStyle = '#ffe4c4';
-  ctx.fillText('😂  Meme', W / 2, BANNER_H / 2);
-  /* Crisp white top layer */
-  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText('😂  Meme', W / 2, BANNER_H / 2);
-  ctx.restore();
+    let startY;
+    if (textBaseline === 'top')
+      startY = bandY + PAD_V + fs * 0.85;    // first baseline from top
+    else
+      startY = bandY + bandH - PAD_V - (totalH - lineH) - fs * 0.15; // anchor from bottom
 
-  /* No date stamp */
+    lines.forEach((l, i) => {
+      const y = startY + i * lineH;
+      if (useStroke) {
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.95)'; ctx.shadowBlur = 4;
+        ctx.lineWidth   = Math.max(3, fs * 0.12);
+        ctx.strokeStyle = '#000'; ctx.lineJoin = 'round';
+        ctx.strokeText(l, W / 2, y); ctx.restore();
+      }
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 5;
+      ctx.fillStyle   = ribbonColor;
+      ctx.fillText(l, W / 2, y); ctx.restore();
+    });
+  }
 
-  /* Left red accent bar (decorative, like news card) */
-  ctx.fillStyle = 'rgba(192,57,43,0.90)';
-  ctx.fillRect(0, BANNER_H + 2, 5, H - BANNER_H - 74);
+  /* Compute ribbon heights based on content */
+  const { totalH: topTotalH }  = measureRibbonLines(topText, fontSize);
+  const { totalH: botTotalH }  = measureRibbonLines(botText, fontSize);
+  const TOP_RIBBON_H  = topText  ? topTotalH  + PAD_V * 2 : ACCENT_H;
+  const BOT_RIBBON_H  = botText  ? botTotalH  + PAD_V * 2 : ACCENT_H;
 
-  /* ── 3. Meme text block ── */
-  const fontSize  = parseInt(document.getElementById('memeFontSize') ? document.getElementById('memeFontSize').value : 42);
-  const useStroke = document.getElementById('memeStroke') ? document.getElementById('memeStroke').checked : true;
-  const topText   = (document.getElementById('memeTopText')     ? document.getElementById('memeTopText').value     : '').toUpperCase();
-  const mid1Text  = (document.getElementById('memeMiddleText1') ? document.getElementById('memeMiddleText1').value : '').toUpperCase();
-  const mid2Text  = (document.getElementById('memeMiddleText2') ? document.getElementById('memeMiddleText2').value : '').toUpperCase();
-  const botText   = (document.getElementById('memeBottomText')  ? document.getElementById('memeBottomText').value  : '').toUpperCase();
+  /* Store for text zone calculation */
+  const BANNER_H = TOP_RIBBON_H;   // replaces old fixed BANNER_H usage below
+  const STRIP_H  = Math.max(BOT_RIBBON_H, 72); // watermark is at least 72px
 
-  /* Text zone: between bottom of banner and top of watermark strip */
-  const STRIP_H   = 72;
-  const textZoneT = BANNER_H + 12;
+  /* Draw top ribbon */
+  drawRibbon(topText, fontSize, 0, TOP_RIBBON_H, 'top');
+
+  /* Draw bottom ribbon (above watermark) */
+  const botRibbonY = H - STRIP_H;
+  drawRibbon(botText, fontSize, botRibbonY, BOT_RIBBON_H, 'bottom');
+
+  /* Left red accent bar on content zone sides */
+  ctx.fillStyle = 'rgba(192,57,43,0.85)';
+  ctx.fillRect(0, TOP_RIBBON_H + 2, 5, H - TOP_RIBBON_H - STRIP_H - 4);
+
+  /* ── 3. Middle floating text (Mid1, Mid2) ── */
+  const textZoneT = TOP_RIBBON_H + 10;
   const textZoneB = H - STRIP_H - 8;
 
   ctx.textAlign = 'center';
@@ -8752,10 +8783,9 @@ async function renderMemeCanvas() {
   }
 
   const midCenterY = (textZoneT + textZoneB) / 2;
-  drawMemeTextAt(topText,  'top',  textZoneT + fontSize,                         'top');
+  /* Top text and Bottom text are now rendered inside ribbons above — only draw mid texts here */
   drawMemeTextAt(mid1Text, 'mid1', midCenterY - Math.round(fontSize * 0.5),      'middle_custom');
   drawMemeTextAt(mid2Text, 'mid2', midCenterY + Math.round(fontSize * 0.8),      'middle_custom');
-  drawMemeTextAt(botText,  'bot',  textZoneB - 6,                                'bottom');
 
   /* ── 3b. Overlay images (rendered after text so they sit on top) ── */
   for (let i = 0; i < _memeOverlays.length; i++) {
