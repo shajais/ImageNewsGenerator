@@ -8260,14 +8260,20 @@ async function renderPuzzleCanvas() {
   /* ═══════════════════════════════════════════════════════
      STEP 4 — MIDDLE-RIGHT: "Only for Genius" + Puzzle box
      ═══════════════════════════════════════════════════════ */
-  const rxPad  = PAD;
-  const rxX    = HALF + rxPad;                      // right text zone x-start
-  const rxW    = W - HALF - rxPad * 2;              // right text zone width
-  const rxMidY = MID_Y + Math.round(MID_H / 2);    // vertical centre of middle zone
+  const rxPad  = PAD;                                    // gap from centre split
+  const rxPadR = Math.round(W * 0.06);                   // breathing room from right canvas edge
+  const rxX    = HALF + rxPad;                           // right text zone x-start
+  const rxW    = W - HALF - rxPad - rxPadR;              // right text zone width
+  const rxMidY = MID_Y + Math.round(MID_H / 2);         // vertical centre of middle zone
 
-  /* Helper: auto-shrink font to fit rxW, draw centred in right zone */
+  /* Helper: auto-shrink font to fit rxW, draw centred in right zone.
+     Clips drawing to the right text zone so nothing bleeds over the edge. */
   function _pzR(text, font, color, shadow, y, align) {
     ctx.save();
+    /* Clip to right text zone so text can never bleed past right canvas edge */
+    ctx.beginPath();
+    ctx.rect(rxX, MID_Y, rxW, MID_H + WM_H);
+    ctx.clip();
     ctx.font = font; ctx.fillStyle = color;
     ctx.textAlign = align || 'center'; ctx.textBaseline = 'top';
     if (shadow) { ctx.shadowColor = shadow; ctx.shadowBlur = 10; }
@@ -8330,6 +8336,10 @@ async function renderPuzzleCanvas() {
   {
     const boxY = rightY;
     ctx.save();
+    /* Clip the entire box to the right text zone */
+    ctx.beginPath();
+    ctx.rect(rxX, MID_Y, rxW, MID_H + WM_H);
+    ctx.clip();
     /* Box fill — subtle tinted background */
     ctx.fillStyle = theme.accent + '20';
     _pzRoundRect(ctx, rxX, boxY, rxW, exprBoxH, 18); ctx.fill();
@@ -8360,9 +8370,11 @@ async function renderPuzzleCanvas() {
     rightY += spacing * 0.5;
   }
 
-  /* 4d. CTA */
-  _pzR('💬 Comment your answer ↓', `600 ${ctaFs}px Arial,sans-serif`,
-       theme.subtext + 'aa', null, rightY);
+  /* 4d. CTA — split into two lines so it never overflows */
+  {
+    const ctaFont = `600 ${ctaFs}px Arial,sans-serif`;
+    rightY = _pzR('💬 Comment your answer ↓', ctaFont, theme.subtext + 'aa', null, rightY);
+  }
 
   /* ═══════════════════════════════════════════════════════
      STEP 5 — WATERMARK STRIP (full width, bottom)
