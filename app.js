@@ -8345,9 +8345,27 @@ function memeCanvasMouseDown(e) {
   const { x, y } = _memeCanvasCoords(e);
   const canvas = document.getElementById('memeCanvas');
   const W = canvas.width, H = canvas.height;
-  const BANNER_H = Math.round(H * 0.09);
-  const STRIP_H  = 72;
   const fontSize = parseInt(document.getElementById('memeFontSize')?.value || 42);
+
+  /* Compute dynamic ribbon heights (same logic as renderMemeCanvas) */
+  const _ctx = canvas.getContext('2d');
+  const _fn  = _memeFontFamily || 'Impact';
+  const _pad = 14, _acc = 5;
+  function _dynRibbonH(text) {
+    if (!text) return _acc;
+    _ctx.font = `900 ${fontSize}px "${_fn}", Impact, "Arial Black", sans-serif`;
+    const mw = W - 36; let line = '', lines = [];
+    for (const w of text.split(' ')) {
+      const t = line ? line + ' ' + w : w;
+      if (_ctx.measureText(t).width > mw && line) { lines.push(line); line = w; } else line = t;
+    }
+    if (line) lines.push(line);
+    return lines.length * fontSize * 1.28 + _pad * 2;
+  }
+  const topTxt   = (document.getElementById('memeTopText')   ?.value || '').toUpperCase().trim();
+  const botTxt   = (document.getElementById('memeBottomText')?.value || '').toUpperCase().trim();
+  const BANNER_H = _dynRibbonH(topTxt);
+  const STRIP_H  = _dynRibbonH(botTxt) + 72; // bot ribbon + watermark
 
   // 0. Check slot panel hits for panning background images
   if (_memeSlots.length > 0) {
@@ -8519,12 +8537,32 @@ async function renderMemeCanvas() {
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
 
-  /* ── 1. Background — slot panels stacked vertically, or single image, or gradient ── */
-  const BANNER_H_bg = Math.round(H * 0.09);
-  const STRIP_H_bg  = 72;
-  const zoneTop_bg  = BANNER_H_bg + 3;
-  const zoneBot_bg  = H - STRIP_H_bg - 2;
-  const zoneH_bg    = zoneBot_bg - zoneTop_bg;
+  /* ── 1. Background — slot panels stacked vertically, or single image, or gradient ──
+     Pre-compute ribbon/watermark heights first so slot zones align exactly.          */
+  const _fontSize_pre = parseInt(document.getElementById('memeFontSize')?.value || 42);
+  const _font_pre     = _memeFontFamily || 'Impact';
+  const _topText_pre  = (document.getElementById('memeTopText')   ?.value || '').toUpperCase().trim();
+  const _botText_pre  = (document.getElementById('memeBottomText')?.value || '').toUpperCase().trim();
+  const _PAD_V_pre    = 14, _ACCENT_H_pre = 5;
+  function _preRibbonH(text, fs) {
+    if (!text) return _ACCENT_H_pre;
+    ctx.font = `900 ${fs}px "${_font_pre}", Impact, "Arial Black", sans-serif`;
+    const maxW = W - 36, words = text.split(' ');
+    let line = '', lines = [];
+    for (const w of words) {
+      const test = line ? line + ' ' + w : w;
+      if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+      else line = test;
+    }
+    if (line) lines.push(line);
+    return lines.length * fs * 1.28 + _PAD_V_pre * 2;
+  }
+  const _topRH  = _preRibbonH(_topText_pre, _fontSize_pre);
+  const _botRH  = _preRibbonH(_botText_pre, _fontSize_pre);
+  const _wmH    = 72; // watermark always 72px
+  const zoneTop_bg = _topRH;           // images start right below top ribbon
+  const zoneBot_bg = H - _botRH - _wmH; // images end right above bottom ribbon
+  const zoneH_bg   = Math.max(0, zoneBot_bg - zoneTop_bg);
 
   if (_memeSlots.length > 0) {
     // Draw each slot as a vertical strip
