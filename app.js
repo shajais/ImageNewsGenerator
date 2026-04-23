@@ -7106,10 +7106,21 @@ let _memeFontFamily = 'Impact';
 let _memeCanvasW    = 600;
 let _memeCanvasH    = 600;
 
-/* ── Overlay images state ── */
-let _memeOverlays        = [];   // [{img, x, y, w, h, circle}]
-let _memeSelOverlayIdx   = -1;
-let _memeDragState       = null; // {overlayIdx, startX, startY, origX, origY}
+/* ── Overlay images state (up to 4) ── */
+let _memeOverlays      = [];   // [{img, x, y, w, h, circle, locked}]  locked=auto-layout
+let _memeSelOverlayIdx = -1;
+let _memeDragState     = null; // {type:'overlay'|'text', idx, startX, startY, origX, origY}
+
+/* ── Per-text drag positions ── */
+// Each entry: {x (0=centre), y, fontSize (0=use global), dragged}
+// 'x' is canvas X position (use null = centred)
+let _memeTextPositions = {
+  top:  { x: null, y: null, fontSize: 0 },
+  mid1: { x: null, y: null, fontSize: 0 },
+  mid2: { x: null, y: null, fontSize: 0 },
+  bot:  { x: null, y: null, fontSize: 0 },
+};
+let _memeSelText = null; // 'top'|'mid1'|'mid2'|'bot'|null
 
 /* ── Evergreen Nepal meme topics (shown when live fetch unavailable) ── */
 const MEME_NEPAL_TOPICS_FALLBACK = [
@@ -7171,8 +7182,9 @@ function openMemeStudio() {
   }
 
   _loadMemeTrendingTopics();
-  /* Reset overlays */
-  _memeOverlays = []; _memeSelOverlayIdx = -1; _memeDragState = null;
+  /* Reset overlays and text positions */
+  _memeOverlays = []; _memeSelOverlayIdx = -1; _memeDragState = null; _memeSelText = null;
+  _memeTextPositions = { top:{x:null,y:null,fontSize:0}, mid1:{x:null,y:null,fontSize:0}, mid2:{x:null,y:null,fontSize:0}, bot:{x:null,y:null,fontSize:0} };
   /* Short delay so canvas is visible/sized before drawing */
   setTimeout(() => renderMemeCanvas(), 80);
 }
@@ -7391,11 +7403,19 @@ async function searchMemeImages() {
     return;
   }
 
-  grid.innerHTML = allSrcs.map(src =>
-    `<img class="meme-img-thumb" src="${src}" loading="lazy"
-       onclick="selectMemeImage(this,'${src.replace(/'/g,"\\'")}' )"
-       onerror="this.style.opacity='.1';this.style.pointerEvents='none'" title="Click to use">`
-  ).join('');
+  grid.innerHTML = allSrcs.map((src, idx) => {
+    const safeSrc = src.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    return `<div class="meme-img-result-item" style="position:relative;display:inline-block">
+      <img class="meme-img-thumb" src="${src}" loading="lazy" id="memeThumb_${idx}"
+        onerror="this.closest('.meme-img-result-item').style.display='none'" title="Click image to set as background">
+      <div class="meme-img-thumb-btns" style="position:absolute;bottom:0;left:0;right:0;display:flex;gap:2px;padding:2px;background:rgba(0,0,0,.65)">
+        <button style="flex:1;font-size:.62rem;padding:2px 3px;background:#1877f2;color:#fff;border:none;border-radius:3px;cursor:pointer;white-space:nowrap"
+          onclick="selectMemeImage(document.getElementById('memeThumb_${idx}'),'${safeSrc}')">🖼 BG</button>
+        <button style="flex:1;font-size:.62rem;padding:2px 3px;background:#059669;color:#fff;border:none;border-radius:3px;cursor:pointer;white-space:nowrap"
+          onclick="memeAddSearchImageAsOverlay('${safeSrc}')">➕ Add</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function selectMemeImage(el, src) {
@@ -7430,27 +7450,55 @@ function memeApplyBgColor() {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   OVERLAY IMAGES — add, drag, resize, circle-crop
+   OVERLAY IMAGES — add (search or upload), auto-layout, drag, resize, circle-crop
+   Max 4 overlays. Layout:
+     1 image → fills entire content zone
+     2 images → left 50% / right 50%
+     3 images → 33% / 33% / 33%
+     4 images → 25% / 25% / 25% / 25%
+   User can drag any overlay to override its auto position.
    ───────────────────────────────────────────────────────────── */
+
+function _memeContentZone() {
+  const canvas = document.getElementById('memeCanvas');
+  const W = canvas.width, H = canvas.height;
+  const BANNER_H = Math.round(H * 0.09);
+  const STRIP_H  = 72;
+  return { W, H, top: BANNER_H + 3, bottom: H - STRIP_H - 2 };
+}
+
+/* Re-calculate auto-layout positions for all overlays that haven't been manually moved */
+function _memeAutoLayout() {
+  const n = _memeOverlays.length;
+  if (n === 0) return;
+  const { W, top, bottom } = _memeContentZone();
+  const zoneH = bottom - top;
+  const colW  = Math.floor(W / n);
+  _memeOverlays.forEach((ov, i) => {
+    if (ov.manualPos) return; // user dragged it → leave it
+    ov.x = i * colW;
+    ov.y = top;
+    ov.w = colW;
+    ov.h = zoneH;
+  });
+}
+
+/* Add overlay from file upload input */
 function memeAddOverlayImage(input) {
+  if (_memeOverlays.length >= 4) { toast('ℹ️ Maximum 4 images allowed', 'info', 3000); return; }
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
     const img = new Image();
     img.onload = () => {
-      const canvas = document.getElementById('memeCanvas');
-      const W = canvas.width, H = canvas.height;
-      const w = Math.round(W * 0.28);
-      const h = Math.round(w * (img.naturalHeight / img.naturalWidth));
-      // Place next overlay to the right of the previous one
-      const xOffset = _memeOverlays.length > 0
-        ? (_memeOverlays[_memeOverlays.length-1].x + _memeOverlays[_memeOverlays.length-1].w + 10) % (W - w)
-        : Math.round(W * 0.1);
-      _memeOverlays.push({ img, x: xOffset, y: Math.round(H * 0.35), w, h, circle: false });
+      _memeOverlays.push({ img, x: 0, y: 0, w: 150, h: 150, circle: false, manualPos: false });
+      _memeAutoLayout();
       _memeSelOverlayIdx = _memeOverlays.length - 1;
       _updateOverlayControls();
+      _updateOverlayList();
       renderMemeCanvas();
+      toast(`✅ Photo ${_memeOverlays.length} added (${_memeOverlays.length}/4)`, 'success', 2000);
     };
     img.src = e.target.result;
   };
@@ -7458,14 +7506,33 @@ function memeAddOverlayImage(input) {
   input.value = '';
 }
 
+/* Add overlay from a search-result URL */
+function memeAddSearchImageAsOverlay(src) {
+  if (_memeOverlays.length >= 4) { toast('ℹ️ Maximum 4 images allowed', 'info', 3000); return; }
+  memeSetStatus('⏳ Adding overlay image…');
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    _memeOverlays.push({ img, x: 0, y: 0, w: 150, h: 150, circle: false, manualPos: false });
+    _memeAutoLayout();
+    _memeSelOverlayIdx = _memeOverlays.length - 1;
+    _updateOverlayControls();
+    _updateOverlayList();
+    renderMemeCanvas();
+    memeSetStatus(`✅ Overlay ${_memeOverlays.length} added`);
+    toast(`✅ Photo ${_memeOverlays.length}/4 added to meme`, 'success', 2000);
+  };
+  img.onerror = () => memeSetStatus('❌ Could not load image as overlay');
+  img.src = src;
+}
+
 function memeAddOverlayCircle() {
-  // Just mark last overlay as circle-cropped, or prompt user to add image first
   if (_memeSelOverlayIdx >= 0 && _memeOverlays[_memeSelOverlayIdx]) {
-    _memeOverlays[_memeSelOverlayIdx].circle = true;
-    document.getElementById('memeOverlayCircle').checked = true;
+    _memeOverlays[_memeSelOverlayIdx].circle = !_memeOverlays[_memeSelOverlayIdx].circle;
+    document.getElementById('memeOverlayCircle').checked = _memeOverlays[_memeSelOverlayIdx].circle;
     renderMemeCanvas();
   } else {
-    toast('ℹ️ First add an overlay image, then click ⭕', 'info', 3000);
+    toast('ℹ️ Select an overlay image first, then click ⭕', 'info', 3000);
   }
 }
 
@@ -7473,16 +7540,27 @@ function memeRemoveSelectedOverlay() {
   if (_memeSelOverlayIdx < 0) return;
   _memeOverlays.splice(_memeSelOverlayIdx, 1);
   _memeSelOverlayIdx = _memeOverlays.length > 0 ? _memeOverlays.length - 1 : -1;
+  _memeAutoLayout();
   _updateOverlayControls();
+  _updateOverlayList();
+  renderMemeCanvas();
+}
+
+function memeResetOverlayLayout() {
+  _memeOverlays.forEach(ov => { ov.manualPos = false; });
+  _memeAutoLayout();
   renderMemeCanvas();
 }
 
 function memeResizeSelectedOverlay(val) {
   if (_memeSelOverlayIdx < 0 || !_memeOverlays[_memeSelOverlayIdx]) return;
   const ov = _memeOverlays[_memeSelOverlayIdx];
-  const aspect = ov.img.naturalHeight / ov.img.naturalWidth;
-  ov.w = parseInt(val);
-  ov.h = Math.round(ov.w * aspect);
+  const newW = parseInt(val);
+  // Keep aspect ratio only if NOT in auto-fill mode; in auto-fill let it stretch
+  ov.w = newW;
+  ov.h = newW; // square crop by default; user can drag height via overlay resize handle
+  ov.manualPos = true; // resizing implies manual override
+  _updateOverlayControls();
   renderMemeCanvas();
 }
 
@@ -7498,27 +7576,140 @@ function _updateOverlayControls() {
   if (_memeSelOverlayIdx >= 0 && _memeOverlays[_memeSelOverlayIdx]) {
     ctrl.style.display = 'block';
     const ov = _memeOverlays[_memeSelOverlayIdx];
-    document.getElementById('memeOverlaySize').value = ov.w;
+    document.getElementById('memeOverlaySize').value   = Math.min(600, Math.max(30, ov.w));
     document.getElementById('memeOverlayCircle').checked = ov.circle;
+    const lbl = document.getElementById('memeOverlaySelLabel');
+    if (lbl) lbl.textContent = `Photo ${_memeSelOverlayIdx + 1} selected`;
   } else {
     ctrl.style.display = 'none';
   }
+  // sync text selection label
+  const tsl = document.getElementById('memeTextSelLabel');
+  if (tsl) tsl.textContent = _memeSelText ? `"${_memeSelText}" text selected — drag on canvas` : '';
+
+  // Show/hide per-text size box
+  const tsb = document.getElementById('memeTextSizeBox');
+  if (tsb) {
+    if (_memeSelText) {
+      tsb.style.display = 'block';
+      const pos = _memeTextPositions[_memeSelText];
+      const curFs = pos.fontSize > 0 ? pos.fontSize : parseInt(document.getElementById('memeFontSize')?.value || 42);
+      document.getElementById('memeTextFontSize').value = curFs;
+      document.getElementById('memeTextFontSizeVal').textContent = curFs + 'px';
+      const lbl = document.getElementById('memeTextSizeLabel');
+      const names = { top:'Top', mid1:'Middle 1', mid2:'Middle 2', bot:'Bottom' };
+      if (lbl) lbl.textContent = `"${names[_memeSelText]}" text size`;
+    } else {
+      tsb.style.display = 'none';
+    }
+  }
 }
 
-/* Drag support on canvas */
+function _updateOverlayList() {
+  const list = document.getElementById('memeOverlayList');
+  if (!list) return;
+  if (_memeOverlays.length === 0) {
+    list.innerHTML = '<span style="color:var(--muted);font-size:.75rem">No overlays added yet</span>';
+    return;
+  }
+  list.innerHTML = _memeOverlays.map((ov, i) =>
+    `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border)">
+      <canvas width="40" height="40" style="border-radius:4px;border:1px solid var(--border);flex-shrink:0"
+        id="memeOvThumb${i}"></canvas>
+      <span style="font-size:.78rem;flex:1">Photo ${i+1}${ov.circle?' ⭕':''}</span>
+      <button class="btn btn-ghost" style="font-size:.72rem;padding:3px 8px" onclick="memeSelectOverlay(${i})">Select</button>
+      <button class="btn" style="font-size:.72rem;padding:3px 8px;background:#ef4444;color:#fff" onclick="memeDeleteOverlay(${i})">✕</button>
+    </div>`
+  ).join('');
+  // Draw thumbnails
+  _memeOverlays.forEach((ov, i) => {
+    const tc = document.getElementById(`memeOvThumb${i}`);
+    if (!tc) return;
+    const tctx = tc.getContext('2d');
+    tctx.clearRect(0, 0, 40, 40);
+    const sc = Math.min(40 / ov.img.naturalWidth, 40 / ov.img.naturalHeight);
+    const tw = ov.img.naturalWidth * sc, th = ov.img.naturalHeight * sc;
+    tctx.drawImage(ov.img, (40-tw)/2, (40-th)/2, tw, th);
+  });
+}
+
+function memeSelectOverlay(i) {
+  _memeSelOverlayIdx = i;
+  _memeSelText = null;
+  _updateOverlayControls();
+  renderMemeCanvas();
+}
+
+function memeDeleteOverlay(i) {
+  _memeOverlays.splice(i, 1);
+  if (_memeSelOverlayIdx >= _memeOverlays.length) _memeSelOverlayIdx = _memeOverlays.length - 1;
+  _memeAutoLayout();
+  _updateOverlayControls();
+  _updateOverlayList();
+  renderMemeCanvas();
+}
+
+/* ─── Unified canvas drag system (overlays + text labels) ─── */
+
 function _memeCanvasCoords(e) {
   const canvas = document.getElementById('memeCanvas');
-  const rect = canvas.getBoundingClientRect();
+  const rect   = canvas.getBoundingClientRect();
   const scaleX = canvas.width  / rect.width;
   const scaleY = canvas.height / rect.height;
-  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-  return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+  const src    = e.touches ? e.touches[0] : e;
+  return { x: (src.clientX - rect.left) * scaleX, y: (src.clientY - rect.top) * scaleY };
+}
+
+/* Returns bounding box of a text label on the canvas */
+function _memeTextBBox(key, W, H, BANNER_H, STRIP_H, fontSize) {
+  const pos = _memeTextPositions[key];
+  const textZoneT = BANNER_H + 12;
+  const textZoneB = H - STRIP_H - 8;
+  const fs = (pos.fontSize > 0 ? pos.fontSize : fontSize);
+
+  let defaultY;
+  if (key === 'top')      defaultY = textZoneT + fs;
+  else if (key === 'mid1') defaultY = Math.round((textZoneT + textZoneB) / 2) - Math.round(fs * 0.6);
+  else if (key === 'mid2') defaultY = Math.round((textZoneT + textZoneB) / 2) + Math.round(fs * 0.8);
+  else                     defaultY = textZoneB - 8;
+
+  const cx  = pos.x != null ? pos.x : W / 2;
+  const cy  = pos.y != null ? pos.y : defaultY;
+  const bw  = W * 0.9;
+  const bh  = fs * 1.6;
+  return { cx, cy, x: cx - bw/2, y: cy - bh/2, w: bw, h: bh };
 }
 
 function memeCanvasMouseDown(e) {
   const { x, y } = _memeCanvasCoords(e);
-  // Find topmost overlay hit
+  const canvas = document.getElementById('memeCanvas');
+  const W = canvas.width, H = canvas.height;
+  const BANNER_H = Math.round(H * 0.09);
+  const STRIP_H  = 72;
+  const fontSize = parseInt(document.getElementById('memeFontSize')?.value || 42);
+
+  // 1. Check text label hits first (top layer)
+  const textKeys = ['top','mid1','mid2','bot'];
+  const textValues = {
+    top:  (document.getElementById('memeTopText')?.value     || '').trim(),
+    mid1: (document.getElementById('memeMiddleText1')?.value || '').trim(),
+    mid2: (document.getElementById('memeMiddleText2')?.value || '').trim(),
+    bot:  (document.getElementById('memeBottomText')?.value  || '').trim(),
+  };
+  for (const key of [...textKeys].reverse()) {
+    if (!textValues[key]) continue;
+    const bb = _memeTextBBox(key, W, H, BANNER_H, STRIP_H, fontSize);
+    if (x >= bb.x && x <= bb.x + bb.w && y >= bb.y && y <= bb.y + bb.h) {
+      _memeSelText       = key;
+      _memeSelOverlayIdx = -1;
+      _memeDragState     = { type:'text', key, startX: x, startY: y, origX: bb.cx, origY: bb.cy };
+      _updateOverlayControls();
+      renderMemeCanvas();
+      return;
+    }
+  }
+
+  // 2. Check overlay hits
   for (let i = _memeOverlays.length - 1; i >= 0; i--) {
     const ov = _memeOverlays[i];
     const hit = ov.circle
@@ -7526,14 +7717,17 @@ function memeCanvasMouseDown(e) {
       : (x >= ov.x && x <= ov.x + ov.w && y >= ov.y && y <= ov.y + ov.h);
     if (hit) {
       _memeSelOverlayIdx = i;
-      _memeDragState = { overlayIdx: i, startX: x, startY: y, origX: ov.x, origY: ov.y };
+      _memeSelText       = null;
+      _memeDragState     = { type:'overlay', idx: i, startX: x, startY: y, origX: ov.x, origY: ov.y };
       _updateOverlayControls();
       renderMemeCanvas();
       return;
     }
   }
+  // Deselect
   _memeSelOverlayIdx = -1;
-  _memeDragState = null;
+  _memeSelText       = null;
+  _memeDragState     = null;
   _updateOverlayControls();
   renderMemeCanvas();
 }
@@ -7542,19 +7736,42 @@ function memeCanvasMouseMove(e) {
   if (!_memeDragState) return;
   e.preventDefault();
   const { x, y } = _memeCanvasCoords(e);
-  const ov = _memeOverlays[_memeDragState.overlayIdx];
-  if (!ov) return;
-  ov.x = _memeDragState.origX + (x - _memeDragState.startX);
-  ov.y = _memeDragState.origY + (y - _memeDragState.startY);
+  const dx = x - _memeDragState.startX;
+  const dy = y - _memeDragState.startY;
+
+  if (_memeDragState.type === 'overlay') {
+    const ov = _memeOverlays[_memeDragState.idx];
+    if (!ov) return;
+    ov.x = _memeDragState.origX + dx;
+    ov.y = _memeDragState.origY + dy;
+    ov.manualPos = true;
+  } else if (_memeDragState.type === 'text') {
+    const pos = _memeTextPositions[_memeDragState.key];
+    pos.x = _memeDragState.origX + dx;
+    pos.y = _memeDragState.origY + dy;
+  }
   renderMemeCanvas();
 }
 
-function memeCanvasMouseUp(e) {
-  _memeDragState = null;
-}
-
+function memeCanvasMouseUp()  { _memeDragState = null; }
 function memeCanvasTouchStart(e) { e.preventDefault(); memeCanvasMouseDown(e); }
 function memeCanvasTouchMove(e)  { e.preventDefault(); memeCanvasMouseMove(e); }
+
+/* Resize selected text via slider */
+function memeResizeSelectedText(val) {
+  if (!_memeSelText) return;
+  _memeTextPositions[_memeSelText].fontSize = parseInt(val);
+  document.getElementById('memeTextFontSizeVal').textContent = val + 'px';
+  renderMemeCanvas();
+}
+
+/* Reset all text positions */
+function memeResetTextPositions() {
+  _memeTextPositions = { top:{x:null,y:null,fontSize:0}, mid1:{x:null,y:null,fontSize:0}, mid2:{x:null,y:null,fontSize:0}, bot:{x:null,y:null,fontSize:0} };
+  _memeSelText = null;
+  _updateOverlayControls();
+  renderMemeCanvas();
+}
 
 /* ── Style setters ── */
 function setMemeTextColor(color, btn) {
@@ -7575,6 +7792,11 @@ function setMemeSize(w, h, btn) {
   canvas.width = w; canvas.height = h;
   document.querySelectorAll('.meme-size-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
+  // Reset manual text positions so they recalculate for new dimensions
+  _memeTextPositions = { top:{x:null,y:null,fontSize:0}, mid1:{x:null,y:null,fontSize:0}, mid2:{x:null,y:null,fontSize:0}, bot:{x:null,y:null,fontSize:0} };
+  // Re-layout overlays for new canvas size
+  _memeOverlays.forEach(ov => { ov.manualPos = false; });
+  _memeAutoLayout();
   renderMemeCanvas();
 }
 
@@ -7711,13 +7933,16 @@ async function renderMemeCanvas() {
   const textZoneB = H - STRIP_H - 8;
 
   ctx.textAlign = 'center';
-  ctx.font = `900 ${fontSize}px "${_memeFontFamily}", Impact, "Arial Black", sans-serif`;
 
-  function drawMemeText(text, yAnchor, baseline) {
+  function drawMemeTextAt(text, key, defaultY, baseline) {
     if (!text) return;
-    const fs = baseline === 'middle' ? Math.round(fontSize * 0.82) : fontSize;
+    const pos = _memeTextPositions[key] || { x: null, y: null, fontSize: 0 };
+    const fs  = pos.fontSize > 0 ? pos.fontSize : (baseline === 'middle_custom' ? Math.round(fontSize * 0.82) : fontSize);
+    const cx  = pos.x != null ? pos.x : W / 2;
+    const cy  = pos.y != null ? pos.y : defaultY;
+
     ctx.font         = `900 ${fs}px "${_memeFontFamily}", Impact, "Arial Black", sans-serif`;
-    ctx.textBaseline = baseline === 'middle' ? 'alphabetic' : baseline;
+    ctx.textBaseline = 'alphabetic';
     const maxW  = W * 0.88;
     const words = text.split(' ');
     const lines = [];
@@ -7730,69 +7955,79 @@ async function renderMemeCanvas() {
     if (line) lines.push(line);
     const lineH  = fs * 1.22;
     const totalH = lines.length * lineH;
-    const startY = baseline === 'bottom' ? yAnchor - totalH + lineH : yAnchor;
+    // Anchor: top=draw from cy down, bottom=draw up, middle=centre
+    let startY;
+    if (baseline === 'top')           startY = cy;
+    else if (baseline === 'bottom')   startY = cy - totalH + lineH;
+    else                              startY = cy - totalH / 2 + lineH / 2;
+
     lines.forEach((l, i) => {
       const y = startY + i * lineH;
       if (useStroke) {
         ctx.save();
         ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 4;
         ctx.lineWidth   = Math.max(3, fs * 0.12);
-        ctx.strokeStyle = '#000';
-        ctx.lineJoin    = 'round';
-        ctx.strokeText(l, W / 2, y);
-        ctx.restore();
+        ctx.strokeStyle = '#000'; ctx.lineJoin = 'round';
+        ctx.strokeText(l, cx, y); ctx.restore();
       }
       ctx.save();
       ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 6;
       ctx.fillStyle   = _memeTextColor;
-      ctx.fillText(l, W / 2, y);
+      ctx.fillText(l, cx, y); ctx.restore();
+    });
+
+    /* Draw selection highlight handle if this text is selected */
+    if (_memeSelText === key) {
+      ctx.save();
+      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2;
+      ctx.setLineDash([5, 3]);
+      const bx = cx - W * 0.45, by = startY - fs * 0.2;
+      const bw = W * 0.9,       bh = totalH + fs * 0.3;
+      ctx.strokeRect(bx, by, bw, bh);
+      /* Resize handle — small square at bottom-right */
+      ctx.fillStyle = '#f59e0b'; ctx.setLineDash([]);
+      ctx.fillRect(bx + bw - 10, by + bh - 10, 10, 10);
       ctx.restore();
-    });
+    }
   }
 
-  drawMemeText(topText, textZoneT + 6, 'top');
-  /* Middle texts — centred vertically in the text zone */
-  if (mid1Text || mid2Text) {
-    const midZoneCenterY = (textZoneT + textZoneB) / 2;
-    const midFontSize = Math.round(fontSize * 0.82);
-    const midLines = [mid1Text, mid2Text].filter(Boolean);
-    const midLineH = midFontSize * 1.3;
-    const midBlockH = midLines.length * midLineH;
-    let midY = midZoneCenterY - midBlockH / 2 + midFontSize / 2;
-    ctx.save();
-    ctx.font = `900 ${midFontSize}px "${_memeFontFamily}", Impact, "Arial Black", sans-serif`;
-    ctx.restore();
-    midLines.forEach(line => {
-      drawMemeText(line, midY, 'middle');
-      midY += midLineH;
-    });
-  }
-  drawMemeText(botText, textZoneB - 6, 'bottom');
+  const midCenterY = (textZoneT + textZoneB) / 2;
+  drawMemeTextAt(topText,  'top',  textZoneT + fontSize,            'top');
+  drawMemeTextAt(mid1Text, 'mid1', midCenterY - Math.round(fontSize * 0.5), 'middle_custom');
+  drawMemeTextAt(mid2Text, 'mid2', midCenterY + Math.round(fontSize * 0.8), 'middle_custom');
+  drawMemeTextAt(botText,  'bot',  textZoneB - 6,                   'bottom');
 
-  /* ── 3b. Overlay images ── */
+  /* ── 3b. Overlay images (rendered after text so they sit on top) ── */
   for (let i = 0; i < _memeOverlays.length; i++) {
     const ov = _memeOverlays[i];
     ctx.save();
-    const isSelected = (i === _memeSelOverlayIdx);
     if (ov.circle) {
       ctx.beginPath();
-      ctx.arc(ov.x + ov.w / 2, ov.y + ov.w / 2, ov.w / 2, 0, Math.PI * 2);
+      ctx.arc(ov.x + ov.w / 2, ov.y + ov.h / 2, Math.min(ov.w, ov.h) / 2, 0, Math.PI * 2);
       ctx.clip();
     }
-    ctx.drawImage(ov.img, ov.x, ov.y, ov.w, ov.h);
+    // Cover-fit the image into the overlay rectangle
+    const iw = ov.img.naturalWidth, ih = ov.img.naturalHeight;
+    const scale = Math.max(ov.w / iw, ov.h / ih);
+    const dw = iw * scale, dh = ih * scale;
+    ctx.drawImage(ov.img, ov.x + (ov.w - dw)/2, ov.y + (ov.h - dh)/2, dw, dh);
     ctx.restore();
-    if (isSelected) {
+
+    /* Selection border */
+    if (i === _memeSelOverlayIdx) {
       ctx.save();
-      ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth   = 3;
-      ctx.setLineDash([6, 3]);
+      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 3; ctx.setLineDash([6,3]);
       if (ov.circle) {
         ctx.beginPath();
-        ctx.arc(ov.x + ov.w / 2, ov.y + ov.w / 2, ov.w / 2 + 3, 0, Math.PI * 2);
+        ctx.arc(ov.x + ov.w/2, ov.y + ov.h/2, Math.min(ov.w,ov.h)/2 + 4, 0, Math.PI*2);
         ctx.stroke();
       } else {
         ctx.strokeRect(ov.x - 2, ov.y - 2, ov.w + 4, ov.h + 4);
       }
+      /* Resize grip — bottom-right corner */
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(ov.x + ov.w - 12, ov.y + ov.h - 12, 12, 12);
       ctx.restore();
     }
   }

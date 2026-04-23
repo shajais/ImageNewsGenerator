@@ -838,31 +838,54 @@
 
         <!-- ── Step 3b: Overlay / Sticker Images ── -->
         <div class="meme-section">
-          <div class="meme-section-title">🖼️ Step 3b — Overlay Images (drag &amp; resize on preview)</div>
-          <div style="font-size:.76rem;color:var(--muted);margin-bottom:6px">Add extra images horizontally on the meme. Click an overlay on the preview to select → drag to reposition → use the resize slider.</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
-            <label class="btn btn-ghost" style="font-size:.78rem;padding:6px 12px;cursor:pointer">
-              ➕ Add Image
+          <div class="meme-section-title">🖼️ Step 3b — Photo Overlays (up to 4, drag &amp; resize)</div>
+          <div style="font-size:.76rem;color:var(--muted);margin-bottom:8px">
+            Photos auto-align horizontally (1=full, 2=50/50, 3=thirds, 4=quarters). <br>
+            <strong style="color:#f59e0b">Click any photo on preview to select → drag to move.</strong> Or search and click <strong>➕ Add</strong> under a result.
+          </div>
+
+          <!-- Upload buttons row -->
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+            <label class="btn btn-ghost" style="font-size:.78rem;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:4px">
+              📤 Upload Photo
               <input type="file" accept="image/*" style="display:none" onchange="memeAddOverlayImage(this)">
             </label>
-            <button class="btn btn-ghost" style="font-size:.78rem;padding:6px 12px" onclick="memeAddOverlayCircle()">⭕ Add Circle Crop</button>
+            <button class="btn btn-ghost" style="font-size:.78rem;padding:6px 12px" onclick="memeResetOverlayLayout()">↺ Reset Layout</button>
             <button class="btn btn-ghost" style="font-size:.78rem;padding:6px 12px" onclick="memeRemoveSelectedOverlay()">🗑️ Remove Selected</button>
           </div>
-          <div id="memeOverlayControls" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px;margin-top:4px">
-            <div style="font-size:.78rem;color:var(--muted);margin-bottom:4px">Selected overlay:</div>
-            <label class="meme-label">Size</label>
-            <input type="range" id="memeOverlaySize" min="30" max="600" value="150" style="width:100%" oninput="memeResizeSelectedOverlay(this.value)">
-            <div style="display:flex;gap:6px;margin-top:6px">
+
+          <!-- Overlay list (thumbnails) -->
+          <div id="memeOverlayList" style="font-size:.75rem;color:var(--muted)">No overlays added yet</div>
+
+          <!-- Selected overlay controls -->
+          <div id="memeOverlayControls" style="display:none;background:var(--card);border:1px solid #f59e0b55;border-radius:8px;padding:8px;margin-top:6px">
+            <div id="memeOverlaySelLabel" style="font-size:.78rem;color:#f59e0b;font-weight:700;margin-bottom:6px">Photo selected</div>
+            <label class="meme-label">Resize width</label>
+            <input type="range" id="memeOverlaySize" min="40" max="700" value="150" style="width:100%" oninput="memeResizeSelectedOverlay(this.value)">
+            <div style="display:flex;gap:10px;margin-top:6px;align-items:center">
               <label style="font-size:.78rem;color:var(--muted);display:flex;align-items:center;gap:4px">
-                <input type="checkbox" id="memeOverlayCircle" onchange="memeToggleOverlayCircle(this.checked)" style="accent-color:#7c3aed"> Circular clip
+                <input type="checkbox" id="memeOverlayCircle" onchange="memeToggleOverlayCircle(this.checked)" style="accent-color:#7c3aed"> ⭕ Circular
               </label>
+              <button class="btn btn-ghost" style="font-size:.72rem;padding:4px 10px" onclick="memeAddOverlayCircle()">Toggle Circle</button>
             </div>
           </div>
         </div>
 
         <!-- ── Step 4: Text Editing ── -->
         <div class="meme-section">
-          <div class="meme-section-title">✏️ Step 4 — Meme Text</div>
+          <div class="meme-section-title">✏️ Step 4 — Meme Text (drag each label on preview)</div>
+          <div style="font-size:.76rem;color:var(--muted);margin-bottom:6px">
+            <strong style="color:#f59e0b">Click any text on the preview canvas to select it</strong> — then drag to reposition. Use the size slider to resize it individually.
+          </div>
+          <div id="memeTextSelLabel" style="font-size:.75rem;color:#f59e0b;min-height:16px;margin-bottom:4px"></div>
+            <div>
+              <label class="meme-label">Top Text</label>
+              <input id="memeTopText" class="meme-input" placeholder="TOP TEXT यहाँ…" oninput="renderMemeCanvas()">
+            </div>
+            <div>
+              <label class="meme-label">Middle Text 1 <span style="font-size:.72rem;color:var(--muted)">(optional)</span></label>
+              <input id="memeMiddleText1" class="meme-input" placeholder="Middle line 1 (optional)…" oninput="renderMemeCanvas()">
+            </div>
           <div style="display:flex;flex-direction:column;gap:8px">
             <div>
               <label class="meme-label">Top Text</label>
@@ -880,9 +903,18 @@
               <label class="meme-label">Bottom Text</label>
               <input id="memeBottomText" class="meme-input" placeholder="BOTTOM TEXT यहाँ…" oninput="renderMemeCanvas()">
             </div>
+            <!-- Selected-text per-item size control -->
+            <div id="memeTextSizeBox" style="background:var(--card);border:1px solid #f59e0b55;border-radius:8px;padding:8px;display:none">
+              <div style="font-size:.75rem;color:#f59e0b;font-weight:700;margin-bottom:4px" id="memeTextSizeLabel">Selected text size</div>
+              <input type="range" id="memeTextFontSize" min="12" max="120" value="42" style="width:100%" oninput="memeResizeSelectedText(this.value)">
+              <span id="memeTextFontSizeVal" style="font-size:.72rem;color:var(--muted)">42px</span>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn btn-ghost" style="font-size:.75rem;padding:4px 10px" onclick="memeResetTextPositions()">↺ Reset Text Positions</button>
+            </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
               <div>
-                <label class="meme-label">Font size</label>
+                <label class="meme-label">Global font size</label>
                 <input type="range" id="memeFontSize" min="18" max="80" value="42" style="width:100%" oninput="renderMemeCanvas();document.getElementById('memeFontSizeVal').textContent=this.value+'px'">
                 <span id="memeFontSizeVal" style="font-size:.75rem;color:var(--muted)">42px</span>
               </div>

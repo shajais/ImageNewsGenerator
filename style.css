@@ -2075,6 +2075,11 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
 }
 .meme-img-thumb:hover { border-color: #f59e0b; transform: scale(1.04); }
 .meme-img-thumb.selected { border-color: #22c55e; box-shadow: 0 0 0 2px #22c55e; }
+/* Result item wrapper — contains image + action buttons */
+.meme-img-result-item { border-radius: 7px; overflow: hidden; position: relative; }
+.meme-img-result-item .meme-img-thumb { border-radius: 0; margin: 0; display: block; }
+.meme-img-thumb-btns { opacity: 0; transition: opacity .18s; }
+.meme-img-result-item:hover .meme-img-thumb-btns { opacity: 1; }
 
 /* Upload label */
 .meme-upload-label {
