@@ -7117,8 +7117,7 @@ let _memeDragState     = null; // {type:'overlay'|'text', idx, startX, startY, o
 let _memeTextPositions = {
   top:  { x: null, y: null, fontSize: 0 },
   mid1: { x: null, y: null, fontSize: 0 },
-  mid2: { x: null, y: null, fontSize: 0 },
-  bot:  { x: null, y: null, fontSize: 0 },
+  mid2: { x: null, y: null, fontSize: 0 },  // kept for backward compat, not shown in UI  bot:  { x: null, y: null, fontSize: 0 },
 };
 let _memeSelText = null; // 'top'|'mid1'|'mid2'|'bot'|null
 
@@ -7239,15 +7238,36 @@ async function _loadMemeTrendingTopics() {
   _renderMemeTrendingGrid(merged);
 }
 
+let _allMemeTopics = []; // stored for search filtering
+
 function _renderMemeTrendingGrid(topics) {
+  _allMemeTopics = topics;
+  _renderTopicsFiltered(topics);
+}
+
+function _renderTopicsFiltered(topics) {
   const grid = document.getElementById('memeTrendingGrid');
   if (!grid) return;
+  if (topics.length === 0) {
+    grid.innerHTML = '<span style="color:var(--muted);font-size:.8rem;padding:4px">No topics found</span>';
+    return;
+  }
   grid.innerHTML = topics.map((t, i) =>
     `<button class="meme-topic-chip${t.live ? ' live' : ''}" data-idx="${i}">${t.emoji} ${escHtml(t.label)}</button>`
   ).join('');
   grid.querySelectorAll('.meme-topic-chip').forEach((btn, i) => {
     btn.addEventListener('click', () => memeClickTopic(topics[i].hint, topics[i].label));
   });
+}
+
+function filterMemeTrendingTopics(q) {
+  if (!q || !q.trim()) { _renderTopicsFiltered(_allMemeTopics); return; }
+  const lq = q.toLowerCase();
+  const filtered = _allMemeTopics.filter(t =>
+    t.label.toLowerCase().includes(lq) || t.hint.toLowerCase().includes(lq)
+  );
+  // Also allow clicking a custom entry if no match
+  _renderTopicsFiltered(filtered.length > 0 ? filtered : _allMemeTopics);
 }
 
 function memeClickTopic(hint, label) {
@@ -7473,13 +7493,13 @@ function _memeAutoLayout() {
   if (n === 0) return;
   const { W, top, bottom } = _memeContentZone();
   const zoneH = bottom - top;
-  const colW  = Math.floor(W / n);
+  const rowH  = Math.floor(zoneH / n);
   _memeOverlays.forEach((ov, i) => {
     if (ov.manualPos) return; // user dragged it → leave it
-    ov.x = i * colW;
-    ov.y = top;
-    ov.w = colW;
-    ov.h = zoneH;
+    ov.x = 0;
+    ov.y = top + i * rowH;
+    ov.w = W;
+    ov.h = rowH;
   });
 }
 
@@ -7597,7 +7617,7 @@ function _updateOverlayControls() {
       document.getElementById('memeTextFontSize').value = curFs;
       document.getElementById('memeTextFontSizeVal').textContent = curFs + 'px';
       const lbl = document.getElementById('memeTextSizeLabel');
-      const names = { top:'Top', mid1:'Middle 1', mid2:'Middle 2', bot:'Bottom' };
+      const names = { top:'Top', mid1:'Middle', bot:'Bottom' };
       if (lbl) lbl.textContent = `"${names[_memeSelText]}" text size`;
     } else {
       tsb.style.display = 'none';
@@ -7689,7 +7709,7 @@ function memeCanvasMouseDown(e) {
   const fontSize = parseInt(document.getElementById('memeFontSize')?.value || 42);
 
   // 1. Check text label hits first (top layer)
-  const textKeys = ['top','mid1','mid2','bot'];
+  const textKeys = ['top','mid1','bot'];
   const textValues = {
     top:  (document.getElementById('memeTopText')?.value     || '').trim(),
     mid1: (document.getElementById('memeMiddleText1')?.value || '').trim(),
@@ -7924,7 +7944,7 @@ async function renderMemeCanvas() {
   const useStroke = document.getElementById('memeStroke') ? document.getElementById('memeStroke').checked : true;
   const topText   = (document.getElementById('memeTopText')     ? document.getElementById('memeTopText').value     : '').toUpperCase();
   const mid1Text  = (document.getElementById('memeMiddleText1') ? document.getElementById('memeMiddleText1').value : '').toUpperCase();
-  const mid2Text  = (document.getElementById('memeMiddleText2') ? document.getElementById('memeMiddleText2').value : '').toUpperCase();
+  const mid2Text  = '';  // removed — only one middle text now
   const botText   = (document.getElementById('memeBottomText')  ? document.getElementById('memeBottomText').value  : '').toUpperCase();
 
   /* Text zone: between bottom of banner and top of watermark strip */
@@ -7993,8 +8013,7 @@ async function renderMemeCanvas() {
 
   const midCenterY = (textZoneT + textZoneB) / 2;
   drawMemeTextAt(topText,  'top',  textZoneT + fontSize,            'top');
-  drawMemeTextAt(mid1Text, 'mid1', midCenterY - Math.round(fontSize * 0.5), 'middle_custom');
-  drawMemeTextAt(mid2Text, 'mid2', midCenterY + Math.round(fontSize * 0.8), 'middle_custom');
+  drawMemeTextAt(mid1Text, 'mid1', midCenterY, 'middle_custom');
   drawMemeTextAt(botText,  'bot',  textZoneB - 6,                   'bottom');
 
   /* ── 3b. Overlay images (rendered after text so they sit on top) ── */

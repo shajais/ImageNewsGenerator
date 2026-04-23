@@ -773,6 +773,9 @@
         <!-- ── Step 1: Trending Topics ── -->
         <div class="meme-section">
           <div class="meme-section-title">🔥 Step 1 — Live Trending Topics (click to auto-generate)</div>
+          <div style="display:flex;gap:6px;margin-bottom:8px">
+            <input id="memeTrendingSearch" class="meme-input" style="flex:1;font-size:.8rem" placeholder="🔍 Search topic or type your own…" oninput="filterMemeTrendingTopics(this.value)">
+          </div>
           <div id="memeTrendingGrid" class="meme-trending-grid">
             <span style="color:var(--muted);font-size:.8rem;padding:6px">⏳ Loading live topics…</span>
           </div>
@@ -818,12 +821,11 @@
             <div id="memeImgResults" class="meme-img-grid"></div>
           </div>
 
-          <!-- Upload -->
           <div id="memeSrcUpload" class="meme-src-panel" style="display:none">
-            <label class="meme-upload-label">
-              <input type="file" id="memeUploadInput" accept="image/*" onchange="memeLoadUpload(this)" style="display:none">
+            <button class="meme-upload-label" onclick="document.getElementById('memeUploadInput').click()">
               📤 Click to upload an image
-            </label>
+            </button>
+            <input type="file" id="memeUploadInput" accept="image/*" onchange="memeLoadUpload(this)" style="display:none">
           </div>
 
           <!-- Solid color -->
@@ -840,16 +842,16 @@
         <div class="meme-section">
           <div class="meme-section-title">🖼️ Step 3b — Photo Overlays (up to 4, drag &amp; resize)</div>
           <div style="font-size:.76rem;color:var(--muted);margin-bottom:8px">
-            Photos auto-align horizontally (1=full, 2=50/50, 3=thirds, 4=quarters). <br>
+            Photos auto-align <strong>vertically</strong> (1=full, 2=top/bottom halves, 3=thirds, 4=quarters). <br>
             <strong style="color:#f59e0b">Click any photo on preview to select → drag to move.</strong> Or search and click <strong>➕ Add</strong> under a result.
           </div>
 
           <!-- Upload buttons row -->
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-            <label class="btn btn-ghost" style="font-size:.78rem;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:4px">
+            <label class="btn btn-ghost" style="font-size:.78rem;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:4px" onclick="document.getElementById('memeOverlayUploadInput').click()">
               📤 Upload Photo
-              <input type="file" accept="image/*" style="display:none" onchange="memeAddOverlayImage(this)">
             </label>
+            <input type="file" id="memeOverlayUploadInput" accept="image/*" style="display:none" onchange="memeAddOverlayImage(this)">
             <button class="btn btn-ghost" style="font-size:.78rem;padding:6px 12px" onclick="memeResetOverlayLayout()">↺ Reset Layout</button>
             <button class="btn btn-ghost" style="font-size:.78rem;padding:6px 12px" onclick="memeRemoveSelectedOverlay()">🗑️ Remove Selected</button>
           </div>
@@ -892,12 +894,8 @@
               <input id="memeTopText" class="meme-input" placeholder="TOP TEXT यहाँ…" oninput="renderMemeCanvas()">
             </div>
             <div>
-              <label class="meme-label">Middle Text 1 <span style="font-size:.72rem;color:var(--muted)">(optional)</span></label>
-              <input id="memeMiddleText1" class="meme-input" placeholder="Middle line 1 (optional)…" oninput="renderMemeCanvas()">
-            </div>
-            <div>
-              <label class="meme-label">Middle Text 2 <span style="font-size:.72rem;color:var(--muted)">(optional)</span></label>
-              <input id="memeMiddleText2" class="meme-input" placeholder="Middle line 2 (optional)…" oninput="renderMemeCanvas()">
+              <label class="meme-label">Middle Text <span style="font-size:.72rem;color:var(--muted)">(optional)</span></label>
+              <input id="memeMiddleText1" class="meme-input" placeholder="Middle text (optional)…" oninput="renderMemeCanvas()">
             </div>
             <div>
               <label class="meme-label">Bottom Text</label>
