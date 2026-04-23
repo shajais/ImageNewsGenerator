@@ -8254,7 +8254,7 @@ function _updateOverlayControls() {
     if (_memeSelText) {
       tsb.style.display = 'block';
       const pos = _memeTextPositions[_memeSelText];
-      const curFs = pos.fontSize > 0 ? pos.fontSize : parseInt(document.getElementById('memeFontSize')?.value || 42);
+      const curFs = pos.fontSize > 0 ? pos.fontSize : parseInt(document.getElementById('memeFontSize')?.value || 27);
       document.getElementById('memeTextFontSize').value = curFs;
       document.getElementById('memeTextFontSizeVal').textContent = curFs + 'px';
       const lbl = document.getElementById('memeTextSizeLabel');
@@ -8345,7 +8345,7 @@ function memeCanvasMouseDown(e) {
   const { x, y } = _memeCanvasCoords(e);
   const canvas = document.getElementById('memeCanvas');
   const W = canvas.width, H = canvas.height;
-  const fontSize = parseInt(document.getElementById('memeFontSize')?.value || 42);
+  const fontSize = parseInt(document.getElementById('memeFontSize')?.value || 27);
 
   /* Compute dynamic ribbon heights (same logic as renderMemeCanvas) */
   const _ctx = canvas.getContext('2d');
@@ -8539,7 +8539,7 @@ async function renderMemeCanvas() {
 
   /* ── 1. Background — slot panels stacked vertically, or single image, or gradient ──
      Pre-compute ribbon/watermark heights first so slot zones align exactly.          */
-  const _fontSize_pre = parseInt(document.getElementById('memeFontSize')?.value || 42);
+  const _fontSize_pre = parseInt(document.getElementById('memeFontSize')?.value || 27);
   const _font_pre     = _memeFontFamily || 'Impact';
   const _topText_pre  = (document.getElementById('memeTopText')   ?.value || '').toUpperCase().trim();
   const _botText_pre  = (document.getElementById('memeBottomText')?.value || '').toUpperCase().trim();
@@ -8658,7 +8658,7 @@ async function renderMemeCanvas() {
      • Bottom ribbon = same style at bottom, above watermark strip, fits botText
      • If no text, ribbons collapse to a thin accent line only              ── */
   const ribbonFont     = _memeFontFamily || 'Impact';
-  const ribbonFontSize = parseInt(document.getElementById('memeFontSize')?.value || 42);
+  const ribbonFontSize = parseInt(document.getElementById('memeFontSize')?.value || 27);
   const ribbonStroke   = document.getElementById('memeStroke')?.checked ?? true;
   const ribbonColor    = _memeTextColor || '#ffffff';
   const ribbonBgColor  = 'rgba(0,0,0,0.72)';
