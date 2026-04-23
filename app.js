@@ -7805,7 +7805,7 @@ const PUZZLE_THEMES = [
 ];
 
 const PUZZLE_PRESETS = [
-  { expr:'3 - 3×6 + 2 = ??',      answer:'-13' },
+  { expr:'3 - 3 × 6 + 2 = ??',      answer:'-13' },
   { expr:'6 ÷ 2(1+2) = ??',        answer:'9'   },
   { expr:'1 + 1 + 1 + 1 × 0 = ??', answer:'3'   },
   { expr:'8 ÷ 2(2+2) = ??',        answer:'16'  },
@@ -8104,7 +8104,7 @@ async function renderPuzzleCanvas() {
   const W = canvas.width, H = canvas.height;
   const theme = PUZZLE_THEMES.find(t => t.id === _puzzleTheme) || PUZZLE_THEMES[0];
 
-  const expr       = (document.getElementById('puzzleExpr')?.value       || '3 - 3×6 + 2 = ??').trim();
+  const expr       = (document.getElementById('puzzleExpr')?.value       || '3 - 3 × 6 + 2 = ??').trim();
   const answer     = (document.getElementById('puzzleAnswer')?.value     || '').trim();
   const showAnswer = document.getElementById('puzzleShowAnswer')?.checked;
   const topText    = (document.getElementById('puzzleTopText')?.value    || 'CAN YOU SOLVE IT?').trim();
