@@ -1209,13 +1209,14 @@ function _locationFeedsFor(label) {
     }
   }
 
-  /* 3. Always append generic Google News RSS queries as fallback/supplement */
+  /* 3. Generic Google News queries — always include location keyword in the query
+     so results are scoped to that location, not all of Nepal.
+     Use `when:1d` to restrict to last 24 h on Google News RSS.              */
+  const encLabel   = encodeURIComponent(label);
+  const encLabelNe = encodeURIComponent(label + ' समाचार');
   const genericFeeds = [
-    { url: `https://news.google.com/rss/search?q=${encodeURIComponent(label + ' news Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google (EN): ' + label, lang: 'en' },
-    { url: `https://news.google.com/rss/search?q=${encodeURIComponent(label + ' समाचार')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google (NE): ' + label, lang: 'ne' },
-    /* Also search mainstream Nepali outlets filtered by location */
-    { url: `https://news.google.com/rss/search?q=${encodeURIComponent(label)}&hl=ne&gl=NP&ceid=NP:ne&source=onlinekhabar.com`, name: 'OnlineKhabar: ' + label, lang: 'ne' },
-    { url: `https://news.google.com/rss/search?q=${encodeURIComponent(label)}&hl=ne&gl=NP&ceid=NP:ne&source=setopati.com`, name: 'Setopati: ' + label, lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encLabel}+Nepal&hl=en&gl=NP&ceid=NP:en&tbs=qdr:d`, name: 'Google (EN): ' + label, lang: 'en' },
+    { url: `https://news.google.com/rss/search?q=${encLabelNe}&hl=ne&gl=NP&ceid=NP:ne&tbs=qdr:d`, name: 'Google (NE): ' + label, lang: 'ne' },
   ];
 
   /* Combine: local-specific first, then generic — deduplicate by URL */
@@ -1246,27 +1247,89 @@ async function _loadLocationArticles(loc) {
   const feeds = _locationFeedsFor(loc.label);
   let items   = await fetchCategoryFeeds(feeds, null);
 
-  /* ── Filter: discard articles older than 24 hours ── */
+  /* ── 1. Relevance filter: keep only articles that mention the location
+         in title or description.  This is critical for local outlet full-feeds
+         that return ALL their articles regardless of location.
+         Build a set of match tokens: English label + known Devanagari equivalents. ── */
+  const matchTokens = _locationMatchTokens(loc.label);
+  const relevant = items.filter(a => {
+    const haystack = (a.title + ' ' + a.description).toLowerCase();
+    return matchTokens.some(t => haystack.includes(t));
+  });
+  /* Use relevance-filtered set only if it has articles; otherwise keep all
+     (e.g. very obscure location where the feed IS the location's own outlet) */
+  if (relevant.length > 0) items = relevant;
+
+  /* ── 2. Date filter: keep only articles from the last 24 hours ── */
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   const fresh  = items.filter(a => {
     const t = new Date(a.pubDate).getTime();
     return !isNaN(t) && t >= cutoff;
   });
-  /* If we got at least 2 fresh articles use the filtered set, otherwise keep raw */
-  if (fresh.length >= 2) items = fresh;
+  /* Always use the fresh set — even if empty; we show a proper empty state */
+  items = fresh;
 
-  /* ── Tag each article with location for the UI badge ── */
+  /* ── 3. Tag each article with location for the UI badge ── */
   items.forEach(a => { a._locationLabel = loc.label; });
 
   loc.articles = items;
   loc.loaded   = true;
   if (_activeNewsTab === 'locations') {
     renderCategoryList('locations');
-    /* Update status badge with 24h-filtered count */
     const total = _locationFeeds.reduce((s, f) => s + (f.loaded ? f.articles.length : 0), 0);
     const badge = document.getElementById('statusBadge');
-    if (badge) badge.textContent = `${total} articles · last 24h only`;
+    if (badge) badge.textContent = total ? `${total} articles · last 24h` : 'No recent news found';
   }
+}
+
+/**
+ * Build a list of lowercase tokens that indicate an article is about `label`.
+ * Includes the English name, Devanagari equivalents from the bilingual dict,
+ * and common alternative spellings.
+ */
+function _locationMatchTokens(label) {
+  const tokens = new Set([label.toLowerCase()]);
+
+  /* Look up the bilingual dict for Devanagari equivalents */
+  const lLow = label.toLowerCase();
+  for (const [engVariants, neVariants] of _BILINGUAL_DICT) {
+    if (engVariants.some(v => v.includes(lLow) || lLow.includes(v))) {
+      neVariants.forEach(v => tokens.add(v.toLowerCase()));
+      engVariants.forEach(v => tokens.add(v.toLowerCase()));
+    }
+  }
+
+  /* Known extra aliases for common locations */
+  const EXTRA_ALIASES = {
+    'kalaiya':   ['कलैया', 'कलाैया', 'kalaiya', 'bara', 'बारा'],
+    'bara':      ['कलैया', 'बारा', 'bara', 'kalaiya'],
+    'kathmandu': ['काठमाडौं', 'काठमाडौँ', 'ktm', 'काठमान्डू'],
+    'pokhara':   ['पोखरा'],
+    'biratnagar':['विराटनगर', 'biratnagar'],
+    'chitwan':   ['चितवन'],
+    'birgunj':   ['वीरगन्ज', 'birgunj'],
+    'dhangadhi': ['धनगढी'],
+    'nepalgunj': ['नेपालगन्ज'],
+    'butwal':    ['बुटवल'],
+    'janakpur':  ['जनकपुर', 'janakpurdham'],
+    'itahari':   ['इटहरी'],
+    'jhapa':     ['झापा'],
+    'surkhet':   ['सुर्खेत'],
+    'hetauda':   ['हेटौंडा'],
+    'lalitpur':  ['ललितपुर', 'patan'],
+    'bhaktapur': ['भक्तपुर'],
+    'rautahat':  ['रौतहट', 'gaur', 'गौर'],
+    'sarlahi':   ['सर्लाही'],
+  };
+  const lKey = label.toLowerCase();
+  for (const [k, extras] of Object.entries(EXTRA_ALIASES)) {
+    if (lKey === k || extras.map(e=>e.toLowerCase()).includes(lKey)) {
+      extras.forEach(e => tokens.add(e.toLowerCase()));
+      tokens.add(k);
+    }
+  }
+
+  return [...tokens];
 }
 
 function removeLocation(label) {
@@ -1365,7 +1428,11 @@ function renderCategoryList(tab, filterText) {
       items.push(...locItems);
     });
     if (!items.length) {
-      list.innerHTML = `<div class="empty-state"><div class="icon">🕐</div><p>No articles found in the last 24 hours for these locations.</p></div>`;
+      list.innerHTML = `<div class="empty-state"><div class="icon">🕐</div>
+        <p>No articles about <strong>${escHtml(_locationFeeds.map(f=>f.label).join(', '))}</strong> in the last 24 hours.</p>
+        <p style="font-size:.78rem;color:var(--muted);margin-top:6px">Try again later — local news is updated periodically.</p>
+        <button class="btn btn-ghost" style="margin-top:10px;font-size:.8rem" onclick="_locationFeeds.filter(f=>f.loaded).forEach(f=>{f.loaded=false;_loadLocationArticles(f)});renderCategoryList('locations')">🔄 Refresh</button>
+        </div>`;
       return;
     }
     /* Sort: top-2-fresh first, then by viralScore */
