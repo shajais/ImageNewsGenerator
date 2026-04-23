@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Shashi Creator Studio</title>
   <link rel="stylesheet" href="style.css?v=20260422a" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Bebas+Neue&family=Permanent+Marker&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -70,7 +73,7 @@
       <span class="status-badge" id="statusBadge">Loading…</span>
     </div>
     <div class="news-search-bar" id="newsSearchBar" style="display:none">
-      <input type="text" id="newsSearchInput" placeholder="🔍 Search articles…" oninput="filterNewsList(this.value)" autocomplete="off" />
+      <input type="text" id="newsSearchInput" placeholder="🔍 Search articles… (English or नेपाली)" oninput="filterNewsList(this.value)" autocomplete="off" />
     </div>
     <div class="news-list" id="newsList">
       <div class="empty-state">
@@ -944,6 +947,9 @@
               <div style="display:flex;gap:6px;flex-wrap:wrap">
                 <button class="meme-font-btn active" data-font="Impact" onclick="setMemeFont('Impact',this)">Impact</button>
                 <button class="meme-font-btn" data-font="Arial Black" onclick="setMemeFont('Arial Black',this)">Arial Black</button>
+                <button class="meme-font-btn" data-font="Bangers" onclick="setMemeFont('Bangers',this)" style="font-family:'Bangers',cursive">Bangers</button>
+                <button class="meme-font-btn" data-font="Bebas Neue" onclick="setMemeFont('Bebas Neue',this)" style="font-family:'Bebas Neue',cursive">Bebas</button>
+                <button class="meme-font-btn" data-font="Permanent Marker" onclick="setMemeFont('Permanent Marker',this)" style="font-family:'Permanent Marker',cursive">Marker</button>
                 <button class="meme-font-btn" data-font="Comic Sans MS" onclick="setMemeFont('Comic Sans MS',this)">Comic</button>
                 <button class="meme-font-btn" data-font="Courier New" onclick="setMemeFont('Courier New',this)">Monospace</button>
               </div>
@@ -955,8 +961,8 @@
             </div>
             <div style="display:flex;gap:6px;align-items:center">
               <label class="meme-label" style="margin:0">Watermark:</label>
-              <input type="checkbox" id="memeWatermark" checked onchange="renderMemeCanvas()" style="accent-color:#f59e0b;width:16px;height:16px">
-              <span style="font-size:.78rem;color:var(--muted)">Author strip (avatar + Shashi News Gen)</span>
+              <input type="checkbox" id="memeWatermark" checked disabled style="accent-color:#f59e0b;width:16px;height:16px;opacity:.6">
+              <span style="font-size:.78rem;color:var(--muted)">Author strip (always on — brand requirement)</span>
             </div>
           </div>
         </div>

@@ -864,7 +864,13 @@ function switchNewsTab(tab) {
   const fetchBar = document.querySelector('.fetch-bar');
   if (fetchBar) fetchBar.style.display = tab === 'nepal' ? 'flex' : 'none';
   const searchBar = document.getElementById('newsSearchBar');
-  if (searchBar) searchBar.style.display = tab === 'nepal' && articles.length ? 'block' : 'none';
+  if (searchBar) {
+    const hasArticles = tab === 'nepal' ? articles.length > 0 : (_catArticles[tab] || []).length > 0;
+    searchBar.style.display = (tab !== 'locations' && hasArticles) ? 'block' : 'none';
+    /* Clear search when switching tabs */
+    const inp = document.getElementById('newsSearchInput');
+    if (inp) inp.value = '';
+  }
 
   if (tab === 'nepal') {
     renderNewsList();
@@ -890,6 +896,9 @@ function switchNewsTab(tab) {
     fetchCategoryFeeds(feedMap[tab] || [], tab).then(() => {
       renderCategoryList(tab);
       document.getElementById('statusBadge').textContent = `${_catArticles[tab].length} articles`;
+      /* Show search bar now that articles are loaded */
+      const sb = document.getElementById('newsSearchBar');
+      if (sb) sb.style.display = 'block';
     });
   } else {
     renderCategoryList(tab);
@@ -897,7 +906,7 @@ function switchNewsTab(tab) {
   }
 }
 
-function renderCategoryList(tab) {
+function renderCategoryList(tab, filterText) {
   const list = document.getElementById('newsList');
   let items = [];
 
@@ -921,6 +930,17 @@ function renderCategoryList(tab) {
     items = _catArticles[tab] || [];
     if (!items.length) {
       list.innerHTML = `<div class="empty-state"><div class="icon">📭</div><p>No articles found.</p></div>`;
+      return;
+    }
+  }
+
+  /* Apply search filter if provided */
+  const query = (filterText || '').trim().toLowerCase();
+  if (query) {
+    const expansions = _expandSearchQuery(query);
+    items = items.filter(a => _articleMatchesQuery(a, expansions));
+    if (!items.length) {
+      list.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>No articles match "<strong>${escHtml(query)}</strong>".</p></div>`;
       return;
     }
   }
@@ -1396,7 +1416,11 @@ function renderNewsList(filterText) {
 
 /** Filter news list by search keyword (called from search input) */
 function filterNewsList(value) {
-  renderNewsList(value);
+  if (_activeNewsTab === 'nepal') {
+    renderNewsList(value);
+  } else {
+    renderCategoryList(_activeNewsTab, value);
+  }
 }
 
 /* ================================================================
@@ -6390,10 +6414,11 @@ async function _drawAuthorWatermark(ctx, W, _titleBottom, label = 'News') {
   if (!_authorImg && _authorImgPromise) await _authorImgPromise;
 
   const H           = ctx.canvas.height || CANVAS_H;
-  const STRIP_H     = 72;                       // height of the bottom strip
-  const AVATAR_R    = 26;                       // avatar circle radius
+  const wScale      = Math.min(W / 600, 1);     // scale factor for narrow canvases (Reel = 400px → 0.667)
+  const STRIP_H     = Math.round(72 * Math.max(wScale, 0.65));  // shrink strip on narrow formats
+  const AVATAR_R    = Math.round(26 * Math.max(wScale, 0.7));   // shrink avatar too
   const AVATAR_D    = AVATAR_R * 2;
-  const PAD_L       = 22;                       // left padding
+  const PAD_L       = Math.round(22 * Math.max(wScale, 0.7));   // left padding
   const stripY      = H - STRIP_H;             // strip top-y
 
   ctx.save();
@@ -6454,16 +6479,23 @@ async function _drawAuthorWatermark(ctx, W, _titleBottom, label = 'News') {
   ctx.textBaseline = 'alphabetic';
 
   /* Brand name */
-  ctx.font      = 'bold 22px "Segoe UI",Arial,sans-serif';
+  ctx.font      = `bold ${Math.round(22 * Math.max(wScale, 0.7))}px "Segoe UI",Arial,sans-serif`;
   ctx.fillStyle = 'rgba(255,255,255,0.96)';
   ctx.fillText(`Shashi Creator Studio — ${label}`, textX, nameY);
 
-  /* URL + separator + email in smaller text */
+  /* URL + email — split into two lines on narrow canvases (< 500px) */
   const SITE_URL = 'shajais.github.io/ShashiNewsGen';
   const EMAIL    = 'shashi19.jaiswal@gmail.com';
-  ctx.font      = '14px "Segoe UI",Arial,sans-serif';
+  ctx.font      = `${Math.round(14 * Math.max(wScale, 0.7))}px "Segoe UI",Arial,sans-serif`;
   ctx.fillStyle = 'rgba(246,173,85,0.90)';
-  ctx.fillText(`🌐 ${SITE_URL}   ✉ ${EMAIL}`, textX, detailY);
+  if (W < 500) {
+    /* Two lines: URL on nameY row gap, email below */
+    ctx.fillText(`🌐 ${SITE_URL}`, textX, detailY);
+    const emailY = detailY + Math.round(16 * Math.max(wScale, 0.7));
+    ctx.fillText(`✉ ${EMAIL}`, textX, emailY);
+  } else {
+    ctx.fillText(`🌐 ${SITE_URL}   ✉ ${EMAIL}`, textX, detailY);
+  }
 
   ctx.shadowBlur = 0;
   ctx.restore();
@@ -7457,7 +7489,7 @@ function selectMemeImage(el, src) {
 function memeAddSlot(type, srcOrColor) {
   if (_memeSlots.length >= 4) { toast('ℹ️ Maximum 4 panels allowed — remove one first', 'info', 3000); return; }
   if (type === 'color') {
-    _memeSlots.push({ type: 'color', img: null, color: srcOrColor, panX: 0, panY: 0 });
+    _memeSlots.push({ type: 'color', img: null, color: srcOrColor, panX: 0, panY: 0, zoom: 1 });
     _memeImgObj = null;
     _renderSlotList();
     renderMemeCanvas();
@@ -7468,7 +7500,7 @@ function memeAddSlot(type, srcOrColor) {
   const img = new Image();
   img.crossOrigin = 'anonymous';
   img.onload = () => {
-    _memeSlots.push({ type: 'img', img, color: null, panX: 0, panY: 0 });
+    _memeSlots.push({ type: 'img', img, color: null, panX: 0, panY: 0, zoom: 1 });
     _memeImgObj = null; // slot mode takes over
     _renderSlotList();
     renderMemeCanvas();
@@ -7486,6 +7518,14 @@ function memeRemoveSlot(idx) {
   renderMemeCanvas();
 }
 
+function memeZoomSlot(idx, val) {
+  if (!_memeSlots[idx]) return;
+  _memeSlots[idx].zoom = parseFloat(val);
+  const label = document.getElementById('memeZoomVal' + idx);
+  if (label) label.textContent = Math.round(parseFloat(val) * 100) + '%';
+  renderMemeCanvas();
+}
+
 function _renderSlotList() {
   const el = document.getElementById('memeSlotList');
   if (!el) return;
@@ -7497,10 +7537,20 @@ function _renderSlotList() {
     const thumb = s.type === 'color'
       ? `<span style="display:inline-block;width:28px;height:28px;background:${s.color};border-radius:4px;border:1px solid #555;vertical-align:middle"></span>`
       : `<img src="${s.img.src}" style="width:28px;height:28px;object-fit:cover;border-radius:4px;vertical-align:middle">`;
-    return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #2a2a2a">
-      ${thumb}
-      <span style="font-size:.75rem;color:var(--muted);flex:1">${s.type === 'color' ? 'Color: ' + s.color : 'Image ' + (i+1)}</span>
-      <button onclick="memeRemoveSlot(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:.8rem;padding:2px 6px">✕</button>
+    const zoomSlider = s.type === 'img'
+      ? `<div style="display:flex;align-items:center;gap:4px;margin-top:3px">
+           <span style="font-size:.7rem;color:var(--muted)">🔍</span>
+           <input type="range" min="1" max="3" step="0.05" value="${s.zoom || 1}" style="flex:1;height:4px;accent-color:#f59e0b" oninput="memeZoomSlot(${i},this.value)">
+           <span id="memeZoomVal${i}" style="font-size:.7rem;color:var(--muted);min-width:26px">${Math.round((s.zoom||1)*100)}%</span>
+         </div>`
+      : '';
+    return `<div style="padding:3px 0;border-bottom:1px solid #2a2a2a">
+      <div style="display:flex;align-items:center;gap:6px">
+        ${thumb}
+        <span style="font-size:.75rem;color:var(--muted);flex:1">${s.type === 'color' ? 'Color: ' + s.color : 'Image ' + (i+1)}</span>
+        <button onclick="memeRemoveSlot(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:.8rem;padding:2px 6px">✕</button>
+      </div>
+      ${zoomSlider}
     </div>`;
   }).join('');
 }
@@ -7518,7 +7568,7 @@ function memeLoadUpload(input) {
     reader.onload = e => {
       const img = new Image();
       img.onload = () => {
-        _memeSlots.push({ type: 'img', img, color: null, panX: 0, panY: 0 });
+        _memeSlots.push({ type: 'img', img, color: null, panX: 0, panY: 0, zoom: 1 });
         _memeImgObj = null;
         loaded++;
         _renderSlotList();
@@ -7974,7 +8024,7 @@ async function renderMemeCanvas() {
         const iw = slot.img.naturalWidth, ih = slot.img.naturalHeight;
         ctx.save();
         ctx.beginPath(); ctx.rect(0, sy, W, sh); ctx.clip();
-        const scale = Math.max(W / iw, sh / ih);
+        const scale = Math.max(W / iw, sh / ih) * (slot.zoom || 1);
         const dw = iw * scale, dh = ih * scale;
         // Apply pan offset (clamped so image never fully leaves its strip)
         const baseX = (W - dw) / 2;
@@ -8172,8 +8222,12 @@ async function renderMemeCanvas() {
       ctx.save();
       ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2;
       ctx.setLineDash([5, 3]);
-      const bx = cx - W * 0.45, by = startY - fs * 0.2;
-      const bw = W * 0.9,       bh = totalH + fs * 0.3;
+      // startY is the alphabetic baseline of the first line.
+      // The text ascenders go ~fs*0.85 above baseline; descenders ~fs*0.2 below last line.
+      const bx = cx - W * 0.45;
+      const by = startY - fs * 0.85;          // top of ascenders
+      const bw = W * 0.9;
+      const bh = totalH + fs * 0.2;           // cover full height incl. descenders
       ctx.strokeRect(bx, by, bw, bh);
       /* Resize handle — small square at bottom-right */
       ctx.fillStyle = '#f59e0b'; ctx.setLineDash([]);
@@ -8224,7 +8278,7 @@ async function renderMemeCanvas() {
   }
 
   /* ── 4. Author watermark strip (avatar + name + URL) ── */
-  const showWatermark = document.getElementById('memeWatermark') ? document.getElementById('memeWatermark').checked : true;
+  const showWatermark = true; // always on — watermark cannot be disabled
   if (showWatermark) {
     await _drawAuthorWatermark(ctx, W, 0, 'Meme');
   }
