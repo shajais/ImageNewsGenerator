@@ -7100,7 +7100,8 @@ function _closeEditMode(m) {
 ================================================================ */
 
 /* ── State ── */
-let _memeImgObj     = null;
+let _memeImgObj     = null;   // kept for legacy compat (single bg)
+let _memeSlots      = [];     // [{type:'img'|'color', img:Image|null, color:string|null}]  up to 4
 let _memeTextColor  = '#ffffff';
 let _memeFontFamily = 'Impact';
 let _memeCanvasW    = 600;
@@ -7182,6 +7183,7 @@ function openMemeStudio() {
 
   _loadMemeTrendingTopics();
   /* Reset overlays and text positions */
+  _memeSlots = []; _memeImgObj = null;
   _memeOverlays = []; _memeSelOverlayIdx = -1; _memeDragState = null; _memeSelText = null;
   _memeTextPositions = { top:{x:null,y:null,fontSize:0}, mid1:{x:null,y:null,fontSize:0}, mid2:{x:null,y:null,fontSize:0}, bot:{x:null,y:null,fontSize:0} };
   /* Short delay so canvas is visible/sized before drawing */
@@ -7266,8 +7268,16 @@ function filterMemeTrendingTopics(q) {
   const filtered = _allMemeTopics.filter(t =>
     t.label.toLowerCase().includes(lq) || t.hint.toLowerCase().includes(lq)
   );
-  // Also allow clicking a custom entry if no match
+  // Always show filtered results; if empty, show all but highlight the search box
   _renderTopicsFiltered(filtered.length > 0 ? filtered : _allMemeTopics);
+}
+
+function memeUseSearchTopic() {
+  const q = (document.getElementById('memeTrendingSearch')?.value || '').trim();
+  if (!q) return;
+  document.getElementById('memeTopicInput').value = q;
+  memeSetStatus('⏳ Generating meme for: ' + q);
+  memeGenerateAI();
 }
 
 function memeClickTopic(hint, label) {
@@ -7354,85 +7364,83 @@ async function searchMemeImages() {
   if (!q) { toast('⚠️ Search keyword लेख्नुस्', 'error'); return; }
   grid.innerHTML = '<span style="color:var(--muted);font-size:.8rem">🔍 Searching…</span>';
 
-  /* Build a rich varied set of sources for the query */
-  const enc  = encodeURIComponent(q);
-  const enc2 = encodeURIComponent(q + ' person');
-  const now  = Date.now();
+  const enc = encodeURIComponent(q);
+  let thumbs = [];
 
-  /* Wikimedia Commons — great for public figures, Nepal topics */
-  const wikimediaSrcs = [
-    `https://commons.wikimedia.org/w/index.php?title=Special:Search&search=${enc}&ns6=1&uselang=en`,
-  ];
-
-  /* Unsplash with varied seeds and topic-focused variants */
-  const unsplashSrcs = [
-    `https://source.unsplash.com/300x300/?${enc}&sig=${now}`,
-    `https://source.unsplash.com/300x300/?${encodeURIComponent(q + ',portrait')}&sig=${now+1}`,
-    `https://source.unsplash.com/300x300/?${encodeURIComponent(q + ',nepal')}&sig=${now+2}`,
-    `https://source.unsplash.com/300x300/?${encodeURIComponent(q + ',funny,meme')}&sig=${now+3}`,
-    `https://source.unsplash.com/300x300/?${encodeURIComponent(q + ',face,expression')}&sig=${now+4}`,
-    `https://source.unsplash.com/300x300/?${enc2}&sig=${now+5}`,
-  ];
-
-  /* Picsum as additional variety (not topic-relevant but useful for abstract) */
-  const picsumSrcs = [
-    `https://picsum.photos/seed/${enc}/300/300`,
-    `https://picsum.photos/seed/${enc}2/300/300`,
-  ];
-
-  /* Try to fetch Wikimedia Commons thumbnails for the query */
-  let wikimediaThumbs = [];
+  /* 1. Wikipedia direct page thumbnail */
   try {
-    const wikiApiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${enc}&srnamespace=6&srlimit=4&format=json&origin=*`;
-    const wRes = await fetch(wikiApiUrl, {signal: AbortSignal.timeout(4000)});
-    if (wRes.ok) {
-      const wJson = await wRes.json();
-      const titles = (wJson.query?.search || []).map(r => r.title);
-      for (const title of titles.slice(0, 3)) {
-        const imgApi = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&pithumbsize=300&format=json&origin=*`;
-        const iRes = await fetch(imgApi, {signal: AbortSignal.timeout(3000)});
-        if (iRes.ok) {
-          const iJson = await iRes.json();
-          const pages = Object.values(iJson.query?.pages || {});
-          for (const pg of pages) {
-            if (pg.thumbnail?.source) wikimediaThumbs.push(pg.thumbnail.source);
-          }
-        }
-      }
+    const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${enc}&prop=pageimages&pithumbsize=400&format=json&origin=*`, {signal:AbortSignal.timeout(4000)});
+    if (r.ok) {
+      const j = await r.json();
+      for (const pg of Object.values(j.query?.pages || {}))
+        if (pg.thumbnail?.source) thumbs.push(pg.thumbnail.source);
     }
-  } catch (_) { /* silently ignore */ }
+  } catch (_) {}
 
-  /* Also try Wikipedia directly for person searches */
-  let wikiPersonThumb = [];
+  /* 2. Wikipedia search results thumbnails */
   try {
-    const wpApi = `https://en.wikipedia.org/w/api.php?action=query&titles=${enc}&prop=pageimages&pithumbsize=300&format=json&origin=*`;
-    const wpRes = await fetch(wpApi, {signal: AbortSignal.timeout(3000)});
-    if (wpRes.ok) {
-      const wpJson = await wpRes.json();
-      const pages = Object.values(wpJson.query?.pages || {});
-      for (const pg of pages) {
-        if (pg.thumbnail?.source) wikiPersonThumb.push(pg.thumbnail.source);
+    const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${enc}&srlimit=6&format=json&origin=*`, {signal:AbortSignal.timeout(4000)});
+    if (r.ok) {
+      const j = await r.json();
+      const titles = (j.query?.search || []).map(s => s.title).slice(0, 5);
+      for (const t of titles) {
+        try {
+          const r2 = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(t)}&prop=pageimages&pithumbsize=400&format=json&origin=*`, {signal:AbortSignal.timeout(3000)});
+          if (r2.ok) {
+            const j2 = await r2.json();
+            for (const pg of Object.values(j2.query?.pages || {}))
+              if (pg.thumbnail?.source && !thumbs.includes(pg.thumbnail.source))
+                thumbs.push(pg.thumbnail.source);
+          }
+        } catch (_) {}
       }
     }
   } catch (_) {}
 
-  const allSrcs = [...wikiPersonThumb, ...wikimediaThumbs, ...unsplashSrcs, ...picsumSrcs];
+  /* 3. Wikimedia Commons search */
+  try {
+    const r = await fetch(`https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch=${enc}&srnamespace=6&srlimit=6&format=json&origin=*`, {signal:AbortSignal.timeout(4000)});
+    if (r.ok) {
+      const j = await r.json();
+      for (const item of (j.query?.search || []).slice(0, 4)) {
+        try {
+          const fn = item.title.replace('File:','');
+          const r2 = await fetch(`https://commons.wikimedia.org/w/api.php?action=query&titles=${encodeURIComponent(item.title)}&prop=imageinfo&iiprop=url|thumburl&iiurlwidth=400&format=json&origin=*`, {signal:AbortSignal.timeout(3000)});
+          if (r2.ok) {
+            const j2 = await r2.json();
+            for (const pg of Object.values(j2.query?.pages || {}))
+              if (pg.imageinfo?.[0]?.thumburl && !thumbs.includes(pg.imageinfo[0].thumburl))
+                thumbs.push(pg.imageinfo[0].thumburl);
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
 
-  if (allSrcs.length === 0) {
-    grid.innerHTML = '<span style="color:var(--muted);font-size:.8rem">❌ No results found</span>';
+  /* 4. DuckDuckGo iframes redirect URL fallback (Picsum seeds for topic variety) */
+  if (thumbs.length < 4) {
+    const seed = q.replace(/\s+/g,'-').toLowerCase().replace(/[^a-z0-9-]/g,'');
+    for (let i = 0; thumbs.length < 6 && i < 4; i++)
+      thumbs.push(`https://picsum.photos/seed/${seed}${i}/400/400`);
+  }
+
+  thumbs = thumbs.slice(0, 8);
+
+  if (thumbs.length === 0) {
+    grid.innerHTML = '<span style="color:var(--muted);font-size:.8rem">❌ No results — try another keyword</span>';
     return;
   }
 
-  grid.innerHTML = allSrcs.map((src, idx) => {
-    const safeSrc = src.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  grid.innerHTML = thumbs.map((src, idx) => {
+    const safe = src.replace(/'/g, "\\'").replace(/"/g, '&quot;');
     return `<div class="meme-img-result-item" style="position:relative;display:inline-block">
       <img class="meme-img-thumb" src="${src}" loading="lazy" id="memeThumb_${idx}"
-        onerror="this.closest('.meme-img-result-item').style.display='none'" title="Click image to set as background">
-      <div class="meme-img-thumb-btns" style="position:absolute;bottom:0;left:0;right:0;display:flex;gap:2px;padding:2px;background:rgba(0,0,0,.65)">
-        <button style="flex:1;font-size:.62rem;padding:2px 3px;background:#1877f2;color:#fff;border:none;border-radius:3px;cursor:pointer;white-space:nowrap"
-          onclick="selectMemeImage(document.getElementById('memeThumb_${idx}'),'${safeSrc}')">🖼 BG</button>
-        <button style="flex:1;font-size:.62rem;padding:2px 3px;background:#059669;color:#fff;border:none;border-radius:3px;cursor:pointer;white-space:nowrap"
-          onclick="memeAddSearchImageAsOverlay('${safeSrc}')">➕ Add</button>
+        onerror="this.closest('.meme-img-result-item').style.display='none'" title="${q}">
+      <div class="meme-img-thumb-btns" style="position:absolute;bottom:0;left:0;right:0;display:flex;gap:2px;padding:2px;background:rgba(0,0,0,.7)">
+        <button style="flex:1;font-size:.6rem;padding:2px 3px;background:#1877f2;color:#fff;border:none;border-radius:3px;cursor:pointer"
+          onclick="memeAddSlot('img','${safe}')">➕ Add</button>
+        <button style="flex:1;font-size:.6rem;padding:2px 3px;background:#059669;color:#fff;border:none;border-radius:3px;cursor:pointer"
+          onclick="memeAddSearchImageAsOverlay('${safe}')">⭕ Overlay</button>
       </div>
     </div>`;
   }).join('');
@@ -7440,33 +7448,93 @@ async function searchMemeImages() {
 
 function selectMemeImage(el, src) {
   document.querySelectorAll('.meme-img-thumb').forEach(i => i.classList.remove('selected'));
-  el.classList.add('selected');
-  memeSetStatus('⏳ Image load हुँदैछ…');
+  if (el) el.classList.add('selected');
+  memeAddSlot('img', src);
+}
+
+/* ── Slot system: up to 4 panels rendered vertically ── */
+function memeAddSlot(type, srcOrColor) {
+  if (_memeSlots.length >= 4) { toast('ℹ️ Maximum 4 panels allowed — remove one first', 'info', 3000); return; }
+  if (type === 'color') {
+    _memeSlots.push({ type: 'color', img: null, color: srcOrColor });
+    _memeImgObj = null;
+    _renderSlotList();
+    renderMemeCanvas();
+    memeSetStatus(`🎨 Color panel ${_memeSlots.length}/4 added`);
+    return;
+  }
+  memeSetStatus('⏳ Loading image…');
   const img = new Image();
   img.crossOrigin = 'anonymous';
-  img.onload  = () => { _memeImgObj = img; renderMemeCanvas(); memeSetStatus('✅ Image loaded'); };
-  img.onerror = () => memeSetStatus('❌ Image load भएन — अर्को select गर्नुस्');
-  img.src = src;
+  img.onload = () => {
+    _memeSlots.push({ type: 'img', img, color: null });
+    _memeImgObj = null; // slot mode takes over
+    _renderSlotList();
+    renderMemeCanvas();
+    memeSetStatus(`✅ Image panel ${_memeSlots.length}/4 added`);
+    toast(`✅ Panel ${_memeSlots.length}/4 added`, 'success', 2000);
+  };
+  img.onerror = () => memeSetStatus('❌ Image load failed');
+  img.src = srcOrColor;
+}
+
+function memeRemoveSlot(idx) {
+  _memeSlots.splice(idx, 1);
+  _renderSlotList();
+  renderMemeCanvas();
+}
+
+function _renderSlotList() {
+  const el = document.getElementById('memeSlotList');
+  if (!el) return;
+  if (_memeSlots.length === 0) {
+    el.innerHTML = '<span style="color:var(--muted);font-size:.75rem">No panels yet</span>';
+    return;
+  }
+  el.innerHTML = _memeSlots.map((s, i) => {
+    const thumb = s.type === 'color'
+      ? `<span style="display:inline-block;width:28px;height:28px;background:${s.color};border-radius:4px;border:1px solid #555;vertical-align:middle"></span>`
+      : `<img src="${s.img.src}" style="width:28px;height:28px;object-fit:cover;border-radius:4px;vertical-align:middle">`;
+    return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #2a2a2a">
+      ${thumb}
+      <span style="font-size:.75rem;color:var(--muted);flex:1">${s.type === 'color' ? 'Color: ' + s.color : 'Image ' + (i+1)}</span>
+      <button onclick="memeRemoveSlot(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:.8rem;padding:2px 6px">✕</button>
+    </div>`;
+  }).join('');
 }
 
 /* ── Upload ── */
 function memeLoadUpload(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const img = new Image();
-    img.onload = () => { _memeImgObj = img; renderMemeCanvas(); memeSetStatus('✅ Image uploaded'); };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+  const files = Array.from(input.files || []);
+  if (!files.length) return;
+  const remaining = 4 - _memeSlots.length;
+  if (remaining <= 0) { toast('ℹ️ Maximum 4 panels — remove one first', 'info', 3000); return; }
+  const toLoad = files.slice(0, remaining);
+  let loaded = 0;
+  toLoad.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        _memeSlots.push({ type: 'img', img, color: null });
+        _memeImgObj = null;
+        loaded++;
+        _renderSlotList();
+        renderMemeCanvas();
+        if (loaded === toLoad.length) memeSetStatus(`✅ ${loaded} image(s) added (${_memeSlots.length}/4)`);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
 }
 
 /* ── Solid colour ── */
 function memeApplyBgColor() {
-  _memeImgObj = null;
-  renderMemeCanvas();
-  memeSetStatus('🎨 Solid background set');
+  const col = document.getElementById('memeBgColor')?.value || '#1a1a2e';
+  memeAddSlot('color', col);
+  memeSetStatus('🎨 Color panel added');
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -7487,38 +7555,43 @@ function _memeContentZone() {
   return { W, H, top: BANNER_H + 3, bottom: H - STRIP_H - 2 };
 }
 
-/* Re-calculate auto-layout positions for all overlays that haven't been manually moved */
+/* Re-calculate auto-layout positions for overlays (circular stickers in corners) */
 function _memeAutoLayout() {
-  const n = _memeOverlays.length;
-  if (n === 0) return;
-  const { W, top, bottom } = _memeContentZone();
-  const zoneH = bottom - top;
-  const rowH  = Math.floor(zoneH / n);
+  const { W, H, top } = _memeContentZone();
+  const BANNER_H = Math.round(H * 0.09);
+  // Place 1st overlay bottom-left, 2nd bottom-right, small circular stickers
+  const corners = [
+    { cx: 0.12, cy: 0.80 },
+    { cx: 0.88, cy: 0.80 },
+  ];
   _memeOverlays.forEach((ov, i) => {
-    if (ov.manualPos) return; // user dragged it → leave it
-    ov.x = 0;
-    ov.y = top + i * rowH;
-    ov.w = W;
-    ov.h = rowH;
+    if (ov.manualPos) return;
+    const sz = Math.round(Math.min(W, H) * 0.20);
+    const corner = corners[i] || { cx: 0.5, cy: 0.5 };
+    ov.w = sz; ov.h = sz;
+    ov.x = Math.round(W * corner.cx - sz / 2);
+    ov.y = Math.round(H * corner.cy - sz / 2);
   });
 }
 
 /* Add overlay from file upload input */
 function memeAddOverlayImage(input) {
-  if (_memeOverlays.length >= 4) { toast('ℹ️ Maximum 4 images allowed', 'info', 3000); return; }
+  if (_memeOverlays.length >= 2) { toast('ℹ️ Maximum 2 overlays allowed', 'info', 3000); return; }
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
     const img = new Image();
     img.onload = () => {
-      _memeOverlays.push({ img, x: 0, y: 0, w: 150, h: 150, circle: false, manualPos: false });
+      const { W, H } = (() => { const c = document.getElementById('memeCanvas'); return {W:c.width,H:c.height}; })();
+      const sz = Math.round(Math.min(W, H) * 0.20); // smaller default: 20% of canvas
+      _memeOverlays.push({ img, x: 10, y: 10, w: sz, h: sz, circle: true, manualPos: false });
       _memeAutoLayout();
       _memeSelOverlayIdx = _memeOverlays.length - 1;
       _updateOverlayControls();
       _updateOverlayList();
       renderMemeCanvas();
-      toast(`✅ Photo ${_memeOverlays.length} added (${_memeOverlays.length}/4)`, 'success', 2000);
+      toast(`✅ Overlay ${_memeOverlays.length} added (${_memeOverlays.length}/2)`, 'success', 2000);
     };
     img.src = e.target.result;
   };
@@ -7528,21 +7601,23 @@ function memeAddOverlayImage(input) {
 
 /* Add overlay from a search-result URL */
 function memeAddSearchImageAsOverlay(src) {
-  if (_memeOverlays.length >= 4) { toast('ℹ️ Maximum 4 images allowed', 'info', 3000); return; }
-  memeSetStatus('⏳ Adding overlay image…');
+  if (_memeOverlays.length >= 2) { toast('ℹ️ Maximum 2 overlays allowed', 'info', 3000); return; }
+  memeSetStatus('⏳ Adding overlay…');
   const img = new Image();
   img.crossOrigin = 'anonymous';
   img.onload = () => {
-    _memeOverlays.push({ img, x: 0, y: 0, w: 150, h: 150, circle: false, manualPos: false });
+    const { W, H } = (() => { const c = document.getElementById('memeCanvas'); return {W:c.width,H:c.height}; })();
+    const sz = Math.round(Math.min(W, H) * 0.20);
+    _memeOverlays.push({ img, x: 10, y: 10, w: sz, h: sz, circle: true, manualPos: false });
     _memeAutoLayout();
     _memeSelOverlayIdx = _memeOverlays.length - 1;
     _updateOverlayControls();
     _updateOverlayList();
     renderMemeCanvas();
-    memeSetStatus(`✅ Overlay ${_memeOverlays.length} added`);
-    toast(`✅ Photo ${_memeOverlays.length}/4 added to meme`, 'success', 2000);
+    memeSetStatus(`✅ Overlay ${_memeOverlays.length}/2 added`);
+    toast(`✅ Overlay ${_memeOverlays.length}/2 added`, 'success', 2000);
   };
-  img.onerror = () => memeSetStatus('❌ Could not load image as overlay');
+  img.onerror = () => memeSetStatus('❌ Could not load overlay image');
   img.src = src;
 }
 
@@ -7617,7 +7692,7 @@ function _updateOverlayControls() {
       document.getElementById('memeTextFontSize').value = curFs;
       document.getElementById('memeTextFontSizeVal').textContent = curFs + 'px';
       const lbl = document.getElementById('memeTextSizeLabel');
-      const names = { top:'Top', mid1:'Middle', bot:'Bottom' };
+      const names = { top:'Top', mid1:'Middle 1', mid2:'Middle 2', bot:'Bottom' };
       if (lbl) lbl.textContent = `"${names[_memeSelText]}" text size`;
     } else {
       tsb.style.display = 'none';
@@ -7709,7 +7784,7 @@ function memeCanvasMouseDown(e) {
   const fontSize = parseInt(document.getElementById('memeFontSize')?.value || 42);
 
   // 1. Check text label hits first (top layer)
-  const textKeys = ['top','mid1','bot'];
+  const textKeys = ['top','mid1','mid2','bot'];
   const textValues = {
     top:  (document.getElementById('memeTopText')?.value     || '').trim(),
     mid1: (document.getElementById('memeMiddleText1')?.value || '').trim(),
@@ -7815,8 +7890,7 @@ function setMemeSize(w, h, btn) {
   // Reset manual text positions so they recalculate for new dimensions
   _memeTextPositions = { top:{x:null,y:null,fontSize:0}, mid1:{x:null,y:null,fontSize:0}, mid2:{x:null,y:null,fontSize:0}, bot:{x:null,y:null,fontSize:0} };
   // Re-layout overlays for new canvas size
-  _memeOverlays.forEach(ov => { ov.manualPos = false; });
-  _memeAutoLayout();
+  _memeOverlays.forEach(ov => { ov.manualPos = false; });  _memeAutoLayout();
   renderMemeCanvas();
 }
 
@@ -7833,8 +7907,41 @@ async function renderMemeCanvas() {
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
 
-  /* ── 1. Background ── */
-  if (_memeImgObj) {
+  /* ── 1. Background — slot panels stacked vertically, or single image, or gradient ── */
+  const BANNER_H_bg = Math.round(H * 0.09);
+  const STRIP_H_bg  = 72;
+  const zoneTop_bg  = BANNER_H_bg + 3;
+  const zoneBot_bg  = H - STRIP_H_bg - 2;
+  const zoneH_bg    = zoneBot_bg - zoneTop_bg;
+
+  if (_memeSlots.length > 0) {
+    // Draw each slot as a vertical strip
+    const rowH = Math.floor(zoneH_bg / _memeSlots.length);
+    _memeSlots.forEach((slot, i) => {
+      const sy = zoneTop_bg + i * rowH;
+      const sh = (i === _memeSlots.length - 1) ? (zoneBot_bg - sy) : rowH; // last row fills remainder
+      if (slot.type === 'color') {
+        ctx.fillStyle = slot.color;
+        ctx.fillRect(0, sy, W, sh);
+      } else if (slot.img) {
+        const iw = slot.img.naturalWidth, ih = slot.img.naturalHeight;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(0, sy, W, sh); ctx.clip();
+        const scale = Math.max(W / iw, sh / ih);
+        const dw = iw * scale, dh = ih * scale;
+        ctx.drawImage(slot.img, (W - dw) / 2, sy + (sh - dh) / 2, dw, dh);
+        /* Subtle dark overlay */
+        const ov = ctx.createLinearGradient(0, sy, 0, sy + sh);
+        ov.addColorStop(0,   'rgba(0,0,0,0.45)');
+        ov.addColorStop(0.5, 'rgba(0,0,0,0.20)');
+        ov.addColorStop(1,   'rgba(0,0,0,0.55)');
+        ctx.fillStyle = ov; ctx.fillRect(0, sy, W, sh);
+        ctx.restore();
+      }
+    });
+    // Fill top banner area + strip with dark if not covered
+    ctx.fillStyle = 'rgba(0,0,0,0.0)';
+  } else if (_memeImgObj) {
     ctx.clearRect(0, 0, W, H);
     const iw = _memeImgObj.naturalWidth, ih = _memeImgObj.naturalHeight;
     const scale = Math.max(W / iw, H / ih);
@@ -7944,7 +8051,7 @@ async function renderMemeCanvas() {
   const useStroke = document.getElementById('memeStroke') ? document.getElementById('memeStroke').checked : true;
   const topText   = (document.getElementById('memeTopText')     ? document.getElementById('memeTopText').value     : '').toUpperCase();
   const mid1Text  = (document.getElementById('memeMiddleText1') ? document.getElementById('memeMiddleText1').value : '').toUpperCase();
-  const mid2Text  = '';  // removed — only one middle text now
+  const mid2Text  = (document.getElementById('memeMiddleText2') ? document.getElementById('memeMiddleText2').value : '').toUpperCase();
   const botText   = (document.getElementById('memeBottomText')  ? document.getElementById('memeBottomText').value  : '').toUpperCase();
 
   /* Text zone: between bottom of banner and top of watermark strip */
@@ -8012,9 +8119,10 @@ async function renderMemeCanvas() {
   }
 
   const midCenterY = (textZoneT + textZoneB) / 2;
-  drawMemeTextAt(topText,  'top',  textZoneT + fontSize,            'top');
-  drawMemeTextAt(mid1Text, 'mid1', midCenterY, 'middle_custom');
-  drawMemeTextAt(botText,  'bot',  textZoneB - 6,                   'bottom');
+  drawMemeTextAt(topText,  'top',  textZoneT + fontSize,                         'top');
+  drawMemeTextAt(mid1Text, 'mid1', midCenterY - Math.round(fontSize * 0.5),      'middle_custom');
+  drawMemeTextAt(mid2Text, 'mid2', midCenterY + Math.round(fontSize * 0.8),      'middle_custom');
+  drawMemeTextAt(botText,  'bot',  textZoneB - 6,                                'bottom');
 
   /* ── 3b. Overlay images (rendered after text so they sit on top) ── */
   for (let i = 0; i < _memeOverlays.length; i++) {
@@ -8123,7 +8231,9 @@ Output ONLY valid JSON (no markdown, no extra text):
           const img   = new Image();
           img.crossOrigin = 'anonymous';
           await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = hfUrl; });
-          _memeImgObj = img;
+          _memeSlots = [{ type: 'img', img, color: null }];
+          _memeImgObj = null;
+          _renderSlotList();
           await renderMemeCanvas();
           memeSetStatus('✅ AI मिम + HuggingFace image तयार भयो! 🎨😂');
           toast(`🎨 ${aiLabel} text + HuggingFace AI image — Meme ready!`, 'success', 4000);
