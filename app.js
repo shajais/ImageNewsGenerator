@@ -806,12 +806,426 @@ async function fetchCategoryFeeds(feedList, catKey) {
 
 /* ── Location-based feeds ────────────────────────────────────────────── */
 
+/**
+ * Known Nepal local/district RSS feeds.
+ * Key = lowercase normalised location name (and common aliases).
+ * Value = array of feed descriptors { url, name, lang }
+ *
+ * Priority order inside each entry:
+ *   1. Local/district-specific RSS outlets
+ *   2. Province/regional outlets
+ *   3. Mainstream Nepali outlets filtered by location keyword
+ */
+const _NEPAL_LOCAL_FEEDS = {
+  /* ── Bara / Kalaiya ───────────────────────────────────────────── */
+  'kalaiya': [
+    { url: 'https://sajhedharipatrika.com/feed/', name: 'Sajhedhari Patrika', lang: 'ne' },
+    { url: 'https://baraupdate.com/feed/', name: 'Bara Update', lang: 'ne' },
+    { url: 'https://kalaiyanews.com/feed/', name: 'Kalaiya News', lang: 'ne' },
+    { url: 'https://madheshpost.com/feed/', name: 'Madhesh Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कलैया')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: कलैया', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Kalaiya Bara')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Kalaiya', lang: 'en' },
+  ],
+  'bara': [
+    { url: 'https://sajhedharipatrika.com/feed/', name: 'Sajhedhari Patrika', lang: 'ne' },
+    { url: 'https://baraupdate.com/feed/', name: 'Bara Update', lang: 'ne' },
+    { url: 'https://kalaiyanews.com/feed/', name: 'Kalaiya News', lang: 'ne' },
+    { url: 'https://madheshpost.com/feed/', name: 'Madhesh Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बारा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: बारा', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Bara Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Bara', lang: 'en' },
+  ],
+  /* ── Kathmandu ─────────────────────────────────────────────────── */
+  'kathmandu': [
+    { url: 'https://kathmandupost.com/rss', name: 'Kathmandu Post', lang: 'en' },
+    { url: 'https://onlinekhabar.com/feed', name: 'OnlineKhabar', lang: 'ne' },
+    { url: 'https://setopati.com/feed', name: 'Setopati', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('काठमाडौं')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: काठमाडौं', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Kathmandu')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Kathmandu', lang: 'en' },
+  ],
+  'ktm': 'kathmandu', /* alias */
+  /* ── Pokhara ───────────────────────────────────────────────────── */
+  'pokhara': [
+    { url: 'https://gandakipost.com/feed/', name: 'Gandaki Post', lang: 'ne' },
+    { url: 'https://pokharanews.com/feed/', name: 'Pokhara News', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('पोखरा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: पोखरा', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Pokhara')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Pokhara', lang: 'en' },
+  ],
+  /* ── Biratnagar / Morang ───────────────────────────────────────── */
+  'biratnagar': [
+    { url: 'https://biratnagarmirror.com/feed/', name: 'Biratnagar Mirror', lang: 'ne' },
+    { url: 'https://koshipost.com/feed/', name: 'Koshi Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('विराटनगर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: विराटनगर', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Biratnagar Morang')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Biratnagar', lang: 'en' },
+  ],
+  'morang': 'biratnagar',
+  /* ── Jhapa / Birtamode ─────────────────────────────────────────── */
+  'jhapa': [
+    { url: 'https://mechi.news/feed/', name: 'Mechi News', lang: 'ne' },
+    { url: 'https://jhapanews.com/feed/', name: 'Jhapa News', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('झापा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: झापा', lang: 'ne' },
+  ],
+  'birtamode': 'jhapa',
+  /* ── Chitwan / Bharatpur ───────────────────────────────────────── */
+  'chitwan': [
+    { url: 'https://chitwanpost.com/feed/', name: 'Chitwan Post', lang: 'ne' },
+    { url: 'https://chitwanchronicle.com/feed/', name: 'Chitwan Chronicle', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('चितवन')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: चितवन', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Chitwan Bharatpur')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Chitwan', lang: 'en' },
+  ],
+  'bharatpur': 'chitwan',
+  /* ── Butwal / Rupandehi ────────────────────────────────────────── */
+  'butwal': [
+    { url: 'https://butwaltoday.com/feed/', name: 'Butwal Today', lang: 'ne' },
+    { url: 'https://rupandehipost.com/feed/', name: 'Rupandehi Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बुटवल')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: बुटवल', lang: 'ne' },
+  ],
+  'rupandehi': 'butwal',
+  /* ── Birgunj / Parsa ───────────────────────────────────────────── */
+  'birgunj': [
+    { url: 'https://birgunjtoday.com/feed/', name: 'Birgunj Today', lang: 'ne' },
+    { url: 'https://parsapost.com/feed/', name: 'Parsa Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('वीरगन्ज')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: वीरगन्ज', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Birgunj Parsa')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Birgunj', lang: 'en' },
+  ],
+  'parsa': 'birgunj',
+  /* ── Dhangadhi / Kailali ───────────────────────────────────────── */
+  'dhangadhi': [
+    { url: 'https://sudurpaschimpost.com/feed/', name: 'Sudurpaschim Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('धनगढी')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: धनगढी', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Dhangadhi Kailali')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Dhangadhi', lang: 'en' },
+  ],
+  'kailali': 'dhangadhi',
+  /* ── Nepalgunj / Banke ─────────────────────────────────────────── */
+  'nepalgunj': [
+    { url: 'https://midwesternherald.com/feed/', name: 'Midwestern Herald', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('नेपालगन्ज')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: नेपालगन्ज', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Nepalgunj Banke')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Nepalgunj', lang: 'en' },
+  ],
+  'banke': 'nepalgunj',
+  /* ── Hetauda / Makwanpur ───────────────────────────────────────── */
+  'hetauda': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('हेटौंडा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: हेटौंडा', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Hetauda Makwanpur')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Hetauda', lang: 'en' },
+  ],
+  'makwanpur': 'hetauda',
+  /* ── Janakpur / Dhanusha ───────────────────────────────────────── */
+  'janakpur': [
+    { url: 'https://janakpurpost.com/feed/', name: 'Janakpur Post', lang: 'ne' },
+    { url: 'https://madheshpost.com/feed/', name: 'Madhesh Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('जनकपुर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: जनकपुर', lang: 'ne' },
+  ],
+  'dhanusha': 'janakpur',
+  /* ── Itahari / Sunsari ─────────────────────────────────────────── */
+  'itahari': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('इटहरी')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: इटहरी', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Itahari Sunsari')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Itahari', lang: 'en' },
+  ],
+  'sunsari': 'itahari',
+  /* ── Damak / Jhapa ─────────────────────────────────────────────── */
+  'damak': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('दमक')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: दमक', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Damak Jhapa')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Damak', lang: 'en' },
+  ],
+  /* ── Lalitpur / Patan ──────────────────────────────────────────── */
+  'lalitpur': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('ललितपुर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: ललितपुर', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Lalitpur Patan Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Lalitpur', lang: 'en' },
+  ],
+  'patan': 'lalitpur',
+  /* ── Bhaktapur ─────────────────────────────────────────────────── */
+  'bhaktapur': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('भक्तपुर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: भक्तपुर', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Bhaktapur')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Bhaktapur', lang: 'en' },
+  ],
+  /* ── Rautahat / Gaur ───────────────────────────────────────────── */
+  'rautahat': [
+    { url: 'https://madheshpost.com/feed/', name: 'Madhesh Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('रौतहट')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: रौतहट', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Rautahat Gaur Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Rautahat', lang: 'en' },
+  ],
+  'gaur': 'rautahat',
+  /* ── Sarlahi ───────────────────────────────────────────────────── */
+  'sarlahi': [
+    { url: 'https://madheshpost.com/feed/', name: 'Madhesh Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('सर्लाही')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: सर्लाही', lang: 'ne' },
+  ],
+  /* ── Mahottari / Jaleshwar ─────────────────────────────────────── */
+  'mahottari': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('महोत्तरी')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: महोत्तरी', lang: 'ne' },
+  ],
+  'jaleshwar': 'mahottari',
+  /* ── Siraha ────────────────────────────────────────────────────── */
+  'siraha': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('सिराहा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: सिराहा', lang: 'ne' },
+  ],
+  /* ── Saptari / Rajbiraj ────────────────────────────────────────── */
+  'saptari': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('सप्तरी')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: सप्तरी', lang: 'ne' },
+  ],
+  'rajbiraj': 'saptari',
+  /* ── Udayapur ──────────────────────────────────────────────────── */
+  'udayapur': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('उदयपुर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: उदयपुर', lang: 'ne' },
+  ],
+  /* ── Okhaldhunga ───────────────────────────────────────────────── */
+  'okhaldhunga': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('ओखलढुङ्गा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: ओखलढुङ्गा', lang: 'ne' },
+  ],
+  /* ── Kaski ─────────────────────────────────────────────────────── */
+  'kaski': 'pokhara',
+  /* ── Syangja ───────────────────────────────────────────────────── */
+  'syangja': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('स्याङ्जा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: स्याङ्जा', lang: 'ne' },
+  ],
+  /* ── Tanahun / Damauli ─────────────────────────────────────────── */
+  'tanahun': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('तनहुँ')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: तनहुँ', lang: 'ne' },
+  ],
+  'damauli': 'tanahun',
+  /* ── Gorkha ────────────────────────────────────────────────────── */
+  'gorkha': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('गोरखा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: गोरखा', lang: 'ne' },
+  ],
+  /* ── Lamjung / Besisahar ───────────────────────────────────────── */
+  'lamjung': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('लमजुङ')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: लमजुङ', lang: 'ne' },
+  ],
+  'besisahar': 'lamjung',
+  /* ── Palpa / Tansen ────────────────────────────────────────────── */
+  'palpa': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('पाल्पा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: पाल्पा', lang: 'ne' },
+  ],
+  'tansen': 'palpa',
+  /* ── Nawalpur / Kawasoti ───────────────────────────────────────── */
+  'nawalpur': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('नवलपुर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: नवलपुर', lang: 'ne' },
+  ],
+  /* ── Baglung ───────────────────────────────────────────────────── */
+  'baglung': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बागलुङ')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: बागलुङ', lang: 'ne' },
+  ],
+  /* ── Mustang ───────────────────────────────────────────────────── */
+  'mustang': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('मुस्ताङ')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: मुस्ताङ', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Mustang Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Mustang', lang: 'en' },
+  ],
+  /* ── Solukhumbu / Namche / Everest ─────────────────────────────── */
+  'solukhumbu': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('सोलुखुम्बु')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: सोलुखुम्बु', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Solukhumbu Everest Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Solukhumbu', lang: 'en' },
+  ],
+  'namche': 'solukhumbu',
+  'lukla': 'solukhumbu',
+  /* ── Humla ─────────────────────────────────────────────────────── */
+  'humla': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('हुम्ला')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: हुम्ला', lang: 'ne' },
+  ],
+  /* ── Jumla ─────────────────────────────────────────────────────── */
+  'jumla': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('जुम्ला')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: जुम्ला', lang: 'ne' },
+  ],
+  /* ── Dolpa ─────────────────────────────────────────────────────── */
+  'dolpa': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('डोल्पा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: डोल्पा', lang: 'ne' },
+  ],
+  /* ── Ilam ──────────────────────────────────────────────────────── */
+  'ilam': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('इलाम')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: इलाम', lang: 'ne' },
+  ],
+  /* ── Taplejung ─────────────────────────────────────────────────── */
+  'taplejung': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('ताप्लेजुङ')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: ताप्लेजुङ', lang: 'ne' },
+  ],
+  /* ── Panchthar ─────────────────────────────────────────────────── */
+  'panchthar': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('पाँचथर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: पाँचथर', lang: 'ne' },
+  ],
+  /* ── Dang / Tulsipur ───────────────────────────────────────────── */
+  'dang': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('दाङ')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: दाङ', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Dang Tulsipur Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Dang', lang: 'en' },
+  ],
+  'tulsipur': 'dang',
+  /* ── Surkhet ───────────────────────────────────────────────────── */
+  'surkhet': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('सुर्खेत')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: सुर्खेत', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Surkhet Karnali Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Surkhet', lang: 'en' },
+  ],
+  /* ── Kapilvastu / Taulihawa ────────────────────────────────────── */
+  'kapilvastu': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कपिलवस्तु')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: कपिलवस्तु', lang: 'ne' },
+  ],
+  'taulihawa': 'kapilvastu',
+  /* ── Arghakhanchi ──────────────────────────────────────────────── */
+  'arghakhanchi': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('अर्घाखाँची')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: अर्घाखाँची', lang: 'ne' },
+  ],
+  /* ── Gulmi ─────────────────────────────────────────────────────── */
+  'gulmi': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('गुल्मी')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: गुल्मी', lang: 'ne' },
+  ],
+  /* ── Pyuthan ───────────────────────────────────────────────────── */
+  'pyuthan': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('प्युठान')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: प्युठान', lang: 'ne' },
+  ],
+  /* ── Rolpa ─────────────────────────────────────────────────────── */
+  'rolpa': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('रोल्पा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: रोल्पा', lang: 'ne' },
+  ],
+  /* ── Rukum ─────────────────────────────────────────────────────── */
+  'rukum': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('रुकुम')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: रुकुम', lang: 'ne' },
+  ],
+  /* ── Salyan ────────────────────────────────────────────────────── */
+  'salyan': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('सल्यान')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: सल्यान', lang: 'ne' },
+  ],
+  /* ── Dailekh ───────────────────────────────────────────────────── */
+  'dailekh': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('दैलेख')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: दैलेख', lang: 'ne' },
+  ],
+  /* ── Jajarkot ──────────────────────────────────────────────────── */
+  'jajarkot': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('जाजरकोट')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: जाजरकोट', lang: 'ne' },
+  ],
+  /* ── Kanchanpur / Mahendranagar ────────────────────────────────── */
+  'kanchanpur': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कञ्चनपुर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: कञ्चनपुर', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Kanchanpur Mahendranagar Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Kanchanpur', lang: 'en' },
+  ],
+  'mahendranagar': 'kanchanpur',
+  /* ── Dadeldhura ────────────────────────────────────────────────── */
+  'dadeldhura': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('डडेल्धुरा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: डडेल्धुरा', lang: 'ne' },
+  ],
+  /* ── Baitadi ───────────────────────────────────────────────────── */
+  'baitadi': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बैतडी')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: बैतडी', lang: 'ne' },
+  ],
+  /* ── Darchula ──────────────────────────────────────────────────── */
+  'darchula': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('दार्चुला')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: दार्चुला', lang: 'ne' },
+  ],
+  /* ── Achham / Sanfebagar ───────────────────────────────────────── */
+  'achham': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('अछाम')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: अछाम', lang: 'ne' },
+  ],
+  /* ── Bajhang ───────────────────────────────────────────────────── */
+  'bajhang': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बाजहाङ')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: बाजहाङ', lang: 'ne' },
+  ],
+  /* ── Bajura ────────────────────────────────────────────────────── */
+  'bajura': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बाजुरा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: बाजुरा', lang: 'ne' },
+  ],
+  /* ── Mugu ──────────────────────────────────────────────────────── */
+  'mugu': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('मुगु')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: मुगु', lang: 'ne' },
+  ],
+  /* ── Kalikot ───────────────────────────────────────────────────── */
+  'kalikot': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कालिकोट')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: कालिकोट', lang: 'ne' },
+  ],
+  /* ── Nuwakot ───────────────────────────────────────────────────── */
+  'nuwakot': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('नुवाकोट')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: नुवाकोट', lang: 'ne' },
+  ],
+  /* ── Rasuwa / Dhunche ──────────────────────────────────────────── */
+  'rasuwa': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('रसुवा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: रसुवा', lang: 'ne' },
+  ],
+  /* ── Sindhupalchok ─────────────────────────────────────────────── */
+  'sindhupalchok': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('सिन्धुपाल्चोक')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: सिन्धुपाल्चोक', lang: 'ne' },
+  ],
+  /* ── Kavrepalanchok / Dhulikhel ────────────────────────────────── */
+  'kavrepalanchok': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('काभ्रेपलान्चोक')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: काभ्रे', lang: 'ne' },
+  ],
+  'dhulikhel': 'kavrepalanchok',
+  /* ── Dolakha / Charikot ────────────────────────────────────────── */
+  'dolakha': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('दोलखा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: दोलखा', lang: 'ne' },
+  ],
+  /* ── Ramechhap ─────────────────────────────────────────────────── */
+  'ramechhap': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('रामेछाप')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: रामेछाप', lang: 'ne' },
+  ],
+  /* ── Sindhuli ──────────────────────────────────────────────────── */
+  'sindhuli': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('सिन्धुली')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: सिन्धुली', lang: 'ne' },
+  ],
+  /* ── Khotang ───────────────────────────────────────────────────── */
+  'khotang': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('खोटाङ')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: खोटाङ', lang: 'ne' },
+  ],
+  /* ── Bhojpur ───────────────────────────────────────────────────── */
+  'bhojpur': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('भोजपुर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: भोजपुर', lang: 'ne' },
+  ],
+  /* ── Sankhuwasabha / Khandbari ─────────────────────────────────── */
+  'sankhuwasabha': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('संखुवासभा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: संखुवासभा', lang: 'ne' },
+  ],
+  'khandbari': 'sankhuwasabha',
+  /* ── Terhathum ─────────────────────────────────────────────────── */
+  'terhathum': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('तेह्रथुम')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: तेह्रथुम', lang: 'ne' },
+  ],
+  /* ── Dhankuta ──────────────────────────────────────────────────── */
+  'dhankuta': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('धनकुटा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: धनकुटा', lang: 'ne' },
+  ],
+};
+
+/**
+ * Resolve alias strings (e.g. 'ktm' → feeds for 'kathmandu').
+ * Returns an array of feed descriptors, never undefined.
+ */
+function _resolveLocalFeeds(key) {
+  let entry = _NEPAL_LOCAL_FEEDS[key];
+  /* Follow single-level alias */
+  if (typeof entry === 'string') entry = _NEPAL_LOCAL_FEEDS[entry];
+  return Array.isArray(entry) ? entry : null;
+}
+
 function _locationFeedsFor(label) {
-  const q = encodeURIComponent(label + ' news');
-  return [
-    { url: `https://news.google.com/rss/search?q=${q}&hl=en&gl=US&ceid=US:en`, name: 'Google News: ' + label, lang: 'en' },
-    { url: `https://news.google.com/rss/search?q=${encodeURIComponent(label)}&hl=en&gl=US&ceid=US:en`, name: 'Google: ' + label, lang: 'en' },
+  const key = label.trim().toLowerCase()
+    .replace(/\s+/g, '')          // strip spaces
+    .replace(/['']/g, '')         // strip apostrophes
+    .normalize('NFC');
+
+  /* 1. Try exact lookup */
+  let localFeeds = _resolveLocalFeeds(key);
+
+  /* 2. Partial-match: check if any known key is a substring of the input or vice-versa */
+  if (!localFeeds) {
+    for (const k of Object.keys(_NEPAL_LOCAL_FEEDS)) {
+      if (typeof _NEPAL_LOCAL_FEEDS[k] === 'string') continue; // skip aliases at this stage
+      if (key.includes(k) || k.includes(key)) {
+        localFeeds = _resolveLocalFeeds(k);
+        break;
+      }
+    }
+  }
+
+  /* 3. Always append generic Google News RSS queries as fallback/supplement */
+  const genericFeeds = [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent(label + ' news Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google (EN): ' + label, lang: 'en' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent(label + ' समाचार')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google (NE): ' + label, lang: 'ne' },
+    /* Also search mainstream Nepali outlets filtered by location */
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent(label)}&hl=ne&gl=NP&ceid=NP:ne&source=onlinekhabar.com`, name: 'OnlineKhabar: ' + label, lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent(label)}&hl=ne&gl=NP&ceid=NP:ne&source=setopati.com`, name: 'Setopati: ' + label, lang: 'ne' },
   ];
+
+  /* Combine: local-specific first, then generic — deduplicate by URL */
+  const combined = [...(localFeeds || []), ...genericFeeds];
+  const seenUrls = new Set();
+  return combined.filter(f => {
+    if (seenUrls.has(f.url)) return false;
+    seenUrls.add(f.url);
+    return true;
+  });
 }
 
 async function addLocation() {
@@ -830,9 +1244,29 @@ async function addLocation() {
 
 async function _loadLocationArticles(loc) {
   const feeds = _locationFeedsFor(loc.label);
-  loc.articles = await fetchCategoryFeeds(feeds, null);
+  let items   = await fetchCategoryFeeds(feeds, null);
+
+  /* ── Filter: discard articles older than 24 hours ── */
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const fresh  = items.filter(a => {
+    const t = new Date(a.pubDate).getTime();
+    return !isNaN(t) && t >= cutoff;
+  });
+  /* If we got at least 2 fresh articles use the filtered set, otherwise keep raw */
+  if (fresh.length >= 2) items = fresh;
+
+  /* ── Tag each article with location for the UI badge ── */
+  items.forEach(a => { a._locationLabel = loc.label; });
+
+  loc.articles = items;
   loc.loaded   = true;
-  if (_activeNewsTab === 'locations') renderCategoryList('locations');
+  if (_activeNewsTab === 'locations') {
+    renderCategoryList('locations');
+    /* Update status badge with 24h-filtered count */
+    const total = _locationFeeds.reduce((s, f) => s + (f.loaded ? f.articles.length : 0), 0);
+    const badge = document.getElementById('statusBadge');
+    if (badge) badge.textContent = `${total} articles · last 24h only`;
+  }
 }
 
 function removeLocation(label) {
@@ -915,17 +1349,31 @@ function renderCategoryList(tab, filterText) {
       list.innerHTML = `<div class="empty-state"><div class="icon">📍</div><p>Add a location above to see trending news from there.</p></div>`;
       return;
     }
-    /* Merge all location articles grouped by location */
-    items = [];
-    _locationFeeds.forEach(loc => {
-      const locItems = loc.loaded ? loc.articles.slice(0, 12) : [];
-      locItems.forEach(a => { a._locationLabel = loc.label; });
-      items.push(...locItems);
-    });
-    if (!items.length) {
+    /* Check if all locations are still loading */
+    const allLoading = _locationFeeds.every(f => !f.loaded);
+    if (allLoading) {
       list.innerHTML = `<div class="empty-state"><div class="icon">⏳</div><p>Loading location news…</p></div>`;
       return;
     }
+    /* Merge all location articles (already tagged with _locationLabel) */
+    items = [];
+    _locationFeeds.forEach(loc => {
+      if (!loc.loaded) return;
+      /* Show up to 20 articles per location (already filtered to 24h in _loadLocationArticles) */
+      const locItems = loc.articles.slice(0, 20);
+      locItems.forEach(a => { a._locationLabel = a._locationLabel || loc.label; });
+      items.push(...locItems);
+    });
+    if (!items.length) {
+      list.innerHTML = `<div class="empty-state"><div class="icon">🕐</div><p>No articles found in the last 24 hours for these locations.</p></div>`;
+      return;
+    }
+    /* Sort: top-2-fresh first, then by viralScore */
+    items.sort((a, b) => {
+      const aTop = a._isLatestTop ? 1 : 0, bTop = b._isLatestTop ? 1 : 0;
+      if (aTop !== bTop) return bTop - aTop;
+      return (b.viralScore || 0) - (a.viralScore || 0) || new Date(b.pubDate) - new Date(a.pubDate);
+    });
   } else {
     items = _catArticles[tab] || [];
     if (!items.length) {
