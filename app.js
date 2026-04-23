@@ -6708,34 +6708,27 @@ let _shareUrl = '', _shareTarget = '';
 
 function shareOnFacebook() {
   if (!generatedPost) { toast('⚠️ पहिले समाचार छान्नुहोस्।','error'); return; }
-  /*
-   * Facebook suppresses posts that contain external links in the text body.
-   * We omit the URL from the copied text — the watermark on the downloaded
-   * image already carries the branding & website URL.
-   */
   const text = buildPostText(generatedPost, selectedArticle?.title, { includeUrl: false });
+  /* Auto-download the image so user can attach it on Facebook */
+  setTimeout(() => { const btn = document.getElementById('downloadBtn'); if (btn) btn.click(); }, 600);
   _shareUrl    = 'https://www.facebook.com/';
   _shareTarget = 'facebook';
   openShareModal(
     '📘 Facebook मा साझा गर्नुहोस्',
-    '✅ तपाईंको पोस्ट क्लिपबोर्डमा कपी भयो!\n\nFacebook खुल्नेछ — "Write something…" बाकसमा Paste गर्नुहोस् र तस्बिर पनि थप्नुहोस्।\n\n💡 Image watermark मा website URL छ — by Shashi News Gen',
+    '✅ Text copied + Image downloading!\n\nFacebook खुल्नेछ → "Photo/Video" post बनाउनुस् → downloaded image select गर्नुस् → caption Paste गर्नुस्।\n\n💡 Image watermark मा website URL छ — by Shashi News Gen',
     text
   );
 }
 
 function shareOnInstagram() {
   if (!generatedPost) { toast('⚠️ पहिले समाचार छान्नुहोस्।','error'); return; }
-  /*
-   * Instagram has no web share API. Standard workflow:
-   * 1. Download the generated 1080×1080 image.
-   * 2. Paste caption (copied to clipboard) when creating the post on mobile.
-   */
   const caption = buildPostText(generatedPost, selectedArticle?.title, { includeUrl: false });
+  setTimeout(() => { const btn = document.getElementById('downloadBtn'); if (btn) btn.click(); }, 400);
   _shareUrl    = 'https://www.instagram.com/';
   _shareTarget = 'instagram';
   openShareModal(
     '📸 Instagram मा साझा गर्नुहोस्',
-    '✅ क्याप्सन क्लिपबोर्डमा कपी भयो!\n\n① तल "Download Image" थिच्नुहोस्।\n② Instagram खुल्नेछ — फोटो छान्नुहोस् र क्याप्सन Paste गर्नुहोस्।',
+    '✅ Caption copied + Image downloading!\n\n① Downloaded image Instagram app मा खोल्नुहोस्।\n② New Post/Story → image select → caption Paste गर्नुस्।\n\n📱 Mobile मा राम्रो काम गर्छ',
     caption
   );
 }
@@ -6743,16 +6736,13 @@ function shareOnInstagram() {
 function shareOnX() {
   if (!generatedPost) { toast('⚠️ पहिले समाचार छान्नुहोस्।','error'); return; }
   const post = generatedPost;
-  /*
-   * X (Twitter) limit ≈ 280 chars. We send: hook + title + top 3 hashtags + brand + URL.
-   * X natively renders URLs as clickable links in tweets.
-   */
   const tweet = `📢 ${post.title}\n\n${post.hashtags.slice(0, 3).join(' ')}\n\n— ${BRAND_NAME}`;
+  setTimeout(() => { const btn = document.getElementById('downloadBtn'); if (btn) btn.click(); }, 400);
   _shareUrl    = `https://x.com/intent/tweet?text=${encodeURIComponent(tweet)}`;
   _shareTarget = 'x';
   openShareModal(
     '𝕏 X (Twitter) मा साझा गर्नुहोस्',
-    '✅ Tweet तयार छ! "Share Now" थिच्नुहोस् — X मा सिधै पोस्ट हुन्छ।',
+    '✅ Tweet ready + Image downloading!\n\n"Share Now" थिच्नुहोस् → X खुल्छ → downloaded image पनि attach गर्न सक्नुहुन्छ।',
     tweet
   );
 }
@@ -7116,6 +7106,11 @@ let _memeFontFamily = 'Impact';
 let _memeCanvasW    = 600;
 let _memeCanvasH    = 600;
 
+/* ── Overlay images state ── */
+let _memeOverlays        = [];   // [{img, x, y, w, h, circle}]
+let _memeSelOverlayIdx   = -1;
+let _memeDragState       = null; // {overlayIdx, startX, startY, origX, origY}
+
 /* ── Evergreen Nepal meme topics (shown when live fetch unavailable) ── */
 const MEME_NEPAL_TOPICS_FALLBACK = [
   { emoji:'⚡', label:'Load Shedding फेरि आयो',    hint:'Nepal बिजुली कटौती र जनताको दुःख' },
@@ -7176,6 +7171,8 @@ function openMemeStudio() {
   }
 
   _loadMemeTrendingTopics();
+  /* Reset overlays */
+  _memeOverlays = []; _memeSelOverlayIdx = -1; _memeDragState = null;
   /* Short delay so canvas is visible/sized before drawing */
   setTimeout(() => renderMemeCanvas(), 80);
 }
@@ -7318,24 +7315,86 @@ function switchMemeImgSrc(src) {
     b.classList.toggle('active', b.dataset.src === src));
 }
 
-/* ── Image search (Unsplash Source — free, no API key) ── */
+/* ── Image search — multi-source for better relevance ── */
 async function searchMemeImages() {
   const q    = (document.getElementById('memeImgQuery').value || '').trim();
   const grid = document.getElementById('memeImgResults');
   if (!q) { toast('⚠️ Search keyword लेख्नुस्', 'error'); return; }
   grid.innerHTML = '<span style="color:var(--muted);font-size:.8rem">🔍 Searching…</span>';
-  const now = Date.now();
-  const srcs = [
-    `https://source.unsplash.com/300x300/?${encodeURIComponent(q)}&sig=${now}`,
-    `https://source.unsplash.com/300x300/?${encodeURIComponent(q + ',nepal')}&sig=${now+1}`,
-    `https://source.unsplash.com/300x300/?${encodeURIComponent(q + ',funny')}&sig=${now+2}`,
-    `https://picsum.photos/seed/${encodeURIComponent(q)}/300/300`,
-    `https://picsum.photos/seed/${encodeURIComponent(q+'2')}/300/300`,
+
+  /* Build a rich varied set of sources for the query */
+  const enc  = encodeURIComponent(q);
+  const enc2 = encodeURIComponent(q + ' person');
+  const now  = Date.now();
+
+  /* Wikimedia Commons — great for public figures, Nepal topics */
+  const wikimediaSrcs = [
+    `https://commons.wikimedia.org/w/index.php?title=Special:Search&search=${enc}&ns6=1&uselang=en`,
   ];
-  grid.innerHTML = srcs.map(src =>
+
+  /* Unsplash with varied seeds and topic-focused variants */
+  const unsplashSrcs = [
+    `https://source.unsplash.com/300x300/?${enc}&sig=${now}`,
+    `https://source.unsplash.com/300x300/?${encodeURIComponent(q + ',portrait')}&sig=${now+1}`,
+    `https://source.unsplash.com/300x300/?${encodeURIComponent(q + ',nepal')}&sig=${now+2}`,
+    `https://source.unsplash.com/300x300/?${encodeURIComponent(q + ',funny,meme')}&sig=${now+3}`,
+    `https://source.unsplash.com/300x300/?${encodeURIComponent(q + ',face,expression')}&sig=${now+4}`,
+    `https://source.unsplash.com/300x300/?${enc2}&sig=${now+5}`,
+  ];
+
+  /* Picsum as additional variety (not topic-relevant but useful for abstract) */
+  const picsumSrcs = [
+    `https://picsum.photos/seed/${enc}/300/300`,
+    `https://picsum.photos/seed/${enc}2/300/300`,
+  ];
+
+  /* Try to fetch Wikimedia Commons thumbnails for the query */
+  let wikimediaThumbs = [];
+  try {
+    const wikiApiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${enc}&srnamespace=6&srlimit=4&format=json&origin=*`;
+    const wRes = await fetch(wikiApiUrl, {signal: AbortSignal.timeout(4000)});
+    if (wRes.ok) {
+      const wJson = await wRes.json();
+      const titles = (wJson.query?.search || []).map(r => r.title);
+      for (const title of titles.slice(0, 3)) {
+        const imgApi = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&pithumbsize=300&format=json&origin=*`;
+        const iRes = await fetch(imgApi, {signal: AbortSignal.timeout(3000)});
+        if (iRes.ok) {
+          const iJson = await iRes.json();
+          const pages = Object.values(iJson.query?.pages || {});
+          for (const pg of pages) {
+            if (pg.thumbnail?.source) wikimediaThumbs.push(pg.thumbnail.source);
+          }
+        }
+      }
+    }
+  } catch (_) { /* silently ignore */ }
+
+  /* Also try Wikipedia directly for person searches */
+  let wikiPersonThumb = [];
+  try {
+    const wpApi = `https://en.wikipedia.org/w/api.php?action=query&titles=${enc}&prop=pageimages&pithumbsize=300&format=json&origin=*`;
+    const wpRes = await fetch(wpApi, {signal: AbortSignal.timeout(3000)});
+    if (wpRes.ok) {
+      const wpJson = await wpRes.json();
+      const pages = Object.values(wpJson.query?.pages || {});
+      for (const pg of pages) {
+        if (pg.thumbnail?.source) wikiPersonThumb.push(pg.thumbnail.source);
+      }
+    }
+  } catch (_) {}
+
+  const allSrcs = [...wikiPersonThumb, ...wikimediaThumbs, ...unsplashSrcs, ...picsumSrcs];
+
+  if (allSrcs.length === 0) {
+    grid.innerHTML = '<span style="color:var(--muted);font-size:.8rem">❌ No results found</span>';
+    return;
+  }
+
+  grid.innerHTML = allSrcs.map(src =>
     `<img class="meme-img-thumb" src="${src}" loading="lazy"
-       onclick="selectMemeImage(this,'${src}')"
-       onerror="this.style.opacity='.15'" title="Click to use">`
+       onclick="selectMemeImage(this,'${src.replace(/'/g,"\\'")}' )"
+       onerror="this.style.opacity='.1';this.style.pointerEvents='none'" title="Click to use">`
   ).join('');
 }
 
@@ -7369,6 +7428,133 @@ function memeApplyBgColor() {
   renderMemeCanvas();
   memeSetStatus('🎨 Solid background set');
 }
+
+/* ─────────────────────────────────────────────────────────────
+   OVERLAY IMAGES — add, drag, resize, circle-crop
+   ───────────────────────────────────────────────────────────── */
+function memeAddOverlayImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.getElementById('memeCanvas');
+      const W = canvas.width, H = canvas.height;
+      const w = Math.round(W * 0.28);
+      const h = Math.round(w * (img.naturalHeight / img.naturalWidth));
+      // Place next overlay to the right of the previous one
+      const xOffset = _memeOverlays.length > 0
+        ? (_memeOverlays[_memeOverlays.length-1].x + _memeOverlays[_memeOverlays.length-1].w + 10) % (W - w)
+        : Math.round(W * 0.1);
+      _memeOverlays.push({ img, x: xOffset, y: Math.round(H * 0.35), w, h, circle: false });
+      _memeSelOverlayIdx = _memeOverlays.length - 1;
+      _updateOverlayControls();
+      renderMemeCanvas();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+function memeAddOverlayCircle() {
+  // Just mark last overlay as circle-cropped, or prompt user to add image first
+  if (_memeSelOverlayIdx >= 0 && _memeOverlays[_memeSelOverlayIdx]) {
+    _memeOverlays[_memeSelOverlayIdx].circle = true;
+    document.getElementById('memeOverlayCircle').checked = true;
+    renderMemeCanvas();
+  } else {
+    toast('ℹ️ First add an overlay image, then click ⭕', 'info', 3000);
+  }
+}
+
+function memeRemoveSelectedOverlay() {
+  if (_memeSelOverlayIdx < 0) return;
+  _memeOverlays.splice(_memeSelOverlayIdx, 1);
+  _memeSelOverlayIdx = _memeOverlays.length > 0 ? _memeOverlays.length - 1 : -1;
+  _updateOverlayControls();
+  renderMemeCanvas();
+}
+
+function memeResizeSelectedOverlay(val) {
+  if (_memeSelOverlayIdx < 0 || !_memeOverlays[_memeSelOverlayIdx]) return;
+  const ov = _memeOverlays[_memeSelOverlayIdx];
+  const aspect = ov.img.naturalHeight / ov.img.naturalWidth;
+  ov.w = parseInt(val);
+  ov.h = Math.round(ov.w * aspect);
+  renderMemeCanvas();
+}
+
+function memeToggleOverlayCircle(checked) {
+  if (_memeSelOverlayIdx < 0 || !_memeOverlays[_memeSelOverlayIdx]) return;
+  _memeOverlays[_memeSelOverlayIdx].circle = checked;
+  renderMemeCanvas();
+}
+
+function _updateOverlayControls() {
+  const ctrl = document.getElementById('memeOverlayControls');
+  if (!ctrl) return;
+  if (_memeSelOverlayIdx >= 0 && _memeOverlays[_memeSelOverlayIdx]) {
+    ctrl.style.display = 'block';
+    const ov = _memeOverlays[_memeSelOverlayIdx];
+    document.getElementById('memeOverlaySize').value = ov.w;
+    document.getElementById('memeOverlayCircle').checked = ov.circle;
+  } else {
+    ctrl.style.display = 'none';
+  }
+}
+
+/* Drag support on canvas */
+function _memeCanvasCoords(e) {
+  const canvas = document.getElementById('memeCanvas');
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+}
+
+function memeCanvasMouseDown(e) {
+  const { x, y } = _memeCanvasCoords(e);
+  // Find topmost overlay hit
+  for (let i = _memeOverlays.length - 1; i >= 0; i--) {
+    const ov = _memeOverlays[i];
+    const hit = ov.circle
+      ? Math.hypot(x - (ov.x + ov.w/2), y - (ov.y + ov.h/2)) <= ov.w/2
+      : (x >= ov.x && x <= ov.x + ov.w && y >= ov.y && y <= ov.y + ov.h);
+    if (hit) {
+      _memeSelOverlayIdx = i;
+      _memeDragState = { overlayIdx: i, startX: x, startY: y, origX: ov.x, origY: ov.y };
+      _updateOverlayControls();
+      renderMemeCanvas();
+      return;
+    }
+  }
+  _memeSelOverlayIdx = -1;
+  _memeDragState = null;
+  _updateOverlayControls();
+  renderMemeCanvas();
+}
+
+function memeCanvasMouseMove(e) {
+  if (!_memeDragState) return;
+  e.preventDefault();
+  const { x, y } = _memeCanvasCoords(e);
+  const ov = _memeOverlays[_memeDragState.overlayIdx];
+  if (!ov) return;
+  ov.x = _memeDragState.origX + (x - _memeDragState.startX);
+  ov.y = _memeDragState.origY + (y - _memeDragState.startY);
+  renderMemeCanvas();
+}
+
+function memeCanvasMouseUp(e) {
+  _memeDragState = null;
+}
+
+function memeCanvasTouchStart(e) { e.preventDefault(); memeCanvasMouseDown(e); }
+function memeCanvasTouchMove(e)  { e.preventDefault(); memeCanvasMouseMove(e); }
 
 /* ── Style setters ── */
 function setMemeTextColor(color, btn) {
@@ -7498,11 +7684,11 @@ async function renderMemeCanvas() {
   ctx.shadowOffsetY = 2;
   ctx.font = `800 ${memeBannerFs}px "Segoe UI","Helvetica Neue",Arial,sans-serif`;
   ctx.fillStyle = '#ffe4c4';
-  ctx.fillText('😂  MEME', W / 2, BANNER_H / 2);
+  ctx.fillText('😂  Meme', W / 2, BANNER_H / 2);
   /* Crisp white top layer */
   ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
   ctx.fillStyle = '#ffffff';
-  ctx.fillText('😂  MEME', W / 2, BANNER_H / 2);
+  ctx.fillText('😂  Meme', W / 2, BANNER_H / 2);
   ctx.restore();
 
   /* No date stamp */
@@ -7514,8 +7700,10 @@ async function renderMemeCanvas() {
   /* ── 3. Meme text block ── */
   const fontSize  = parseInt(document.getElementById('memeFontSize') ? document.getElementById('memeFontSize').value : 42);
   const useStroke = document.getElementById('memeStroke') ? document.getElementById('memeStroke').checked : true;
-  const topText   = (document.getElementById('memeTopText')    ? document.getElementById('memeTopText').value    : '').toUpperCase();
-  const botText   = (document.getElementById('memeBottomText') ? document.getElementById('memeBottomText').value : '').toUpperCase();
+  const topText   = (document.getElementById('memeTopText')     ? document.getElementById('memeTopText').value     : '').toUpperCase();
+  const mid1Text  = (document.getElementById('memeMiddleText1') ? document.getElementById('memeMiddleText1').value : '').toUpperCase();
+  const mid2Text  = (document.getElementById('memeMiddleText2') ? document.getElementById('memeMiddleText2').value : '').toUpperCase();
+  const botText   = (document.getElementById('memeBottomText')  ? document.getElementById('memeBottomText').value  : '').toUpperCase();
 
   /* Text zone: between bottom of banner and top of watermark strip */
   const STRIP_H   = 72;
@@ -7527,8 +7715,9 @@ async function renderMemeCanvas() {
 
   function drawMemeText(text, yAnchor, baseline) {
     if (!text) return;
-    ctx.font         = `900 ${fontSize}px "${_memeFontFamily}", Impact, "Arial Black", sans-serif`;
-    ctx.textBaseline = baseline;
+    const fs = baseline === 'middle' ? Math.round(fontSize * 0.82) : fontSize;
+    ctx.font         = `900 ${fs}px "${_memeFontFamily}", Impact, "Arial Black", sans-serif`;
+    ctx.textBaseline = baseline === 'middle' ? 'alphabetic' : baseline;
     const maxW  = W * 0.88;
     const words = text.split(' ');
     const lines = [];
@@ -7539,7 +7728,7 @@ async function renderMemeCanvas() {
       else line = test;
     }
     if (line) lines.push(line);
-    const lineH  = fontSize * 1.22;
+    const lineH  = fs * 1.22;
     const totalH = lines.length * lineH;
     const startY = baseline === 'bottom' ? yAnchor - totalH + lineH : yAnchor;
     lines.forEach((l, i) => {
@@ -7547,7 +7736,7 @@ async function renderMemeCanvas() {
       if (useStroke) {
         ctx.save();
         ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 4;
-        ctx.lineWidth   = Math.max(3, fontSize * 0.12);
+        ctx.lineWidth   = Math.max(3, fs * 0.12);
         ctx.strokeStyle = '#000';
         ctx.lineJoin    = 'round';
         ctx.strokeText(l, W / 2, y);
@@ -7562,7 +7751,51 @@ async function renderMemeCanvas() {
   }
 
   drawMemeText(topText, textZoneT + 6, 'top');
+  /* Middle texts — centred vertically in the text zone */
+  if (mid1Text || mid2Text) {
+    const midZoneCenterY = (textZoneT + textZoneB) / 2;
+    const midFontSize = Math.round(fontSize * 0.82);
+    const midLines = [mid1Text, mid2Text].filter(Boolean);
+    const midLineH = midFontSize * 1.3;
+    const midBlockH = midLines.length * midLineH;
+    let midY = midZoneCenterY - midBlockH / 2 + midFontSize / 2;
+    ctx.save();
+    ctx.font = `900 ${midFontSize}px "${_memeFontFamily}", Impact, "Arial Black", sans-serif`;
+    ctx.restore();
+    midLines.forEach(line => {
+      drawMemeText(line, midY, 'middle');
+      midY += midLineH;
+    });
+  }
   drawMemeText(botText, textZoneB - 6, 'bottom');
+
+  /* ── 3b. Overlay images ── */
+  for (let i = 0; i < _memeOverlays.length; i++) {
+    const ov = _memeOverlays[i];
+    ctx.save();
+    const isSelected = (i === _memeSelOverlayIdx);
+    if (ov.circle) {
+      ctx.beginPath();
+      ctx.arc(ov.x + ov.w / 2, ov.y + ov.w / 2, ov.w / 2, 0, Math.PI * 2);
+      ctx.clip();
+    }
+    ctx.drawImage(ov.img, ov.x, ov.y, ov.w, ov.h);
+    ctx.restore();
+    if (isSelected) {
+      ctx.save();
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth   = 3;
+      ctx.setLineDash([6, 3]);
+      if (ov.circle) {
+        ctx.beginPath();
+        ctx.arc(ov.x + ov.w / 2, ov.y + ov.w / 2, ov.w / 2 + 3, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(ov.x - 2, ov.y - 2, ov.w + 4, ov.h + 4);
+      }
+      ctx.restore();
+    }
+  }
 
   /* ── 4. Author watermark strip (avatar + name + URL) ── */
   const showWatermark = document.getElementById('memeWatermark') ? document.getElementById('memeWatermark').checked : true;
@@ -7705,8 +7938,15 @@ function memeGenerateTemplate() {
   document.getElementById('memeTopText').value    = tmpl.top;
   document.getElementById('memeBottomText').value = tmpl.bottom;
   const capEl = document.getElementById('memeCaptionText');
-  if (capEl && !capEl.value) {
-    capEl.value = `${tmpl.top} ${tmpl.bottom} 😂😂\n#NepalMeme #नेपाली_मिम #ShashiNewsGen #viral #trending #nepal #funnynepal #meme`;
+  if (capEl) {
+    /* Generate a relevant caption based on the actual meme content */
+    const topicLabel = document.getElementById('memeTopicInput')?.value?.trim() || 'Nepal';
+    const captions = [
+      `${tmpl.top}\n${tmpl.bottom}\n\n😂 Tag गर्नुस् जो यो situation मा छन्! यो share गर्न नबिर्सनुस् �\n#NepalMeme #नेपाली_मिम #${topicLabel.replace(/\s+/g,'_').replace(/[^\w_]/g,'')} #ShashiNewsGen #viral #trending #nepal #funnynepal`,
+      `यो meme share गर्नुस् तपाईंको friends लाई! 😂🔥\n"${tmpl.top}" — सबैको यही हाल हो! 😭\n#NepalMeme #ShashiNewsGen #नेपालीहास्य #viral #nepal #meme #trending #relatable`,
+      `😂😂 Nepali life is full of surprises!\n${tmpl.bottom}\nComment गर्नुस् — तपाईंको पनि यस्तै हो? 😅\n#NepalMeme #ShashiNewsGen #${topicLabel.replace(/\s+/g,'_').replace(/[^\w_]/g,'')} #funnynepal #trending #nepal #viral #हास्य`,
+    ];
+    capEl.value = captions[Math.floor(Math.random() * captions.length)];
   }
   /* Auto-search matching image for this template */
   const imgQ = tmpl.img || (topic.split(/\s+/).slice(0, 3).join(' ') || 'funny relatable meme');
@@ -7764,24 +8004,61 @@ async function memeCopyImage() {
   } catch { toast('⚠️ Clipboard copy failed — download गर्नुस्', 'error', 3000); }
 }
 
-/* ── Share ── */
-function shareMeme(platform) {
-  const caption = (document.getElementById('memeCaptionText') ? document.getElementById('memeCaptionText').value : '😂 Nepal Meme!') +
-    '\n\nCreate yours → https://shajais.github.io/ShashiNewsGen/';
-  const encoded  = encodeURIComponent(caption);
-  const siteEnc  = encodeURIComponent('https://shajais.github.io/ShashiNewsGen/');
-  const urls = {
-    facebook : 'https://www.facebook.com/sharer/sharer.php?u=' + siteEnc + '&quote=' + encoded,
-    twitter  : 'https://twitter.com/intent/tweet?text=' + encoded,
-    whatsapp : 'https://api.whatsapp.com/send?text=' + encoded,
-  };
-  if (platform === 'instagram') {
-    downloadMeme();
-    toast('📸 Downloaded! Instagram app खोलेर Story/Post गर्नुस्', 'info', 7000);
+/* ── Share (all studios) ── */
+async function _shareCanvasToSocial(platform, canvasId, captionText, downloadFn) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const caption = captionText + '\n\nCreate yours → https://shajais.github.io/ShashiNewsGen/';
+
+  if (platform === 'whatsapp') {
+    const encoded = encodeURIComponent(caption);
+    window.open('https://api.whatsapp.com/send?text=' + encoded, '_blank', 'noopener,width=620,height=520');
     return;
   }
-  if (urls[platform]) window.open(urls[platform], '_blank', 'noopener,width=620,height=520');
-  setTimeout(downloadMeme, 400);
+
+  if (platform === 'instagram') {
+    /* Instagram doesn't have a web share API for images — best UX: download + instruct */
+    if (typeof downloadFn === 'function') downloadFn();
+    toast('📸 Image downloaded! Instagram app खोलेर Story/Post मा upload गर्नुस्', 'info', 8000);
+    return;
+  }
+
+  /* Try Web Share API (works on mobile Chrome/Safari) */
+  if (navigator.canShare && platform === 'native') {
+    try {
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+      const file = new File([blob], 'shashi-news-gen.png', { type: 'image/png' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Shashi News Gen', text: caption });
+        return;
+      }
+    } catch (e) { console.warn('Web Share:', e); }
+  }
+
+  /* Facebook — shares the site URL + quote text (images can't be shared directly via web) */
+  if (platform === 'facebook') {
+    const siteEnc = encodeURIComponent('https://shajais.github.io/ShashiNewsGen/');
+    const textEnc = encodeURIComponent(caption);
+    /* Download the image first so user can attach it manually */
+    if (typeof downloadFn === 'function') downloadFn();
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${siteEnc}&quote=${textEnc}`, '_blank', 'noopener,width=620,height=520');
+    toast('� Image downloaded! Facebook खुल्यो — Post मा image attach गर्न सक्नुहुन्छ', 'info', 7000);
+    return;
+  }
+
+  /* Twitter / X */
+  if (platform === 'twitter') {
+    if (typeof downloadFn === 'function') downloadFn();
+    const textEnc = encodeURIComponent(caption);
+    window.open(`https://twitter.com/intent/tweet?text=${textEnc}`, '_blank', 'noopener,width=620,height=520');
+    toast('💡 Image downloaded! Tweet मा image attach गर्नुस् 🐦', 'info', 6000);
+    return;
+  }
+}
+
+function shareMeme(platform) {
+  const caption = (document.getElementById('memeCaptionText') ? document.getElementById('memeCaptionText').value : '😂 Nepal Meme!');
+  _shareCanvasToSocial(platform, 'memeCanvas', caption, downloadMeme);
 }
 
 /* ================================================================
@@ -8512,18 +8789,9 @@ function puzzlePhotoTouchMove(e) {
 }
 
 function sharePuzzle(platform) {
-  const expr    = document.getElementById('puzzleExpr')?.value||'Math Puzzle';
-  const caption = `🧩 Can you solve it??\n\n${expr}\n\n90% fail! Only for genius 🧠\n\nCreate yours → https://shajais.github.io/ShashiNewsGen/`;
-  const encoded = encodeURIComponent(caption);
-  const siteEnc = encodeURIComponent('https://shajais.github.io/ShashiNewsGen/');
-  if (platform==='instagram') { downloadPuzzle(); toast('📸 Downloaded! Instagram app खोलेर Post गर्नुस्','info',7000); return; }
-  const urls = {
-    facebook:'https://www.facebook.com/sharer/sharer.php?u='+siteEnc+'&quote='+encoded,
-    twitter :'https://twitter.com/intent/tweet?text='+encoded,
-    whatsapp:'https://api.whatsapp.com/send?text='+encoded,
-  };
-  if (urls[platform]) window.open(urls[platform],'_blank','noopener,width=620,height=520');
-  setTimeout(downloadPuzzle, 400);
+  const expr    = document.getElementById('puzzleExpr')?.value || 'Math Puzzle';
+  const caption = `🧩 Can you solve it??\n\n${expr}\n\n90% fail! Only for genius 🧠\n#MathPuzzle #ShashiNewsGen #viral #nepal #puzzle #genius #mathchallenge #trending`;
+  _shareCanvasToSocial(platform, 'puzzleCanvas', caption, downloadPuzzle);
 }
 
 /* ── Puzzle Studio live-render bindings ── */
