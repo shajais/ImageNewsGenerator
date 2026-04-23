@@ -8370,10 +8370,24 @@ async function renderPuzzleCanvas() {
     rightY += spacing * 0.5;
   }
 
-  /* 4d. CTA — split into two lines so it never overflows */
+  /* 4d. CTA — full-width, centred above the watermark strip */
   {
-    const ctaFont = `600 ${ctaFs}px Arial,sans-serif`;
-    rightY = _pzR('💬 Comment your answer ↓', ctaFont, theme.subtext + 'aa', null, rightY);
+    const ctaY = H - WM_H - Math.round(H * 0.055);   // pin just above watermark
+    let ctaSize = ctaFs;
+    ctx.save();
+    ctx.font = `600 ${ctaSize}px Arial,sans-serif`;
+    /* Auto-shrink to fit full canvas width with generous padding */
+    while (ctx.measureText('💬 Comment your answer ↓').width > W - PAD * 4 && ctaSize > 10) {
+      ctaSize--;
+      ctx.font = `600 ${ctaSize}px Arial,sans-serif`;
+    }
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle    = theme.subtext + 'cc';
+    ctx.shadowColor  = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur   = 6;
+    ctx.fillText('💬 Comment your answer ↓', W / 2, ctaY);
+    ctx.restore();
   }
 
   /* ═══════════════════════════════════════════════════════
