@@ -1209,14 +1209,14 @@ function _locationFeedsFor(label) {
     }
   }
 
-  /* 3. Generic Google News queries — always include location keyword in the query
-     so results are scoped to that location, not all of Nepal.
-     Use `when:1d` to restrict to last 24 h on Google News RSS.              */
+  /* 3. Generic Google News queries — scope to location keyword.
+     Note: `tbs=qdr:d` is ignored by Google News RSS; date filtering is done
+     in _loadLocationArticles instead.                                         */
   const encLabel   = encodeURIComponent(label);
   const encLabelNe = encodeURIComponent(label + ' समाचार');
   const genericFeeds = [
-    { url: `https://news.google.com/rss/search?q=${encLabel}+Nepal&hl=en&gl=NP&ceid=NP:en&tbs=qdr:d`, name: 'Google (EN): ' + label, lang: 'en' },
-    { url: `https://news.google.com/rss/search?q=${encLabelNe}&hl=ne&gl=NP&ceid=NP:ne&tbs=qdr:d`, name: 'Google (NE): ' + label, lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encLabel}+Nepal&hl=en&gl=NP&ceid=NP:en`, name: 'Google (EN): ' + label, lang: 'en' },
+    { url: `https://news.google.com/rss/search?q=${encLabelNe}&hl=ne&gl=NP&ceid=NP:ne`,     name: 'Google (NE): ' + label, lang: 'ne' },
   ];
 
   /* Combine: local-specific first, then generic — deduplicate by URL */
@@ -1256,18 +1256,17 @@ async function _loadLocationArticles(loc) {
     const haystack = (a.title + ' ' + a.description).toLowerCase();
     return matchTokens.some(t => haystack.includes(t));
   });
-  /* Use relevance-filtered set only if it has articles; otherwise keep all
-     (e.g. very obscure location where the feed IS the location's own outlet) */
-  if (relevant.length > 0) items = relevant;
+  /* Use relevance-filtered set only if it returns ≥3 results (avoids stripping
+     an outlet's own feed that doesn't mention the city name in every headline) */
+  if (relevant.length >= 3) items = relevant;
 
-  /* ── 2. Date filter: keep only articles from the last 24 hours ── */
-  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-  const fresh  = items.filter(a => {
-    const t = new Date(a.pubDate).getTime();
-    return !isNaN(t) && t >= cutoff;
-  });
-  /* Always use the fresh set — even if empty; we show a proper empty state */
-  items = fresh;
+  /* ── 2. Date filter: prefer articles from the last 48 h ── */
+  const cutoff48 = Date.now() - 48 * 60 * 60 * 1000;
+  const cutoff7d = Date.now() - 7  * 24 * 60 * 60 * 1000;
+  const fresh48  = items.filter(a => { const t = new Date(a.pubDate).getTime(); return !isNaN(t) && t >= cutoff48; });
+  const fresh7d  = items.filter(a => { const t = new Date(a.pubDate).getTime(); return !isNaN(t) && t >= cutoff7d;  });
+  /* Cascade: prefer 48h → 7d → all (Google RSS often strips pubDate) */
+  items = fresh48.length > 0 ? fresh48 : fresh7d.length > 0 ? fresh7d : items;
 
   /* ── 3. Tag each article with location for the UI badge ── */
   items.forEach(a => { a._locationLabel = loc.label; });
@@ -1278,7 +1277,7 @@ async function _loadLocationArticles(loc) {
     renderCategoryList('locations');
     const total = _locationFeeds.reduce((s, f) => s + (f.loaded ? f.articles.length : 0), 0);
     const badge = document.getElementById('statusBadge');
-    if (badge) badge.textContent = total ? `${total} articles · last 24h` : 'No recent news found';
+    if (badge) badge.textContent = total ? `${total} articles · last 48h` : 'No recent news found';
   }
 }
 
@@ -1422,7 +1421,7 @@ function renderCategoryList(tab, filterText) {
     items = [];
     _locationFeeds.forEach(loc => {
       if (!loc.loaded) return;
-      /* Show up to 20 articles per location (already filtered to 24h in _loadLocationArticles) */
+      /* Show up to 20 articles per location (filtered to 48h in _loadLocationArticles) */
       const locItems = loc.articles.slice(0, 20);
       locItems.forEach(a => { a._locationLabel = a._locationLabel || loc.label; });
       items.push(...locItems);
@@ -1431,7 +1430,7 @@ function renderCategoryList(tab, filterText) {
       list.innerHTML = `<div class="empty-state"><div class="icon">🕐</div>
         <p>No articles about <strong>${escHtml(_locationFeeds.map(f=>f.label).join(', '))}</strong> in the last 24 hours.</p>
         <p style="font-size:.78rem;color:var(--muted);margin-top:6px">Try again later — local news is updated periodically.</p>
-        <button class="btn btn-ghost" style="margin-top:10px;font-size:.8rem" onclick="_locationFeeds.filter(f=>f.loaded).forEach(f=>{f.loaded=false;_loadLocationArticles(f)});renderCategoryList('locations')">🔄 Refresh</button>
+        <button class="btn btn-ghost" style="margin-top:10px;font-size:.8rem" onclick="_locationFeeds.forEach(f=>{f.loaded=false;f.articles=[];_loadLocationArticles(f)});renderCategoryList('locations')">🔄 Refresh</button>
         </div>`;
       return;
     }
