@@ -8378,6 +8378,7 @@ function memeCanvasMouseDown(e) {
   for (const key of [...textKeys].reverse()) {
     if (!textValues[key]) continue;
     const bb = _memeTextBBox(key, W, H, BANNER_H, STRIP_H, fontSize);
+    if (!bb) continue; // key is handled by a ribbon — not draggable
     if (x >= bb.x && x <= bb.x + bb.w && y >= bb.y && y <= bb.y + bb.h) {
       _memeSelText       = key;
       _memeSelOverlayIdx = -1;
@@ -8699,14 +8700,16 @@ async function renderMemeCanvas() {
   const TOP_RIBBON_H  = topText  ? topTotalH  + PAD_V * 2 : ACCENT_H;
   const BOT_RIBBON_H  = botText  ? botTotalH  + PAD_V * 2 : ACCENT_H;
 
-  /* Store for text zone calculation */
-  const BANNER_H = TOP_RIBBON_H;   // replaces old fixed BANNER_H usage below
-  const STRIP_H  = Math.max(BOT_RIBBON_H, 72); // watermark is at least 72px
+  /* Watermark strip is always 72px at the very bottom.
+     Bottom ribbon sits ABOVE the watermark — never overlapping it. */
+  const WATERMARK_H = 72;
+  const BANNER_H    = TOP_RIBBON_H;
+  const STRIP_H     = BOT_RIBBON_H + WATERMARK_H; // total reserved at bottom
 
   /* Draw top ribbon */
   drawRibbon(topText, fontSize, 0, TOP_RIBBON_H, 'top');
 
-  /* Draw bottom ribbon (above watermark) */
+  /* Draw bottom ribbon — sits directly above the watermark strip */
   const botRibbonY = H - STRIP_H;
   drawRibbon(botText, fontSize, botRibbonY, BOT_RIBBON_H, 'bottom');
 
