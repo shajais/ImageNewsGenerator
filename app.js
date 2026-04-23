@@ -7101,7 +7101,8 @@ function _closeEditMode(m) {
 
 /* ── State ── */
 let _memeImgObj     = null;   // kept for legacy compat (single bg)
-let _memeSlots      = [];     // [{type:'img'|'color', img:Image|null, color:string|null}]  up to 4
+let _memeSlots      = [];     // [{type:'img'|'color', img:Image|null, color:string|null, panX:0, panY:0}]  up to 4
+let _memeSelSlotIdx = -1;     // index of currently selected slot panel for panning
 let _memeTextColor  = '#ffffff';
 let _memeFontFamily = 'Impact';
 let _memeCanvasW    = 600;
@@ -7183,7 +7184,7 @@ function openMemeStudio() {
 
   _loadMemeTrendingTopics();
   /* Reset overlays and text positions */
-  _memeSlots = []; _memeImgObj = null;
+  _memeSlots = []; _memeImgObj = null; _memeSelSlotIdx = -1;
   _memeOverlays = []; _memeSelOverlayIdx = -1; _memeDragState = null; _memeSelText = null;
   _memeTextPositions = { top:{x:null,y:null,fontSize:0}, mid1:{x:null,y:null,fontSize:0}, mid2:{x:null,y:null,fontSize:0}, bot:{x:null,y:null,fontSize:0} };
   /* Short delay so canvas is visible/sized before drawing */
@@ -7456,7 +7457,7 @@ function selectMemeImage(el, src) {
 function memeAddSlot(type, srcOrColor) {
   if (_memeSlots.length >= 4) { toast('ℹ️ Maximum 4 panels allowed — remove one first', 'info', 3000); return; }
   if (type === 'color') {
-    _memeSlots.push({ type: 'color', img: null, color: srcOrColor });
+    _memeSlots.push({ type: 'color', img: null, color: srcOrColor, panX: 0, panY: 0 });
     _memeImgObj = null;
     _renderSlotList();
     renderMemeCanvas();
@@ -7467,7 +7468,7 @@ function memeAddSlot(type, srcOrColor) {
   const img = new Image();
   img.crossOrigin = 'anonymous';
   img.onload = () => {
-    _memeSlots.push({ type: 'img', img, color: null });
+    _memeSlots.push({ type: 'img', img, color: null, panX: 0, panY: 0 });
     _memeImgObj = null; // slot mode takes over
     _renderSlotList();
     renderMemeCanvas();
@@ -7480,6 +7481,7 @@ function memeAddSlot(type, srcOrColor) {
 
 function memeRemoveSlot(idx) {
   _memeSlots.splice(idx, 1);
+  if (_memeSelSlotIdx >= _memeSlots.length) _memeSelSlotIdx = _memeSlots.length - 1;
   _renderSlotList();
   renderMemeCanvas();
 }
@@ -7516,7 +7518,7 @@ function memeLoadUpload(input) {
     reader.onload = e => {
       const img = new Image();
       img.onload = () => {
-        _memeSlots.push({ type: 'img', img, color: null });
+        _memeSlots.push({ type: 'img', img, color: null, panX: 0, panY: 0 });
         _memeImgObj = null;
         loaded++;
         _renderSlotList();
@@ -7783,6 +7785,24 @@ function memeCanvasMouseDown(e) {
   const STRIP_H  = 72;
   const fontSize = parseInt(document.getElementById('memeFontSize')?.value || 42);
 
+  // 0. Check slot panel hits for panning background images
+  if (_memeSlots.length > 0) {
+    const zoneTop = BANNER_H + 3;
+    const zoneBot = H - STRIP_H - 2;
+    const zoneH   = zoneBot - zoneTop;
+    const rowH    = Math.floor(zoneH / _memeSlots.length);
+    for (let i = 0; i < _memeSlots.length; i++) {
+      const sy = zoneTop + i * rowH;
+      const sh = (i === _memeSlots.length - 1) ? (zoneBot - sy) : rowH;
+      if (_memeSlots[i].type === 'img' && x >= 0 && x <= W && y >= sy && y <= sy + sh) {
+        // Only select the slot if clicking in the strip — overlays/text take priority so check those first
+        // Defer to after text/overlay checks below — use a flag
+        // Actually: check text and overlay first; if nothing hit, then pan this slot
+        break;
+      }
+    }
+  }
+
   // 1. Check text label hits first (top layer)
   const textKeys = ['top','mid1','mid2','bot'];
   const textValues = {
@@ -7819,7 +7839,29 @@ function memeCanvasMouseDown(e) {
       return;
     }
   }
-  // Deselect
+  // 3. Check slot panel hits for panning — fallback after text & overlay
+  if (_memeSlots.length > 0) {
+    const zoneTop = BANNER_H + 3;
+    const zoneBot = H - STRIP_H - 2;
+    const zoneH   = zoneBot - zoneTop;
+    const rowH    = Math.floor(zoneH / _memeSlots.length);
+    for (let i = 0; i < _memeSlots.length; i++) {
+      const sy = zoneTop + i * rowH;
+      const sh = (i === _memeSlots.length - 1) ? (zoneBot - sy) : rowH;
+      if (_memeSlots[i].type === 'img' && x >= 0 && x <= W && y >= sy && y <= sy + sh) {
+        _memeSelSlotIdx    = i;
+        _memeSelOverlayIdx = -1;
+        _memeSelText       = null;
+        _memeDragState     = { type:'slot', idx: i, startX: x, startY: y, origPanX: _memeSlots[i].panX || 0, origPanY: _memeSlots[i].panY || 0 };
+        _updateOverlayControls();
+        renderMemeCanvas();
+        return;
+      }
+    }
+  }
+
+  // Deselect all
+  _memeSelSlotIdx    = -1;
   _memeSelOverlayIdx = -1;
   _memeSelText       = null;
   _memeDragState     = null;
@@ -7840,6 +7882,11 @@ function memeCanvasMouseMove(e) {
     ov.x = _memeDragState.origX + dx;
     ov.y = _memeDragState.origY + dy;
     ov.manualPos = true;
+  } else if (_memeDragState.type === 'slot') {
+    const slot = _memeSlots[_memeDragState.idx];
+    if (!slot || slot.type !== 'img') return;
+    slot.panX = _memeDragState.origPanX + dx;
+    slot.panY = _memeDragState.origPanY + dy;
   } else if (_memeDragState.type === 'text') {
     const pos = _memeTextPositions[_memeDragState.key];
     pos.x = _memeDragState.origX + dx;
@@ -7929,7 +7976,24 @@ async function renderMemeCanvas() {
         ctx.beginPath(); ctx.rect(0, sy, W, sh); ctx.clip();
         const scale = Math.max(W / iw, sh / ih);
         const dw = iw * scale, dh = ih * scale;
-        ctx.drawImage(slot.img, (W - dw) / 2, sy + (sh - dh) / 2, dw, dh);
+        // Apply pan offset (clamped so image never fully leaves its strip)
+        const baseX = (W - dw) / 2;
+        const baseY = sy + (sh - dh) / 2;
+        const maxPanX = Math.max(0, (dw - W) / 2);
+        const maxPanY = Math.max(0, (dh - sh) / 2);
+        const px = Math.max(-maxPanX, Math.min(maxPanX, slot.panX || 0));
+        const py = Math.max(-maxPanY, Math.min(maxPanY, slot.panY || 0));
+        ctx.drawImage(slot.img, baseX + px, baseY + py, dw, dh);
+        /* Draw selection border if this slot is selected */
+        if (i === _memeSelSlotIdx) {
+          ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 3; ctx.setLineDash([6,3]);
+          ctx.strokeRect(1, sy + 1, W - 2, sh - 2);
+          ctx.setLineDash([]);
+          /* Pan hint */
+          ctx.fillStyle = 'rgba(245,158,11,0.85)'; ctx.font = 'bold 13px sans-serif';
+          ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+          ctx.fillText('✥ drag to pan panel ' + (i+1), W/2, sy + 4);
+        }
         /* Subtle dark overlay */
         const ov = ctx.createLinearGradient(0, sy, 0, sy + sh);
         ov.addColorStop(0,   'rgba(0,0,0,0.45)');
