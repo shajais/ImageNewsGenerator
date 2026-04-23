@@ -8370,13 +8370,16 @@ async function renderPuzzleCanvas() {
     rightY += spacing * 0.5;
   }
 
-  /* 4d. CTA — full-width, centred above the watermark strip */
-  {
-    const ctaY = H - WM_H - Math.round(H * 0.055);   // pin just above watermark
+  /* 4d. CTA — position depends on format:
+     • Square / Landscape (W >= H): below the puzzle box in the right zone (in-flow)
+     • Portrait / Story / Reel  (H > W): full-width centred just above watermark */
+  const _isPortrait = H > W;
+  if (_isPortrait) {
+    /* Full-width, centred, pinned just above watermark */
+    const ctaY = H - WM_H - Math.round(H * 0.055);
     let ctaSize = ctaFs;
     ctx.save();
     ctx.font = `600 ${ctaSize}px Arial,sans-serif`;
-    /* Auto-shrink to fit full canvas width with generous padding */
     while (ctx.measureText('💬 Comment your answer ↓').width > W - PAD * 4 && ctaSize > 10) {
       ctaSize--;
       ctx.font = `600 ${ctaSize}px Arial,sans-serif`;
@@ -8388,6 +8391,10 @@ async function renderPuzzleCanvas() {
     ctx.shadowBlur   = 6;
     ctx.fillText('💬 Comment your answer ↓', W / 2, ctaY);
     ctx.restore();
+  } else {
+    /* Square / Landscape — draw in-flow below puzzle box inside right zone */
+    _pzR('💬 Comment your answer ↓', `600 ${ctaFs}px Arial,sans-serif`,
+         theme.subtext + 'cc', null, rightY);
   }
 
   /* ═══════════════════════════════════════════════════════
