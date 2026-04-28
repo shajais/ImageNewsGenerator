@@ -3,8 +3,39 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Shashi Creator Studio</title>
-  <link rel="stylesheet" href="style.css?v=20260422a" />
+  <title>Shashi Creator Studio — AI News, Meme & Social Post Generator Nepal</title>
+  <meta name="description" content="Shashi Creator Studio — Create viral Nepali news posts, memes, festival greetings, political quotes, ad banners & more for social media. Free AI-powered content studio.">
+  <meta name="keywords" content="Nepal news generator, Nepali social media post maker, meme generator Nepal, festival post Nepal, AI content studio, shashi creator studio, news image generator">
+  <meta name="author" content="Shashi Jaiswal">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://shajais.github.io/ShashiNewsGen/">
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Shashi Creator Studio — AI News & Meme Generator Nepal">
+  <meta property="og:description" content="Create viral Nepali news posts, memes, festival greetings, quotes, ad banners & social polls. Free AI-powered content studio by Shashi Jaiswal.">
+  <meta property="og:url" content="https://shajais.github.io/ShashiNewsGen/">
+  <meta property="og:image" content="https://shajais.github.io/ShashiNewsGen/shashi_PP.jpg">
+  <meta property="og:site_name" content="Shashi Creator Studio">
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Shashi Creator Studio — AI News & Meme Generator Nepal">
+  <meta name="twitter:description" content="Create viral Nepali news posts, memes, festival greetings, quotes & more. Free AI-powered.">
+  <meta name="twitter:image" content="https://shajais.github.io/ShashiNewsGen/shashi_PP.jpg">
+  <!-- Structured data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Shashi Creator Studio",
+    "url": "https://shajais.github.io/ShashiNewsGen/",
+    "description": "AI-powered Nepali news image generator, meme creator, festival post maker, and social media content studio.",
+    "applicationCategory": "UtilitiesApplication",
+    "operatingSystem": "Any",
+    "author": { "@type": "Person", "name": "Shashi Jaiswal" },
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+  }
+  </script>
+  <link rel="stylesheet" href="style.css?v=20260427a" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Bebas+Neue&family=Permanent+Marker&display=swap" rel="stylesheet">
@@ -27,6 +58,8 @@
     <button class="btn news-studio-nav-btn" id="newsStudioBtn" onclick="openNewsStudio()" title="News Explorer">🗞️ News Studio</button>
     <button class="btn meme-nav-btn" id="memeStudioBtn" onclick="openMemeStudio()" title="Meme Studio">😂 Meme Studio</button>
     <button class="btn puzzle-nav-btn" id="puzzleStudioBtn" onclick="openPuzzleStudio()" title="Puzzle Studio">🧩 Puzzle Studio</button>
+    <button class="btn" id="contentStudioBtn" onclick="openContentStudio()" title="Content Studio" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:700;border:none">🎭 Content Studio</button>
+    <button class="btn" onclick="openFeedbackModal()" title="Feedback" style="background:rgba(124,58,237,.18);border:1px solid #7c3aed;color:#e2e8f0;font-size:.8rem">📩 Feedback</button>
     <button id="aiBadge" class="btn ai-badge-btn" onclick="openAISettings()" title="AI key status">⏳ AI…</button>
   </div>
 </header>
@@ -694,6 +727,7 @@
 </div>
 
 <script src="app.js?v=20260422d"></script>
+<script src="content-studio.js?v=20260428c"></script>
 
 <!-- ══════════════════════════════════════════════════════════════
      NEWS STUDIO MODAL
@@ -773,19 +807,7 @@
       <!-- LEFT COLUMN: Controls -->
       <div class="meme-left-col">
 
-        <!-- ── Step 1: Trending Topics ── -->
-        <div class="meme-section">
-          <div class="meme-section-title">🔥 Step 1 — Live Trending Topics (click to auto-generate)</div>
-          <div style="display:flex;gap:6px;margin-bottom:8px">
-            <input id="memeTrendingSearch" class="meme-input" style="flex:1;font-size:.8rem" placeholder="🔍 Search topic or type your own…" oninput="filterMemeTrendingTopics(this.value)" onkeydown="if(event.key==='Enter')memeUseSearchTopic()">
-            <button class="btn btn-blue" style="font-size:.78rem;padding:7px 10px;white-space:nowrap" onclick="memeUseSearchTopic()">→ Use</button>
-          </div>
-          <div id="memeTrendingGrid" class="meme-trending-grid">
-            <span style="color:var(--muted);font-size:.8rem;padding:6px">⏳ Loading live topics…</span>
-          </div>
-        </div>
-
-        <!-- ── Step 1b: From News Article ── -->
+        <!-- ── From News Article ── -->
         <div class="meme-section">
           <div class="meme-section-title">📰 From News Article / Link (optional)</div>
           <div style="display:flex;gap:6px">
@@ -796,9 +818,9 @@
           <div id="memeArticleStatus" style="font-size:.75rem;color:var(--muted);min-height:16px;margin-top:4px"></div>
         </div>
 
-        <!-- ── Step 2: Topic / Prompt ── -->
+        <!-- ── Step 1: Topic / Prompt ── -->
         <div class="meme-section">
-          <div class="meme-section-title">✍️ Step 2 — Topic or custom prompt</div>
+          <div class="meme-section-title">✍️ Step 1 — Topic or custom prompt</div>
           <textarea id="memeTopicInput" class="meme-textarea" rows="2"
             placeholder="e.g. केपी ओली र ट्राफिक जाम 😂 | Deuba को बाचा | Nepal बिजुली कटौती"></textarea>
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
@@ -807,11 +829,15 @@
           </div>
         </div>
 
-        <!-- ── Step 3: Image Source ── -->
+        <!-- ── Step 2: Image Source ── -->
         <div class="meme-section">
-          <div class="meme-section-title">🖼️ Step 3 — Background Panels (up to 4, stacked vertically)</div>
-          <div style="font-size:.75rem;color:var(--muted);margin-bottom:8px">
-            Mix <strong>search images + uploads + solid colors</strong> — each becomes a vertical panel. <strong style="color:#f59e0b">Click ➕ Add</strong> to stack panels (max 4).
+          <div class="meme-section-title">🖼️ Step 2 — Background Panels (up to 4)</div>
+          <div style="font-size:.75rem;color:var(--muted);margin-bottom:6px">
+            Mix <strong>search images + uploads + solid colors</strong> — each becomes a panel. <strong style="color:#f59e0b">Click ➕ Add</strong> to stack panels (max 4).
+          </div>
+          <!-- Panel orientation toggle -->
+          <div style="margin-bottom:8px">
+            <button id="memeOrientationBtn" class="btn btn-ghost" style="font-size:.78rem;padding:6px 14px;width:100%" onclick="toggleMemeOrientation()">⇄ Horizontal (click for ⇅ Vertical)</button>
           </div>
 
           <!-- Slot list -->
@@ -859,9 +885,9 @@
           </div>
         </div>
 
-        <!-- ── Step 3b: Overlay / Sticker Images ── -->
+        <!-- ── Step 3: Overlay / Sticker Images ── -->
         <div class="meme-section">
-          <div class="meme-section-title">⭕ Step 3b — Circle Overlays (max 2, auto-placed, draggable)</div>
+          <div class="meme-section-title">⭕ Step 3 — Circle Overlays (max 2, draggable)</div>
           <div style="font-size:.76rem;color:var(--muted);margin-bottom:8px">
             Add up to <strong>2 circular overlays</strong> (face stickers, logos). Auto-placed at corners — drag to reposition, resize with slider.
           </div>
@@ -975,14 +1001,25 @@
           <button class="btn btn-ghost" style="font-size:.75rem;padding:5px 12px;margin-top:6px" onclick="memeGenerateCaption()">✨ AI Generate Caption</button>
         </div>
 
+        <!-- ── Trending Topics ── -->
+        <div class="meme-section">
+          <div class="meme-section-title">🔥 Trending Topics (click any to auto-fill)</div>
+          <div style="display:flex;gap:6px;margin-bottom:8px">
+            <input id="memeTrendingSearch" class="meme-input" style="flex:1;font-size:.8rem" placeholder="🔍 Search topic or type your own…" oninput="filterMemeTrendingTopics(this.value)" onkeydown="if(event.key==='Enter')memeUseSearchTopic()">
+            <button class="btn btn-blue" style="font-size:.78rem;padding:7px 10px;white-space:nowrap" onclick="memeUseSearchTopic()">→ Use</button>
+          </div>
+          <div id="memeTrendingGrid" class="meme-trending-grid">
+            <span style="color:var(--muted);font-size:.8rem;padding:6px">⏳ Loading live topics…</span>
+          </div>
+        </div>
+
       </div><!-- end meme-left-col -->
 
-      <!-- RIGHT COLUMN: Preview + Actions -->
+      <!-- RIGHT COLUMN: Preview + Actions (sticky, full-height, no scroll needed) -->
       <div class="meme-right-col">
-        <div class="meme-section" style="position:sticky;top:16px">
-          <div class="meme-section-title">👁️ Preview</div>
+          <div class="meme-section-title" style="padding:0 0 8px 0">👁️ Preview</div>
           <div class="meme-canvas-wrap" style="position:relative;user-select:none">
-            <canvas id="memeCanvas" width="600" height="600" style="width:100%;border-radius:10px;display:block;background:#111;touch-action:none"
+            <canvas id="memeCanvas" width="600" height="600" style="width:100%;object-fit:contain;border-radius:10px;display:block;background:#111;touch-action:none"
               onmousedown="memeCanvasMouseDown(event)"
               onmousemove="memeCanvasMouseMove(event)"
               onmouseup="memeCanvasMouseUp(event)"
@@ -996,29 +1033,28 @@
           <div id="memeStatusMsg" style="font-size:.78rem;color:var(--muted);min-height:18px;margin-top:4px;text-align:center"></div>
 
           <!-- Action buttons -->
-          <div class="meme-action-btns">
+          <div class="meme-action-btns" style="margin-top:10px">
             <button class="btn btn-green" style="flex:1" onclick="downloadMeme()">💾 Download</button>
             <button class="btn btn-blue" style="flex:1" onclick="memeCopyImage()">📋 Copy Image</button>
           </div>
-          <div class="meme-action-btns" style="margin-top:8px">
-            <button class="btn meme-share-btn fb" onclick="shareMeme('facebook')">👍 Facebook</button>
-            <button class="btn meme-share-btn ig" onclick="shareMeme('instagram')">📸 Instagram</button>
-            <button class="btn meme-share-btn tw" onclick="shareMeme('twitter')">🐦 X / Twitter</button>
-            <button class="btn meme-share-btn wa" onclick="shareMeme('whatsapp')">💬 WhatsApp</button>
+          <div class="meme-action-btns" style="margin-top:6px">
+            <button class="btn meme-share-btn fb" onclick="shareMeme('facebook')">👍 FB</button>
+            <button class="btn meme-share-btn ig" onclick="shareMeme('instagram')">📸 IG</button>
+            <button class="btn meme-share-btn tw" onclick="shareMeme('twitter')">🐦 X</button>
+            <button class="btn meme-share-btn wa" onclick="shareMeme('whatsapp')">💬 WA</button>
           </div>
 
           <!-- Size presets -->
-          <div style="margin-top:14px">
-            <div class="meme-label">Canvas size preset</div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px">
+          <div style="margin-top:12px">
+            <div class="meme-label">Canvas size</div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px">
               <button class="meme-size-btn active" onclick="setMemeSize(600,600,this)">Square 1:1</button>
               <button class="meme-size-btn" onclick="setMemeSize(600,400,this)">Landscape 3:2</button>
               <button class="meme-size-btn" onclick="setMemeSize(400,600,this)">Portrait 2:3</button>
-              <button class="meme-size-btn" onclick="setMemeSize(600,315,this)">Twitter Banner</button>
-              <button class="meme-size-btn" onclick="setMemeSize(400,711,this)">📱 Reel / Story</button>
+              <button class="meme-size-btn" onclick="setMemeSize(600,315,this)">Twitter</button>
+              <button class="meme-size-btn" onclick="setMemeSize(400,711,this)">📱 Story</button>
             </div>
           </div>
-        </div>
       </div>
 
     </div><!-- end meme-studio-body -->
@@ -1220,20 +1256,716 @@
 
   function fmt(n) { return Number(n).toLocaleString(); }
 
-  document.getElementById('visitCountToday').textContent = fmt(todayCount);
-  document.getElementById('visitCountTotal').textContent  = fmt(totalCount);
+  function _syncAllCounters(today, total) {
+    ['visitCountToday','csVisitCountToday'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.textContent = fmt(today);
+    });
+    ['visitCountTotal','csVisitCountTotal'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.textContent = fmt(total);
+    });
+  }
+
+  _syncAllCounters(todayCount, totalCount);
 
   /* ── Remote count (real cross-user total via free CounterAPI) ── */
   fetch('https://api.counterapi.dev/v1/shajais-ShashiNewsGen/hits/up')
     .then(r => r.ok ? r.json() : null)
     .then(d => {
       if (d && d.count) {
-        document.getElementById('visitCountTotal').textContent = fmt(d.count);
+        ['visitCountTotal','csVisitCountTotal'].forEach(id => {
+          const el = document.getElementById(id); if (el) el.textContent = fmt(d.count);
+        });
       }
     })
     .catch(() => { /* silently use local count */ });
 })();
 </script>
+
+<!-- ══════════════════════════════════════════════════════════════
+     CONTENT STUDIO — 9-tab creative post generator
+══════════════════════════════════════════════════════════════ -->
+<div id="contentStudioModal" style="display:none;width:100%;background:var(--bg);border-top:3px solid #7c3aed;animation:slideDown .2s ease">
+  <div style="max-width:1400px;margin:0 auto;padding:0 12px">
+  <div class="cs-box">
+
+    <!-- Header -->
+    <div class="cs-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:2rem">🎭</span>
+        <div>
+          <h2 style="font-size:1.3rem;font-weight:800;background:linear-gradient(90deg,#a855f7,#6366f1,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Content Studio</h2>
+          <p style="font-size:.75rem;color:var(--muted)">AI-powered social media post generator • नेपाली क्याप्शन सहित</p>
+        </div>
+      </div>
+      <button onclick="closeContentStudio()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;padding:4px 8px;border-radius:6px" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--muted)'">✕</button>
+    </div>
+
+    <!-- Tab Bar -->
+    <div class="cs-tab-bar" id="csTabBar">
+      <button class="cs-tab active" data-tab="ad"        onclick="csSwitch('ad')">📢 Ad Post</button>
+      <button class="cs-tab"        data-tab="festival"  onclick="csSwitch('festival')">🎉 Occasions</button>
+      <button class="cs-tab"        data-tab="politician"onclick="csSwitch('politician')">�️ Leader Banner</button>
+      <button class="cs-tab"        data-tab="poll"      onclick="csSwitch('poll')">📊 Poll / Yes-No</button>
+      <button class="cs-tab"        data-tab="quote"     onclick="csSwitch('quote')"   style="display:none">💬 Quotes</button>
+      <button class="cs-tab"        data-tab="health"    onclick="csSwitch('health')"  style="display:none">💊 Health Tips</button>
+      <button class="cs-tab"        data-tab="facts"     onclick="csSwitch('facts')"   style="display:none">🌌 Unknown Facts</button>
+      <button class="cs-tab"        data-tab="atomic"    onclick="csSwitch('atomic')"  style="display:none">⚛️ Atomic Habits</button>
+      <button class="cs-tab"        data-tab="quiz"      onclick="csSwitch('quiz')"    style="display:none">🧠 Quiz/Puzzle</button>
+      <button class="cs-tab"        data-tab="success"   onclick="csSwitch('success')" style="display:none">🏆 Success Story</button>
+    </div>
+
+    <!-- Studio Body -->
+    <div class="cs-body">
+
+      <!-- LEFT: Controls -->
+      <div class="cs-left">
+
+        <!-- ══ AD POST ══ -->
+        <div id="csPane-ad" class="cs-pane active">
+          <div class="cs-section-title">📢 Professional Ad Post Builder</div>
+
+          <!-- Template selector -->
+          <div class="cs-field">
+            <label>Ad Template</label>
+            <div class="ad-template-grid" id="csAdTemplateGrid">
+              <button class="ad-tmpl-btn active" data-tmpl="bold-offer"    onclick="csAdTemplate(this,'bold-offer')">🔥 Bold Offer</button>
+              <button class="ad-tmpl-btn"         data-tmpl="elegant"       onclick="csAdTemplate(this,'elegant')">✨ Elegant</button>
+              <button class="ad-tmpl-btn"         data-tmpl="split-photo"   onclick="csAdTemplate(this,'split-photo')">🖼️ Split Photo</button>
+              <button class="ad-tmpl-btn"         data-tmpl="promo-banner"  onclick="csAdTemplate(this,'promo-banner')">🎯 Promo Banner</button>
+              <button class="ad-tmpl-btn"         data-tmpl="minimal"       onclick="csAdTemplate(this,'minimal')">◻️ Minimal</button>
+              <button class="ad-tmpl-btn"         data-tmpl="festive-sale"  onclick="csAdTemplate(this,'festive-sale')">🎉 Festive Sale</button>
+            </div>
+          </div>
+
+          <!-- Content -->
+          <div class="cs-field">
+            <label>Product / Service Name <span class="cs-optional cs-drag-hint">✋ drag on canvas</span></label>
+            <input id="csAdProduct" class="cs-input" placeholder="e.g. Shashi Bakery, Pokhara Hotel…" oninput="csAdLiveRender()">
+            <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+              <span style="font-size:.75rem;color:#a78bfa;white-space:nowrap">🔠 Font Size</span>
+              <input type="range" min="20" max="120" value="42" step="2" style="flex:1;accent-color:#7c3aed" oninput="csAdSetProductFontSize(this.value)">
+              <span id="csAdProductFontSizeLabel" style="font-size:.75rem;color:#e2e8f0;min-width:36px;text-align:right">Auto</span>
+              <button class="cs-radio-btn" style="font-size:.65rem;padding:2px 8px" onclick="csAdSetProductFontSize(0);document.querySelector('[oninput=\'csAdSetProductFontSize(this.value)\']').value=42" title="Reset to auto">↺</button>
+            </div>
+          </div>
+          <div class="cs-field">
+            <label>Tagline / Offer <span class="cs-optional cs-drag-hint">✋ drag on canvas</span></label>
+            <input id="csAdTagline" class="cs-input" placeholder="e.g. ५०% छूट! Grand Opening Special…" oninput="csAdLiveRender()">
+          </div>
+          <div class="cs-field">
+            <label style="display:flex;align-items:center;justify-content:space-between">
+              <span>Description <span class="cs-optional">(optional)</span> <span class="cs-optional cs-drag-hint">✋ drag on canvas</span></span>
+              <button class="cs-upload-btn" style="font-size:.7rem;padding:2px 8px" onclick="csAdResetPositions()" title="Reset all text positions to default">↺ Reset</button>
+            </label>
+            <textarea id="csAdDetails" class="cs-textarea" rows="2" placeholder="Short description, features, benefits…" oninput="csAdLiveRender()"></textarea>
+          </div>
+          <div class="cs-field">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div><label>📍 Location</label><input id="csAdLocation" class="cs-input" placeholder="Kathmandu…" oninput="csAdLiveRender()"></div>
+              <div><label>📞 Contact</label><input id="csAdContact" class="cs-input" placeholder="98XXXXXXXX" oninput="csAdLiveRender()"></div>
+            </div>
+          </div>
+
+          <!-- Images section -->
+          <div class="cs-field">
+            <label>🖼️ Images <span class="cs-optional">(up to 4)</span></label>
+            <div class="ad-img-upload-row">
+              <button class="cs-upload-btn" onclick="document.getElementById('csAdPhotos').click()">📸 Add Images</button>
+              <input type="file" id="csAdPhotos" accept="image/*" multiple style="display:none" onchange="csAdAddPhotos(this)">
+              <button class="cs-upload-btn" onclick="document.getElementById('csAdOverlay').click()" title="Logo / circular icon overlay">🔵 Add Logo/Icon</button>
+              <input type="file" id="csAdOverlay" accept="image/*" style="display:none" onchange="csAdAddOverlay(this)">
+              <button class="cs-upload-btn" style="background:rgba(239,68,68,.15);color:#fca5a5;border-color:#ef4444" onclick="csAdRemoveBgSelected()" title="Remove background from selected image (or all images)">🚫 Remove BG</button>
+            </div>
+            <div id="csAdPhotoThumbs" class="ad-photo-thumbs"></div>
+          </div>
+
+          <!-- Background -->
+          <div class="cs-field"><label>Background Style</label>
+            <div class="cs-bg-swatches" id="csAdBgSwatches">
+              <button class="cs-bg-swatch active" data-bg="gradient-purple"  onclick="csSelectBg(this,'csAdBgSwatches');csAdLiveRender()" style="background:linear-gradient(135deg,#7c3aed,#3b82f6)" title="Purple Blue"></button>
+              <button class="cs-bg-swatch"         data-bg="gradient-red"     onclick="csSelectBg(this,'csAdBgSwatches');csAdLiveRender()" style="background:linear-gradient(135deg,#dc2626,#f59e0b)" title="Red Gold"></button>
+              <button class="cs-bg-swatch"         data-bg="gradient-green"   onclick="csSelectBg(this,'csAdBgSwatches');csAdLiveRender()" style="background:linear-gradient(135deg,#059669,#065f46)" title="Green"></button>
+              <button class="cs-bg-swatch"         data-bg="gradient-dark"    onclick="csSelectBg(this,'csAdBgSwatches');csAdLiveRender()" style="background:linear-gradient(135deg,#0f172a,#1e293b)" title="Dark"></button>
+              <button class="cs-bg-swatch"         data-bg="gradient-gold"    onclick="csSelectBg(this,'csAdBgSwatches');csAdLiveRender()" style="background:linear-gradient(135deg,#92400e,#f59e0b)" title="Gold"></button>
+              <button class="cs-bg-swatch"         data-bg="gradient-pink"    onclick="csSelectBg(this,'csAdBgSwatches');csAdLiveRender()" style="background:linear-gradient(135deg,#be185d,#7c3aed)" title="Pink"></button>
+              <button class="cs-bg-swatch"         data-bg="gradient-teal"    onclick="csSelectBg(this,'csAdBgSwatches');csAdLiveRender()" style="background:linear-gradient(135deg,#0891b2,#134e4a)" title="Teal"></button>
+              <button class="cs-bg-swatch"         data-bg="white-clean"      onclick="csSelectBg(this,'csAdBgSwatches');csAdLiveRender()" style="background:linear-gradient(135deg,#f8fafc,#e2e8f0);border:1px solid #ccc" title="White"></button>
+              <button class="cs-bg-swatch"         data-bg="gradient-orange"  onclick="csSelectBg(this,'csAdBgSwatches');csAdLiveRender()" style="background:linear-gradient(135deg,#ea580c,#f59e0b)" title="Orange"></button>
+              <button class="cs-bg-swatch"         data-bg="bokeh"            onclick="csSelectBg(this,'csAdBgSwatches');csAdLiveRender()" style="background:linear-gradient(135deg,#1e1b4b,#4c1d95)" title="Bokeh Dark"></button>
+            </div>
+          </div>
+
+          <!-- Ribbon colour -->
+          <div class="cs-field">
+            <label>🎨 Ribbon / Accent Colour</label>
+            <div class="cs-bg-swatches" id="csAdRibbonSwatches">
+              <button class="cs-bg-swatch active" onclick="csAdRibbonColor(this,'')"          style="background:linear-gradient(135deg,#7c3aed,#f59e0b)" title="Auto (accent)"></button>
+              <button class="cs-bg-swatch"        onclick="csAdRibbonColor(this,'#ef4444')"   style="background:#ef4444" title="Red"></button>
+              <button class="cs-bg-swatch"        onclick="csAdRibbonColor(this,'#f59e0b')"   style="background:#f59e0b" title="Gold"></button>
+              <button class="cs-bg-swatch"        onclick="csAdRibbonColor(this,'#10b981')"   style="background:#10b981" title="Green"></button>
+              <button class="cs-bg-swatch"        onclick="csAdRibbonColor(this,'#3b82f6')"   style="background:#3b82f6" title="Blue"></button>
+              <button class="cs-bg-swatch"        onclick="csAdRibbonColor(this,'#a855f7')"   style="background:#a855f7" title="Purple"></button>
+              <button class="cs-bg-swatch"        onclick="csAdRibbonColor(this,'#ec4899')"   style="background:#ec4899" title="Pink"></button>
+              <button class="cs-bg-swatch"        onclick="csAdRibbonColor(this,'#0891b2')"   style="background:#0891b2" title="Teal"></button>
+              <button class="cs-bg-swatch"        onclick="csAdRibbonColor(this,'#1e293b')"   style="background:#1e293b" title="Dark"></button>
+              <button class="cs-bg-swatch"        onclick="csAdRibbonColor(this,'#f8fafc')"   style="background:#f8fafc;border:1px solid #ccc" title="White"></button>
+              <!-- Custom colour picker -->
+              <label title="Custom colour" style="width:26px;height:26px;border-radius:50%;overflow:hidden;cursor:pointer;border:2px solid rgba(255,255,255,.3);display:inline-flex;align-items:center;justify-content:center;background:#222">
+                <input type="color" value="#f59e0b" style="opacity:0;position:absolute;width:1px;height:1px" onchange="csAdRibbonColor(null,this.value)">🎨
+              </label>
+            </div>
+          </div>
+
+          <!-- Canvas border -->
+          <div class="cs-field">
+            <label>🖼️ Canvas Border</label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px" id="csAdBorderBtns">
+              <button class="cs-radio-btn active" onclick="csAdSetBorder(this,'none')">⛔ None</button>
+              <button class="cs-radio-btn" onclick="csAdSetBorder(this,'gold-frame')">🥇 Gold Frame</button>
+              <button class="cs-radio-btn" onclick="csAdSetBorder(this,'neon-glow')">💜 Neon Glow</button>
+              <button class="cs-radio-btn" onclick="csAdSetBorder(this,'double-line')">📐 Double Line</button>
+              <button class="cs-radio-btn" onclick="csAdSetBorder(this,'rounded-glow')">⭕ Rounded</button>
+              <button class="cs-radio-btn" onclick="csAdSetBorder(this,'diagonal-strips')">🔶 Diagonal</button>
+              <button class="cs-radio-btn" onclick="csAdSetBorder(this,'film-strip')">🎞️ Film Strip</button>
+            </div>
+          </div>
+
+          <!-- Image shape toggle (shown when image selected) -->
+          <div class="cs-field" id="csAdImgShapeRow" style="display:none">
+            <label>🔵 Selected Image Shape</label>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="csAdImgCircleToggle" onchange="csAdImgCircle(this)">
+                <span>Circle / Round crop</span>
+              </label>
+              <button class="cs-radio-btn" onclick="csAdDeselect()" style="font-size:.75rem;padding:3px 10px">✖ Deselect</button>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="cs-generate-row">
+            <button class="btn btn-primary cs-gen-btn" onclick="csGenerate('ad')">🤖 AI Generate</button>
+            <button class="btn btn-ghost cs-quick-btn" onclick="csQuick('ad')">⚡ Quick</button>
+            <button class="btn cs-quick-btn" style="background:rgba(16,185,129,.15);color:#6ee7b7;border-color:#059669" onclick="csAdAiEnhance()">✨ AI Enhance</button>
+          </div>
+        </div>
+
+        <!-- ══ FESTIVAL ══ -->
+        <div id="csPane-festival" class="cs-pane">
+          <div class="cs-section-title">🎉 Occasions & Shubhakamana Post</div>
+          <div class="cs-field"><label>Occasion</label>
+            <select id="csFestival" class="cs-input" onchange="csFestivalChanged(this.value)">
+              <option value="dashain">🎉 Dashain</option>
+              <option value="tihar">🪔 Tihar / Diwali</option>
+              <option value="chhath">🌅 Chhath Puja</option>
+              <option value="holi">🎨 Holi</option>
+              <option value="teej">💃 Teej</option>
+              <option value="maghe-sankranti">🌾 Maghe Sankranti</option>
+              <option value="buddha-jayanti">☸️ Buddha Jayanti</option>
+              <option value="new-year">🎆 New Year (Naya Barsha)</option>
+              <option value="christmas">🎄 Christmas</option>
+              <option value="eid">☪️ Eid</option>
+              <option value="birthday">🎂 Birthday Wishes</option>
+              <option value="custom">✍️ Custom Occasion…</option>
+            </select>
+          </div>
+          <div id="csFestivalCustomRow" class="cs-field" style="display:none"><label>Custom Occasion Name</label><input id="csFestivalCustom" class="cs-input" placeholder="Occasion name in Nepali or English…"></div>
+
+          <!-- Background style -->
+          <div class="cs-field">
+            <label>🎨 Background Style</label>
+            <div id="csFestBgGrid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:4px;"></div>
+            <div style="margin-top:6px;">
+              <button class="cs-upload-btn" onclick="document.getElementById('csFestBgUpload').click()">�️ Upload BG Image</button>
+              <input type="file" id="csFestBgUpload" accept="image/*" style="display:none" onchange="csFestLoadBgImage(this)">
+              <span id="csFestBgImgName" style="font-size:11px;color:#94a3b8;margin-left:6px;"></span>
+              <button id="csFestBgImgClear" style="display:none;margin-left:6px;font-size:11px;background:rgba(239,68,68,.15);color:#f87171;border:1px solid #ef4444;border-radius:4px;padding:2px 8px;cursor:pointer;" onclick="csFestClearBgImage()">✕ Clear</button>
+            </div>
+          </div>
+
+          <!-- Greeting -->
+          <div class="cs-field">
+            <label>�🙏 Greeting Message</label>
+            <select id="csFestivalGreeting" class="cs-input" onchange="csFestivalGreetingChange(this.value)"></select>
+            <textarea id="csFestivalGreetingCustom" class="cs-input" rows="3" placeholder="Edit or write custom greeting here…" style="margin-top:6px;resize:vertical;font-size:13px;min-height:64px;"></textarea>
+            <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+              <label style="font-size:12px;color:#94a3b8;white-space:nowrap;">Text Size</label>
+              <input type="range" id="csFestGreetFontSize" min="18" max="72" value="30" step="2"
+                style="flex:1;accent-color:#7c3aed;" oninput="csFestGreetFontSizeChange(this.value)">
+              <span id="csFestGreetFontSizeLabel" style="font-size:12px;color:#c4b5fd;min-width:28px;text-align:right;">30</span>
+            </div>
+          </div>
+
+          <!-- Person -->
+          <div class="cs-field"><label>Person's Name <span class="cs-optional">(optional)</span></label><input id="csFestivalName" class="cs-input" placeholder="e.g. Shashi Sharma, राम बहादुर…"></div>
+          <div class="cs-field">
+            <label>Person's Photo <span class="cs-optional">(optional)</span></label>
+            <div class="cs-upload-row">
+              <button class="cs-upload-btn" onclick="document.getElementById('csFestivalPhoto').click()">📸 Upload Photo</button>
+              <input type="file" id="csFestivalPhoto" accept="image/*" style="display:none" onchange="csLoadPhoto(this,'csFestivalPhotoPreview')">
+              <span id="csFestivalPhotoPreview" class="cs-photo-name"></span>
+            </div>
+            <!-- Photo position -->
+            <div style="margin-top:8px;display:flex;gap:6px;" id="csFestPhotoPos">
+              <button class="cs-border-btn active" data-pos="center" onclick="csFestSetPhotoPos(this)" style="flex:1;font-size:11px;">⬆ Centre Top</button>
+              <button class="cs-border-btn" data-pos="bottom-left" onclick="csFestSetPhotoPos(this)" style="flex:1;font-size:11px;">↙ Bottom Left</button>
+              <button class="cs-border-btn" data-pos="bottom-right" onclick="csFestSetPhotoPos(this)" style="flex:1;font-size:11px;">↘ Bottom Right</button>
+            </div>
+          </div>
+
+          <div class="cs-field"><label>Border Style</label>
+            <div class="cs-border-grid" id="csBorderGrid">
+              <button class="cs-border-btn active" data-border="flowers" onclick="csSelectBorder(this)">🌸 Flowers</button>
+              <button class="cs-border-btn" data-border="diyas" onclick="csSelectBorder(this)">🪔 Diyas</button>
+              <button class="cs-border-btn" data-border="stars" onclick="csSelectBorder(this)">⭐ Stars</button>
+              <button class="cs-border-btn" data-border="leaves" onclick="csSelectBorder(this)">🍃 Leaves</button>
+              <button class="cs-border-btn" data-border="geometric" onclick="csSelectBorder(this)">🔷 Geometric</button>
+              <button class="cs-border-btn" data-border="mandala" onclick="csSelectBorder(this)">🌀 Mandala</button>
+            </div>
+          </div>
+          <div class="cs-generate-row">
+            <button class="btn btn-primary cs-gen-btn" onclick="csGenerate('festival')">🤖 Generate Greeting</button>
+            <button class="btn btn-ghost cs-quick-btn" onclick="csQuick('festival')">⚡ Quick</button>
+          </div>
+        </div>
+
+        <!-- ══ POLITICIAN ══ -->
+        <div id="csPane-politician" class="cs-pane">
+          <div class="cs-section-title">�️ Leader / Public Figure Banner</div>
+          <div class="cs-field"><label>Person's Name</label><input id="csPoliticianName" class="cs-input" placeholder="e.g. केपी शर्मा ओली, Pushpa Kamal Dahal…"></div>
+          <div class="cs-field"><label>Party / Position <span class="cs-optional">(optional)</span></label><input id="csPoliticianParty" class="cs-input" placeholder="e.g. नेकपा एमाले, प्रधानमन्त्री…"></div>
+          <div class="cs-field"><label>Occasion / Caption Theme</label><input id="csPoliticianOccasion" class="cs-input" placeholder="e.g. जन्मदिन, विजय उत्सव, राष्ट्रिय दिवस…"></div>
+          <div class="cs-field"><label>Additional Message <span style="font-weight:400;opacity:0.6">(optional)</span></label><textarea id="csPoliticianMessage" class="cs-input" rows="3" placeholder="e.g. Wishing you continued success and prosperity…" style="resize:vertical;min-height:60px;" oninput="csQuick('politician')"></textarea></div>
+          <div class="cs-field"><label>Photo</label>
+            <div class="cs-upload-row">
+              <button class="cs-upload-btn" onclick="document.getElementById('csPoliticianPhoto').click()">📸 Upload Photo</button>
+              <input type="file" id="csPoliticianPhoto" accept="image/*" style="display:none" onchange="csLoadPhoto(this,'csPoliticianPhotoPreview')">
+              <span id="csPoliticianPhotoPreview" class="cs-photo-name"></span>
+            </div>
+          </div>
+          <div class="cs-field"><label>Logo / Party Symbol <span style="font-weight:400;opacity:0.6">(optional)</span></label>
+            <div class="cs-upload-row">
+              <button class="cs-upload-btn" onclick="document.getElementById('csPoliticianLogo').click()">🏅 Upload Logo</button>
+              <input type="file" id="csPoliticianLogo" accept="image/*" style="display:none" onchange="csPoliticianLoadLogo(this)">
+              <span id="csPoliticianLogoName" class="cs-photo-name"></span>
+              <button id="csPoliticianLogoClear" class="cs-remove-btn" style="display:none" onclick="csPoliticianClearLogo()">✕</button>
+            </div>
+          </div>
+          <div class="cs-field"><label>Banner Style</label>
+            <div class="cs-bg-swatches" id="csPoliticianBgSwatches">
+              <button class="cs-bg-swatch active" data-bg="navy-gold"    onclick="csSelectBg(this,'csPoliticianBgSwatches')" style="background:linear-gradient(135deg,#0a0f2e,#1a2a6c)" title="Navy Gold"></button>
+              <button class="cs-bg-swatch"        data-bg="gradient-dark" onclick="csSelectBg(this,'csPoliticianBgSwatches')" style="background:linear-gradient(135deg,#1a1a2e,#16213e)" title="Dark Slate"></button>
+              <button class="cs-bg-swatch"        data-bg="charcoal-amber" onclick="csSelectBg(this,'csPoliticianBgSwatches')" style="background:linear-gradient(135deg,#1c1c1c,#3a3a3a)" title="Charcoal Amber"></button>
+              <button class="cs-bg-swatch"        data-bg="burgundy-silver" onclick="csSelectBg(this,'csPoliticianBgSwatches')" style="background:linear-gradient(135deg,#3b0016,#6b0026)" title="Burgundy Silver"></button>
+              <button class="cs-bg-swatch"        data-bg="forest-cream" onclick="csSelectBg(this,'csPoliticianBgSwatches')" style="background:linear-gradient(135deg,#0a2e0a,#14532d)" title="Forest Cream"></button>
+              <button class="cs-bg-swatch"        data-bg="deep-teal"    onclick="csSelectBg(this,'csPoliticianBgSwatches')" style="background:linear-gradient(135deg,#00292e,#065f46)" title="Deep Teal"></button>
+              <button class="cs-bg-swatch"        data-bg="gradient-gold" onclick="csSelectBg(this,'csPoliticianBgSwatches')" style="background:linear-gradient(135deg,#78350f,#d97706)" title="Royal Gold"></button>
+              <button class="cs-bg-swatch"        data-bg="gradient-red"  onclick="csSelectBg(this,'csPoliticianBgSwatches')" style="background:linear-gradient(135deg,#7f1d1d,#dc2626)" title="Crimson"></button>
+            </div>
+          </div>
+          <div class="cs-generate-row">
+            <button class="btn btn-primary cs-gen-btn" onclick="csGenerate('politician')">🤖 Generate Banner</button>
+            <button class="btn btn-ghost cs-quick-btn" onclick="csQuick('politician')">⚡ Quick</button>
+          </div>
+        </div>
+
+        <!-- ══ QUOTES ══ -->
+        <div id="csPane-quote" class="cs-pane">
+          <div class="cs-section-title">💬 Motivational Quotes / Famous Quotes</div>
+          <div class="cs-field"><label>Quote Type</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+              <button class="cs-radio-btn active" data-val="motivational" onclick="csRadio(this,'csQuoteType')">💪 Motivational</button>
+              <button class="cs-radio-btn" data-val="famous" onclick="csRadio(this,'csQuoteType')">🌟 Famous Personality</button>
+              <button class="cs-radio-btn" data-val="anonymous" onclick="csRadio(this,'csQuoteType')">🎭 Anonymous</button>
+              <button class="cs-radio-btn" data-val="custom" onclick="csRadio(this,'csQuoteType')">✍️ My Own Quote</button>
+            </div>
+            <input type="hidden" id="csQuoteType" value="motivational">
+          </div>
+          <div id="csQuoteFamousRow" class="cs-field" style="display:none"><label>Personality Name</label><input id="csQuotePersonality" class="cs-input" placeholder="e.g. APJ Abdul Kalam, Buddha, Einstein…"></div>
+          <div id="csQuoteCustomRow" class="cs-field" style="display:none"><label>Your Quote</label><textarea id="csQuoteCustomText" class="cs-textarea" rows="3" placeholder="आफ्नो उद्धरण यहाँ लेख्नुस्…"></textarea></div>
+          <div class="cs-field"><label>Topic / Theme <span class="cs-optional">(optional)</span></label><input id="csQuoteTopic" class="cs-input" placeholder="e.g. success, life, love, persistence, Nepal…"></div>
+          <div class="cs-field"><label>Small Photo <span class="cs-optional">(optional)</span></label>
+            <div class="cs-upload-row">
+              <button class="cs-upload-btn" onclick="document.getElementById('csQuotePhoto').click()">📸 Upload</button>
+              <input type="file" id="csQuotePhoto" accept="image/*" style="display:none" onchange="csLoadPhoto(this,'csQuotePhotoPreview')">
+              <span id="csQuotePhotoPreview" class="cs-photo-name"></span>
+            </div>
+          </div>
+          <div class="cs-field"><label>Background</label>
+            <div class="cs-bg-swatches" id="csQuoteBgSwatches">
+              <button class="cs-bg-swatch active" data-bg="gradient-dark" onclick="csSelectBg(this,'csQuoteBgSwatches')" style="background:linear-gradient(135deg,#0f172a,#1e293b)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-purple" onclick="csSelectBg(this,'csQuoteBgSwatches')" style="background:linear-gradient(135deg,#4c1d95,#7c3aed)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-gold" onclick="csSelectBg(this,'csQuoteBgSwatches')" style="background:linear-gradient(135deg,#78350f,#d97706)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-teal" onclick="csSelectBg(this,'csQuoteBgSwatches')" style="background:linear-gradient(135deg,#134e4a,#0f766e)"></button>
+              <button class="cs-bg-swatch" data-bg="bokeh" onclick="csSelectBg(this,'csQuoteBgSwatches')" style="background:radial-gradient(circle at 30% 30%,#7c3aed44,transparent),radial-gradient(circle at 70% 70%,#3b82f644,transparent),#0f172a"></button>
+            </div>
+          </div>
+          <div class="cs-generate-row">
+            <button class="btn btn-primary cs-gen-btn" onclick="csGenerate('quote')">🤖 Generate Quote Post</button>
+            <button class="btn btn-ghost cs-quick-btn" onclick="csQuick('quote')">⚡ Quick</button>
+          </div>
+        </div>
+
+        <!-- ══ HEALTH TIPS ══ -->
+        <div id="csPane-health" class="cs-pane">
+          <div class="cs-section-title">💊 Health Tips Generator</div>
+          <div class="cs-field"><label>Health Topic</label><input id="csHealthTopic" class="cs-input" placeholder="e.g. पानी पिउने फाइदा, व्यायाम, मधुमेह रोकथाम, निद्रा, mental health…"></div>
+          <div class="cs-field"><label>Target Audience <span class="cs-optional">(optional)</span></label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+              <button class="cs-radio-btn active" data-val="general" onclick="csRadio(this,'csHealthAudience')">👨‍👩‍👧 General</button>
+              <button class="cs-radio-btn" data-val="elderly" onclick="csRadio(this,'csHealthAudience')">👴 Elderly</button>
+              <button class="cs-radio-btn" data-val="youth" onclick="csRadio(this,'csHealthAudience')">🧑 Youth</button>
+              <button class="cs-radio-btn" data-val="mothers" onclick="csRadio(this,'csHealthAudience')">🤱 Mothers</button>
+            </div>
+            <input type="hidden" id="csHealthAudience" value="general">
+          </div>
+          <div class="cs-field"><label>Number of Tips</label>
+            <select id="csHealthCount" class="cs-input">
+              <option value="3">3 Tips</option>
+              <option value="5" selected>5 Tips</option>
+              <option value="7">7 Tips</option>
+              <option value="10">10 Tips</option>
+            </select>
+          </div>
+          <div class="cs-field"><label>Background</label>
+            <div class="cs-bg-swatches" id="csHealthBgSwatches">
+              <button class="cs-bg-swatch active" data-bg="gradient-green" onclick="csSelectBg(this,'csHealthBgSwatches')" style="background:linear-gradient(135deg,#064e3b,#059669)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-blue" onclick="csSelectBg(this,'csHealthBgSwatches')" style="background:linear-gradient(135deg,#1e3a5f,#3b82f6)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-teal" onclick="csSelectBg(this,'csHealthBgSwatches')" style="background:linear-gradient(135deg,#134e4a,#06b6d4)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-purple" onclick="csSelectBg(this,'csHealthBgSwatches')" style="background:linear-gradient(135deg,#4c1d95,#7c3aed)"></button>
+              <button class="cs-bg-swatch" data-bg="white-clean" onclick="csSelectBg(this,'csHealthBgSwatches')" style="background:#f8fafc;border:2px solid #e2e8f0"></button>
+            </div>
+          </div>
+          <div class="cs-generate-row">
+            <button class="btn btn-primary cs-gen-btn" onclick="csGenerate('health')">🤖 Generate Health Tips</button>
+            <button class="btn btn-ghost cs-quick-btn" onclick="csQuick('health')">⚡ Quick</button>
+          </div>
+        </div>
+
+        <!-- ══ UNKNOWN FACTS ══ -->
+        <div id="csPane-facts" class="cs-pane">
+          <div class="cs-section-title">🌌 Unknown Facts / Science Generator</div>
+          <div class="cs-field"><label>Category</label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+              <button class="cs-radio-btn active" data-val="space" onclick="csRadio(this,'csFactsCategory')">🚀 Space</button>
+              <button class="cs-radio-btn" data-val="human-body" onclick="csRadio(this,'csFactsCategory')">🫀 Human Body</button>
+              <button class="cs-radio-btn" data-val="universe" onclick="csRadio(this,'csFactsCategory')">🌌 Universe</button>
+              <button class="cs-radio-btn" data-val="time" onclick="csRadio(this,'csFactsCategory')">⏳ Time</button>
+              <button class="cs-radio-btn" data-val="nature" onclick="csRadio(this,'csFactsCategory')">🌿 Nature</button>
+              <button class="cs-radio-btn" data-val="technology" onclick="csRadio(this,'csFactsCategory')">💻 Technology</button>
+              <button class="cs-radio-btn" data-val="nepal" onclick="csRadio(this,'csFactsCategory')">🇳🇵 Nepal Facts</button>
+              <button class="cs-radio-btn" data-val="random" onclick="csRadio(this,'csFactsCategory')">🎲 Surprise Me!</button>
+            </div>
+            <input type="hidden" id="csFactsCategory" value="space">
+          </div>
+          <div class="cs-field"><label>Specific Topic <span class="cs-optional">(optional)</span></label><input id="csFactsTopic" class="cs-input" placeholder="e.g. black holes, DNA, quantum physics, Everest…"></div>
+          <div class="cs-field"><label>Background</label>
+            <div class="cs-bg-swatches" id="csFactsBgSwatches">
+              <button class="cs-bg-swatch active" data-bg="space-dark" onclick="csSelectBg(this,'csFactsBgSwatches')" style="background:radial-gradient(ellipse at 20% 20%,#1a1060,#000)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-dark" onclick="csSelectBg(this,'csFactsBgSwatches')" style="background:linear-gradient(135deg,#0f172a,#1e293b)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-purple" onclick="csSelectBg(this,'csFactsBgSwatches')" style="background:linear-gradient(135deg,#2e1065,#7c3aed)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-teal" onclick="csSelectBg(this,'csFactsBgSwatches')" style="background:linear-gradient(135deg,#042f2e,#0891b2)"></button>
+            </div>
+          </div>
+          <div class="cs-generate-row">
+            <button class="btn btn-primary cs-gen-btn" onclick="csGenerate('facts')">🤖 Generate Facts Post</button>
+            <button class="btn btn-ghost cs-quick-btn" onclick="csQuick('facts')">⚡ Quick</button>
+          </div>
+        </div>
+
+        <!-- ══ ATOMIC HABITS ══ -->
+        <div id="csPane-atomic" class="cs-pane">
+          <div class="cs-section-title">⚛️ Atomic Habits Change Post</div>
+          <div class="cs-field"><label>Habit to Build or Break</label><input id="csAtomicHabit" class="cs-input" placeholder="e.g. बिहान ५ बजे उठ्ने, मोबाइल कम चलाउने, daily reading…"></div>
+          <div class="cs-field"><label>Type</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+              <button class="cs-radio-btn active" data-val="build" onclick="csRadio(this,'csAtomicType')">✅ Build Good Habit</button>
+              <button class="cs-radio-btn" data-val="break" onclick="csRadio(this,'csAtomicType')">❌ Break Bad Habit</button>
+              <button class="cs-radio-btn" data-val="1pct" onclick="csRadio(this,'csAtomicType')">📈 1% Better Daily</button>
+              <button class="cs-radio-btn" data-val="identity" onclick="csRadio(this,'csAtomicType')">🪪 Identity Change</button>
+            </div>
+            <input type="hidden" id="csAtomicType" value="build">
+          </div>
+          <div class="cs-field"><label>Background</label>
+            <div class="cs-bg-swatches" id="csAtomicBgSwatches">
+              <button class="cs-bg-swatch active" data-bg="gradient-dark" onclick="csSelectBg(this,'csAtomicBgSwatches')" style="background:linear-gradient(135deg,#0f172a,#1e293b)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-orange" onclick="csSelectBg(this,'csAtomicBgSwatches')" style="background:linear-gradient(135deg,#7c2d12,#ea580c)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-green" onclick="csSelectBg(this,'csAtomicBgSwatches')" style="background:linear-gradient(135deg,#14532d,#16a34a)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-purple" onclick="csSelectBg(this,'csAtomicBgSwatches')" style="background:linear-gradient(135deg,#3b0764,#7c3aed)"></button>
+            </div>
+          </div>
+          <div class="cs-generate-row">
+            <button class="btn btn-primary cs-gen-btn" onclick="csGenerate('atomic')">🤖 Generate Habit Post</button>
+            <button class="btn btn-ghost cs-quick-btn" onclick="csQuick('atomic')">⚡ Quick</button>
+          </div>
+        </div>
+
+        <!-- ══ QUIZ ══ -->
+        <div id="csPane-quiz" class="cs-pane">
+          <div class="cs-section-title">🧠 Logical Quiz / Puzzle Generator</div>
+          <div class="cs-field"><label>Quiz Type</label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+              <button class="cs-radio-btn active" data-val="logical" onclick="csRadio(this,'csQuizType')">🧩 Logical</button>
+              <button class="cs-radio-btn" data-val="riddle" onclick="csRadio(this,'csQuizType')">🎭 Riddle</button>
+              <button class="cs-radio-btn" data-val="math" onclick="csRadio(this,'csQuizType')">➕ Math</button>
+              <button class="cs-radio-btn" data-val="general-knowledge" onclick="csRadio(this,'csQuizType')">🌍 GK Nepal</button>
+              <button class="cs-radio-btn" data-val="science" onclick="csRadio(this,'csQuizType')">🔬 Science</button>
+              <button class="cs-radio-btn" data-val="fun" onclick="csRadio(this,'csQuizType')">😄 Fun / Trick</button>
+            </div>
+            <input type="hidden" id="csQuizType" value="logical">
+          </div>
+          <div class="cs-field"><label>Difficulty</label>
+            <div style="display:flex;gap:8px;margin-top:4px">
+              <button class="cs-radio-btn active" data-val="easy" onclick="csRadio(this,'csQuizDiff')">🟢 Easy</button>
+              <button class="cs-radio-btn" data-val="medium" onclick="csRadio(this,'csQuizDiff')">🟡 Medium</button>
+              <button class="cs-radio-btn" data-val="hard" onclick="csRadio(this,'csQuizDiff')">🔴 Hard</button>
+            </div>
+            <input type="hidden" id="csQuizDiff" value="easy">
+          </div>
+          <div class="cs-field"><label>Show Answer on Post?</label>
+            <div style="display:flex;gap:8px;margin-top:4px">
+              <button class="cs-radio-btn active" data-val="hidden" onclick="csRadio(this,'csQuizAnswer')">🙈 Hide (engagement trick)</button>
+              <button class="cs-radio-btn" data-val="show" onclick="csRadio(this,'csQuizAnswer')">✅ Show Answer</button>
+            </div>
+            <input type="hidden" id="csQuizAnswer" value="hidden">
+          </div>
+          <div class="cs-field"><label>Background</label>
+            <div class="cs-bg-swatches" id="csQuizBgSwatches">
+              <button class="cs-bg-swatch active" data-bg="gradient-dark" onclick="csSelectBg(this,'csQuizBgSwatches')" style="background:linear-gradient(135deg,#0f172a,#1e293b)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-purple" onclick="csSelectBg(this,'csQuizBgSwatches')" style="background:linear-gradient(135deg,#2e1065,#7c3aed)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-blue" onclick="csSelectBg(this,'csQuizBgSwatches')" style="background:linear-gradient(135deg,#1e3a5f,#2563eb)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-green" onclick="csSelectBg(this,'csQuizBgSwatches')" style="background:linear-gradient(135deg,#14532d,#16a34a)"></button>
+            </div>
+          </div>
+          <div class="cs-generate-row">
+            <button class="btn btn-primary cs-gen-btn" onclick="csGenerate('quiz')">🤖 Generate Quiz Post</button>
+            <button class="btn btn-ghost cs-quick-btn" onclick="csQuick('quiz')">⚡ Quick</button>
+          </div>
+        </div>
+
+        <!-- ══ SUCCESS STORY ══ -->
+        <div id="csPane-success" class="cs-pane">
+          <div class="cs-section-title">🏆 Success Story Generator</div>
+          <div class="cs-field"><label>Person / Organization</label><input id="csSuccessPerson" class="cs-input" placeholder="e.g. Binod Chaudhary, Tara Air, grassroots farmer, startup…"></div>
+          <div class="cs-field"><label>Country / Context</label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+              <button class="cs-radio-btn active" data-val="nepal" onclick="csRadio(this,'csSuccessCountry')">🇳🇵 Nepal</button>
+              <button class="cs-radio-btn" data-val="india" onclick="csRadio(this,'csSuccessCountry')">🇮🇳 India</button>
+              <button class="cs-radio-btn" data-val="global" onclick="csRadio(this,'csSuccessCountry')">🌍 Global</button>
+              <button class="cs-radio-btn" data-val="custom" onclick="csRadio(this,'csSuccessCountry')">🗺️ Other</button>
+            </div>
+            <input type="hidden" id="csSuccessCountry" value="nepal">
+          </div>
+          <div id="csSuccessCountryCustomRow" class="cs-field" style="display:none"><label>Country Name</label><input id="csSuccessCountryCustom" class="cs-input" placeholder="Country name…"></div>
+          <div class="cs-field"><label>Industry / Field <span class="cs-optional">(optional)</span></label><input id="csSuccessField" class="cs-input" placeholder="e.g. business, sports, education, agriculture, tech…"></div>
+          <div class="cs-field"><label>Key Achievement <span class="cs-optional">(optional)</span></label><textarea id="csSuccessAchievement" class="cs-textarea" rows="2" placeholder="e.g. zero to billionaire, won Olympics, built school in village…"></textarea></div>
+          <div class="cs-field"><label>Photo <span class="cs-optional">(optional)</span></label>
+            <div class="cs-upload-row">
+              <button class="cs-upload-btn" onclick="document.getElementById('csSuccessPhoto').click()">📸 Upload Photo</button>
+              <input type="file" id="csSuccessPhoto" accept="image/*" style="display:none" onchange="csLoadPhoto(this,'csSuccessPhotoPreview')">
+              <span id="csSuccessPhotoPreview" class="cs-photo-name"></span>
+            </div>
+          </div>
+          <div class="cs-field"><label>Background</label>
+            <div class="cs-bg-swatches" id="csSuccessBgSwatches">
+              <button class="cs-bg-swatch active" data-bg="gradient-gold" onclick="csSelectBg(this,'csSuccessBgSwatches')" style="background:linear-gradient(135deg,#78350f,#d97706)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-dark" onclick="csSelectBg(this,'csSuccessBgSwatches')" style="background:linear-gradient(135deg,#0f172a,#1e293b)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-green" onclick="csSelectBg(this,'csSuccessBgSwatches')" style="background:linear-gradient(135deg,#14532d,#059669)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-purple" onclick="csSelectBg(this,'csSuccessBgSwatches')" style="background:linear-gradient(135deg,#3b0764,#7c3aed)"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-red" onclick="csSelectBg(this,'csSuccessBgSwatches')" style="background:linear-gradient(135deg,#7f1d1d,#dc2626)"></button>
+            </div>
+          </div>
+          <div class="cs-generate-row">
+            <button class="btn btn-primary cs-gen-btn" onclick="csGenerate('success')">🤖 Generate Success Story</button>
+            <button class="btn btn-ghost cs-quick-btn" onclick="csQuick('success')">⚡ Quick</button>
+          </div>
+        </div>
+
+        <!-- ══ POLL / YES-NO ══ -->
+        <div id="csPane-poll" class="cs-pane">
+          <div class="cs-section-title">📊 Poll / Yes-No Image Generator</div>
+
+          <!-- Layout template -->
+          <div class="cs-field">
+            <label>Layout</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="cs-radio-btn active" data-val="image-top"    onclick="csRadio(this,'csPollLayout')">🖼️ Image Top</button>
+              <button class="cs-radio-btn"        data-val="image-middle" onclick="csRadio(this,'csPollLayout')">🖼️ Image Middle</button>
+              <button class="cs-radio-btn"        data-val="caption-top"  onclick="csRadio(this,'csPollLayout')">📝 Caption Top</button>
+              <button class="cs-radio-btn"        data-val="fullbg"       onclick="csRadio(this,'csPollLayout')">🎨 Full BG</button>
+            </div>
+            <input type="hidden" id="csPollLayout" value="image-top">
+          </div>
+
+          <!-- Caption / Question -->
+          <div class="cs-field">
+            <label>Poll Question / Caption</label>
+            <textarea id="csPollCaption" class="cs-textarea" rows="2" placeholder="के तपाईंलाई Nepal को यो सडक सुधार पसन्द छ? / Do you support this policy?"></textarea>
+          </div>
+
+          <!-- Choice type -->
+          <div class="cs-field">
+            <label>Choice Type</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="cs-radio-btn active" data-val="yesno" onclick="csRadio(this,'csPollType');_csPollToggleChoices()">✅ Yes / No</button>
+              <button class="cs-radio-btn" data-val="custom" onclick="csRadio(this,'csPollType');_csPollToggleChoices()">✏️ Custom Choices</button>
+            </div>
+            <input type="hidden" id="csPollType" value="yesno">
+          </div>
+
+          <!-- Custom choices (shown when type=custom) -->
+          <div id="csPollCustomChoicesRow" style="display:none" class="cs-field">
+            <label>Choices (one per line, max 4)</label>
+            <textarea id="csPollChoices" class="cs-textarea" rows="4" placeholder="Option A&#10;Option B&#10;Option C&#10;Option D" oninput="csRenderBlank()"></textarea>
+          </div>
+
+          <!-- Custom message above choices -->
+          <div class="cs-field">
+            <label>Custom Message <span style="font-weight:400;opacity:0.6">(optional — shown above choices)</span></label>
+            <input id="csPollCustomMsg" class="cs-input" placeholder="e.g. Comment your answer below! / तलमा कमेन्ट गर्नुहोस्" oninput="csQuick('poll')">
+          </div>
+
+          <!-- Image upload -->
+          <div class="cs-field">
+            <label>Poll Images <span style="font-weight:400;opacity:0.6">(optional, up to 4 — shown horizontally)</span></label>
+            <div class="cs-upload-row" style="flex-wrap:wrap;gap:6px">
+              <button class="cs-upload-btn" onclick="document.getElementById('csPollPhotoInput').click()">� Add Images (up to 4)</button>
+              <input type="file" id="csPollPhotoInput" accept="image/*" multiple style="display:none" onchange="csPollLoadImages(this)">
+              <button class="cs-upload-btn" style="background:rgba(239,68,68,.15);color:#fca5a5;border-color:#ef4444" onclick="csPollClearImages()">🗑️ Clear All</button>
+            </div>
+            <div id="csPollPhotoThumbs" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+          </div>
+
+          <!-- Topic / context for AI -->
+          <div class="cs-field">
+            <label>Topic / Context (for AI caption generation)</label>
+            <input id="csPollTopic" class="cs-input" placeholder="e.g. Nepal road quality, KP Oli, Budget 2081…">
+          </div>
+
+          <!-- Background -->
+          <div class="cs-field">
+            <label>Background</label>
+            <div class="cs-bg-swatches" id="csPollBgSwatches">
+              <button class="cs-bg-swatch active" data-bg="poll-navy"    onclick="csSelectBg(this,'csPollBgSwatches')" style="background:linear-gradient(135deg,#0a0f2e,#1a2a6c)" title="Navy Pro"></button>
+              <button class="cs-bg-swatch"        data-bg="gradient-dark" onclick="csSelectBg(this,'csPollBgSwatches')" style="background:linear-gradient(135deg,#0f172a,#1e293b)" title="Dark Slate"></button>
+              <button class="cs-bg-swatch"        data-bg="poll-charcoal" onclick="csSelectBg(this,'csPollBgSwatches')" style="background:linear-gradient(135deg,#111,#2a2a2a)" title="Charcoal"></button>
+              <button class="cs-bg-swatch"        data-bg="gradient-purple" onclick="csSelectBg(this,'csPollBgSwatches')" style="background:linear-gradient(135deg,#4c1d95,#7c3aed)" title="Purple"></button>
+              <button class="cs-bg-swatch"        data-bg="gradient-blue" onclick="csSelectBg(this,'csPollBgSwatches')" style="background:linear-gradient(135deg,#1e3a5f,#2563eb)" title="Blue"></button>
+              <button class="cs-bg-swatch"        data-bg="gradient-red"  onclick="csSelectBg(this,'csPollBgSwatches')" style="background:linear-gradient(135deg,#7f1d1d,#dc2626)" title="Crimson"></button>
+              <button class="cs-bg-swatch"        data-bg="gradient-teal" onclick="csSelectBg(this,'csPollBgSwatches')" style="background:linear-gradient(135deg,#134e4a,#0d9488)" title="Teal"></button>
+              <button class="cs-bg-swatch"        data-bg="gradient-gold" onclick="csSelectBg(this,'csPollBgSwatches')" style="background:linear-gradient(135deg,#78350f,#d97706)" title="Gold"></button>
+            </div>
+          </div>
+
+          <div class="cs-generate-row">
+            <button class="btn btn-primary cs-gen-btn" onclick="csGenerate('poll')">🤖 AI Generate Poll</button>
+            <button class="btn btn-ghost cs-quick-btn" onclick="csQuick('poll')">⚡ Quick</button>
+          </div>
+        </div>
+
+      </div><!-- end cs-left -->
+
+      <!-- RIGHT: Preview + Actions -->
+      <div class="cs-right">
+        <div style="position:sticky;top:16px">
+          <div class="cs-section-title">👁️ Preview</div>
+
+          <!-- Status -->
+          <div id="csStatus" class="cs-status">AI टाइप गर्न Generate थिच्नुस् →</div>
+
+          <!-- Canvas preview with drag overlay -->
+          <div style="position:relative" id="csCanvasWrap">
+            <canvas id="csCanvas" width="600" height="600" style="width:100%;border-radius:12px;display:block;background:#111;box-shadow:0 4px 24px rgba(0,0,0,.5);cursor:default"></canvas>
+            <!-- Drag handles overlay (only for ad tab) -->
+            <div id="csAdDragOverlay" style="display:none;position:absolute;inset:0;border-radius:12px;pointer-events:none"></div>
+            <!-- Politician logo drag/resize overlay -->
+            <div id="csLogoOverlay" style="display:none;position:absolute;inset:0;border-radius:12px;pointer-events:none">
+              <div id="csLogoDragBox" style="position:absolute;pointer-events:all;cursor:move;box-sizing:border-box;border:2px dashed rgba(255,255,255,0.7);border-radius:50%;touch-action:none"
+                   onmousedown="csLogoDragStart(event)" ontouchstart="csLogoDragStart(event)">
+                <div id="csLogoResizeHandle" title="Drag to resize"
+                     style="position:absolute;bottom:-7px;right:-7px;width:16px;height:16px;background:#fff;border:2px solid #7c3aed;border-radius:50%;cursor:se-resize;pointer-events:all;z-index:10"
+                     onmousedown="csLogoResizeStart(event)" ontouchstart="csLogoResizeStart(event)"></div>
+              </div>
+            </div>
+            <div id="csSpinner" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,.7);border-radius:12px;align-items:center;justify-content:center;flex-direction:column;gap:12px">
+              <div style="width:40px;height:40px;border:4px solid #7c3aed;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+              <span style="color:#a78bfa;font-size:.85rem">AI सोच्दैछ…</span>
+            </div>
+          </div>
+
+          <!-- Generated caption text box — EDITABLE -->
+          <div id="csCaptionBox" style="display:none;margin-top:10px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px">
+            <div style="font-size:.72rem;color:#a78bfa;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">📋 Post Caption <span style="font-weight:400;opacity:.7">(editable)</span></div>
+            <textarea id="csCaptionText" style="width:100%;font-size:.82rem;color:var(--text);line-height:1.6;background:transparent;border:none;resize:vertical;min-height:80px;outline:none;font-family:inherit" oninput="_csCaption=this.value"></textarea>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+              <button class="btn btn-ghost" style="font-size:.72rem;padding:4px 10px" onclick="csCopyCaption()">📋 Copy Caption</button>
+              <button class="btn btn-ghost" style="font-size:.72rem;padding:4px 10px;color:#6ee7b7;border-color:#059669" onclick="csAiEnhanceCaption()">✨ AI Enhance Caption</button>
+            </div>
+          </div>
+
+          <!-- Size presets -->
+          <div style="margin-top:10px">
+            <div style="font-size:.75rem;color:var(--muted);margin-bottom:5px">Canvas size</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="meme-size-btn active" onclick="csSetSize(600,600,this)">Square 1:1 · 600×600</button>
+              <button class="meme-size-btn" onclick="csSetSize(800,450,this)">Landscape 16:9 · 800×450</button>
+              <button class="meme-size-btn" onclick="csSetSize(600,750,this)">Portrait 4:5 · 600×750</button>
+              <button class="meme-size-btn" onclick="csSetSize(400,711,this)">📱 Story 9:16 · 400×711</button>
+              <button class="meme-size-btn" onclick="csSetSize(1080,1080,this)">HD 1:1 · 1080×1080</button>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <button class="btn btn-green" style="flex:1" onclick="csDownload()">💾 Download</button>
+            <button class="btn btn-blue" style="flex:1" onclick="csCopyImage()">📋 Copy Image</button>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+            <button class="btn" onclick="csShare('whatsapp')" style="background:#25d366;color:#fff;font-size:.75rem;flex:1">💬 WhatsApp</button>
+            <button class="btn" onclick="csShare('facebook')" style="background:#1877f2;color:#fff;font-size:.75rem;flex:1">👍 Facebook</button>
+            <button class="btn" onclick="csShare('twitter')" style="background:#1da1f2;color:#fff;font-size:.75rem;flex:1">🐦 X</button>
+          </div>
+        </div>
+      </div><!-- end cs-right -->
+
+    </div><!-- end cs-body -->
+  </div><!-- end cs-box -->
+
+  <!-- Visitor counter — same as meme/puzzle/news studios -->
+  <div style="text-align:center;padding:10px 0 14px">
+    <div style="display:inline-flex;align-items:center;gap:7px;background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.3);border-radius:20px;padding:5px 14px;font-size:.78rem;color:rgba(255,255,255,.55)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.7;flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span id="csVisitCountToday" style="color:#a78bfa;font-weight:700;font-size:.82rem">—</span>
+      <span style="opacity:.45">today</span>
+      <span style="opacity:.25">|</span>
+      <span id="csVisitCountTotal" style="color:#c4b5fd;font-weight:600">—</span>
+      <span style="opacity:.45">total visitors</span>
+    </div>
+  </div>
+  </div>
+</div><!-- end contentStudioModal -->
+
+<!-- ══════════════════════════════════════════════════════════════
+     FEEDBACK / CONTACT MODAL
+══════════════════════════════════════════════════════════════ -->
+<div id="feedbackModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;max-width:440px;width:92%;box-shadow:0 8px 40px rgba(0,0,0,.6)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <h2 style="font-size:1.15rem;font-weight:800;background:linear-gradient(90deg,#7c3aed,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">📩 Feedback / Contact</h2>
+      <button onclick="closeFeedbackModal()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:14px">Your message will be sent to <strong style="color:#f59e0b">shashi19.jaiswal@gmail.com</strong></p>
+    <form onsubmit="submitFeedback(event)" style="display:flex;flex-direction:column;gap:10px">
+      <input id="fbName" class="cs-input" placeholder="Your name" required style="padding:9px 12px;font-size:.88rem">
+      <input id="fbEmail" class="cs-input" placeholder="Your email (optional)" type="email" style="padding:9px 12px;font-size:.88rem">
+      <textarea id="fbMsg" class="cs-textarea" rows="4" placeholder="Write your feedback, suggestion or bug report here…" required style="font-size:.88rem"></textarea>
+      <div style="display:flex;gap:8px">
+        <button type="submit" class="btn btn-primary" style="flex:1">📤 Send Feedback</button>
+        <button type="button" class="btn btn-ghost" onclick="closeFeedbackModal()" style="flex:1">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 </body>
 </html>
