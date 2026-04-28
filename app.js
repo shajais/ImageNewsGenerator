@@ -2985,15 +2985,15 @@ TITLE (35-40 words):
 • Should read like a detailed front-page headline that tells the full story
 • SEO-optimised — naturally include keywords people would search for
 
-DESCRIPTION (100-200 words, 4-6 sentences):
-• Sentence 1: State exactly WHAT happened, WHO was involved, WHERE and WHEN (use real names)
-• Sentence 2: HOW it happened and WHY — key cause, background or context
-• Sentence 3: KEY numbers — box office, awards, injuries, amounts, dates, etc.
-• Sentence 4: Reaction — fans, critics, co-stars, government, public — what did they say/do?
-• Sentence 5: What is the IMPACT or significance of this story?
-• Sentence 6 (optional): Current status or what happens next
+DESCRIPTION (200-600 words, well-formatted paragraphs — NO word limit, write as much as the story needs):
+• Paragraph 1: WHAT happened, WHO was involved, WHERE and WHEN (use real names, 3-4 sentences)
+• Paragraph 2: HOW it happened and WHY — key cause, background or context (3-4 sentences)
+• Paragraph 3: KEY numbers, quotes, and evidence — box office, awards, injuries, amounts, dates (3-4 sentences)
+• Paragraph 4: Reactions — fans, critics, co-stars, government, public — what did they say/do? (2-3 sentences)
+• Paragraph 5: IMPACT, significance, and what happens next (2-3 sentences)
+• Separate paragraphs with a blank line for readability
 • ${cfg.descTip}
-• NEVER use vague fillers
+• NEVER use vague fillers — write like a full news article
 
 HASHTAGS (exactly 11 — the last one MUST be #ShashiNewsGen):
 • Tags 1-3: STORY-SPECIFIC in Devanagari script — the real name, film, song, place or event keyword from THIS article
@@ -3020,7 +3020,7 @@ HEADLINE: ${rawTitle}
 ${bodySnippet ? `ARTICLE BODY: ${bodySnippet.slice(0, 1000)}` : ''}
 
 Write in Nepali Devanagari script. Return ONLY this JSON (no markdown, no explanation):
-{"hook":"<1 punchy Nepali sentence, max 15 words>","title":"<detailed Nepali headline with real names/places/numbers>","description":"<3-4 sentence Nepali news paragraph with WHO WHAT WHERE WHEN WHY>","hashtags":["#नेपाल","#BreakingNews","#Nepal","#viral","#trending","#नेपाल_समाचार","#NepaliNews","#ShashiNewsGen"]}` : prompt;
+{"hook":"<1 punchy Nepali sentence, max 15 words>","title":"<detailed Nepali headline with real names/places/numbers>","description":"<full news article in Nepali — 5-6 paragraphs with blank lines between, WHO WHAT WHERE WHEN WHY HOW, reactions, impact>","hashtags":["#नेपाल","#BreakingNews","#Nepal","#viral","#trending","#नेपाल_समाचार","#NepaliNews","#ShashiNewsGen"]}` : prompt;
 
   let result;
   try {
@@ -6997,19 +6997,11 @@ async function _drawAuthorWatermark(ctx, W, _titleBottom, label = 'News') {
   ctx.fillStyle = 'rgba(255,255,255,0.96)';
   ctx.fillText(`Shashi Creator Studio — ${label}`, textX, nameY);
 
-  /* URL + email — split into two lines on narrow canvases (< 500px) */
+  /* URL only — no email */
   const SITE_URL = 'shajais.github.io/ShashiNewsGen';
-  const EMAIL    = 'shashi19.jaiswal@gmail.com';
-  ctx.font      = `${Math.round(14 * Math.max(wScale, 0.7))}px "Segoe UI",Arial,sans-serif`;
+  ctx.font      = `${Math.round(11 * Math.max(wScale, 0.7))}px "Segoe UI",Arial,sans-serif`;
   ctx.fillStyle = 'rgba(246,173,85,0.90)';
-  if (W < 500) {
-    /* Two lines: URL on nameY row gap, email below */
-    ctx.fillText(`🌐 ${SITE_URL}`, textX, detailY);
-    const emailY = detailY + Math.round(16 * Math.max(wScale, 0.7));
-    ctx.fillText(`✉ ${EMAIL}`, textX, emailY);
-  } else {
-    ctx.fillText(`🌐 ${SITE_URL}   ✉ ${EMAIL}`, textX, detailY);
-  }
+  ctx.fillText(`🌐 ${SITE_URL}`, textX, detailY);
 
   ctx.shadowBlur = 0;
   ctx.restore();
@@ -7309,7 +7301,8 @@ function openShareWindow() { window.open(_shareUrl,'_blank','noopener,noreferrer
 
 function openCopyModal() {
   if (!generatedPost) { toast('⚠️ Generate content first.','error'); return; }
-  document.getElementById('modalText').textContent = buildPostText(generatedPost, selectedArticle?.title);
+  // Pass includeUrl:false so the URL is excluded from the copy text
+  document.getElementById('modalText').textContent = buildPostText(generatedPost, selectedArticle?.title, { includeUrl: false });
   document.getElementById('copyModal').classList.add('open');
 }
 function closeCopyModal() { document.getElementById('copyModal').classList.remove('open'); }
@@ -7668,6 +7661,14 @@ let _memeTextPositions = {
   mid2: { x: null, y: null, fontSize: 0 },  // kept for backward compat, not shown in UI  bot:  { x: null, y: null, fontSize: 0 },
 };
 let _memeSelText = null; // 'top'|'mid1'|'mid2'|'bot'|null
+let _memeVertical = false; // false = horizontal panels (default), true = vertical stacking
+
+function toggleMemeOrientation() {
+  _memeVertical = !_memeVertical;
+  const btn = document.getElementById('memeOrientationBtn');
+  if (btn) btn.textContent = _memeVertical ? '⇅ Vertical (click for ⇄ Horizontal)' : '⇄ Horizontal (click for ⇅ Vertical)';
+  renderMemeCanvas();
+}
 
 /* ── Evergreen Nepal meme topics (shown when live fetch unavailable) ── */
 const MEME_NEPAL_TOPICS_FALLBACK = [
@@ -8565,47 +8566,71 @@ async function renderMemeCanvas() {
   const zoneH_bg   = Math.max(0, zoneBot_bg - zoneTop_bg);
 
   if (_memeSlots.length > 0) {
-    // Draw each slot as a vertical strip
-    const rowH = Math.floor(zoneH_bg / _memeSlots.length);
-    _memeSlots.forEach((slot, i) => {
-      const sy = zoneTop_bg + i * rowH;
-      const sh = (i === _memeSlots.length - 1) ? (zoneBot_bg - sy) : rowH; // last row fills remainder
-      if (slot.type === 'color') {
-        ctx.fillStyle = slot.color;
-        ctx.fillRect(0, sy, W, sh);
-      } else if (slot.img) {
-        const iw = slot.img.naturalWidth, ih = slot.img.naturalHeight;
-        ctx.save();
-        ctx.beginPath(); ctx.rect(0, sy, W, sh); ctx.clip();
-        const scale = Math.max(W / iw, sh / ih) * (slot.zoom || 1);
-        const dw = iw * scale, dh = ih * scale;
-        // Apply pan offset (clamped so image never fully leaves its strip)
-        const baseX = (W - dw) / 2;
-        const baseY = sy + (sh - dh) / 2;
-        const maxPanX = Math.max(0, (dw - W) / 2);
-        const maxPanY = Math.max(0, (dh - sh) / 2);
-        const px = Math.max(-maxPanX, Math.min(maxPanX, slot.panX || 0));
-        const py = Math.max(-maxPanY, Math.min(maxPanY, slot.panY || 0));
-        ctx.drawImage(slot.img, baseX + px, baseY + py, dw, dh);
-        /* Draw selection border if this slot is selected */
-        if (i === _memeSelSlotIdx) {
-          ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 3; ctx.setLineDash([6,3]);
-          ctx.strokeRect(1, sy + 1, W - 2, sh - 2);
-          ctx.setLineDash([]);
-          /* Pan hint */
-          ctx.fillStyle = 'rgba(245,158,11,0.85)'; ctx.font = 'bold 13px sans-serif';
-          ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-          ctx.fillText('✥ drag to pan panel ' + (i+1), W/2, sy + 4);
+    if (_memeVertical) {
+      // Vertical stacking (original behaviour): each slot is a horizontal strip
+      const rowH = Math.floor(zoneH_bg / _memeSlots.length);
+      _memeSlots.forEach((slot, i) => {
+        const sy = zoneTop_bg + i * rowH;
+        const sh = (i === _memeSlots.length - 1) ? (zoneBot_bg - sy) : rowH;
+        if (slot.type === 'color') {
+          ctx.fillStyle = slot.color; ctx.fillRect(0, sy, W, sh);
+        } else if (slot.img) {
+          const iw = slot.img.naturalWidth, ih = slot.img.naturalHeight;
+          ctx.save();
+          ctx.beginPath(); ctx.rect(0, sy, W, sh); ctx.clip();
+          const scale = Math.max(W / iw, sh / ih) * (slot.zoom || 1);
+          const dw = iw * scale, dh = ih * scale;
+          const baseX = (W - dw) / 2, baseY = sy + (sh - dh) / 2;
+          const maxPanX = Math.max(0, (dw - W) / 2), maxPanY = Math.max(0, (dh - sh) / 2);
+          const px = Math.max(-maxPanX, Math.min(maxPanX, slot.panX || 0));
+          const py = Math.max(-maxPanY, Math.min(maxPanY, slot.panY || 0));
+          ctx.drawImage(slot.img, baseX + px, baseY + py, dw, dh);
+          if (i === _memeSelSlotIdx) {
+            ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 3; ctx.setLineDash([6,3]);
+            ctx.strokeRect(1, sy + 1, W - 2, sh - 2); ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(245,158,11,0.85)'; ctx.font = 'bold 13px sans-serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+            ctx.fillText('✥ drag to pan panel ' + (i+1), W/2, sy + 4);
+          }
+          const ov = ctx.createLinearGradient(0, sy, 0, sy + sh);
+          ov.addColorStop(0,'rgba(0,0,0,0.45)'); ov.addColorStop(0.5,'rgba(0,0,0,0.20)'); ov.addColorStop(1,'rgba(0,0,0,0.55)');
+          ctx.fillStyle = ov; ctx.fillRect(0, sy, W, sh);
+          ctx.restore();
         }
-        /* Subtle dark overlay */
-        const ov = ctx.createLinearGradient(0, sy, 0, sy + sh);
-        ov.addColorStop(0,   'rgba(0,0,0,0.45)');
-        ov.addColorStop(0.5, 'rgba(0,0,0,0.20)');
-        ov.addColorStop(1,   'rgba(0,0,0,0.55)');
-        ctx.fillStyle = ov; ctx.fillRect(0, sy, W, sh);
-        ctx.restore();
-      }
-    });
+      });
+    } else {
+      // Horizontal layout (default): each slot is a vertical column side-by-side
+      const colW = Math.floor(W / _memeSlots.length);
+      _memeSlots.forEach((slot, i) => {
+        const sx = i * colW;
+        const sw = (i === _memeSlots.length - 1) ? (W - sx) : colW;
+        if (slot.type === 'color') {
+          ctx.fillStyle = slot.color; ctx.fillRect(sx, zoneTop_bg, sw, zoneH_bg);
+        } else if (slot.img) {
+          const iw = slot.img.naturalWidth, ih = slot.img.naturalHeight;
+          ctx.save();
+          ctx.beginPath(); ctx.rect(sx, zoneTop_bg, sw, zoneH_bg); ctx.clip();
+          const scale = Math.max(sw / iw, zoneH_bg / ih) * (slot.zoom || 1);
+          const dw = iw * scale, dh = ih * scale;
+          const baseX = sx + (sw - dw) / 2, baseY = zoneTop_bg + (zoneH_bg - dh) / 2;
+          const maxPanX = Math.max(0, (dw - sw) / 2), maxPanY = Math.max(0, (dh - zoneH_bg) / 2);
+          const px = Math.max(-maxPanX, Math.min(maxPanX, slot.panX || 0));
+          const py = Math.max(-maxPanY, Math.min(maxPanY, slot.panY || 0));
+          ctx.drawImage(slot.img, baseX + px, baseY + py, dw, dh);
+          if (i === _memeSelSlotIdx) {
+            ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 3; ctx.setLineDash([6,3]);
+            ctx.strokeRect(sx + 1, zoneTop_bg + 1, sw - 2, zoneH_bg - 2); ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(245,158,11,0.85)'; ctx.font = 'bold 13px sans-serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+            ctx.fillText('✥ pan ' + (i+1), sx + sw/2, zoneTop_bg + 4);
+          }
+          const ov = ctx.createLinearGradient(sx, 0, sx + sw, 0);
+          ov.addColorStop(0,'rgba(0,0,0,0.45)'); ov.addColorStop(0.5,'rgba(0,0,0,0.20)'); ov.addColorStop(1,'rgba(0,0,0,0.45)');
+          ctx.fillStyle = ov; ctx.fillRect(sx, zoneTop_bg, sw, zoneH_bg);
+          ctx.restore();
+        }
+      });
+    }
     // Fill top banner area + strip with dark if not covered
     ctx.fillStyle = 'rgba(0,0,0,0.0)';
   } else if (_memeImgObj) {
