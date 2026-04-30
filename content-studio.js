@@ -7,7 +7,11 @@
 'use strict';
 
 /* -- State -- */
-const _csPhotos  = {};   // { tabKey: HTMLImageElement }
+const _csPhotos       = {};   // { tabKey: HTMLImageElement }
+const _csPhotoOffsets = {};   // { tabKey: { dx, dy } }  — pan offset in canvas-px within clip box
+const _csPhotoZoom    = {};   // { tabKey: Number }       — zoom multiplier (1.0 = cover-fill)
+const _csPhotoRects   = {};   // { tabKey: { x,y,w,h } } — last drawn clip box (for hit-test)
+let   _csPhotoDrag    = null; // active drag: { key, startX, startY, baseDx, baseDy }
 let   _csTab     = 'ad';
 let   _csW       = 600, _csH = 600;
 let   _csCaption = '';
@@ -92,6 +96,12 @@ function csSwitch(tab) {
   if (tab === 'festival') {
     document.getElementById('csFestival').dispatchEvent(new Event('change'));
   }
+  if (tab === 'quote') {
+    csQuoteLoadDB();
+  }
+  if (tab === 'health') {
+    csHealthLoadDB();
+  }
 }
 
 /* -- Conditional rows -- */
@@ -106,6 +116,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Populate on first load
     _csFestPopulateGreetings(festSel.value);
     _csFestPopulateBgGrid(festSel.value);
+    // Pre-fill banner text for the default occasion
+    csFestivalChanged(festSel.value);
   }
   const quoteTypeHidden = document.getElementById('csQuoteType');
   document.querySelectorAll('[onclick*="csQuoteType"]').forEach(b => b.addEventListener('click', () => {
@@ -135,6 +147,89 @@ document.addEventListener('DOMContentLoaded', () => {
     csLeft.addEventListener('input',  liveHandler);
     csLeft.addEventListener('change', liveHandler);
   }
+
+  // ── Photo pan & zoom within fixed clip box ──
+  (function _initCsPhotoPanZoom() {
+    const PHOTO_TABS = ['festival', 'politician', 'quote', 'success'];
+
+    function _pt(canvas, e) {
+      const rect = canvas.getBoundingClientRect();
+      const src  = e.touches ? e.touches[0] : e;
+      const sx   = (canvas.width  || _csW) / rect.width;
+      const sy   = (canvas.height || _csH) / rect.height;
+      return { x: (src.clientX - rect.left) * sx, y: (src.clientY - rect.top) * sy };
+    }
+
+    function _insideRect(r, px, py) {
+      return r && px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
+    }
+
+    // ── Mouse drag to pan ──
+    function _onDown(e) {
+      const key = PHOTO_TABS.includes(_csTab) ? _csTab : null; if (!key) return;
+      if (!_csPhotos[key]) return;
+      const canvas = document.getElementById('csCanvas'); if (!canvas) return;
+      const p = _pt(canvas, e);
+      if (!_insideRect(_csPhotoRects[key], p.x, p.y)) return;
+      e.preventDefault();
+      const off = _csPhotoOffsets[key] || { dx: 0, dy: 0 };
+      _csPhotoDrag = { key, startX: p.x, startY: p.y, baseDx: off.dx, baseDy: off.dy };
+      canvas.style.cursor = 'grabbing';
+    }
+
+    function _onMove(e) {
+      const canvas = document.getElementById('csCanvas'); if (!canvas) return;
+      if (!_csPhotoDrag) {
+        // Hover: show grab cursor when over the photo box
+        const key = PHOTO_TABS.includes(_csTab) ? _csTab : null;
+        if (key && _csPhotos[key]) {
+          const p = _pt(canvas, e);
+          canvas.style.cursor = _insideRect(_csPhotoRects[key], p.x, p.y) ? 'grab' : '';
+        }
+        return;
+      }
+      e.preventDefault();
+      const { key, startX, startY, baseDx, baseDy } = _csPhotoDrag;
+      const p = _pt(canvas, e);
+      _csPhotoOffsets[key] = { dx: baseDx + (p.x - startX), dy: baseDy + (p.y - startY) };
+      csRenderBlank();
+    }
+
+    function _onUp() {
+      if (_csPhotoDrag) {
+        _csPhotoDrag = null;
+        const canvas = document.getElementById('csCanvas');
+        if (canvas) canvas.style.cursor = '';
+      }
+    }
+
+    // ── Scroll / pinch to zoom ──
+    function _onWheel(e) {
+      const key = PHOTO_TABS.includes(_csTab) ? _csTab : null; if (!key) return;
+      if (!_csPhotos[key]) return;
+      const canvas = document.getElementById('csCanvas'); if (!canvas) return;
+      const p = _pt(canvas, e);
+      if (!_insideRect(_csPhotoRects[key], p.x, p.y)) return;
+      e.preventDefault();
+      const delta  = e.deltaY < 0 ? 0.08 : -0.08;
+      const cur    = _csPhotoZoom[key] || 1.0;
+      _csPhotoZoom[key] = Math.min(4, Math.max(0.5, cur + delta));
+      csRenderBlank();
+    }
+
+    function _attach() {
+      const canvas = document.getElementById('csCanvas'); if (!canvas) { setTimeout(_attach, 300); return; }
+      canvas.addEventListener('mousedown',  _onDown, { passive: false });
+      canvas.addEventListener('touchstart', _onDown, { passive: false });
+      window.addEventListener('mousemove',  _onMove, { passive: false });
+      window.addEventListener('touchmove',  _onMove, { passive: false });
+      window.addEventListener('mouseup',    _onUp,   { passive: true });
+      window.addEventListener('touchend',   _onUp,   { passive: true });
+      canvas.addEventListener('wheel',      _onWheel, { passive: false });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _attach);
+    else _attach();
+  })();
 });
 
 /* -- Radio button helper -- */
@@ -171,19 +266,44 @@ function csLoadPhoto(input, previewId) {
   reader.onload = e => {
     const img = new Image();
     img.onload = () => {
-      // Derive tab key from previewId
       const key = previewId.replace('cs','').replace('PhotoPreview','').toLowerCase();
       _csPhotos[key] = img;
+      _csPhotoOffsets[key] = { dx: 0, dy: 0 };   // reset pan
+      _csPhotoZoom[key]    = 1.0;                 // reset zoom
       const span = document.getElementById(previewId);
       if (span) span.textContent = '✅ ' + file.name;
-      csRenderBlank(); // live update immediately on upload
+      _csShowPhotoDragHint();
+      csRenderBlank();
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
 
-/* -- Canvas size -- */
+/* -- Hint toast on canvas -- */
+function _csShowPhotoDragHint() {
+  const wrap = document.getElementById('csCanvasWrap');
+  if (!wrap) return;
+  let hint = document.getElementById('_csPhotoDragHint');
+  if (!hint) {
+    hint = document.createElement('div');
+    hint.id = '_csPhotoDragHint';
+    hint.textContent = '✋ Drag to pan · scroll to zoom inside circle/box';
+    hint.style.cssText = 'position:absolute;bottom:44px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);color:#f6ad55;font-size:12px;padding:5px 14px;border-radius:20px;pointer-events:none;z-index:20;white-space:nowrap;transition:opacity .4s;border:1px solid rgba(246,173,85,.3)';
+    wrap.appendChild(hint);
+  }
+  hint.style.opacity = '1';
+  clearTimeout(hint._t);
+  hint._t = setTimeout(() => { hint.style.opacity = '0'; }, 3500);
+}
+
+/* -- Reset photo pan+zoom to default -- */
+function csResetPhotoPos(key) {
+  _csPhotoOffsets[key] = { dx: 0, dy: 0 };
+  _csPhotoZoom[key]    = 1.0;
+  csRenderBlank();
+}
+
 function csSetSize(w, h, btn) {
   _csW = w; _csH = h;
   const canvas = document.getElementById('csCanvas');
@@ -216,7 +336,22 @@ function csRenderBlank() {
     festival:  () => typeof _csRenderFestival  === 'function' && _csRenderFestival(null),
     politician:() => typeof _csRenderPolitician=== 'function' && _csRenderPolitician(null),
     quote:     () => typeof _csRenderQuote     === 'function' && _csRenderQuote(null),
-    health:    () => typeof _csRenderHealth    === 'function' && _csRenderHealth(null),
+    health:    () => {
+      // Re-render with current selected habit so bg/photo changes don't wipe content
+      if (_csHealthSelected && typeof _csRenderHealth === 'function') {
+        const habit = _csHealthSelected;
+        _csRenderHealth({
+          title: '� Health Tips',
+          habits: [{ bad_habit: habit.bad, bad_impact: habit.bad_impact, good_habit: habit.good, good_impact: habit.good_impact }],
+          tip: habit.tip,
+          closing: habit.closing,
+        });
+      } else if (_csHealthResearchActive && typeof _csRenderHealth === 'function') {
+        csHealthShowResearch();
+      } else if (typeof _csRenderHealth === 'function') {
+        _csRenderHealth(null);
+      }
+    },
     facts:     () => typeof _csRenderFacts     === 'function' && _csRenderFacts(null),
     atomic:    () => typeof _csRenderAtomic    === 'function' && _csRenderAtomic(null),
     quiz:      () => typeof _csRenderQuiz      === 'function' && _csRenderQuiz(null),
@@ -246,22 +381,34 @@ function csRenderBlank() {
 function _csDrawBackground(ctx, W, H, bgKey) {
   ctx.clearRect(0, 0, W, H);
   const gradients = {
-    'gradient-dark':   ['#0a0f1e', '#1e293b'],
-    'gradient-purple': ['#1e0538', '#7c3aed'],
-    'gradient-red':    ['#450a0a', '#dc2626'],
-    'gradient-green':  ['#022c22', '#059669'],
-    'gradient-gold':   ['#431407', '#d97706'],
-    'gradient-pink':   ['#500724', '#a855f7'],
-    'gradient-blue':   ['#0c1a2e', '#2563eb'],
-    'gradient-teal':   ['#042f2e', '#0891b2'],
-    'gradient-orange': ['#431407', '#ea580c'],
-    'nepal-flag':      ['#003893', '#dc143c'],
-    'white-clean':     ['#f8fafc', '#e2e8f0'],
-    'space-dark':      ['#000008', '#0d0a2e'],
-    'bokeh':           ['#060310', '#1e1b4b'],
+    'gradient-dark':     ['#0a0f1e', '#1e293b'],
+    'gradient-purple':   ['#1e0538', '#7c3aed'],
+    'gradient-red':      ['#450a0a', '#dc2626'],
+    'gradient-green':    ['#022c22', '#059669'],
+    'gradient-gold':     ['#431407', '#d97706'],
+    'gradient-pink':     ['#500724', '#a855f7'],
+    'gradient-blue':     ['#0c1a2e', '#2563eb'],
+    'gradient-teal':     ['#042f2e', '#0891b2'],
+    'gradient-orange':   ['#431407', '#ea580c'],
+    'gradient-rose':     ['#4c0519', '#e11d48'],
+    'gradient-emerald':  ['#052e16', '#16a34a'],
+    'gradient-indigo':   ['#1e1b4b', '#4338ca'],
+    'gradient-saffron':  ['#7c2d12', '#f59e0b'],
+    'nepal-flag':        ['#003893', '#dc143c'],
+    'white-clean':       ['#f8fafc', '#e2e8f0'],
+    'space-dark':        ['#000008', '#0d0a2e'],
+    'bokeh':             ['#060310', '#1e1b4b'],
+    'health-emerald':    ['#064e3b', '#059669'],
+    'health-ocean':      ['#0c4a6e', '#0284c7'],
+    'health-teal':       ['#134e4a', '#0d9488'],
+    'health-purple':     ['#3b0764', '#7e22ce'],
+    'health-slate':      ['#0f172a', '#1e293b'],
+    'health-warm':       ['#431407', '#c2410c'],
+    'health-rose':       ['#4c0519', '#be123c'],
+    'health-white':      ['#f0fdf4', '#dcfce7'],
   };
   const stops = gradients[bgKey] || gradients['gradient-dark'];
-  const isLight = bgKey === 'white-clean';
+  const isLight = bgKey === 'white-clean' || bgKey === 'health-white';
 
   // Rich multi-stop gradient
   const grad = ctx.createLinearGradient(0, 0, W * 0.7, H);
@@ -297,20 +444,44 @@ function _csDrawBackground(ctx, W, H, bgKey) {
 }
 
 /* -- Draw photo (circle or rect) -- */
-function _csDrawPhoto(ctx, img, x, y, w, h, circle = false) {
+function _csDrawPhoto(ctx, img, x, y, w, h, circle = false, offKey = null) {
   if (!img) return;
+
+  // Record the clip-box rect so the pan/zoom event handler can hit-test it
+  if (offKey) _csPhotoRects[offKey] = { x, y, w, h };
+
+  // Retrieve pan offset and zoom for this tab key
+  const off  = offKey ? (_csPhotoOffsets[offKey] || { dx: 0, dy: 0 }) : { dx: 0, dy: 0 };
+  const zoom = offKey ? (_csPhotoZoom[offKey]    || 1.0)              : 1.0;
+
   ctx.save();
+  // Clip to the fixed layout box (circle or rounded-rect) — this NEVER moves
   if (circle) {
     ctx.beginPath();
     ctx.arc(x + w / 2, y + h / 2, Math.min(w, h) / 2, 0, Math.PI * 2);
     ctx.clip();
   } else {
-    ctx.beginPath(); ctx.roundRect(x, y, w, h, 12); ctx.clip();
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, 12);
+    else ctx.rect(x, y, w, h);
+    ctx.clip();
   }
-  const iw = img.naturalWidth, ih = img.naturalHeight;
-  const scale = Math.max(w / iw, h / ih);
-  const dw = iw * scale, dh = ih * scale;
-  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+
+  // Cover-fill the box with the image, then apply zoom + pan offset
+  const iw = img.naturalWidth  || img.width  || 1;
+  const ih = img.naturalHeight || img.height || 1;
+  const baseSc = Math.max(w / iw, h / ih) * zoom;
+  const imgW   = iw * baseSc,  imgH = ih * baseSc;
+
+  // Centre the zoomed image in the box, then shift by pan offset
+  let imgX = x + (w - imgW) / 2 + off.dx;
+  let imgY = y + (h - imgH) / 2 + off.dy;
+
+  // Clamp so the image always covers the box edges (no empty gaps)
+  imgX = Math.min(x, Math.max(x - (imgW - w), imgX));
+  imgY = Math.min(y, Math.max(y - (imgH - h), imgY));
+
+  ctx.drawImage(img, imgX, imgY, imgW, imgH);
   ctx.restore();
 }
 
@@ -501,7 +672,105 @@ function _csShowCaption(text) {
   _csCaption = text;
   const box = document.getElementById('csCaptionBox');
   const txt = document.getElementById('csCaptionText');
-  if (box && txt) { box.style.display = 'block'; txt.value = text; }
+  if (box && txt) {
+    box.style.display = 'block';
+    txt.value = text;
+    _csRenderCaptionPreview();
+  }
+}
+
+/* ── Caption colour engine ── */
+// Bright palette — designed to pop on dark AND light backgrounds
+const _CAPTION_COLORS = [
+  '#f59e0b','#34d399','#60a5fa','#f472b6','#a78bfa',
+  '#fb923c','#4ade80','#38bdf8','#e879f9','#fde68a',
+  '#f87171','#2dd4bf','#818cf8','#fdba74','#86efac',
+];
+// Per-group override map: key = group index, value = colour hex
+let _captionGroupColors = {};
+
+function _csRenderCaptionPreview() {
+  const preview = document.getElementById('csCaptionColorPreview');
+  const tools   = document.getElementById('csCaptionColorTools');
+  if (!preview) return;
+
+  const text = document.getElementById('csCaptionText')?.value || '';
+  if (!text.trim()) { preview.style.display = 'none'; if (tools) tools.style.display = 'none'; return; }
+
+  // Split into word tokens (keep whitespace/newlines as separate tokens)
+  const tokens = text.split(/(\s+)/);
+  const words  = tokens.filter(t => t.trim().length > 0);
+
+  if (words.length === 0) { preview.style.display = 'none'; return; }
+
+  // Group words in chunks of 2–3
+  const chunkSize = words.length <= 6 ? 2 : 3;
+  const groups = [];
+  let wIdx = 0;
+  for (const tok of tokens) {
+    if (!tok.trim()) { groups.push({ type: 'ws', val: tok }); continue; }
+    const gi = Math.floor(wIdx / chunkSize);
+    groups.push({ type: 'word', val: tok, gi });
+    wIdx++;
+  }
+  const numGroups = Math.ceil(words.length / chunkSize);
+
+  // Assign colours — cycle palette, skip over background-clashing colours
+  preview.innerHTML = groups.map(g => {
+    if (g.type === 'ws') return g.val.replace(/\n/g, '<br>');
+    const baseColor = _captionGroupColors[g.gi] ?? _CAPTION_COLORS[g.gi % _CAPTION_COLORS.length];
+    return `<span class="cs-cap-word" data-gi="${g.gi}" style="color:${baseColor};font-weight:700;cursor:pointer" onclick="_csPickCaptionGroup(${g.gi})" title="Click to change colour">${g.val}</span>`;
+  }).join('');
+
+  preview.style.display = 'block';
+  if (tools) tools.style.display = 'flex';
+
+  // Build swatch strip
+  _csRenderCaptionSwatches(numGroups);
+}
+
+let _captionActiveGroup = null;
+
+function _csPickCaptionGroup(gi) {
+  _captionActiveGroup = gi;
+  // Highlight selected group
+  document.querySelectorAll('.cs-cap-word').forEach(el => {
+    el.style.outline = el.dataset.gi == gi ? '2px solid #fff' : 'none';
+    el.style.borderRadius = '2px';
+  });
+  _csRenderCaptionSwatches();
+}
+
+function _csRenderCaptionSwatches() {
+  const strip = document.getElementById('csCaptionColorSwatches');
+  if (!strip) return;
+  strip.innerHTML = _CAPTION_COLORS.map(c => `
+    <span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:${c};cursor:pointer;border:2px solid rgba(255,255,255,.25);transition:transform .1s"
+      title="${c}"
+      onmouseover="this.style.transform='scale(1.25)'" onmouseout="this.style.transform=''"
+      onclick="_csCaptionSetColor('${c}')"></span>`).join('');
+}
+
+function _csCaptionSetColor(color) {
+  if (_captionActiveGroup === null) return;
+  _captionGroupColors[_captionActiveGroup] = color;
+  _csRenderCaptionPreview();
+  // Re-select the group visually
+  setTimeout(() => _csPickCaptionGroup(_captionActiveGroup), 10);
+}
+
+function _csRandomizeCaptionColors() {
+  _captionGroupColors = {};
+  // Shuffle palette so each call gives a fresh random set
+  const shuffled = [..._CAPTION_COLORS].sort(() => Math.random() - .5);
+  const text = document.getElementById('csCaptionText')?.value || '';
+  const words = text.split(/\s+/).filter(Boolean);
+  const chunkSize = words.length <= 6 ? 2 : 3;
+  const n = Math.ceil(words.length / chunkSize);
+  for (let i = 0; i < n; i++) {
+    _captionGroupColors[i] = shuffled[i % shuffled.length];
+  }
+  _csRenderCaptionPreview();
 }
 
 /* -- Quick (template-only, no AI) -- */
@@ -510,8 +779,45 @@ function csQuick(tab) {
     ad: { caption: '🔥 Special Offer!\n✨ Our Premium Service - Run Now!\n📞 Contact Today!\n\n#Nepal #Business #Sale #Offer', render: _csRenderAd },
     festival:  { caption: '🪔 Best Wishes! Happy Festival!\n#NepalFestival', render: _csRenderFestival },
     politician:{ caption: '🙏 Happy Birthday - Heartfelt Wishes!\n#Nepal #Politics', render: _csRenderPolitician },
-    quote:     { caption: '"Success is a journey."\n- Inspirational Quote\n#Motivation #Nepal', render: _csRenderQuote },
-    health:    { caption: '💊 Health is Wealth!\n🌿 Start Healthy Today\n#HealthTips #Nepal', render: _csRenderHealth },
+    quote: {
+      caption: '"सफलता एक यात्रा हो — गन्तव्य होइन।"\n— प्रेरणादायक उद्धरण\n#Motivation #Nepal #Nepali',
+      render: (d) => {
+        const type = document.getElementById('csQuoteType')?.value || 'motivational';
+        // Custom: render from textarea + creator name
+        if (type === 'custom') {
+          const q = document.getElementById('csQuoteCustomText')?.value?.trim() || '';
+          const a = document.getElementById('csQuoteCreatorName')?.value?.trim() || '';
+          return _csRenderQuote({ quote: q, author: a });
+        }
+        // Anonymous: use selected/DB quote with "Anonymous" author
+        if (type === 'anonymous') {
+          const q = document.getElementById('csQuoteSelectedText')?.value?.trim() || '';
+          if (q) return _csRenderQuote({ quote: q, author: 'Anonymous' });
+        }
+        // Famous / motivational: try DB quote
+        if (typeof QUOTES_DB !== 'undefined') {
+          const item = dbGetRandomQuote(type);
+          if (item) {
+            const q = typeof item === 'object' ? item.quote : item;
+            const a = typeof item === 'object' ? (item.author || '') : '';
+            return _csRenderQuote({ quote: q, author: a });
+          }
+        }
+        _csRenderQuote(d);
+      }
+    },
+    health: {
+      caption: '💊 स्वस्थ बानीहरू\n🌿 आजैदेखि सुरु गर्नुस्!\n#HealthTips #Nepal #Wellness',
+      render: () => {
+        const cat = document.getElementById('csHealthCategory')?.value || 'all';
+        const h = healthDbRandom(cat) || HEALTH_DB[0];
+        _csRenderHealth({
+          title: '� Health Tips',
+          habits: [{ bad_habit: h.bad, bad_impact: h.bad_impact, good_habit: h.good, good_impact: h.good_impact }],
+          tip: h.tip, closing: h.closing,
+        });
+      }
+    },
     facts:     { caption: '🌌 Did You Know?\nThe universe has more stars than grains of sand on Earth!\n#Facts #Science', render: _csRenderFacts },
     atomic:    { caption: '☢️ Improve 1% Every Day!\nIn 365 days you will be 37x better! 🚀\n#AtomicHabits #Nepal', render: _csRenderAtomic },
     quiz:      { caption: '🧠 Brain Teaser - Write your answer in comments!\n#Quiz #Nepal #Brain', render: _csRenderQuiz },
@@ -589,37 +895,44 @@ Format as JSON: { "title": "...", "subtitle": "...", "hashtags": "..." }`;
       const customText  = document.getElementById('csQuoteCustomText')?.value?.trim() || '';
       const topic = document.getElementById('csQuoteTopic')?.value?.trim() || 'success';
       if (type === 'custom' && customText) {
-        const translated = await _csCallAI(`Translate this quote to Nepali Devanagari: "${customText}". Return only the Nepali translation.`);
-        const nepaliQuote = translated || customText;
+        const translated = await _csCallAI(`Translate this quote accurately to Nepali Devanagari, keeping it grammatically correct and natural: "${customText}". Return only the Nepali translation, nothing else.`);
+        const nepaliQuote = translated?.trim() || customText;
+        const creatorName = document.getElementById('csQuoteCreatorName')?.value?.trim() || '';
         _csShowSpinner(false);
- _csShowCaption(`"${nepaliQuote}"\n- #Nepal`);
- _csSetStatus('✅ Custom quote ');
- _csRenderQuote({ quote: nepaliQuote, author: ' ', caption: nepaliQuote });
+        _csShowCaption(`"${nepaliQuote}"${creatorName ? '\n— ' + creatorName : ''}\n#Nepal #Motivation`);
+        _csSetStatus('✅ Custom quote translated!');
+        _csRenderQuote({ quote: nepaliQuote, author: creatorName });
         return;
       }
-      prompt = `Generate ${type === 'famous' && personality ? 'a real quote by '+personality : 'a '+type} motivational quote about "${topic}" in Nepali (Devanagari script).
-${type === 'famous' && personality ? `Author: ${personality}. Also provide their name in Devanagari if possible.` : ''}
-Write:
-1. The quote in Nepali (powerful, 1-3 lines)
-2. Author attribution in Nepali (or "" for anonymous)
-3. Brief explanation in Nepali (1 line, why it matters)
-4. 5 hashtags
-Format as JSON: { "quote": "...", "author": "...", "explanation": "...", "hashtags": "..." }`;
+      prompt = `Generate ${type === 'famous' && personality ? 'a real famous quote by ' + personality : 'a ' + type} quote about "${topic}" in Nepali (Devanagari script). The quote must be grammatically correct, naturally articulated Nepali.
+${type === 'famous' && personality ? `The author is ${personality}. Provide their name in Nepali Devanagari and also in English.` : ''}
+${type === 'anonymous' ? 'This is an anonymous quote — set author as "अज्ञात" and authorEn as "Anonymous".' : ''}
+Respond ONLY as JSON with these exact keys:
+{ "quote": "<Nepali quote text>", "author": "<author in Nepali or empty>", "authorEn": "<author in English or empty>", "explanation": "<1-line Nepali explanation of why it matters>", "hashtags": "#Nepal #Motivation #Quote #Nepali #Inspiration" }`;
       renderFn = _csRenderQuote;
       break;
     }
     case 'health': {
- const topic = document.getElementById('csHealthTopic')?.value?.trim() || '';
+      const topic    = document.getElementById('csHealthTopic')?.value?.trim() || '';
       const audience = document.getElementById('csHealthAudience')?.value || 'general';
-      const count    = document.getElementById('csHealthCount')?.value || 5;
-      prompt = `Generate ${count} health tips in Nepali (Devanagari) about: "${topic}" for ${audience} audience.
-Each tip should be practical, science-backed, and easy to follow.
-Write:
-1. Post title in Nepali (catchy, max 8 words)
-2. ${count} numbered tips in Nepali (each 1-2 sentences)
-3. Closing motivational line in Nepali
-4. 5 hashtags
-Format as JSON: { "title": "...", "tips": ["tip1","tip2",...], "closing": "...", "hashtags": "..." }`;
+      const audienceLabel = { general:'सबैका लागि', elderly:'वृद्धवृद्धाका लागि', youth:'युवाहरूका लागि', mothers:'आमाहरूका लागि' }[audience] || 'सबैका लागि';
+      prompt = `तपाईं एक स्वास्थ्य विशेषज्ञ हुनुहुन्छ। "${topic}" बारे ${audienceLabel} एउटा स्वास्थ्य बानीको पोस्ट बनाउनुस् — एउटा नराम्रो बानी र एउटा राम्रो बानी।
+
+JSON मात्र फर्काउनुस् (कुनै markdown नभई):
+{
+  "title": "इमोजीसहित आकर्षक नेपाली शीर्षक (अधिकतम ८ शब्द)",
+  "habits": [
+    {
+      "bad_habit": "मानिसहरूले गर्ने नराम्रो बानी (१-२ वाक्य)",
+      "bad_impact": "त्यो बानीले गर्ने नोक्सान (१-२ वाक्य)",
+      "good_habit": "राम्रो विकल्प बानी (१-२ वाक्य)",
+      "good_impact": "राम्रो बानीले ल्याउने फाइदा (१-२ वाक्य)"
+    }
+  ],
+  "tip": "एउटा छोटो व्यावहारिक सुझाव",
+  "closing": "छोटो प्रेरणादायी बन्द वाक्य",
+  "hashtags": "#Nepal #Health #Wellness #Nepali #HealthTips"
+}`;
       aiData = { topic };
       renderFn = _csRenderHealth;
       break;
@@ -730,13 +1043,21 @@ Format as JSON: { "question": "...", "choices": ["choice1","choice2"${type !== '
   _csSetStatus('🤖 AI is thinking...');
   // Build caption from result
   const captionParts = [];
-  ['headline','title','quote','question'].forEach(k => aiResult[k] && captionParts.push(aiResult[k]));
-  ['subtitle','body','message','story','insight','fact','tips','action','closing','explanation','cta'].forEach(k => {
-    if (aiResult[k]) captionParts.push(Array.isArray(aiResult[k]) ? aiResult[k].map((t,i) => `${i+1}. ${t}`).join('\n') : aiResult[k]);
-  });
-  if (aiResult.author) captionParts.push('- ' + aiResult.author);
-  if (aiResult.hashtags) captionParts.push('\n' + aiResult.hashtags);
-  _csShowCaption(captionParts.join('\n\n'));
+  // Health tab: use styled caption builder
+  if (tab === 'health' && aiResult.habits?.[0]) {
+    const h0 = aiResult.habits[0];
+    const captionStyle = document.getElementById('csHealthCaptionStyle')?.value || 'emoji';
+    const habitObj = { bad_habit: h0.bad_habit, bad_impact: h0.bad_impact, good_habit: h0.good_habit, good_impact: h0.good_impact, tip: aiResult.tip, category: '' };
+    _csShowCaption(_csHealthBuildCaption(habitObj, captionStyle));
+  } else {
+    ['headline','title','quote','question'].forEach(k => aiResult[k] && captionParts.push(aiResult[k]));
+    ['subtitle','body','message','story','insight','fact','tips','action','closing','explanation','cta'].forEach(k => {
+      if (aiResult[k]) captionParts.push(Array.isArray(aiResult[k]) ? aiResult[k].map((t,i) => `${i+1}. ${t}`).join('\n') : aiResult[k]);
+    });
+    if (aiResult.author) captionParts.push('- ' + aiResult.author);
+    if (aiResult.hashtags) captionParts.push('\n' + aiResult.hashtags);
+    _csShowCaption(captionParts.join('\n\n'));
+  }
   renderFn && renderFn(aiResult);
 }
 
@@ -1712,6 +2033,19 @@ function csFestivalChanged(val) {
   if (bgImgName) bgImgName.textContent = '';
   const bgImgClear = document.getElementById('csFestBgImgClear');
   if (bgImgClear) bgImgClear.style.display = 'none';
+  // Auto-fill banner text for the selected occasion
+  const bannerEl = document.getElementById('csFestivalBanner');
+  if (bannerEl) {
+    const autoNepali = {
+      dashain:'दशैंको शुभकामना! 🎉', tihar:'तिहारको शुभकामना! 🪔',
+      chhath:'छठ पर्वको शुभकामना! 🌅', holi:'होलीको शुभकामना! 🎨',
+      teej:'तीजको शुभकामना! 💃', 'maghe-sankranti':'माघे सङ्क्रान्तिको शुभकामना! 🌾',
+      'buddha-jayanti':'बुद्ध जयन्तीको शुभकामना! ☸️', 'new-year':'नयाँ वर्षको शुभकामना! 🎆',
+      christmas:'Merry Christmas! 🎄', eid:'ईद मुबारक! ☪️', birthday:'जन्मदिनको शुभकामना! 🎂',
+      custom: '',
+    };
+    bannerEl.value = autoNepali[val] || '';
+  }
   _csFestPopulateGreetings(val);
   _csFestPopulateBgGrid(val);
 }
@@ -2168,8 +2502,7 @@ function _csRenderFestival(data) {
     ctx.globalAlpha = 1; ctx.strokeStyle = accent; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.arc(W/2, photoTop + photoSize/2, photoSize/2 + 5, 0, Math.PI*2); ctx.stroke();
     ctx.restore();
-    _csDrawPhoto(ctx, photo, px, photoTop, photoSize, photoSize, true);
-    // Emoji badge at top-right of circle (doesn't skew visual centre)
+    _csDrawPhoto(ctx, photo, px, photoTop, photoSize, photoSize, true, 'festival');
     ctx.save(); ctx.font=`${Math.round(W*0.040)}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.globalAlpha=0.9;
     ctx.fillText(emojis[0], W/2 + photoSize/2*0.68, photoTop + photoSize/2 - photoSize/2*0.68);
     ctx.restore();
@@ -2180,7 +2513,7 @@ function _csRenderFestival(data) {
     ? photoTop + photoSize + Math.round(H * 0.035)
     : bi + Math.round(H * 0.10);
 
-  /* ── 10. Ribbon — bilingual based on greeting language ── */
+  /* ── 10. Ribbon — user-editable banner text, falling back to auto-generated ── */
   const greetingRaw = document.getElementById('csFestivalGreetingCustom')?.value?.trim()
     || data?.message
     || (_csFestGreetings[festVal] || _csFestGreetings.custom)[0];
@@ -2204,9 +2537,11 @@ function _csRenderFestival(data) {
     christmas:'Merry Christmas! 🎄', eid:'Eid Mubarak! ☪️', birthday:'Happy Birthday! 🎂',
   };
   const ribbonMap  = isEnglish ? ribbonEnglish : ribbonNepali;
-  const ribbonText = festVal === 'custom'
+  const autoRibbon = festVal === 'custom'
     ? ((document.getElementById('csFestivalCustom')?.value || 'Occasion') + (isEnglish ? ' Greetings! 🎉' : ' को शुभकामना! 🎉'))
     : (ribbonMap[festVal] || 'शुभकामना! 🎉');
+  // Use user-edited banner input if not empty, otherwise auto-generate
+  const ribbonText = document.getElementById('csFestivalBanner')?.value?.trim() || autoRibbon;
 
   const badgeH = Math.round(H * 0.068);
   const badgeW = W * 0.82;
@@ -2289,12 +2624,11 @@ function _csRenderFestival(data) {
 
   /* ── 15. Bottom-corner photo ── */
   if (photo && isBottomPos) {
-    const ringPad  = Math.round(photoSize * 0.18) + 8; // glow rings clear the border
+    const ringPad  = Math.round(photoSize * 0.18) + 8;
     const margin   = bi + ringPad + 4;
     const px       = photoPos === 'bottom-left' ? margin : W - margin - photoSize;
     const py       = H - margin - photoSize;
     ctx.save();
-    // Glow rings
     for (let r = 2; r >= 0; r--) {
       ctx.strokeStyle = accent; ctx.globalAlpha = 0.10 + r*0.08; ctx.lineWidth = 6 - r*1.5;
       ctx.beginPath(); ctx.arc(px + photoSize/2, py + photoSize/2, photoSize/2 + 6 + r*6, 0, Math.PI*2); ctx.stroke();
@@ -2302,7 +2636,7 @@ function _csRenderFestival(data) {
     ctx.globalAlpha = 1; ctx.strokeStyle = accent; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(px + photoSize/2, py + photoSize/2, photoSize/2 + 4, 0, Math.PI*2); ctx.stroke();
     ctx.restore();
-    _csDrawPhoto(ctx, photo, px, py, photoSize, photoSize, true);
+    _csDrawPhoto(ctx, photo, px, py, photoSize, photoSize, true, 'festival');
 
     // Name beside the photo (right side for bottom-left photo; left side for bottom-right photo)
     if (name) {
@@ -2417,17 +2751,12 @@ function _csRenderPolitician(data) {
     ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
     ctx.restore();
 
-    // Photo with clipped rounded rect
+    // Draw photo — _csDrawPhoto clips to the fixed rounded-rect and applies pan/zoom inside
+    _csDrawPhoto(ctx, photo, photoX, photoY, photoW, photoH, false, 'politician');
+
+    // Accent border around the fixed box
     ctx.save();
     const r = Math.round(photoW * 0.06);
-    ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(photoX, photoY, photoW, photoH, r) : ctx.rect(photoX, photoY, photoW, photoH);
-    ctx.clip();
-    _csDrawPhoto(ctx, photo, photoX, photoY, photoW, photoH);
-    ctx.restore();
-
-    // Accent border around photo
-    ctx.save();
     ctx.strokeStyle = th.accent; ctx.lineWidth = 3; ctx.globalAlpha = 0.85;
     ctx.beginPath();
     ctx.roundRect ? ctx.roundRect(photoX, photoY, photoW, photoH, r) : ctx.rect(photoX, photoY, photoW, photoH);
@@ -2551,101 +2880,1149 @@ function _csRenderQuote(data) {
   _csDrawBackground(ctx, W, H, bg);
   const isLight = bg === 'white-clean';
 
-  // Giant quote mark
-  ctx.fillStyle = isLight ? 'rgba(124,58,237,0.1)' : 'rgba(167,139,250,0.12)';
-  ctx.font = `900 ${Math.round(W * 0.45)}px serif`;
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.fillText('"', W * 0.02, -H * 0.05);
+  // Theme accent colours per background
+  const themeAccent = {
+    'gradient-dark':    ['#60a5fa', '#93c5fd'],
+    'gradient-purple':  ['#e879f9', '#d946ef'],
+    'gradient-gold':    ['#fde68a', '#fbbf24'],
+    'gradient-teal':    ['#5eead4', '#2dd4bf'],
+    'gradient-rose':    ['#fda4af', '#fb7185'],
+    'gradient-emerald': ['#86efac', '#4ade80'],
+    'gradient-indigo':  ['#a5b4fc', '#818cf8'],
+    'bokeh':            ['#f0abfc', '#c084fc'],
+    'white-clean':      ['#7c3aed', '#4f46e5'],
+    'gradient-saffron': ['#fed7aa', '#fdba74'],
+  };
+  const [accentA, accentB] = themeAccent[bg] || ['#60a5fa', '#93c5fd'];
 
-  // Small photo
-  const photo = _csPhotos['quote'];
-  const pSize = Math.round(Math.min(W, H) * 0.14);
-  if (photo) {
-    ctx.save();
-    ctx.strokeStyle = isLight ? '#7c3aed' : '#f59e0b'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(W/2, H * 0.2, pSize/2 + 3, 0, Math.PI*2); ctx.stroke();
-    ctx.restore();
-    _csDrawPhoto(ctx, photo, W/2 - pSize/2, H * 0.2 - pSize/2, pSize, pSize, true);
+  const photo    = _csPhotos['quote'];
+  const hasPhoto = !!photo;
+  const pSize    = Math.round(Math.min(W, H) * 0.18);
+
+  const quote    = data?.quote || document.getElementById('csQuoteSelectedText')?.value?.trim() || '';
+
+  // Resolve author based on quote type
+  let author = data?.author ?? null;
+  if (author === null || author === undefined) {
+    const qType = document.getElementById('csQuoteType')?.value || 'motivational';
+    if (qType === 'anonymous') {
+      const showName = document.getElementById('csAnonShowName')?.checked !== false;
+      const anonName = document.getElementById('csQuoteAnonName')?.value?.trim();
+      author = showName ? (anonName || 'Anonymous') : '';
+    } else if (qType === 'custom') {
+      author = document.getElementById('csQuoteCreatorName')?.value?.trim() || '';
+    } else {
+      author = document.getElementById('csQuoteSelectedAuthor')?.textContent?.replace(/^—\s*/, '').trim() || '';
+    }
   }
+  const hasAuthor = !!(author && author.trim());
 
-  const quoteY = photo ? H * 0.34 : H * 0.18;
+  // ── Metrics (sizes / gaps) ──
+  const quoteFontSize  = Math.round(W * 0.047);
+  const quoteLineH     = Math.round(quoteFontSize * 1.45);
+  const quoteMaxW      = W * 0.82;
+  const dividerGap     = Math.round(H * 0.028);   // space above & below divider
+  const photoGap       = Math.round(H * 0.018);   // gap above photo
+  const authorFontSize = Math.round(W * 0.036);
+  const authorLineH    = Math.round(authorFontSize * 1.5);
+  const expFontSize    = Math.round(W * 0.027);
+  const expLineH       = Math.round(expFontSize * 1.45);
 
-  // Quote text
-  ctx.fillStyle = isLight ? '#1e293b' : '#ffffff';
-  ctx.font = `italic ${Math.round(W * 0.048)}px serif`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  const quote = data?.quote || '" "';
-  const qLines = _csWrapText(ctx, '"' + quote + '"', W/2, quoteY, W * 0.82, Math.round(W * 0.058));
+  // ── PASS 1: measure quote line count without drawing ──
+  ctx.font = `italic ${quoteFontSize}px 'Noto Sans Devanagari', Georgia, serif`;
+  const quoteText = '\u201C' + (quote || '\u2026') + '\u201D';
+  let measLine = '', measLines = 0;
+  for (const w of quoteText.split(' ')) {
+    const test = measLine ? measLine + ' ' + w : w;
+    if (ctx.measureText(test).width > quoteMaxW && measLine) { measLines++; measLine = w; }
+    else measLine = test;
+  }
+  if (measLine) measLines++;
+  const quoteBlockH = measLines * quoteLineH;
 
-  // Divider
-  const divY = quoteY + qLines * W * 0.058 + 16;
-  ctx.fillStyle = isLight ? '#7c3aed' : '#f59e0b';
-  ctx.fillRect(W/2 - 30, divY, 60, 2);
-
-  // Author
-  ctx.fillStyle = isLight ? '#7c3aed' : '#f59e0b';
-  ctx.font = `bold ${Math.round(W * 0.038)}px sans-serif`;
-  ctx.textBaseline = 'top';
-  ctx.fillText('- ' + (data?.author || ''), W/2, divY + 12);
-
-  // Explanation
+  // ── Measure explanation lines ──
+  let expLines = 0;
   if (data?.explanation) {
-    ctx.fillStyle = isLight ? '#64748b' : 'rgba(255,255,255,0.65)';
-    ctx.font = `${Math.round(W * 0.028)}px sans-serif`;
-    _csWrapText(ctx, data.explanation, W/2, divY + 52, W * 0.8, Math.round(W * 0.036));
+    ctx.font = `${expFontSize}px 'Noto Sans Devanagari', sans-serif`;
+    let expLine = '';
+    for (const w of data.explanation.split(' ')) {
+      const test = expLine ? expLine + ' ' + w : w;
+      if (ctx.measureText(test).width > W * 0.78 && expLine) { expLines++; expLine = w; }
+      else expLine = test;
+    }
+    if (expLine) expLines++;
   }
+  const expBlockH = expLines * expLineH;
+
+  // ── Total content height ──
+  const dividerH     = 2;
+  const photoBlockH  = hasPhoto ? pSize + photoGap : 0;
+  const authorBlockH = hasAuthor ? authorLineH : 0;
+  const expTotalH    = expBlockH > 0 ? expBlockH + Math.round(H * 0.015) : 0;
+  const photoNameGap = Math.round(H * 0.032); // generous gap between photo and name
+
+  // Divider always rendered — keeps visual consistency
+  const totalH = quoteBlockH
+    + dividerGap + dividerH + dividerGap
+    + photoBlockH
+    + (hasPhoto && hasAuthor ? photoNameGap : 0)
+    + authorBlockH
+    + expTotalH;
+
+  // Usable vertical space — top line will be drawn just above cursor; bottom reserved for watermark
+  const topPad    = H * 0.07;
+  const bottomPad = H * 0.10;   // leave room for watermark
+  const usableH   = H - topPad - bottomPad;
+
+  // Centre the content block vertically in the usable area
+  let cursor = topPad + Math.max(0, (usableH - totalH) / 2);
+
+  // ── Decorative: faint giant quote mark ──
+  ctx.save();
+  ctx.globalAlpha = isLight ? 0.07 : 0.10;
+  ctx.fillStyle = accentA;
+  ctx.font = `900 ${Math.round(W * 0.55)}px Georgia, serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('\u201C', W * -0.01, H * -0.08);
+  ctx.restore();
+
+  // ── Top decorative line — always just above the quote text ──
+  const topLineY = cursor - Math.round(H * 0.022);
+  const grad1 = ctx.createLinearGradient(W * 0.1, 0, W * 0.9, 0);
+  grad1.addColorStop(0, 'transparent');
+  grad1.addColorStop(0.5, accentA);
+  grad1.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad1;
+  ctx.fillRect(W * 0.1, topLineY, W * 0.8, 2);
+
+  // ── PASS 2: draw quote text ──
+  ctx.fillStyle = isLight ? '#1e293b' : '#f1f5f9';
+  ctx.font = `italic ${quoteFontSize}px 'Noto Sans Devanagari', Georgia, serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  _csWrapText(ctx, quoteText, W / 2, cursor, quoteMaxW, quoteLineH);
+  cursor += quoteBlockH;
+
+  // ── Divider — always shown ──
+  cursor += dividerGap;
+  const gradDiv = ctx.createLinearGradient(W * 0.3, 0, W * 0.7, 0);
+  gradDiv.addColorStop(0, accentB + '00');
+  gradDiv.addColorStop(0.5, accentA);
+  gradDiv.addColorStop(1, accentB + '00');
+  ctx.fillStyle = gradDiv;
+  ctx.fillRect(W * 0.3, cursor, W * 0.4, dividerH);
+  cursor += dividerH + dividerGap;
+
+  // ── Photo circle ──
+  if (hasPhoto) {
+    cursor += photoGap;
+    const cx = W / 2;
+    const cy = cursor + pSize / 2;
+    ctx.save();
+    ctx.shadowColor = accentA;
+    ctx.shadowBlur  = 18;
+    ctx.strokeStyle = accentA;
+    ctx.lineWidth   = 3;
+    ctx.beginPath(); ctx.arc(cx, cy, pSize / 2 + 4, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+    _csDrawPhoto(ctx, photo, cx - pSize / 2, cy - pSize / 2, pSize, pSize, true, 'quote');
+    cursor += pSize;
+    if (hasAuthor) cursor += photoNameGap; // generous space between photo and name
+  }
+
+  // ── Author name ──
+  if (hasAuthor) {
+    ctx.fillStyle = accentA;
+    ctx.font = `700 ${authorFontSize}px 'Noto Sans Devanagari', sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('\u2014 ' + author, W / 2, cursor);
+    cursor += authorLineH;
+  }
+
+  // ── Explanation ──
+  if (data?.explanation) {
+    cursor += Math.round(H * 0.015);
+    ctx.fillStyle = isLight ? '#64748b' : 'rgba(241,245,249,0.60)';
+    ctx.font = `${expFontSize}px 'Noto Sans Devanagari', sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    _csWrapText(ctx, data.explanation, W / 2, cursor, W * 0.78, expLineH);
+  }
+
+  // ── Bottom decorative line ──
+  ctx.fillStyle = grad1;
+  ctx.fillRect(W * 0.1, H - H * 0.04 - 2, W * 0.8, 2);
 
   _csWatermark(ctx, W, H);
 }
 
-/* -- HEALTH TIPS -- */
+/* ================================================================
+   QUOTE DB UI HELPERS
+   ================================================================ */
+
+/* Toggle anonymous name input visibility/enabled state */
+function csAnonToggleName(checkbox) {
+  const nameInput = document.getElementById('csQuoteAnonName');
+  if (!nameInput) return;
+  nameInput.disabled = !checkbox.checked;
+  nameInput.style.opacity = checkbox.checked ? '1' : '0.35';
+}
+
+/* Called when quote category tab changes — loads DB quote cards */
+function csQuoteLoadDB() {
+  setTimeout(() => {
+    const type = document.getElementById('csQuoteType')?.value || 'motivational';
+    const isCustom  = type === 'custom';
+    const isFamous  = type === 'famous';
+    const isAnon    = type === 'anonymous';
+
+    // ── Clear photo from previous category so it doesn't bleed across ──
+    _csPhotos['quote']       = null;
+    _csPhotoOffsets['quote'] = { dx: 0, dy: 0 };
+    _csPhotoZoom['quote']    = 1.0;
+    const prevPrev = document.getElementById('csQuotePhotoPreview');
+    if (prevPrev) prevPrev.textContent = '';
+    const personPhotos = document.getElementById('csQuotePersonPhotos');
+    if (personPhotos) personPhotos.innerHTML = '';
+
+    const _qDBRow = document.getElementById('csQuoteDBRow');
+    const _qSelRow = document.getElementById('csQuoteSelectedRow');
+    const _qFamRow = document.getElementById('csQuoteFamousRow');
+    const _qCusRow = document.getElementById('csQuoteCustomRow');
+    const _qAnonRow = document.getElementById('csQuoteAnonRow');
+    if (_qDBRow)   _qDBRow.style.display   = isCustom ? 'none' : 'block';
+    if (_qSelRow)  _qSelRow.style.display  = isCustom ? 'none' : 'block';
+    if (_qFamRow)  _qFamRow.style.display  = isFamous ? 'block' : 'none';
+    if (_qCusRow)  _qCusRow.style.display  = isCustom ? 'block' : 'none';
+    if (_qAnonRow) _qAnonRow.style.display = isAnon   ? 'block' : 'none';
+
+    if (!isCustom) _csQuoteRenderCards(type);
+  }, 30);
+}
+
+/* Render quote cards from DB */
+function _csQuoteRenderCards(type) {
+  const list = document.getElementById('csQuoteDBList');
+  const countEl = document.getElementById('csQuoteDBCount');
+  if (!list) return;
+
+  if (typeof QUOTES_DB === 'undefined') {
+    list.innerHTML = '<div style="color:#94a3b8;font-size:.8rem;padding:8px">Quote database loading…</div>';
+    return;
+  }
+
+  const arr = QUOTES_DB[type] || [];
+  countEl && (countEl.textContent = `(${arr.length} quotes)`);
+
+  // Show up to 20 shuffled cards
+  const sample = [...arr].sort(() => Math.random() - 0.5).slice(0, 20);
+
+  list.innerHTML = sample.map((item, i) => {
+    const isObj    = typeof item === 'object';
+    const quoteNp  = isObj ? item.quote  : item;
+    const author   = isObj ? item.author : '';
+    const authorEn = isObj ? (item.authorEn || '') : '';
+    const display  = author ? `${author}${authorEn ? ' ('+authorEn+')' : ''}` : '';
+    return `<div class="quote-db-card" onclick="csQuoteSelectCard(this)" 
+      data-quote="${quoteNp.replace(/"/g,'&quot;')}" 
+      data-author="${(author||'').replace(/"/g,'&quot;')}"
+      data-author-en="${(authorEn||'').replace(/"/g,'&quot;')}">
+      <div class="quote-db-card-text">${quoteNp}</div>
+      ${display ? `<div class="quote-db-card-author">— ${display}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+/* User clicks a quote card */
+function csQuoteSelectCard(el) {
+  document.querySelectorAll('.quote-db-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  const q        = el.dataset.quote    || '';
+  const author   = el.dataset.author   || '';
+  const authorEn = el.dataset.authorEn || '';
+  const textEl   = document.getElementById('csQuoteSelectedText');
+  const authorEl = document.getElementById('csQuoteSelectedAuthor');
+  // Store both on the author element for lang toggle
+  if (authorEl) {
+    authorEl.dataset.np = author;
+    authorEl.dataset.en = authorEn;
+    const lang = document.getElementById('csQuoteAuthorLang')?.value || 'np';
+    const display = lang === 'en' ? (authorEn || author) : (author || authorEn);
+    authorEl.textContent = display ? '— ' + display : '';
+  }
+  if (textEl) textEl.value = q;
+  // Show photo suggestions for famous tab — also fill personality name input
+  const type = document.getElementById('csQuoteType')?.value;
+  if (type === 'famous' && (author || authorEn)) {
+    const nameInput = document.getElementById('csQuotePersonality');
+    if (nameInput) nameInput.value = authorEn || author;
+    _csQuoteShowPersonPhotos(authorEn || author, author);
+  }
+  csQuotePreviewUpdate();
+}
+
+/* ── Famous person photo suggestions ── */
+// Curated Wikimedia Commons thumbnail URLs (public domain / CC)
+const _FAMOUS_PHOTOS = {
+  'Mahatma Gandhi':        ['https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Mahatma-Gandhi%2C_studio%2C_1931.jpg/220px-Mahatma-Gandhi%2C_studio%2C_1931.jpg','https://upload.wikimedia.org/wikipedia/commons/thumb/d/d9/Gandhi_spinning.jpg/220px-Gandhi_spinning.jpg'],
+  'Albert Einstein':       ['https://upload.wikimedia.org/wikipedia/commons/thumb/d/d3/Albert_Einstein_Head.jpg/220px-Albert_Einstein_Head.jpg','https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Einstein_1921_by_F_Schmutzer_-_restoration.jpg/220px-Einstein_1921_by_F_Schmutzer_-_restoration.jpg'],
+  'Winston Churchill':     ['https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Sir_Winston_Churchill_-_19086236948.jpg/220px-Sir_Winston_Churchill_-_19086236948.jpg'],
+  'A.P.J. Abdul Kalam':   ['https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/A._P._J._Abdul_Kalam.jpg/220px-A._P._J._Abdul_Kalam.jpg'],
+  'Gautam Buddha':         ['https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Buddhastatue.jpg/220px-Buddhastatue.jpg','https://upload.wikimedia.org/wikipedia/commons/thumb/3/35/Seated_Buddha_Amitabha_statue.jpg/220px-Seated_Buddha_Amitabha_statue.jpg'],
+  'Nelson Mandela':        ['https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Nelson_Mandela_1994.jpg/220px-Nelson_Mandela_1994.jpg','https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Nelson_Mandela-2008_%28edit%29.jpg/220px-Nelson_Mandela-2008_%28edit%29.jpg'],
+  'Abraham Lincoln':       ['https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Abraham_Lincoln_O-77_matte_collodion_print.jpg/220px-Abraham_Lincoln_O-77_matte_collodion_print.jpg'],
+  'Martin Luther King Jr.':['https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Martin_Luther_King%2C_Jr..jpg/220px-Martin_Luther_King%2C_Jr..jpg'],
+  'Swami Vivekananda':     ['https://upload.wikimedia.org/wikipedia/commons/thumb/5/57/Swami_Vivekananda.jpg/220px-Swami_Vivekananda.jpg','https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/Vivekananda_Chicago_1893.jpg/220px-Vivekananda_Chicago_1893.jpg'],
+  'Dalai Lama':            ['https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/Dalailama1_20121014_4639.jpg/220px-Dalailama1_20121014_4639.jpg'],
+  'Steve Jobs':            ['https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Steve_Jobs_Headshot_2010-CROP_%28cropped_2%29.jpg/220px-Steve_Jobs_Headshot_2010-CROP_%28cropped_2%29.jpg'],
+  'Confucius':             ['https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Confucius_Tang_Dynasty.jpg/220px-Confucius_Tang_Dynasty.jpg'],
+  'Laozi':                 ['https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Zhuangzi-Laozi.jpg/220px-Zhuangzi-Laozi.jpg'],
+  'Aristotle':             ['https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/Aristotle_Altemps_Inv8575.jpg/220px-Aristotle_Altemps_Inv8575.jpg'],
+  'Plato':                 ['https://upload.wikimedia.org/wikipedia/commons/thumb/8/88/Plato_Silanion_Musei_Capitolini_MC1377.jpg/220px-Plato_Silanion_Musei_Capitolini_MC1377.jpg'],
+  'Socrates':              ['https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Socrate_du_Louvre.jpg/220px-Socrate_du_Louvre.jpg'],
+  'Benjamin Franklin':     ['https://upload.wikimedia.org/wikipedia/commons/thumb/2/27/Benjamin_Franklin_age_16.jpg/220px-Benjamin_Franklin_age_16.jpg'],
+  'Henry Ford':            ['https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Henry_ford_1919.jpg/220px-Henry_ford_1919.jpg'],
+  'Walt Disney':           ['https://upload.wikimedia.org/wikipedia/commons/thumb/d/df/Walt_Disney_1946.JPG/220px-Walt_Disney_1946.JPG'],
+  'Eleanor Roosevelt':     ['https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Eleanor_Roosevelt_portrait_1933.jpg/220px-Eleanor_Roosevelt_portrait_1933.jpg'],
+  'Napoleon Hill':         ['https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Napoleon_Hill.jpg/220px-Napoleon_Hill.jpg'],
+  'Oprah Winfrey':         ['https://upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Oprah_in_2014.jpg/220px-Oprah_in_2014.jpg'],
+  'Helen Keller':          ['https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Helen_Keller_circa_1920.jpg/220px-Helen_Keller_circa_1920.jpg'],
+  'Marcus Aurelius':       ['https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/MSR-ra-61-b-1.jpg/220px-MSR-ra-61-b-1.jpg'],
+  'Muhammad Ali':          ['https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Muhammad_Ali_NYWTS.jpg/220px-Muhammad_Ali_NYWTS.jpg'],
+  'Nelson Mandela':        ['https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Nelson_Mandela_1994.jpg/220px-Nelson_Mandela_1994.jpg'],
+  'Bhagat Singh':          ['https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Bhagat_Singh_1929.jpg/220px-Bhagat_Singh_1929.jpg'],
+  'Pablo Picasso':         ['https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/Pablo_picasso_1.jpg/220px-Pablo_picasso_1.jpg'],
+  'Mark Twain':            ['https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Mark_Twain_by_AF_Bradley.jpg/220px-Mark_Twain_by_AF_Bradley.jpg'],
+  'Warren Buffett':        ['https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/Warren_Buffett_KU_Visit.jpg/220px-Warren_Buffett_KU_Visit.jpg'],
+  'Friedrich Nietzsche':   ['https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Nietzsche187a.jpg/220px-Nietzsche187a.jpg'],
+  'Dale Carnegie':         ['https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Dale_Carnegie.jpg/220px-Dale_Carnegie.jpg'],
+  'Prithvi Narayan Shah':  ['https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Prithvinarayan.jpg/220px-Prithvinarayan.jpg'],
+};
+
+function _csQuoteShowPersonPhotos(authorEn, authorNp) {
+  const wrap = document.getElementById('csQuotePersonPhotos');
+  if (!wrap) return;
+
+  const displayName = authorEn || authorNp || '';
+  if (!displayName) return;
+
+  // Find matching key in curated map (case-insensitive, match on any word)
+  const nameLower = displayName.toLowerCase();
+  const matchKey = Object.keys(_FAMOUS_PHOTOS).find(k => {
+    const kl = k.toLowerCase();
+    // exact or partial: "Confucius" matches "confucius" in name, or name contains a word from key
+    return kl === nameLower ||
+      nameLower.includes(kl) ||
+      kl.includes(nameLower) ||
+      kl.split(' ').some(w => w.length > 3 && nameLower.includes(w)) ||
+      nameLower.split(' ').some(w => w.length > 3 && kl.includes(w));
+  });
+  const presetPhotos = matchKey ? _FAMOUS_PHOTOS[matchKey] : [];
+
+  // Build the container — preset photos on top, Wikipedia results below
+  wrap.innerHTML = `
+    <div style="margin-top:8px">
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:6px">📸 Photos for <strong style="color:#f59e0b">${displayName}</strong> — click to use, or upload your own above</div>
+      <div id="csQuotePhotoGrid" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+        ${presetPhotos.map(url => `
+          <img src="${url}"
+            style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:2px solid rgba(255,255,255,.15);cursor:pointer;transition:border-color .15s;display:none"
+            onload="this.style.display='inline-block'"
+            onmouseover="this.style.borderColor='#f59e0b'"
+            onmouseout="this.style.borderColor='rgba(255,255,255,.15)'"
+            onclick="csQuoteUsePersonPhoto(this)"
+            title="Click to use this photo"
+          >`).join('')}
+      </div>
+      <div id="csQuoteSearchResults" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+        <span style="font-size:11px;color:#94a3b8">� Searching Wikipedia…</span>
+      </div>
+    </div>`;
+
+  // Always fire Wikipedia search for the best portrait result
+  _csQuoteWikiSearch(displayName);
+}
+
+function csQuoteUsePersonPhoto(imgEl) {
+  const src = imgEl.src;
+  const preview = document.getElementById('csQuotePhotoPreview');
+
+  // Helper to store the loaded image into quote slot
+  function _store(img) {
+    _csPhotos['quote'] = img;
+    _csPhotoOffsets['quote'] = { dx: 0, dy: 0 };
+    _csPhotoZoom['quote'] = 1.0;
+    if (preview) preview.textContent = '✅ Photo loaded';
+    csRenderBlank();
+  }
+
+  // First try: load WITH crossOrigin (needed for canvas drawImage without taint)
+  const img1 = new Image();
+  img1.crossOrigin = 'anonymous';
+  img1.onload = () => _store(img1);
+  img1.onerror = () => {
+    // Second try: load WITHOUT crossOrigin so it at least renders on canvas
+    // (canvas will be tainted but image is visible)
+    const img2 = new Image();
+    img2.onload = () => _store(img2);
+    img2.onerror = () => {
+      // Last resort: fetch as blob to bypass CORS
+      fetch(src)
+        .then(r => r.blob())
+        .then(blob => {
+          const blobUrl = URL.createObjectURL(blob);
+          const img3 = new Image();
+          img3.onload = () => _store(img3);
+          img3.src = blobUrl;
+        })
+        .catch(() => {
+          if (preview) preview.textContent = '⚠️ Could not load — please upload manually';
+        });
+    };
+    img2.src = src;
+  };
+  img1.src = src;
+}
+
+/* Called when personality name input changes — re-show photos */
+function csQuotePersonalityInput(val) {
+  if (val.trim().length > 2) {
+    _csQuoteShowPersonPhotos(val.trim(), val.trim());
+  }
+}
+
+/* Re-search button handler — reads name from personality input */
+function csQuoteSearchPhoto() {
+  const q = document.getElementById('csQuotePersonality')?.value?.trim();
+  if (!q) return;
+  // Always rebuild the photo section (ensures containers exist) then search
+  _csQuoteShowPersonPhotos(q, q);
+}
+
+/* Internal: fetch Wikipedia thumbnail for a name and render into #csQuoteSearchResults */
+function _csQuoteWikiSearch(name) {
+  const resultsEl = document.getElementById('csQuoteSearchResults');
+  if (!resultsEl) return;
+
+  // Strategy 1: direct title lookup
+  const apiUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(name)}&prop=pageimages&format=json&pithumbsize=220&origin=*`;
+  fetch(apiUrl)
+    .then(r => r.json())
+    .then(data => {
+      const pages = data?.query?.pages || {};
+      const imgs = Object.values(pages).filter(p => p.thumbnail).map(p => p.thumbnail.source);
+      if (imgs.length) {
+        // Strategy 1 succeeded — render and STOP (no further chaining)
+        _csQuoteRenderWikiResults(imgs);
+        return;
+      }
+      // Strategy 2: opensearch to find the correct page title
+      const searchUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(name)}&limit=3&format=json&origin=*`;
+      fetch(searchUrl)
+        .then(r => r.json())
+        .then(sData => {
+          const titles = (sData[1] || []);
+          if (!titles.length) {
+            const el = document.getElementById('csQuoteSearchResults');
+            if (el) el.innerHTML = '<span style="font-size:11px;color:#64748b;font-style:italic">No photos found — upload manually above.</span>';
+            return;
+          }
+          const bestTitle = titles[0];
+          const imgUrl2 = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(bestTitle)}&prop=pageimages&format=json&pithumbsize=220&origin=*`;
+          fetch(imgUrl2)
+            .then(r => r.json())
+            .then(data2 => {
+              const pages2 = data2?.query?.pages || {};
+              const imgs2 = Object.values(pages2).filter(p => p.thumbnail).map(p => p.thumbnail.source);
+              const el = document.getElementById('csQuoteSearchResults');
+              if (!el) return;
+              if (imgs2.length) {
+                _csQuoteRenderWikiResults(imgs2);
+              } else {
+                el.innerHTML = '<span style="font-size:11px;color:#64748b;font-style:italic">No photos found — upload manually above.</span>';
+              }
+            });
+        })
+        .catch(() => {
+          const el = document.getElementById('csQuoteSearchResults');
+          if (el) el.innerHTML = '<span style="font-size:11px;color:#ef4444">Search failed. Please upload photo manually.</span>';
+        });
+    })
+    .catch(() => {
+      const el = document.getElementById('csQuoteSearchResults');
+      if (el) el.innerHTML = '<span style="font-size:11px;color:#ef4444">Search failed. Please upload photo manually.</span>';
+    });
+}
+
+function _csQuoteRenderWikiResults(imgs) {
+  const resultsEl = document.getElementById('csQuoteSearchResults');
+  if (!resultsEl) return;
+  resultsEl.innerHTML = imgs.map(url => `
+    <img src="${url}"
+      style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:2px solid rgba(255,255,255,.15);cursor:pointer;transition:border-color .15s;display:none"
+      onload="this.style.display='inline-block'"
+      onmouseover="this.style.borderColor='#f59e0b'" onmouseout="this.style.borderColor='rgba(255,255,255,.15)'"
+      onclick="csQuoteUsePersonPhoto(this)" title="Click to use">`).join('');
+}
+
+
+/* Shuffle the DB cards */
+function csQuoteShuffleDB() {
+  const type = document.getElementById('csQuoteType')?.value || 'motivational';
+  _csQuoteRenderCards(type);
+}
+
+/* Toggle author name language (Nepali / English) */
+function csQuoteAuthorLangToggle(btn, lang) {
+  document.querySelectorAll('[data-lang-btn]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const hidden = document.getElementById('csQuoteAuthorLang');
+  if (hidden) hidden.value = lang;
+  const authorEl = document.getElementById('csQuoteSelectedAuthor');
+  if (authorEl) {
+    const np = authorEl.dataset.np || '';
+    const en = authorEl.dataset.en || '';
+    const display = lang === 'en' ? (en || np) : (np || en);
+    authorEl.textContent = display ? '— ' + display : '';
+  }
+  csQuotePreviewUpdate();
+}
+
+/* Preview update on text input */
+function csQuotePreviewUpdate() {
+  const q = document.getElementById('csQuoteSelectedText')?.value || '';
+  const type = document.getElementById('csQuoteType')?.value || 'motivational';
+  let a;
+  if (type === 'anonymous') {
+    a = 'Anonymous';
+  } else if (type === 'custom') {
+    a = document.getElementById('csQuoteCreatorName')?.value?.trim() || '';
+  } else {
+    a = document.getElementById('csQuoteSelectedAuthor')?.textContent?.replace(/^—\s*/, '').trim() || '';
+  }
+  _csRenderQuote({ quote: q, author: a });
+}
+
+/* Use DB quote directly (no AI) */
+function csQuoteFromDB() {
+  const type = document.getElementById('csQuoteType')?.value || 'motivational';
+  if (type === 'custom') {
+    const q = document.getElementById('csQuoteCustomText')?.value?.trim() || '';
+    const a = document.getElementById('csQuoteCreatorName')?.value?.trim() || '';
+    _csRenderQuote({ quote: q, author: a });
+    _csShowCaption(`"${q}"${a ? '\n— ' + a : ''}\n\n#Nepal #Nepali #motivation`);
+    _csSetStatus('✅ Custom quote rendered!');
+    return;
+  }
+  if (type === 'anonymous') {
+    const q = document.getElementById('csQuoteSelectedText')?.value?.trim() || '';
+    const anonName = document.getElementById('csQuoteAnonName')?.value?.trim() || 'Anonymous';
+    _csRenderQuote({ quote: q, author: anonName });
+    _csShowCaption(`"${q}"\n— ${anonName}\n\n#Nepal #Nepali #motivation`);
+    _csSetStatus('✅ Anonymous quote rendered!');
+    return;
+  }
+
+  const q    = document.getElementById('csQuoteSelectedText')?.value?.trim();
+  const a    = document.getElementById('csQuoteSelectedAuthor')?.textContent?.replace(/^—\s*/,'').trim() || '';
+
+  if (!q) {
+    // pick random from DB
+    const item = dbGetRandomQuote(type);
+    if (!item) { csQuick('quote'); return; }
+    const quoteText = typeof item === 'object' ? item.quote : item;
+    const auth      = typeof item === 'object' ? (item.author || '') : '';
+    _csRenderQuote({ quote: quoteText, author: auth });
+    _csShowCaption(`"${quoteText}"${auth ? '\n— ' + auth : ''}\n\n#Nepal #Nepali #motivation`);
+    _csSetStatus('✅ DB quote rendered!');
+    return;
+  }
+  _csRenderQuote({ quote: q, author: a });
+  _csShowCaption(`"${q}"${a ? '\n— ' + a : ''}\n\n#Nepal #Nepali #motivation`);
+  _csSetStatus('✅ DB quote rendered!');
+}
+
+/* Initialize quote DB on tab first open */
+(function _initQuoteTab() {
+  document.addEventListener('DOMContentLoaded', () => {
+    // Load motivational quotes on init
+    setTimeout(() => csQuoteLoadDB(), 500);
+  });
+})();
+
+/* ── HEALTH DB BROWSER ────────────────────────────────────────── */
+let _csHealthSelected = null;
+
+function csHealthSelectCat(btn) {
+  document.querySelectorAll('#csHealthCatBtns .cs-radio-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('csHealthCategory').value = btn.dataset.val;
+  csHealthRenderDB();
+}
+
+function csHealthShuffleDB() {
+  csHealthRenderDB(true);
+}
+
+function csHealthRenderDB(shuffle = false) {
+  const cat = document.getElementById('csHealthCategory')?.value || 'all';
+  let pool = cat === 'all' ? [...HEALTH_DB] : HEALTH_DB.filter(h => h.category === cat);
+  if (shuffle) pool = pool.sort(() => Math.random() - 0.5);
+  const countEl = document.getElementById('csHealthDbCount');
+  if (countEl) countEl.textContent = `(${pool.length} habits)`;
+  const container = document.getElementById('csHealthDbCards');
+  if (!container) return;
+  container.innerHTML = '';
+  pool.forEach((habit, i) => {
+    const card = document.createElement('div');
+    card.className = 'cs-health-db-card';
+    card.dataset.idx = i;
+    const catEmoji = { sleep:'😴', exercise:'🏃', diet:'🥗', water:'💧', screen:'📱', stress:'🧘', posture:'🪑', hygiene:'🧼', breathing:'🌬️', mindset:'🧠', addiction:'🚭', digestion:'🫁' }[habit.category] || '💊';
+    card.innerHTML = `<div class="cs-health-card-cat">${catEmoji} ${habit.category}</div>
+      <div class="cs-health-card-bad">❌ ${habit.bad.length > 70 ? habit.bad.slice(0,70)+'…' : habit.bad}</div>
+      <div class="cs-health-card-good">✅ ${habit.good.length > 70 ? habit.good.slice(0,70)+'…' : habit.good}</div>`;
+    card.onclick = () => csHealthPickCard(habit, card);
+    container.appendChild(card);
+  });
+}
+
+function csHealthCaptionStyle(btn, style) {
+  document.querySelectorAll('#csHealthCaptionStyleBtns .cs-radio-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const el = document.getElementById('csHealthCaptionStyle');
+  if (el) el.value = style;
+}
+
+function _csHealthBuildCaption(habit, style) {
+  const bad  = habit.bad   || habit.bad_habit   || '';
+  const good = habit.good  || habit.good_habit  || '';
+  const tip  = habit.tip   || '';
+  const cat  = habit.category ? habit.category.charAt(0).toUpperCase() + habit.category.slice(1) : 'Health';
+  switch (style) {
+    case 'bold':
+      return `🔴 नराम्रो बानी:\n${bad}\n\n🟢 राम्रो बानी:\n${good}\n\n💡 ${tip}\n\n#Nepal #Health #Wellness`;
+    case 'minimal':
+      return `❌ ${bad}\n\n✅ ${good}\n\n💡 ${tip}`;
+    case 'hashtag':
+      return `${good}\n\n💡 ${tip}\n\n#Nepal #NepaliHealth #स्वस्थ_बानी #${cat}Habit #Wellness #HealthTips #NepaliLifestyle #SundayMotivation #DailyHabit #HealthyLiving`;
+    case 'emoji':
+    default:
+      return `🌿 ${cat} स्वस्थ बानी!\n\n❌ नराम्रो: ${bad}\n\n✅ राम्रो: ${good}\n\n💡 टिप्स: ${tip}\n\n#Nepal #Health #Wellness #Nepali #HealthTips`;
+  }
+}
+
+function csHealthPickCard(habit, cardEl) {
+  _csHealthSelected = habit;
+  _csHealthResearchActive = false;
+  document.querySelectorAll('.cs-health-db-card').forEach(c => c.classList.remove('selected'));
+  cardEl.classList.add('selected');
+  const box = document.getElementById('csHealthSelectedBox');
+  const prev = document.getElementById('csHealthSelectedPreview');
+  if (box && prev) {
+    prev.innerHTML = `<b style="color:#f87171">❌ ${habit.bad}</b><br><span style="color:#fca5a5;font-size:11px">⚠️ ${habit.bad_impact}</span><br><br><b style="color:#6ee7b7">✅ ${habit.good}</b><br><span style="color:#a7f3d0;font-size:11px">💚 ${habit.good_impact}</span>`;
+    box.style.display = 'block';
+  }
+  // Render on canvas immediately
+  const data = {
+    title: `💚 ${habit.category.charAt(0).toUpperCase()+habit.category.slice(1)} Habit`,
+    habits: [{ bad_habit: habit.bad, bad_impact: habit.bad_impact, good_habit: habit.good, good_impact: habit.good_impact }],
+    tip: habit.tip,
+    closing: habit.closing,
+  };
+  _csRenderHealth(data);
+  const captionStyle = document.getElementById('csHealthCaptionStyle')?.value || 'emoji';
+  _csShowCaption(_csHealthBuildCaption(habit, captionStyle));
+  _csSetStatus('✅ Habit loaded!');
+}
+
+/* Called when Health tab opens */
+/* ── LATEST RESEARCH TIPS DB ─────────────────────────────────── */
+const _HEALTH_RESEARCH_DB = [
+  { emoji:'🧠', title:'बिहानको घाम दिमागलाई फाइदाजनक', finding:'हार्वर्ड विश्वविद्यालयको २०२४ को अध्ययनअनुसार बिहान १० मिनेट घाममा बस्दा शरीरको कोर्टिसोल ३०% बढ्छ, जसले सारा दिन एकाग्रता र सम्झनाशक्ति सुधार्छ।', source:'Harvard Health, 2024', category:'mindset' },
+  { emoji:'🚶', title:'७,००० पाइला हिँड्दा मुटुको रोग आधा हुन्छ', finding:'JAMA Internal Medicine (२०२४) को रिपोर्टअनुसार दैनिक ७,००० वा सोभन्दा बढी पाइला हिँड्ने मानिसहरूमा मुटुसम्बन्धी मृत्युको जोखिम ५०% कम हुन्छ।', source:'JAMA Internal Medicine, 2024', category:'exercise' },
+  { emoji:'💧', title:'खाना अघि पानी पिउँदा तौल घट्छ', finding:'Clinical Nutrition (२०२४): खाना खानुभन्दा ३० मिनेट अघि ५०० मिली पानी पिउँदा क्यालोरी सेवन १३% घट्छ र तौल सन्तुलनमा राख्न मद्दत गर्छ।', source:'Clinical Nutrition, 2024', category:'water' },
+  { emoji:'😴', title:'७–९ घण्टा निद्राले दिमाग सफा राख्छ', finding:'Nature Neuroscience (२०२४): ७ देखि ९ घण्टाको गहिरो निद्रामा दिमागको ग्लिम्फेटिक प्रणालीले अल्जाइमरसँग जोडिएका विषाक्त पदार्थ सफा गर्छ।', source:'Nature Neuroscience, 2024', category:'sleep' },
+  { emoji:'🥦', title:'हरियो तरकारीले क्यान्सरको जोखिम घटाउँछ', finding:'Cell Metabolism (२०२४): ब्रोकोली र फूलगोभीमा पाइने सल्फोराफेनले NRF2 मार्ग सक्रिय गरी क्यान्सर कोशिकाको वृद्धि ४०% सम्म रोक्न सक्छ।', source:'Cell Metabolism, 2024', category:'diet' },
+  { emoji:'📵', title:'सुत्नुअघि स्क्रिन नहेर्दा निद्रा २८% राम्रो हुन्छ', finding:'Sleep Medicine Reviews (२०२४): मोबाइल र ल्यापटपको नीलो प्रकाशले मेलाटोनिन २ घण्टासम्म थप्न रोक्छ। सुत्नुभन्दा १ घण्टा अघि स्क्रिन बन्द गर्दा निद्राको गुणस्तर २८% सुधार हुन्छ।', source:'Sleep Medicine Reviews, 2024', category:'screen' },
+  { emoji:'🧘', title:'५ मिनेट गहिरो सास फेर्दा रक्तचाप घट्छ', finding:'American Heart Association (२०२४): दैनिक ५ मिनेट लयबद्ध गहिरो सास फेर्दा सिस्टोलिक रक्तचाप ९ mmHg घट्छ, जुन केही औषधिको बराबर असरकारक छ।', source:'Hypertension / AHA, 2024', category:'stress' },
+  { emoji:'🦠', title:'आन्द्राको स्वास्थ्यले मानसिक स्वास्थ्यलाई असर गर्छ', finding:'Nature (२०२४): आन्द्रामा पाइने ९५ प्रकारका ब्याक्टेरियाले सिधै सेरोटोनिन र डोपामिन उत्पादन गर्छन्। दही र किण्वित खानाले डिप्रेसन ३२% कम गर्छ।', source:'Nature, 2024', category:'digestion' },
+  { emoji:'🚭', title:'धुम्रपान छाड्दा १ वर्षमा मुटुको जोखिम आधा हुन्छ', finding:'Circulation (२०२४): धुम्रपान छाडेको १२ महिनामा हार्ट अट्याकको जोखिम ५०% घट्छ। ३ महिनामै फोक्सोको कार्यक्षमता उल्लेखनीय रूपमा सुधार हुन्छ।', source:'Circulation / AHA, 2024', category:'addiction' },
+  { emoji:'🏋️', title:'हप्तामा २ पटक कसरत गर्दा उमेर लम्बिन्छ', finding:'BMJ (२०२४): हप्तामा मात्र २ पटक, २०–२५ मिनेट भारोत्तोलन वा बल कसरत गर्दा सबै कारणबाट हुने मृत्युको जोखिम २३% घट्छ।', source:'BMJ, 2024', category:'exercise' },
+  { emoji:'🌿', title:'प्रकृतिमा समय बिताउँदा तनाव २५% घट्छ', finding:'Environmental Health Perspectives (२०२४): हरियो ठाउँमा २ घण्टा बिताउँदा कोर्टिसोल (तनाव हर्मोन) २५% घट्छ र रोगप्रतिरोधक क्षमता बढ्छ।', source:'Env. Health Perspectives, 2024', category:'stress' },
+  { emoji:'🦷', title:'दाँतको सरसफाइले मुटुको रोग रोक्छ', finding:'Circulation (२०२४): मसुरोको सूजन भएका मानिसहरूमा हार्ट अट्याकको जोखिम दोब्बर हुन्छ। दैनिक फ्लस गर्दा यो जोखिम उल्लेखनीय रूपमा कम हुन्छ।', source:'Circulation, 2024', category:'hygiene' },
+];
+
+function csHealthShowResearch() {
+  _csHealthResearchActive = true;
+  _csHealthSelected = null; // deselect any habit
+  const shuffled = [..._HEALTH_RESEARCH_DB].sort(() => Math.random() - 0.5);
+  const tips = shuffled.slice(0, 2);
+  _csRenderHealth({ research: tips, title: '🔬 Latest Health Research' });
+  // Build caption
+  const caption = tips.map((t, i) =>
+    `${i+1}. ${t.emoji} ${t.title}\n${t.finding}\n📰 ${t.source}`
+  ).join('\n\n') + '\n\n#स्वास्थ्य #HealthResearch #Nepal #Wellness #HealthTips';
+  _csShowCaption(caption);
+  _csSetStatus('✅ Research tips loaded!');
+}
+
+function csHealthLoadDB() {
+  setTimeout(() => csHealthRenderDB(), 300);
+}
+
+/* ── HEALTH HABITS — CANVAS RENDERER ─────────────────────────── */
+/* ── Health card style state ── */
+let _csHealthCardStyle    = 'gradient';   // 'gradient' | 'solid' | 'glass' | 'outline'
+let _csHealthPhotoLayout  = 'side-right'; // 'side-right' | 'side-left' | 'top-rect' | 'top-circle' | 'bottom'
+let _csHealthResearchActive = false;      // true when research tips mode is active
+let _csHealthTextMode     = 'auto';       // 'auto' | 'colorful'
+let _csHealthColorPalette = 'vivid';      // 'vivid' | 'pastel' | 'neon' | 'warm' | 'cool'
+
+const _CS_HEALTH_PALETTES = {
+  vivid:  ['#f59e0b','#34d399','#60a5fa','#f472b6','#a78bfa','#fb923c','#4ade80','#38bdf8'],
+  pastel: ['#fde68a','#bbf7d0','#bfdbfe','#fbcfe8','#ddd6fe','#fed7aa','#a7f3d0','#bae6fd'],
+  neon:   ['#faff00','#00ff88','#00eeff','#ff00cc','#bf00ff','#ff6600','#00ffaa','#ff3300'],
+  warm:   ['#fbbf24','#f97316','#ef4444','#ec4899','#fde68a','#fb923c','#fca5a5','#fdba74'],
+  cool:   ['#38bdf8','#34d399','#818cf8','#2dd4bf','#60a5fa','#4ade80','#a78bfa','#67e8f9'],
+};
+
+function csHealthSetTextMode(btn, mode) {
+  _csHealthTextMode = mode;
+  document.querySelectorAll('#csHealthTextModeAuto,#csHealthTextModeColor').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const palette = document.getElementById('csHealthColorPalette');
+  if (palette) palette.style.display = mode === 'colorful' ? 'block' : 'none';
+  csRenderBlank();
+}
+
+function csHealthSetPalette(btn, palette) {
+  _csHealthColorPalette = palette;
+  document.querySelectorAll('[data-palette]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const inp = document.getElementById('csHealthColorPaletteVal');
+  if (inp) inp.value = palette;
+  csRenderBlank();
+}
+
+// Draw text word-by-word with cycling palette colours
+function _csDrawColorWords(ctx, text, x, y, maxW, lineH, palette) {
+  const colors = _CS_HEALTH_PALETTES[palette] || _CS_HEALTH_PALETTES.vivid;
+  const words = text.split(' ');
+  let line = [], lineWords = [], colorIdx = 0;
+  let curY = y;
+
+  function flushLine(words, isLast) {
+    let curX = x;
+    for (const w of words) {
+      ctx.fillStyle = colors[colorIdx % colors.length];
+      colorIdx++;
+      ctx.fillText(w, curX, curY);
+      curX += ctx.measureText(w + ' ').width;
+    }
+    if (!isLast) curY += lineH;
+  }
+
+  let lineW = 0;
+  let currentLine = [];
+  for (const word of words) {
+    const ww = ctx.measureText(word + ' ').width;
+    if (lineW + ww > maxW && currentLine.length > 0) {
+      flushLine(currentLine, false);
+      curY += lineH;
+      currentLine = [word];
+      lineW = ww;
+    } else {
+      currentLine.push(word);
+      lineW += ww;
+    }
+  }
+  if (currentLine.length > 0) flushLine(currentLine, true);
+  return Math.round((curY - y) / lineH) + 1;
+}
+
+function csHealthSetCardStyle(btn, style) {
+  _csHealthCardStyle = style;
+  document.querySelectorAll('[data-health-style]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (_csHealthSelected) {
+    csHealthPickCard(_csHealthSelected, document.querySelector('.cs-health-db-card.selected') || document.createElement('div'));
+  } else { _csRenderHealth(null); }
+}
+
+function csHealthSetPhotoLayout(btn, layout) {
+  _csHealthPhotoLayout = layout;
+  document.querySelectorAll('#csHealthPhotoLayoutBtns .cs-radio-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (_csHealthSelected) {
+    csHealthPickCard(_csHealthSelected, document.querySelector('.cs-health-db-card.selected') || document.createElement('div'));
+  } else { _csRenderHealth(null); }
+}
+
 function _csRenderHealth(data) {
   const { ctx, W, H } = _csGetCanvas();
   const bg = _csActiveBg('csHealthBgSwatches');
   _csDrawBackground(ctx, W, H, bg);
-  const isLight = bg === 'white-clean';
-  const txtColor = isLight ? '#1e293b' : '#fff';
-  const accentColor = bg === 'gradient-green' ? '#6ee7b7' : bg === 'white-clean' ? '#059669' : '#a7f3d0';
 
-  // Header bar
-  ctx.fillStyle = accentColor + (isLight ? '' : '33');
-  ctx.fillRect(0, 0, W, Math.round(H * 0.12));
-  ctx.fillStyle = isLight ? '#065f46' : accentColor;
-  ctx.font = `900 ${Math.round(W * 0.055)}px sans-serif`;
+  const isLight    = bg === 'health-white' || bg === 'white-clean';
+  const cardStyle  = _csHealthCardStyle   || 'gradient';
+  const photoLayout = _csHealthPhotoLayout || 'side-right';
+
+  // ── Per-theme palette ─────────────────────────────────────────
+  const themeMap = {
+    'health-emerald': { accent:'#f59e0b', badSolid:'#3b0000',  goodSolid:'#001a3b',  badBorder:'#f43f5e', goodBorder:'#38bdf8', badGrad:['#4a0000','#2d0000'], goodGrad:['#00243f','#001428'], tipTxt:'#fde68a', tipBg:'rgba(0,0,0,0.55)' },
+    'health-ocean':   { accent:'#f59e0b', badSolid:'#2e0050',  goodSolid:'#00284f',  badBorder:'#c084fc', goodBorder:'#22d3ee', badGrad:['#3b0066','#1e0038'], goodGrad:['#003366','#001f40'], tipTxt:'#fde68a', tipBg:'rgba(0,0,0,0.55)' },
+    'health-teal':    { accent:'#fbbf24', badSolid:'#3a0a00',  goodSolid:'#001a36',  badBorder:'#fb923c', goodBorder:'#818cf8', badGrad:['#4a1000','#2e0800'], goodGrad:['#00233a','#001428'], tipTxt:'#fff176', tipBg:'rgba(0,0,0,0.55)' },
+    'health-purple':  { accent:'#f59e0b', badSolid:'#3b0000',  goodSolid:'#00003b',  badBorder:'#fb7185', goodBorder:'#60a5fa', badGrad:['#4d0000','#300000'], goodGrad:['#00004d','#000030'], tipTxt:'#fde68a', tipBg:'rgba(0,0,0,0.55)' },
+    'health-slate':   { accent:'#f59e0b', badSolid:'#3a0a0a',  goodSolid:'#0a1940',  badBorder:'#f87171', goodBorder:'#38bdf8', badGrad:['#4d1010','#2e0808'], goodGrad:['#0d2050','#081530'], tipTxt:'#fde68a', tipBg:'rgba(0,0,0,0.60)' },
+    'health-warm':    { accent:'#fde68a', badSolid:'#3c0020',  goodSolid:'#001440',  badBorder:'#f472b6', goodBorder:'#67e8f9', badGrad:['#4f0030','#300020'], goodGrad:['#001a50','#000e30'], tipTxt:'#ffffff', tipBg:'rgba(0,0,0,0.55)' },
+    'health-rose':    { accent:'#fde68a', badSolid:'#280040',  goodSolid:'#002030',  badBorder:'#c084fc', goodBorder:'#34d399', badGrad:['#360054','#200034'], goodGrad:['#002840','#001525'], tipTxt:'#ffffff', tipBg:'rgba(0,0,0,0.55)' },
+    'health-white':   { accent:'#7c3aed', badSolid:'#fde8e8',  goodSolid:'#e8f0fe',  badBorder:'#dc2626', goodBorder:'#2563eb', badGrad:['#fee2e2','#fecaca'], goodGrad:['#dbeafe','#bfdbfe'], tipTxt:'#3b0764', tipBg:'rgba(237,233,254,0.85)' },
+    'white-clean':    { accent:'#7c3aed', badSolid:'#fde8e8',  goodSolid:'#e8f0fe',  badBorder:'#dc2626', goodBorder:'#2563eb', badGrad:['#fee2e2','#fecaca'], goodGrad:['#dbeafe','#bfdbfe'], tipTxt:'#3b0764', tipBg:'rgba(237,233,254,0.85)' },
+  };
+  const theme = themeMap[bg] || themeMap['health-slate'];
+  const accent      = theme.accent;
+  const badImpColor = isLight ? '#991b1b' : '#ffd6d6';
+  const goodImpColor = isLight ? '#1d4ed8' : '#bfdbfe';
+
+  const sc    = Math.min(W / 600, H / 750, 1);
+  const PAD   = Math.round(W * 0.048);
+  const WMARK = Math.round(34 * Math.min(W / 600, 1));
+  const usableH = H - WMARK;
+
+  // ── TITLE BANNER ──────────────────────────────────────────────
+  const bannerH = Math.round(H * 0.115);
+  ctx.save();
+  ctx.fillStyle = isLight ? 'rgba(0,0,0,0.07)' : 'rgba(0,0,0,0.52)';
+  ctx.fillRect(0, 0, W, bannerH);
+  const bannerLine = ctx.createLinearGradient(0, 0, W, 0);
+  bannerLine.addColorStop(0, theme.badBorder);
+  bannerLine.addColorStop(0.5, accent);
+  bannerLine.addColorStop(1, theme.goodBorder);
+  ctx.fillStyle = bannerLine;
+  ctx.fillRect(0, bannerH - 4, W, 4);
+  const title = '💊 Health Tips';
+  ctx.fillStyle = isLight ? '#1e293b' : '#ffffff';
+  ctx.font = `900 ${Math.round(W * 0.050)}px sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  const title = data?.title || '💚 Health Tips';
-  ctx.fillText(title, W/2, Math.round(H * 0.06));
+  ctx.fillText(title, W / 2, bannerH / 2);
+  ctx.restore();
 
-  // Tips
-  const tips = data?.tips || ['Stay hydrated daily', 'Exercise 30 minutes', 'Sleep 7-8 hours'];
-  const tipIcons = ['💧','🏃','😴','🥗','🧘','💊','🫀','🌿','🧠','🍎'];
-  const tipStartY = H * 0.14;
-  const tipSpacing = Math.min((H * 0.74) / tips.length, H * 0.12);
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  tips.forEach((tip, i) => {
-    const ty = tipStartY + i * tipSpacing;
-    // Icon
-    ctx.font = `${Math.round(W * 0.04)}px sans-serif`;
-    ctx.fillText(tipIcons[i] || '•', W * 0.04, ty);
-    // Tip text
-    ctx.fillStyle = txtColor;
-    ctx.font = `${Math.round(W * 0.035)}px sans-serif`;
-    _csWrapText(ctx, tip, W * 0.14, ty, W * 0.82, Math.round(W * 0.042));
-    // Subtle divider
-    if (i < tips.length - 1) {
-      ctx.fillStyle = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)';
-      ctx.fillRect(W * 0.04, ty + tipSpacing - 4, W * 0.92, 1);
-      ctx.fillStyle = txtColor;
-    }
-  });
+  // ── PHOTO — layout-aware ──────────────────────────────────────
+  const photo = _csPhotos?.['health'];
 
-  // Closing
-  if (data?.closing) {
-    ctx.fillStyle = accentColor;
-    ctx.font = `bold italic ${Math.round(W * 0.033)}px serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    ctx.fillText(data.closing, W/2, H - Math.round(34 * Math.min(W/600,1)) - 10);
+  // Helper: draw a photo in a box (rounded rect or circle) with shadow + border
+  function _drawPhotoBox(px, py, pw, ph, isCircle, borderColor) {
+    if (!photo) return;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.70)'; ctx.shadowBlur = 20; ctx.shadowOffsetY = 4;
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    if (isCircle) { ctx.arc(px + pw/2, py + ph/2, pw/2, 0, Math.PI*2); }
+    else { if (ctx.roundRect) ctx.roundRect(px, py, pw, ph, 12); else ctx.rect(px, py, pw, ph); }
+    ctx.fill();
+    ctx.restore();
+    _csDrawPhoto(ctx, photo, px, py, pw, ph, isCircle, 'health');
+    ctx.save();
+    ctx.strokeStyle = borderColor; ctx.lineWidth = 3;
+    if (isCircle) { ctx.beginPath(); ctx.arc(px + pw/2, py + ph/2, pw/2 + 1, 0, Math.PI*2); ctx.stroke(); }
+    else { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(px, py, pw, ph, 12); else ctx.rect(px, py, pw, ph); ctx.stroke(); }
+    ctx.restore();
   }
+
+  // Layout geometry
+  let contentX, contentW, contentStartY, photoReservedBottom = 0;
+  const afterBanner = bannerH + Math.round(H * 0.016);
+
+  if (!photo) {
+    contentX = PAD; contentW = W - PAD * 2; contentStartY = afterBanner;
+  } else if (photoLayout === 'side-right') {
+    const pW = Math.round(W * 0.30); const pH = Math.round(H * 0.32);
+    const pX = W - PAD - pW; const pY = afterBanner;
+    _drawPhotoBox(pX, pY, pW, pH, false, theme.goodBorder);
+    contentX = PAD; contentW = W - PAD * 2 - pW - Math.round(W * 0.025); contentStartY = afterBanner;
+  } else if (photoLayout === 'side-left') {
+    const pW = Math.round(W * 0.30); const pH = Math.round(H * 0.32);
+    _drawPhotoBox(PAD, afterBanner, pW, pH, false, theme.badBorder);
+    contentX = PAD + pW + Math.round(W * 0.025); contentW = W - contentX - PAD; contentStartY = afterBanner;
+  } else if (photoLayout === 'top-rect') {
+    const pW = W - PAD * 2; const pH = Math.round(H * 0.22);
+    _drawPhotoBox(PAD, afterBanner, pW, pH, false, theme.goodBorder);
+    contentX = PAD; contentW = W - PAD * 2; contentStartY = afterBanner + pH + Math.round(H * 0.014);
+  } else if (photoLayout === 'top-circle') {
+    const pr = Math.round(W * 0.13);
+    const cx = W / 2 - pr, cy = afterBanner;
+    _drawPhotoBox(cx, cy, pr * 2, pr * 2, true, accent);
+    // "Name" label bar under circle
+    ctx.save();
+    ctx.fillStyle = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.35)';
+    ctx.fillRect(0, afterBanner + pr * 2 + 6, W, Math.round(H * 0.04));
+    ctx.restore();
+    contentX = PAD; contentW = W - PAD * 2; contentStartY = afterBanner + pr * 2 + 6 + Math.round(H * 0.04) + Math.round(H * 0.01);
+  } else if (photoLayout === 'bottom') {
+    const pH = Math.round(H * 0.20);
+    photoReservedBottom = pH + Math.round(H * 0.016);
+    contentX = PAD; contentW = W - PAD * 2; contentStartY = afterBanner;
+    // Draw photo after cards (deferred below)
+  } else {
+    contentX = PAD; contentW = W - PAD * 2; contentStartY = afterBanner;
+  }
+
+  // ── HABIT CARDS LAYOUT ────────────────────────────────────────
+  const habit    = data?.habits?.[0];
+  const tipH     = data?.tip ? Math.round(H * 0.072) : 0;
+  const bottomH  = tipH + WMARK + Math.round(H * 0.012) + photoReservedBottom;
+  const cardsH   = usableH - contentStartY - bottomH;
+  const gap      = Math.round(H * 0.032);
+
+  // ── Text colors — always readable regardless of theme ─────────
+  const bodyTxt         = isLight ? '#111827' : '#ffffff';
+  const badImpTxtColor  = isLight ? '#7f1d1d' : '#fecdd3';
+  const goodImpTxtColor = isLight ? '#1e3a8a' : '#bae6fd';
+
+  // ── Measure-only helper (counts wrap lines without drawing) ───
+  function _measureLines(font, text, maxW) {
+    ctx.font = font;
+    const words = text.split(' ');
+    let line = '', count = 1;
+    for (const w of words) {
+      const test = line ? line + ' ' + w : w;
+      if (ctx.measureText(test).width > maxW && line) { line = w; count++; }
+      else line = test;
+    }
+    return count;
+  }
+
+  if (habit) {
+    const pillH   = Math.round(Math.max(sc * 26, 20));
+    const pillW   = Math.round(Math.max(sc * 155, 115));
+    const pillX   = contentX + 14;
+    const textPad = contentX + 16;
+    const textW   = contentW - 26;
+    const spacingBelowPill = Math.round(H * 0.022);
+    const sectionPadBottom = Math.round(H * 0.014);
+
+    // ── Helper: draw a FLAT section bg ────────────────────────
+    function _drawFlat(x, y, w, h, isBad) {
+      ctx.save();
+      ctx.fillStyle = isLight
+        ? (isBad ? 'rgba(255,220,220,0.72)' : 'rgba(210,232,255,0.72)')
+        : (isBad ? 'rgba(60,0,0,0.60)'      : 'rgba(0,15,50,0.60)');
+      ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = isBad ? theme.badBorder : theme.goodBorder;
+      ctx.fillRect(x, y, w, 3);
+      ctx.restore();
+    }
+
+    // Font sizes
+    let bFsz = Math.round(Math.max(W * 0.034, 13));
+    let bLh  = Math.round(bFsz * 1.55);
+    let iFsz = Math.round(bFsz * 0.84);
+    let iLh  = Math.round(iFsz * 1.45);
+
+    const badTxt    = habit.bad_habit  || '';
+    const badImpStr = '⚠️  ' + (habit.bad_impact  || '');
+    const goodTxt   = habit.good_habit || '';
+    const goodImpStr = '💡  ' + (habit.good_impact || '');
+
+    // ── Measure bad section ───────────────────────────────────
+    const bBodyLines = _measureLines(`700 ${bFsz}px sans-serif`,    badTxt,    textW);
+    const bImpLines  = _measureLines(`italic ${iFsz}px sans-serif`, badImpStr, textW);
+    const badSecH    = 8 + pillH + spacingBelowPill + bBodyLines * bLh + 4 + bImpLines * iLh + sectionPadBottom;
+
+    // ── Measure good section ──────────────────────────────────
+    const gBodyLines = _measureLines(`700 ${bFsz}px sans-serif`,    goodTxt,    textW);
+    const gImpLines  = _measureLines(`italic ${iFsz}px sans-serif`, goodImpStr, textW);
+    const goodSecH   = 8 + pillH + spacingBelowPill + gBodyLines * bLh + 4 + gImpLines * iLh + sectionPadBottom;
+
+    const badY  = contentStartY;
+    const goodY = badY + badSecH + gap;
+
+    // ── Draw BAD SECTION ──────────────────────────────────────
+    _drawFlat(contentX, badY, contentW, badSecH, true);
+
+    // Pill label
+    ctx.save();
+    ctx.fillStyle = theme.badBorder;
+    ctx.fillRect(pillX, badY + 8, pillW, pillH);
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1;
+    ctx.strokeRect(pillX, badY + 8, pillW, pillH);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `700 ${Math.round(Math.max(sc*14,12))}px sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('❌  नराम्रो बानी', pillX + pillW/2, badY + 8 + pillH/2);
+    ctx.restore();
+
+    // Vertically centre text block within the remaining space below pill
+    const badTextBlockH = bBodyLines * bLh + 4 + bImpLines * iLh;
+    const badTextAreaH  = badSecH - (8 + pillH + spacingBelowPill) - sectionPadBottom;
+    const badTextOffY   = Math.max(0, Math.floor((badTextAreaH - badTextBlockH) / 2));
+    const badBodyY      = badY + 8 + pillH + spacingBelowPill + badTextOffY;
+
+    ctx.fillStyle = bodyTxt;
+    ctx.font = `700 ${bFsz}px sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    let bLines;
+    if (_csHealthTextMode === 'colorful') {
+      bLines = _csDrawColorWords(ctx, badTxt, textPad, badBodyY, textW, bLh, _csHealthColorPalette);
+    } else {
+      bLines = _csWrapText(ctx, badTxt, textPad, badBodyY, textW, bLh);
+    }
+    ctx.fillStyle = badImpTxtColor;
+    ctx.font = `italic ${iFsz}px sans-serif`;
+    if (_csHealthTextMode === 'colorful') {
+      _csDrawColorWords(ctx, badImpStr, textPad, badBodyY + bLines * bLh + 4, textW, iLh, _csHealthColorPalette);
+    } else {
+      _csWrapText(ctx, badImpStr, textPad, badBodyY + bLines * bLh + 4, textW, iLh);
+    }
+
+    // ── Draw GOOD SECTION ─────────────────────────────────────
+    _drawFlat(contentX, goodY, contentW, goodSecH, false);
+
+    ctx.save();
+    ctx.fillStyle = theme.goodBorder;
+    ctx.fillRect(pillX, goodY + 8, pillW, pillH);
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1;
+    ctx.strokeRect(pillX, goodY + 8, pillW, pillH);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `700 ${Math.round(Math.max(sc*14,12))}px sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('✅  राम्रो बानी', pillX + pillW/2, goodY + 8 + pillH/2);
+    ctx.restore();
+
+    const goodTextBlockH = gBodyLines * bLh + 4 + gImpLines * iLh;
+    const goodTextAreaH  = goodSecH - (8 + pillH + spacingBelowPill) - sectionPadBottom;
+    const goodTextOffY   = Math.max(0, Math.floor((goodTextAreaH - goodTextBlockH) / 2));
+    const goodBodyY      = goodY + 8 + pillH + spacingBelowPill + goodTextOffY;
+
+    ctx.fillStyle = bodyTxt;
+    ctx.font = `700 ${bFsz}px sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    let gLines;
+    if (_csHealthTextMode === 'colorful') {
+      gLines = _csDrawColorWords(ctx, goodTxt, textPad, goodBodyY, textW, bLh, _csHealthColorPalette);
+    } else {
+      gLines = _csWrapText(ctx, goodTxt, textPad, goodBodyY, textW, bLh);
+    }
+    ctx.fillStyle = goodImpTxtColor;
+    ctx.font = `italic ${iFsz}px sans-serif`;
+    if (_csHealthTextMode === 'colorful') {
+      _csDrawColorWords(ctx, goodImpStr, textPad, goodBodyY + gLines * bLh + 4, textW, iLh, _csHealthColorPalette);
+    } else {
+      _csWrapText(ctx, goodImpStr, textPad, goodBodyY + gLines * bLh + 4, textW, iLh);
+    }
+
+  } else if (data?.research) {
+    // ── RESEARCH TIPS MODE ─────────────────────────────────
+    const tips = data.research.slice(0, 2);
+    const rPad = 12; // inner padding top/bottom
+
+    tips.forEach((tip, i) => {
+      const titleFsz = Math.round(Math.max(W * 0.033, 13));
+      const titleLh  = Math.round(titleFsz * 1.45);
+      const findFsz  = Math.round(Math.max(W * 0.028, 11));
+      const findLh   = Math.round(findFsz * 1.5);
+      const srcFsz   = Math.round(findFsz * 0.85);
+      const rTextW   = contentW - 28;
+
+      // Measure all lines first
+      const tLineCount = _measureLines(`900 ${titleFsz}px sans-serif`, tip.emoji + '  ' + tip.title, rTextW);
+      const fLineCount = _measureLines(`${findFsz}px sans-serif`, tip.finding, rTextW);
+      // total content block height
+      const contentBlockH = tLineCount * titleLh + 6 + fLineCount * findLh + 4 + Math.round(srcFsz * 1.4);
+      const rH = contentBlockH + rPad * 2 + 4; // +4 for top accent bar
+
+      // Y position — stack tip 0 then tip 1 with gap
+      const ry = i === 0
+        ? contentStartY
+        : contentStartY + tips.slice(0,1).reduce((acc, t2) => {
+            const tl = _measureLines(`900 ${titleFsz}px sans-serif`, t2.emoji + '  ' + t2.title, rTextW);
+            const fl = _measureLines(`${findFsz}px sans-serif`, t2.finding, rTextW);
+            const cb = tl * titleLh + 6 + fl * findLh + 4 + Math.round(srcFsz * 1.4);
+            return acc + cb + rPad * 2 + 4;
+          }, 0) + gap;
+
+      // Flat bg — sized to content
+      ctx.save();
+      ctx.fillStyle = isLight ? 'rgba(224,242,254,0.88)' : 'rgba(0,20,50,0.80)';
+      ctx.fillRect(contentX, ry, contentW, rH);
+      ctx.fillStyle = accent;
+      ctx.fillRect(contentX, ry, contentW, 4);
+      ctx.restore();
+
+      // Text block — vertically centred inside the band
+      const textStartY = ry + 4 + rPad;
+
+      // Title
+      ctx.fillStyle = bodyTxt;
+      ctx.font = `900 ${titleFsz}px sans-serif`;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      let tLines;
+      if (_csHealthTextMode === 'colorful') {
+        tLines = _csDrawColorWords(ctx, tip.emoji + '  ' + tip.title, contentX + 14, textStartY, rTextW, titleLh, _csHealthColorPalette);
+      } else {
+        tLines = _csWrapText(ctx, tip.emoji + '  ' + tip.title, contentX + 14, textStartY, rTextW, titleLh);
+      }
+
+      // Finding
+      const findY = textStartY + tLines * titleLh + 6;
+      ctx.fillStyle = isLight ? '#1e293b' : '#e2e8f0';
+      ctx.font = `${findFsz}px sans-serif`;
+      let fLines;
+      if (_csHealthTextMode === 'colorful') {
+        fLines = _csDrawColorWords(ctx, tip.finding, contentX + 14, findY, rTextW, findLh, _csHealthColorPalette);
+      } else {
+        fLines = _csWrapText(ctx, tip.finding, contentX + 14, findY, rTextW, findLh);
+      }
+
+      // Source
+      const srcY = findY + fLines * findLh + 4;
+      ctx.fillStyle = isLight ? '#475569' : '#94a3b8';
+      ctx.font = `italic ${srcFsz}px sans-serif`;
+      ctx.fillText('📰 ' + tip.source, contentX + 14, srcY);
+    });
+  } else {
+    ctx.fillStyle = isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.5)';
+    ctx.font = `${Math.round(W * 0.036)}px sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('बानी छान्नुस् वा AI Generate गर्नुस्', W/2, contentStartY + cardsH/2);
+  }
+
+  // ── BOTTOM PHOTO (deferred) ───────────────────────────────────
+  if (photo && photoLayout === 'bottom') {
+    const pH = Math.round(H * 0.20);
+    const pY = usableH - tipH - pH - Math.round(H * 0.016);
+    _drawPhotoBox(PAD, pY, W - PAD * 2, pH, false, theme.goodBorder);
+  }
+
+  // ── TIP STRIP ─────────────────────────────────────────────────
+  if (data?.tip) {
+    const tipY    = usableH - tipH - Math.round(H * 0.040);
+    const tipBoxW = W - PAD * 2;
+    const tipBoxH = tipH - 4;
+    const tipTextX = PAD + 18;
+    const tipMaxW  = tipBoxW - 22; // space after the accent bar + right pad
+
+    ctx.save();
+    // Draw background
+    ctx.fillStyle = isLight ? 'rgba(255,255,255,0.92)' : 'rgba(5,5,15,0.88)';
+    ctx.fillRect(PAD, tipY, tipBoxW, tipBoxH);
+    ctx.fillStyle = theme.tipBg;
+    ctx.fillRect(PAD, tipY, tipBoxW, tipBoxH);
+    // Accent bar
+    ctx.fillStyle = accent;
+    ctx.fillRect(PAD, tipY, 5, tipBoxH);
+
+    // Auto-shrink font until text fits on one line
+    const tipFullText = '💡  ' + data.tip;
+    let tipFsz = Math.round(W * 0.030);
+    ctx.font = `700 ${tipFsz}px sans-serif`;
+    while (ctx.measureText(tipFullText).width > tipMaxW && tipFsz > 10) {
+      tipFsz--;
+      ctx.font = `700 ${tipFsz}px sans-serif`;
+    }
+
+    ctx.fillStyle = isLight ? '#1e1b4b' : '#ffffff';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(tipFullText, tipTextX, tipY + tipBoxH / 2);
+    ctx.restore();
+  }
+
   _csWatermark(ctx, W, H);
 }
 
@@ -2849,7 +4226,7 @@ function _csRenderSuccess(data) {
   const pW = Math.round(W * 0.38), pH = Math.round(H * 0.38);
   const pX = W * 0.05, pY = H * 0.12;
   if (photo) {
-    _csDrawPhoto(ctx, photo, pX, pY, pW, pH);
+    _csDrawPhoto(ctx, photo, pX, pY, pW, pH, false, 'success');
     ctx.strokeStyle = '#d97706'; ctx.lineWidth = 4;
     ctx.strokeRect(pX, pY, pW, pH);
   }
