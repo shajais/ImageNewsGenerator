@@ -2790,46 +2790,58 @@ async function callGroq(prompt, timeoutMs = 20000) {
   const groqEndpoint = 'https://api.groq.com/openai/v1/chat/completions';
   const groqHeaders = { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' };
 
+  /* Use llama-3.1-8b-instant as primary (fast, free).
+     llama3-8b-8192 is deprecated as of 2025 and returns model-not-found errors. */
+  const GROQ_MODELS = ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'gemma2-9b-it'];
+
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), timeoutMs);
 
-  try {
-    const res = await fetch(groqEndpoint, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: groqHeaders,
-      body: JSON.stringify({
-        model: 'llama3-8b-8192',
-        messages: [
-          { role: 'system', content: 'You are a helpful assistant that always responds with valid JSON only. No markdown, no explanation, no code fences — just raw JSON.' },
-          { role: 'user', content: prompt }
-        ],
-        max_tokens: 2048,
-        temperature: 0.7
-      })
-    });
-    clearTimeout(tid);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      const msg = err?.error?.message || res.statusText;
-      console.error('[Groq] API error', res.status, msg);
-      throw new Error(`Groq API error ${res.status}: ${msg}`);
+  for (const model of GROQ_MODELS) {
+    try {
+      console.log(`[Groq] trying model: ${model}`);
+      const res = await fetch(groqEndpoint, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: groqHeaders,
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: 'You are a helpful assistant that always responds with valid JSON only. No markdown, no explanation, no code fences — just raw JSON.' },
+            { role: 'user', content: prompt }
+          ],
+          max_tokens: 2048,
+          temperature: 0.7
+        })
+      });
+      clearTimeout(tid);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const msg = err?.error?.message || res.statusText;
+        console.warn(`[Groq] model ${model} error ${res.status}: ${msg}`);
+        if (res.status === 401 || res.status === 403) throw new Error(`Groq key invalid: ${msg}`);
+        continue; // try next model
+      }
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content || '';
+      console.log('[Groq] raw response (first 400):', text.slice(0, 400));
+      if (!text) { console.warn('[Groq] empty response from', model); continue; }
+      /* Parse JSON — try several strategies */
+      try { return JSON.parse(text.trim()); } catch (_) {}
+      const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      if (fenced) { try { return JSON.parse(fenced[1].trim()); } catch (_) {} }
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) { try { return JSON.parse(jsonMatch[0]); } catch (_) {} }
+      console.error('[Groq] could not parse JSON from model', model, ':', text.slice(0, 300));
+      throw new Error('Groq: could not extract JSON from response');
+    } catch (e) {
+      clearTimeout(tid);
+      if (e.name === 'AbortError') throw new Error('Groq: request timed out');
+      if (e.message.includes('invalid')) throw e; // auth errors — no point retrying
+      console.warn('[Groq] model failed, trying next:', model, e.message);
     }
-    const data = await res.json();
-    const text = data.choices?.[0]?.message?.content || '';
-    console.log('[Groq] raw response (first 400):', text.slice(0, 400));
-    if (!text) throw new Error('Groq returned empty response');
-    /* Parse JSON — try several strategies */
-    try { return JSON.parse(text.trim()); } catch (_) {}
-    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    if (fenced) { try { return JSON.parse(fenced[1].trim()); } catch (_) {} }
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) { try { return JSON.parse(jsonMatch[0]); } catch (_) {} }
-    console.error('[Groq] could not parse JSON from response:', text.slice(0, 300));
-    throw new Error('Groq: could not extract JSON from response');
-  } finally {
-    clearTimeout(tid);
   }
+  throw new Error('Groq: all models failed');
 }
 
 /* ================================================================
@@ -2843,28 +2855,49 @@ async function fetchHuggingFaceImage(query, timeoutMs = 35000) {
   const tid = setTimeout(() => controller.abort(), timeoutMs);
   const enhancedPrompt = `${query}, high quality, vibrant colors, expressive faces, photorealistic, funny meme style`;
 
-  try {
-    const res = await fetch('https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ inputs: enhancedPrompt })
-    });
-    clearTimeout(tid);
-    /* Model still loading — wait and retry once */
-    if (res.status === 503) {
-      await new Promise(r => setTimeout(r, 9000));
-      return fetchHuggingFaceImage(query, timeoutMs);
+  /* Try FLUX.1-schnell first; fall back to stable-diffusion-xl-base-1.0 if model is down */
+  const HF_MODELS = [
+    'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell',
+    'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell',
+    'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0',
+  ];
+
+  for (const endpoint of HF_MODELS) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ inputs: enhancedPrompt })
+      });
+      clearTimeout(tid);
+      /* Model still loading — wait and retry with same endpoint once */
+      if (res.status === 503) {
+        await new Promise(r => setTimeout(r, 9000));
+        const res2 = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inputs: enhancedPrompt })
+        });
+        if (!res2.ok) continue; // try next model
+        const blob2 = await res2.blob();
+        return URL.createObjectURL(blob2);
+      }
+      if (res.status === 401 || res.status === 403) throw new Error('HuggingFace key invalid or expired');
+      if (!res.ok) { console.warn(`[HF] ${endpoint} → ${res.status}`); continue; }
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    } catch (e) {
+      clearTimeout(tid);
+      if (e.message.includes('invalid') || e.message.includes('expired')) throw e;
+      if (e.name === 'AbortError') throw e;
+      console.warn('[HF] endpoint failed:', endpoint, e.message);
     }
-    if (!res.ok) throw new Error(`HuggingFace error ${res.status}`);
-    const blob = await res.blob();
-    return URL.createObjectURL(blob);
-  } finally {
-    clearTimeout(tid);
   }
+  throw new Error('HuggingFace: all model endpoints failed');
 }
 
 /**
@@ -3208,6 +3241,22 @@ async function selectArticle(idx) {
     desc = await buildDescription(nepaliTitle, rawTitle, bestBody, sourceLang);
     /* Step 3d: Hashtags */
     hashtags = buildHashtags(nepaliTitle + ' ' + rawTitle, bestBody);
+
+    /* Tell the user WHY they got a template — prompt them to set up AI */
+    const hasAnyKey = _geminiKey || _browserGeminiKey || _browserGroqKey;
+    if (!hasAnyKey) {
+      setTimeout(() => {
+        toast(
+          '📝 Template mode — click <strong>⚙️ Setup AI Keys</strong> in the header to enable AI-generated titles, descriptions & hashtags (free Gemini key)',
+          'info', 8000
+        );
+      }, 800);
+    } else {
+      /* Had a key but AI call failed */
+      setTimeout(() => {
+        toast('⚠️ AI call failed — showing template. Check your key in ⚙️ Setup AI Keys.', 'error', 6000);
+      }, 800);
+    }
   }
 
   document.getElementById('outHook').textContent   = hook;
