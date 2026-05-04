@@ -2243,7 +2243,7 @@ async function loadKeyStatus() {
   } catch {
     _geminiKey = _removebgKey = false;
     _serverOnline = false;
-    showServerDownBanner();
+    showServerDownBanner(); // only shown when _isNodeServer is true (see showServerDownBanner guard)
   }
   updateAIBadge();
 }
@@ -2252,6 +2252,9 @@ async function loadKeyStatus() {
 let _serverOnline = true;
 
 function showServerDownBanner() {
+  /* Only show this banner when running via the local Node server.
+     On GitHub Pages there is no local server — users add keys via the browser. */
+  if (!_isNodeServer) return;
   let banner = document.getElementById('serverDownBanner');
   if (!banner) {
     banner = document.createElement('div');
@@ -2263,7 +2266,7 @@ function showServerDownBanner() {
       border:1px solid #dc2626;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.6);
       max-width:90%;cursor:pointer;
     `;
-    banner.innerHTML = `⚠️ <strong>Server not running.</strong> 
+    banner.innerHTML = `⚠️ <strong>Local server not running.</strong> 
       Open a terminal and run: <code style="background:#991b1b;padding:2px 8px;border-radius:4px;margin:0 4px">python server.py</code>
       then refresh this page. <span style="opacity:.7;font-size:.75rem">(click to dismiss)</span>`;
     banner.onclick = () => banner.remove();
@@ -2588,26 +2591,32 @@ function updateAIBadge() {
     badge.textContent = '🤖 All AI Active';
     badge.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
     badge.title = 'Gemini + Groq + Remove.bg + HuggingFace all active';
+    badge.classList.remove('needs-setup');
   } else if (geminiOk && removebgOk) {
     badge.textContent = '🤖 Gemini + BgRemover';
     badge.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
     badge.title = 'Gemini AI + Remove.bg active';
+    badge.classList.remove('needs-setup');
   } else if (geminiOk) {
     badge.textContent = '🤖 Gemini AI';
     badge.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
     badge.title = 'Gemini active' + (groqOk ? ' + Groq fallback' : '');
+    badge.classList.remove('needs-setup');
   } else if (groqOk) {
     badge.textContent = '⚡ Groq AI';
     badge.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
     badge.title = 'Groq AI active — add Gemini key for best results';
+    badge.classList.remove('needs-setup');
   } else if (removebgOk) {
     badge.textContent = '🎨 BgRemover';
     badge.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
     badge.title = 'Remove.bg active — add Gemini or Groq key for AI rewriting';
+    badge.classList.remove('needs-setup');
   } else {
-    badge.textContent = '⚙️ Setup AI';
+    badge.textContent = '⚙️ Setup AI Keys';
     badge.style.background = 'linear-gradient(135deg,#6366f1,#4f46e5)';
-    badge.title = 'Add API keys via Setup AI';
+    badge.title = 'Click to add your free Gemini API key and enable all AI features';
+    badge.classList.add('needs-setup');
   }
 }
 
@@ -7602,6 +7611,40 @@ function _closeEditMode(m) {
 /* ================================================================
    STARTUP CHECKS
 ================================================================ */
+
+/** Show a friendly first-visit banner on GitHub Pages when no API keys are configured yet */
+function showGitHubPagesSetupBanner() {
+  if (document.getElementById('ghpSetupBanner')) return; // already shown
+  const banner = document.createElement('div');
+  banner.id = 'ghpSetupBanner';
+  banner.style.cssText = `
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:linear-gradient(135deg,#1e1b4b,#312e81);
+    color:#e0e7ff;padding:16px 24px;
+    border-radius:14px;font-size:.9rem;text-align:center;
+    border:1px solid #6366f1;z-index:9999;box-shadow:0 6px 30px rgba(0,0,0,.7);
+    max-width:90%;min-width:280px;
+  `;
+  banner.innerHTML = `
+    <div style="font-size:1.1rem;font-weight:700;margin-bottom:6px">🤖 AI Features Need Setup</div>
+    <div style="opacity:.85;margin-bottom:12px;font-size:.82rem">
+      This is a GitHub Pages site — add your free Gemini API key to enable<br>
+      AI title, description, hashtags, memes &amp; Content Studio.
+    </div>
+    <button onclick="openAISettings();document.getElementById('ghpSetupBanner')?.remove();"
+      style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:8px 18px;
+             font-size:.88rem;font-weight:600;cursor:pointer;margin-right:8px">
+      ⚙️ Setup AI Keys
+    </button>
+    <button onclick="document.getElementById('ghpSetupBanner').remove()"
+      style="background:rgba(255,255,255,.12);color:#c7d2fe;border:1px solid rgba(255,255,255,.2);
+             border-radius:8px;padding:8px 14px;font-size:.82rem;cursor:pointer">
+      Later
+    </button>
+  `;
+  document.body.appendChild(banner);
+}
+
 (function onStartup() {
   /* Show red CORS warning banner if opened as file:// */
   if (location.protocol === 'file:') {
@@ -7619,6 +7662,13 @@ function _closeEditMode(m) {
   /* Fetch key availability from the server and update the AI badge.
      Keys live only in .env — the browser never sees the actual values. */
   loadKeyStatus();
+
+  /* On GitHub Pages: if no keys are saved yet, show a first-visit setup prompt */
+  if (!_isNodeServer && !_browserGeminiKey && !_browserGroqKey) {
+    setTimeout(() => {
+      showGitHubPagesSetupBanner();
+    }, 1500);
+  }
 
   /* Retry every 10 seconds if server was offline at startup */
   setInterval(async () => {

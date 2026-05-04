@@ -538,7 +538,7 @@
       <span class="ai-settings-icon">🤖</span>
       <div>
         <h3>AI Setup</h3>
-        <p class="ai-settings-sub">Configure your API keys — stored securely in <code>.env</code> on the server</p>
+        <p class="ai-settings-sub">Keys are saved in your browser's localStorage (GitHub Pages) or in <code>.env</code> on the local server</p>
       </div>
       <button class="ai-settings-close-btn" onclick="closeAISettings()" title="Close">✕</button>
     </div>
@@ -569,7 +569,7 @@
               autocomplete="off" spellcheck="false">
             <p class="ai-card-hint">
               Get free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com</a><br>
-              Add <code>GEMINI_API_KEY=…</code> to <code>.env</code>
+              Paste key above &amp; click <strong>Save</strong> — stored in browser localStorage
             </p>
           </div>
           <div class="ai-card-footer">
@@ -596,7 +596,7 @@
               autocomplete="off" spellcheck="false">
             <p class="ai-card-hint">
               Get free key at <a href="https://www.remove.bg/api" target="_blank" rel="noopener">remove.bg/api</a><br>
-              Add <code>REMOVEBG_API_KEY=…</code> to <code>.env</code>
+              Paste key above &amp; click <strong>Save</strong> — stored in browser localStorage
             </p>
           </div>
           <div class="ai-card-footer">
@@ -666,7 +666,7 @@
 
       <!-- Security note -->
       <div class="ai-info-box" style="border-color:rgba(234,179,8,.4);background:rgba(234,179,8,.08);margin-top:4px">
-        <strong>🔒 Security:</strong> Keys live only in <code>.env</code> on the server — never sent to the browser or stored in <code>localStorage</code>. Keep <code>.env</code> in <code>.gitignore</code>.
+        <strong>🔒 Security:</strong> On this live site, keys are saved only in your browser's <code>localStorage</code> — they never leave your device or get sent to any server other than the AI provider directly. On the local dev server, keys live in <code>.env</code> and are never sent to the browser.
       </div>
 
     </div><!-- end ai-settings-body -->

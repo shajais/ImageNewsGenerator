@@ -1631,6 +1631,13 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
   transition: all .2s;
 }
 .ai-badge-btn:hover { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(99,102,241,.6); }
+.ai-badge-btn.needs-setup {
+  animation: badgePulse 2.5s ease-in-out infinite;
+}
+@keyframes badgePulse {
+  0%, 100% { box-shadow: 0 3px 12px rgba(99,102,241,.4); }
+  50% { box-shadow: 0 0 0 6px rgba(99,102,241,.25), 0 3px 12px rgba(99,102,241,.4); }
+}
 
 /* ─── AI Settings Modal ──────────────────────────────────────── */
 #aiSettingsModal {
