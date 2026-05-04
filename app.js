@@ -2745,18 +2745,22 @@ async function callGemini(prompt, timeoutMs = 18000) {
 }
 
 /**
- * Unified AI dispatcher — routes to Gemini.
+ * Unified AI dispatcher — routes to Gemini first, then Groq fallback.
+ * Sets `callAI._lastModel` to 'gemini' or 'groq' so callers know which ran.
  * @param {string} prompt
  * @param {number} timeoutMs
  */
 async function callAI(prompt, timeoutMs = 22000) {
   const hasGemini = _geminiKey || _browserGeminiKey;
   const hasGroq   = !!_browserGroqKey;
+  callAI._lastModel = null;
 
   /* Try Gemini first */
   if (hasGemini) {
     try {
-      return await callGemini(prompt, timeoutMs);
+      const result = await callGemini(prompt, timeoutMs);
+      callAI._lastModel = 'gemini';
+      return result;
     } catch (e) {
       console.warn('[callAI] Gemini failed:', e.message, hasGroq ? '— trying Groq fallback…' : '');
       if (!hasGroq) throw e;
@@ -2766,7 +2770,9 @@ async function callAI(prompt, timeoutMs = 22000) {
   /* Groq fallback */
   if (hasGroq) {
     try {
-      return await callGroq(prompt, timeoutMs);
+      const result = await callGroq(prompt, timeoutMs);
+      callAI._lastModel = 'groq';
+      return result;
     } catch (e) {
       throw new Error('Both Gemini and Groq failed: ' + e.message);
     }
@@ -3090,15 +3096,19 @@ Write in Nepali Devanagari script. Return ONLY this JSON (no markdown, no explan
     return null;
   }
 
-  /* For Gemini: require Devanagari. For Groq: accept any non-empty response */
-  const usingGroqOnly = !(_geminiKey || _browserGeminiKey) && !!_browserGroqKey;
-  if (!usingGroqOnly) {
-    const hasDevanagariStrict = hasDevanagari(title) && hasDevanagari(description);
-    if (!hasDevanagariStrict) {
-      console.warn('[AI Rewrite] Gemini response missing Devanagari — falling back');
+  /* Validate Devanagari content — use the actual model that ran (callAI._lastModel),
+     NOT just whether keys exist. Gemini always writes Nepali; Groq sometimes uses English.
+     We only require Devanagari in the description (which is long-form prose).
+     Titles often have English proper nouns (names, places) — so we relax that check. */
+  const actualModel = callAI._lastModel || ((_geminiKey || _browserGeminiKey) ? 'gemini' : 'groq');
+  if (actualModel === 'gemini') {
+    /* Gemini should always write Devanagari in the description */
+    if (!hasDevanagari(description)) {
+      console.warn('[AI Rewrite] Gemini description missing Devanagari — falling back. desc:', (description||'').slice(0,80));
       return null;
     }
   }
+  /* For Groq: accept any non-empty response — it may write partly in English */
   if (!Array.isArray(hashtags) || hashtags.length < 3) {
     console.warn('[AI Rewrite] Invalid hashtags array — falling back');
     return null;
@@ -3271,7 +3281,7 @@ async function selectArticle(idx) {
   renderHashtags(hashtags);
 
   /* ── Update AI/Template badges on all content fields ── */
-  const prov = (_geminiKey || _browserGeminiKey) ? '✨ Gemini' : '⚡ Groq';
+  const prov = (callAI._lastModel === 'groq') ? '⚡ Groq' : ((_geminiKey || _browserGeminiKey) ? '✨ Gemini' : '⚡ Groq');
   setGenBadges(aiUsed, aiUsed ? prov : '');
 
   if (aiUsed) {
