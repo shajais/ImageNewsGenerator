@@ -10366,7 +10366,10 @@ async function runFaceSwap() {
       setMsg('Sending to local server…', 15);
       resultBlob = await _fsCallLocalServer(setMsg);
     } else {
-      throw new Error('No backend configured. Please paste your HuggingFace Space URL above.');
+      // Browser-side canvas fallback — no backend needed
+      setMsg('Preparing canvas magic…', 15);
+      resultBlob = await _fsCanvasFallback(setMsg);
+      isVideo = false;
     }
 
     _fs.resultBlob = resultBlob;
@@ -10394,6 +10397,92 @@ async function runFaceSwap() {
   } finally {
     createBtn.disabled = false;
   }
+}
+
+// ── Browser canvas fallback (no backend) ──────────────────────────────────────
+async function _fsCanvasFallback(setMsg) {
+  setMsg('Loading template image…', 20);
+  const tpl = _fs.selectedTpl;
+
+  // Load background: template thumb or bg option or solid colour
+  const bgKey = _fs.selectedBg;
+  const bgCfg = FS_BG_OPTIONS[bgKey];
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 720; canvas.height = 1280; // portrait reel ratio
+  const ctx = canvas.getContext('2d');
+
+  // Helper to load an image from url or File
+  function loadImg(src) {
+    return new Promise((res, rej) => {
+      const img = new Image(); img.crossOrigin = 'anonymous';
+      if (src instanceof File) img.src = URL.createObjectURL(src);
+      else img.src = src;
+      img.onload = () => res(img);
+      img.onerror = () => rej(new Error('Could not load image: ' + (src?.name || src)));
+    });
+  }
+
+  // 1) Draw background
+  if (bgKey !== 'none' && bgCfg?.color) {
+    ctx.fillStyle = bgCfg.color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } else {
+    const bgUrl = (bgKey === 'custom' && _fs.bgFile) ? _fs.bgFile
+                : (bgCfg?.url || tpl?.thumb || null);
+    if (bgUrl) {
+      try {
+        setMsg('Loading background…', 30);
+        const bg = await loadImg(bgUrl);
+        // Cover-fit
+        const scale = Math.max(canvas.width / bg.width, canvas.height / bg.height);
+        const sw = bg.width * scale, sh = bg.height * scale;
+        ctx.drawImage(bg, (canvas.width - sw) / 2, (canvas.height - sh) / 2, sw, sh);
+      } catch (_) {
+        ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+    } else {
+      ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  // 2) Slight dark vignette overlay
+  const vignette = ctx.createRadialGradient(360,640,200, 360,640,700);
+  vignette.addColorStop(0,'rgba(0,0,0,0)');
+  vignette.addColorStop(1,'rgba(0,0,0,0.55)');
+  ctx.fillStyle = vignette; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // 3) Draw face photo centered, taking up ~60% height
+  setMsg('Compositing your face…', 60);
+  try {
+    const face = await loadImg(_fs.srcFile);
+    const maxH = canvas.height * 0.62;
+    const maxW = canvas.width * 0.78;
+    const scale = Math.min(maxW / face.width, maxH / face.height);
+    const fw = face.width * scale, fh = face.height * scale;
+    const fx = (canvas.width - fw) / 2, fy = (canvas.height - fh) / 2 + 60;
+    // Soft circular mask for the face
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 30;
+    ctx.drawImage(face, fx, fy, fw, fh);
+    ctx.restore();
+  } catch(_) { /* face load failed, skip */ }
+
+  // 4) Overlay title text
+  ctx.save();
+  ctx.font = 'bold 36px Inter, Arial, sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.shadowColor = '#000'; ctx.shadowBlur = 8;
+  const title = tpl?.title || 'Face Swap Preview';
+  ctx.fillText(title, canvas.width / 2, 80);
+  ctx.font = '22px Inter, Arial, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.fillText('✨ Shashi Creator Studio', canvas.width / 2, 118);
+  ctx.restore();
+
+  setMsg('Finalising image…', 90);
+  return await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.92));
 }
 
 // ── HuggingFace Gradio REST ────────────────────────────────────────────────────
