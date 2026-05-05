@@ -1,4 +1,4 @@
-﻿/* ================================================================
+/* ================================================================
    Nepal Viral News Generator — Application Logic
    app.js
 ================================================================ */
@@ -10061,6 +10061,7 @@ document.addEventListener('DOMContentLoaded', () => {
   ['puzzleShowAnswer','puzzleWatermark'].forEach(id => {
     document.getElementById(id)?.addEventListener('change', renderPuzzleCanvas);
   });
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // FACE SWAP VIDEO CREATOR
