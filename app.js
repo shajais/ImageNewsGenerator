@@ -2664,14 +2664,31 @@ function clearBrowserKeys() {
 }
 
 /**
+ * Translate a raw fetch/API error into a user-readable reason code + message.
+ * Used by callGemini and callGroq to surface exact failure reasons.
+ */
+function _classifyAIError(status, rawMsg, isFetchError) {
+  if (isFetchError) {
+    // TypeError: Failed to fetch — usually CORS or no internet
+    return { code: 'NETWORK', msg: '🌐 Network error — no internet, or API blocked by browser (CORS). Try a different network.' };
+  }
+  if (status === 400) return { code: 'BAD_REQUEST', msg: `❌ Bad request to AI — possibly malformed key. Detail: ${rawMsg}` };
+  if (status === 401) return { code: 'KEY_INVALID', msg: '🔑 API key is invalid or has been revoked. Open ⚙️ Setup AI Keys and re-paste your key.' };
+  if (status === 403) return { code: 'KEY_FORBIDDEN', msg: '🚫 API key rejected (forbidden). The key may be expired, over quota, or wrong type. Check your key.' };
+  if (status === 429) return { code: 'RATE_LIMIT', msg: '⏳ Rate limit hit — you\'ve made too many requests. Wait 60 seconds then try again.' };
+  if (status >= 500) return { code: 'SERVICE_DOWN', msg: `🔴 AI service is temporarily down (HTTP ${status}). Try again in a minute.` };
+  return { code: 'HTTP_ERROR', msg: `❌ AI API error HTTP ${status}: ${rawMsg}` };
+}
+
+/**
  * Call Gemini 2.0-flash (free tier) with a structured prompt.
- * Returns parsed JSON from the model or null on failure.
+ * Returns parsed JSON from the model or throws a descriptive error.
  * @param {string} prompt
  * @param {number} timeoutMs
  */
 async function callGemini(prompt, timeoutMs = 18000) {
   const effectiveKey = _browserGeminiKey || (_geminiKey ? '__server__' : '');
-  if (!effectiveKey) throw new Error('NO_KEY: Gemini API key not configured');
+  if (!effectiveKey) throw new Error('🔑 No Gemini API key configured. Click ⚙️ Setup AI Keys to add your free key.');
 
   /* Build the list of URLs to try in order:
      1. Server proxy with browser key (X-Gemini-Key header) — works on localhost even without .env key
@@ -2687,12 +2704,14 @@ async function callGemini(prompt, timeoutMs = 18000) {
   if (!_isNodeServer && _browserGeminiKey) {
     urlsToTry.push({ url: `${GEMINI_API_URL}?key=${encodeURIComponent(_browserGeminiKey)}`, label: 'direct', headers: {} });
   }
-  if (!urlsToTry.length) throw new Error('NO_KEY: No usable Gemini endpoint');
+  if (!urlsToTry.length) throw new Error('🔑 No Gemini endpoint available — check your key is saved.');
 
   const body = JSON.stringify({
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0.85, topK: 40, topP: 0.95, maxOutputTokens: 2048 },
   });
+
+  let lastError = 'Unknown Gemini error';
 
   for (const endpoint of urlsToTry) {
     const ctrl = new AbortController();
@@ -2707,13 +2726,21 @@ async function callGemini(prompt, timeoutMs = 18000) {
       clearTimeout(tid);
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        const msg = errData?.error?.message || res.statusText || res.status;
-        console.warn(`[Gemini] ${endpoint.label} HTTP ${res.status}:`, msg);
-        continue; // try next endpoint
+        const rawMsg  = errData?.error?.message || res.statusText || String(res.status);
+        const { code, msg } = _classifyAIError(res.status, rawMsg, false);
+        console.warn(`[Gemini] ${endpoint.label} HTTP ${res.status} [${code}]:`, rawMsg);
+        lastError = msg;
+        // Auth/quota errors are fatal — no point trying next endpoint with same key
+        if (res.status === 401 || res.status === 403 || res.status === 429) throw new Error(msg);
+        continue; // try next endpoint for 5xx / 400
       }
       const data = await res.json();
       const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      if (!raw) { console.warn('[Gemini] empty response from', endpoint.label); continue; }
+      if (!raw) {
+        lastError = '⚠️ Gemini returned an empty response. The model may be overloaded — try again.';
+        console.warn('[Gemini] empty response from', endpoint.label);
+        continue;
+      }
 
       console.log('[Gemini] raw response (first 400 chars):', raw.slice(0, 400));
 
@@ -2731,17 +2758,32 @@ async function callGemini(prompt, timeoutMs = 18000) {
       if (firstBrace !== -1 && lastBrace > firstBrace) {
         try { return JSON.parse(raw.slice(firstBrace, lastBrace + 1)); } catch (_) {}
       }
+      lastError = '⚠️ Gemini responded but output was not valid JSON. Try again.';
       console.error('[Gemini] could not extract JSON. Full raw:', raw);
-      throw new Error('NO_JSON: Could not extract JSON from Gemini response');
+      throw new Error(lastError);
     } catch (e) {
       clearTimeout(tid);
-      if (e.name === 'AbortError') { console.warn('[Gemini] timeout on', endpoint.label); continue; }
-      if (e.message.startsWith('NO_JSON')) throw e; // don't retry parse failures
+      if (e.name === 'AbortError') {
+        lastError = '⏱️ Gemini request timed out — your internet may be slow, or the model is busy. Try again.';
+        console.warn('[Gemini] timeout on', endpoint.label);
+        continue;
+      }
+      // TypeError: Failed to fetch = CORS / network issue
+      if (e instanceof TypeError && e.message.includes('fetch')) {
+        const { msg } = _classifyAIError(0, e.message, true);
+        lastError = msg;
+        console.warn('[Gemini] network/CORS error on', endpoint.label, ':', e.message);
+        continue;
+      }
+      // Re-throw auth/rate/parse errors immediately — no point retrying
+      if (e.message.startsWith('🔑') || e.message.startsWith('🚫') || e.message.startsWith('⏳') || e.message.startsWith('⚠️')) {
+        throw e;
+      }
+      lastError = e.message;
       console.warn('[Gemini] error on', endpoint.label, ':', e.message);
-      // continue to next endpoint
     }
   }
-  throw new Error('GEMINI_FAILED: All endpoints failed');
+  throw new Error(lastError);
 }
 
 /**
@@ -2786,22 +2828,17 @@ async function callAI(prompt, timeoutMs = 22000) {
 ================================================================ */
 async function callGroq(prompt, timeoutMs = 20000) {
   const key = _browserGroqKey;
-  if (!key) throw new Error('NO_GROQ_KEY');
+  if (!key) throw new Error('🔑 No Groq API key configured. Click ⚙️ Setup AI Keys to add your free key.');
 
   console.log('[Groq] calling API, key prefix:', key.slice(0, 8) + '…');
 
-  /* Always call Groq directly from the browser.
-     On localhost, the server proxy may be intercepted by corporate firewalls;
-     direct browser fetch is identical and works on GitHub Pages too. */
   const groqEndpoint = 'https://api.groq.com/openai/v1/chat/completions';
   const groqHeaders = { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' };
-
-  /* Use llama-3.1-8b-instant as primary (fast, free).
-     llama3-8b-8192 is deprecated as of 2025 and returns model-not-found errors. */
   const GROQ_MODELS = ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'gemma2-9b-it'];
 
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), timeoutMs);
+  let lastError = 'Groq: unknown error';
 
   for (const model of GROQ_MODELS) {
     try {
@@ -2823,31 +2860,45 @@ async function callGroq(prompt, timeoutMs = 20000) {
       clearTimeout(tid);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        const msg = err?.error?.message || res.statusText;
-        console.warn(`[Groq] model ${model} error ${res.status}: ${msg}`);
-        if (res.status === 401 || res.status === 403) throw new Error(`Groq key invalid: ${msg}`);
-        continue; // try next model
+        const rawMsg = err?.error?.message || res.statusText;
+        const { code, msg } = _classifyAIError(res.status, rawMsg, false);
+        console.warn(`[Groq] model ${model} HTTP ${res.status} [${code}]:`, rawMsg);
+        lastError = msg;
+        // Auth/quota errors are fatal — key is wrong, no point trying other models
+        if (res.status === 401 || res.status === 403 || res.status === 429) throw new Error(msg);
+        continue;
       }
       const data = await res.json();
       const text = data.choices?.[0]?.message?.content || '';
       console.log('[Groq] raw response (first 400):', text.slice(0, 400));
-      if (!text) { console.warn('[Groq] empty response from', model); continue; }
+      if (!text) { lastError = '⚠️ Groq returned empty response'; console.warn('[Groq] empty response from', model); continue; }
       /* Parse JSON — try several strategies */
       try { return JSON.parse(text.trim()); } catch (_) {}
       const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
       if (fenced) { try { return JSON.parse(fenced[1].trim()); } catch (_) {} }
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) { try { return JSON.parse(jsonMatch[0]); } catch (_) {} }
+      lastError = '⚠️ Groq responded but output was not valid JSON. Try again.';
       console.error('[Groq] could not parse JSON from model', model, ':', text.slice(0, 300));
-      throw new Error('Groq: could not extract JSON from response');
+      throw new Error(lastError);
     } catch (e) {
       clearTimeout(tid);
-      if (e.name === 'AbortError') throw new Error('Groq: request timed out');
-      if (e.message.includes('invalid')) throw e; // auth errors — no point retrying
+      if (e.name === 'AbortError') throw new Error('⏱️ Groq request timed out — your internet may be slow. Try again.');
+      if (e instanceof TypeError && e.message.includes('fetch')) {
+        const { msg } = _classifyAIError(0, e.message, true);
+        lastError = msg;
+        console.warn('[Groq] network/CORS error:', e.message);
+        continue;
+      }
+      // Re-throw descriptive errors immediately
+      if (e.message.startsWith('🔑') || e.message.startsWith('🚫') || e.message.startsWith('⏳') || e.message.startsWith('⚠️') || e.message.startsWith('⏱️')) {
+        throw e;
+      }
+      lastError = e.message;
       console.warn('[Groq] model failed, trying next:', model, e.message);
     }
   }
-  throw new Error('Groq: all models failed');
+  throw new Error(lastError);
 }
 
 /* ================================================================
@@ -3071,15 +3122,17 @@ Write in Nepali Devanagari script. Return ONLY this JSON (no markdown, no explan
 {"hook":"<1 punchy Nepali sentence, max 15 words>","title":"<detailed Nepali headline with real names/places/numbers>","description":"<full news article in Nepali — 5-6 paragraphs with blank lines between, WHO WHAT WHERE WHEN WHY HOW, reactions, impact>","hashtags":["#नेपाल","#BreakingNews","#Nepal","#viral","#trending","#नेपाल_समाचार","#NepaliNews","#ShashiNewsGen"]}` : prompt;
 
   let result;
+  let _aiFailReason = null;
   try {
     console.log('[AI DEBUG] calling callAI… model:', usingGroqModel ? 'Groq' : 'Gemini');
     result = await callAI(finalPrompt, 30000);
     console.log('[AI DEBUG] callAI returned:', JSON.stringify(result)?.slice(0, 200));
   } catch(e) {
+    _aiFailReason = e.message;
     console.warn('[AI Rewrite] callAI threw:', e.message);
-    return null;
+    return { _error: _aiFailReason };   // return error object, not null, so caller can show it
   }
-  if (!result) { console.warn('[AI DEBUG] result is null/undefined after callAI'); return null; }
+  if (!result) { console.warn('[AI DEBUG] result is null/undefined after callAI'); return { _error: '⚠️ AI returned empty result — try again.' }; }
 
   /* Validate the response has all required fields with Devanagari content */
   const { hook, title, description, hashtags } = result;
@@ -3092,8 +3145,9 @@ Write in Nepali Devanagari script. Return ONLY this JSON (no markdown, no explan
 
   /* Validate fields exist and are non-empty strings */
   if (!hook || !title || !description) {
-    console.warn('[AI Rewrite] Missing required fields — hook:', !!hook, 'title:', !!title, 'desc:', !!description);
-    return null;
+    const missing = [!hook&&'hook', !title&&'title', !description&&'description'].filter(Boolean).join(', ');
+    console.warn('[AI Rewrite] Missing required fields:', missing);
+    return { _error: `⚠️ AI responded but output was incomplete (missing: ${missing}). Try again.` };
   }
 
   /* Validate Devanagari content — use the actual model that ran (callAI._lastModel),
@@ -3102,16 +3156,15 @@ Write in Nepali Devanagari script. Return ONLY this JSON (no markdown, no explan
      Titles often have English proper nouns (names, places) — so we relax that check. */
   const actualModel = callAI._lastModel || ((_geminiKey || _browserGeminiKey) ? 'gemini' : 'groq');
   if (actualModel === 'gemini') {
-    /* Gemini should always write Devanagari in the description */
     if (!hasDevanagari(description)) {
-      console.warn('[AI Rewrite] Gemini description missing Devanagari — falling back. desc:', (description||'').slice(0,80));
-      return null;
+      console.warn('[AI Rewrite] Gemini description missing Devanagari — desc:', (description||'').slice(0,80));
+      return { _error: '⚠️ Gemini responded in English instead of Nepali. Try again — or try a different article.' };
     }
   }
   /* For Groq: accept any non-empty response — it may write partly in English */
   if (!Array.isArray(hashtags) || hashtags.length < 3) {
-    console.warn('[AI Rewrite] Invalid hashtags array — falling back');
-    return null;
+    console.warn('[AI Rewrite] Invalid hashtags array');
+    return { _error: '⚠️ AI response was missing hashtags. Try again.' };
   }
 
   /* Always ensure #ShashiNewsGen is present as the brand tag */
@@ -3234,7 +3287,7 @@ async function selectArticle(idx) {
 
   const aiResult = await rewriteWithAI(rawTitle, bestBody, sourceLang, selectedArticle._category || _activeNewsTab);
 
-  if (aiResult) {
+  if (aiResult && !aiResult._error) {
     /* ✅ AI succeeded — use fully original AI-generated content */
     hook        = aiResult.hook;
     nepaliTitle = aiResult.title;
@@ -3252,21 +3305,19 @@ async function selectArticle(idx) {
     /* Step 3d: Hashtags */
     hashtags = buildHashtags(nepaliTitle + ' ' + rawTitle, bestBody);
 
-    /* Tell the user WHY they got a template — prompt them to set up AI */
+    /* Show EXACT reason why AI failed — not a generic message */
     const hasAnyKey = _geminiKey || _browserGeminiKey || _browserGroqKey;
-    if (!hasAnyKey) {
-      setTimeout(() => {
-        toast(
-          '📝 Template mode — click <strong>⚙️ Setup AI Keys</strong> in the header to enable AI-generated titles, descriptions & hashtags (free Gemini key)',
-          'info', 8000
-        );
-      }, 800);
-    } else {
-      /* Had a key but AI call failed */
-      setTimeout(() => {
+    const failReason = aiResult?._error || null;
+    setTimeout(() => {
+      if (!hasAnyKey) {
+        toast('📝 Template mode — click ⚙️ Setup AI Keys to enable real AI (free Gemini key)', 'info', 8000);
+      } else if (failReason) {
+        // Show the exact error with a persistent red toast (10s)
+        toast(`🤖 AI failed: ${failReason}`, 'error', 10000);
+      } else {
         toast('⚠️ AI call failed — showing template. Check your key in ⚙️ Setup AI Keys.', 'error', 6000);
-      }, 800);
-    }
+      }
+    }, 800);
   }
 
   document.getElementById('outHook').textContent   = hook;
