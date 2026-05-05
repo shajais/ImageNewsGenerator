@@ -2166,79 +2166,259 @@
 <!-- ══════════════════════════════════════════════════════════════
      FACE SWAP STUDIO MODAL
 ══════════════════════════════════════════════════════════════ -->
-<div id="faceSwapModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:flex-start;justify-content:center;overflow-y:auto;padding:16px">
-  <div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:28px;max-width:860px;width:100%;margin:auto;box-shadow:0 8px 60px rgba(124,58,237,.25)">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <h2 style="font-size:1.25rem;font-weight:900;background:linear-gradient(90deg,#7c3aed,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">🎭 Face Swap Studio</h2>
-      <button onclick="closeFaceSwapStudio()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1">✕</button>
+<!-- ══════════════════════════════════════════════════════════════
+     FACE SWAP VIDEO CREATOR — 4-step wizard
+══════════════════════════════════════════════════════════════ -->
+<div id="faceSwapModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;align-items:flex-start;justify-content:center;overflow-y:auto;padding:12px">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:20px;width:100%;max-width:960px;margin:auto;box-shadow:0 8px 60px rgba(124,58,237,.3);overflow:hidden">
+
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,rgba(124,58,237,.15),rgba(236,72,153,.1));border-bottom:1px solid var(--border);padding:18px 24px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <h2 style="font-size:1.2rem;font-weight:900;background:linear-gradient(90deg,#7c3aed,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin:0">🎬 Video Face Swap Creator</h2>
+        <p style="font-size:.75rem;color:var(--muted);margin:3px 0 0">Pick a trending video template → upload your face → change background → create!</p>
+      </div>
+      <button onclick="closeFaceSwapStudio()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1;padding:4px">✕</button>
     </div>
 
-    <!-- Legal disclaimer (shown once) -->
-    <div id="fsDisclaimerBox" style="background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.35);border-radius:12px;padding:16px;margin-bottom:18px">
-      <p style="font-size:.82rem;color:var(--text);margin:0 0 10px">⚖️ <strong>Legal Notice:</strong> By using Face Swap Studio you confirm that:
-        <br>• You own or have permission to use all uploaded images
-        <br>• You will not use results to deceive, harm or harass anyone
-        <br>• This feature is for creative/entertainment purposes only
-      </p>
-      <label style="display:flex;align-items:center;gap:8px;font-size:.82rem;cursor:pointer;color:var(--muted)">
-        <input type="checkbox" id="fsDisclaimerCheck" onchange="handleFsDisclaimer()">
-        I understand and agree to the above terms
-      </label>
+    <!-- Step indicator -->
+    <div style="display:flex;border-bottom:1px solid var(--border);background:rgba(0,0,0,.2)">
+      <div class="fs-step-tab active" id="fsTab1" onclick="fsGoStep(1)" style="flex:1;padding:12px 8px;text-align:center;cursor:pointer;font-size:.78rem;font-weight:700;border-bottom:2px solid #7c3aed;color:#a78bfa;transition:.2s">
+        <div style="font-size:1.1rem">🎬</div>1. Template
+      </div>
+      <div class="fs-step-tab" id="fsTab2" onclick="fsGoStep(2)" style="flex:1;padding:12px 8px;text-align:center;cursor:pointer;font-size:.78rem;font-weight:700;border-bottom:2px solid transparent;color:var(--muted);transition:.2s">
+        <div style="font-size:1.1rem">👤</div>2. Your Face
+      </div>
+      <div class="fs-step-tab" id="fsTab3" onclick="fsGoStep(3)" style="flex:1;padding:12px 8px;text-align:center;cursor:pointer;font-size:.78rem;font-weight:700;border-bottom:2px solid transparent;color:var(--muted);transition:.2s">
+        <div style="font-size:1.1rem">🖼️</div>3. Background
+      </div>
+      <div class="fs-step-tab" id="fsTab4" onclick="fsGoStep(4)" style="flex:1;padding:12px 8px;text-align:center;cursor:pointer;font-size:.78rem;font-weight:700;border-bottom:2px solid transparent;color:var(--muted);transition:.2s">
+        <div style="font-size:1.1rem">✨</div>4. Create
+      </div>
     </div>
 
-    <!-- Main UI (locked until disclaimer accepted) -->
-    <div id="fsMainUI" style="opacity:.35;pointer-events:none;transition:.3s">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-        <!-- Source face -->
-        <div>
-          <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:6px">👤 Source — Your Face Photo</label>
-          <div id="fsSrcDrop" onclick="document.getElementById('fsSrcInput').click()"
-            style="border:2px dashed var(--border);border-radius:12px;height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden;background:rgba(255,255,255,.03)">
-            <img id="fsSrcPreview" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:10px">
-            <span id="fsSrcPlaceholder" style="font-size:.8rem;color:var(--muted);text-align:center;padding:12px">📷 Click or drag &amp; drop<br><small>JPG / PNG / WebP</small></span>
-            <input type="file" id="fsSrcInput" accept="image/*" style="display:none" onchange="fsSrcChanged(event)">
+    <div style="padding:20px 24px">
+
+      <!-- ── STEP 1: Trending Templates ── -->
+      <div id="fsStep1">
+        <!-- Category tabs -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+          <button class="fs-cat-btn active" onclick="fsFilterCat('all',this)">🔥 All Trending</button>
+          <button class="fs-cat-btn" onclick="fsFilterCat('nepal',this)">🇳🇵 Nepali Hits</button>
+          <button class="fs-cat-btn" onclick="fsFilterCat('bollywood',this)">🎵 Bollywood</button>
+          <button class="fs-cat-btn" onclick="fsFilterCat('dance',this)">💃 Viral Dance</button>
+          <button class="fs-cat-btn" onclick="fsFilterCat('reel',this)">📱 Reels</button>
+          <button class="fs-cat-btn" onclick="fsFilterCat('custom',this)">📤 My Video</button>
+        </div>
+
+        <!-- Template grid -->
+        <div id="fsTplGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px;max-height:320px;overflow-y:auto;padding-right:4px"></div>
+
+        <!-- Custom video upload / URL paste -->
+        <div id="fsCustomSection" style="display:none;border:1px solid var(--border);border-radius:12px;padding:14px;background:rgba(255,255,255,.03)">
+          <p style="font-size:.8rem;color:var(--muted);margin:0 0 10px">📤 <strong>Upload your own video</strong> or paste a link</p>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div id="fsVidDrop" onclick="document.getElementById('fsVidInput').click()"
+              style="border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:.2s"
+              ondragover="event.preventDefault();this.style.borderColor='#7c3aed'"
+              ondragleave="this.style.borderColor=''"
+              ondrop="fsVidDropped(event)">
+              <div style="font-size:1.8rem">🎬</div>
+              <div id="fsVidDropLabel" style="font-size:.8rem;color:var(--muted);margin-top:4px">Click or drag &amp; drop video<br><small>MP4 / MOV / WebM · max 60s</small></div>
+              <input type="file" id="fsVidInput" accept="video/*" style="display:none" onchange="fsVidFileChanged(event)">
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="flex:1;height:1px;background:var(--border)"></div>
+              <span style="font-size:.72rem;color:var(--muted)">OR</span>
+              <div style="flex:1;height:1px;background:var(--border)"></div>
+            </div>
+            <input id="fsVidUrl" type="url" placeholder="Paste YouTube / TikTok / Instagram Reel URL…"
+              style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--text);font-size:.82rem;width:100%"
+              oninput="fsVidUrlChanged(this.value)">
+            <p style="font-size:.7rem;color:var(--muted);margin:0">⚠️ Only use videos you own or have permission to use.</p>
           </div>
         </div>
-        <!-- Target image -->
-        <div>
-          <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:6px">🎯 Target — Image to Swap Into</label>
-          <div id="fsTgtDrop" onclick="document.getElementById('fsTgtInput').click()"
-            style="border:2px dashed var(--border);border-radius:12px;height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden;background:rgba(255,255,255,.03)">
-            <img id="fsTgtPreview" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:10px">
-            <span id="fsTgtPlaceholder" style="font-size:.8rem;color:var(--muted);text-align:center;padding:12px">📷 Click or drag &amp; drop<br><small>JPG / PNG / WebP</small></span>
-            <input type="file" id="fsTgtInput" accept="image/*" style="display:none" onchange="fsTgtChanged(event)">
+
+        <!-- Selected template preview -->
+        <div id="fsSelectedTpl" style="display:none;margin-top:12px;padding:10px 14px;border-radius:10px;background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.3);display:none;align-items:center;gap:12px">
+          <img id="fsSelectedThumb" src="" alt="" style="width:56px;height:56px;border-radius:8px;object-fit:cover">
+          <div style="flex:1">
+            <div id="fsSelectedTitle" style="font-size:.88rem;font-weight:700;color:var(--text)"></div>
+            <div id="fsSelectedMeta" style="font-size:.73rem;color:var(--muted);margin-top:2px"></div>
+          </div>
+          <button onclick="fsClearTemplate()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.1rem">✕</button>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;margin-top:16px">
+          <button onclick="fsGoStep(2)" id="fsNext1" class="btn btn-primary" disabled style="min-width:120px">Next: Your Face →</button>
+        </div>
+      </div><!-- end fsStep1 -->
+
+      <!-- ── STEP 2: Face Photo ── -->
+      <div id="fsStep2" style="display:none">
+        <!-- Legal disclaimer -->
+        <div id="fsDisclaimerBox" style="background:rgba(124,58,237,.08);border:1px solid rgba(124,58,237,.25);border-radius:10px;padding:12px;margin-bottom:14px">
+          <p style="font-size:.78rem;color:var(--text);margin:0 0 8px">⚖️ <strong>By continuing you confirm:</strong> You own rights to all uploaded content. Results are for creative/entertainment use only. Do not use to deceive or harm others.</p>
+          <label style="display:flex;align-items:center;gap:6px;font-size:.78rem;cursor:pointer;color:var(--muted)">
+            <input type="checkbox" id="fsDisclaimerCheck" onchange="handleFsDisclaimer()">
+            I agree to the above terms
+          </label>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" id="fsFaceUI">
+          <!-- Upload face -->
+          <div>
+            <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:6px">👤 Upload your face photo</label>
+            <div id="fsSrcDrop" onclick="document.getElementById('fsSrcInput').click()"
+              style="border:2px dashed var(--border);border-radius:12px;height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden;background:rgba(255,255,255,.03);transition:.2s"
+              ondragover="event.preventDefault();this.style.borderColor='#7c3aed'"
+              ondragleave="this.style.borderColor=''"
+              ondrop="fsSrcDropped(event)">
+              <img id="fsSrcPreview" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:10px">
+              <span id="fsSrcPlaceholder" style="font-size:.82rem;color:var(--muted);text-align:center;padding:16px">📷 Click or drag &amp; drop<br><small style="opacity:.7">JPG · PNG · WebP<br>Clear front-facing photo</small></span>
+              <input type="file" id="fsSrcInput" accept="image/*" style="display:none" onchange="fsSrcChanged(event)">
+            </div>
+          </div>
+          <!-- Tips -->
+          <div style="display:flex;flex-direction:column;justify-content:center;gap:10px">
+            <div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:4px">💡 Tips for best results</div>
+            <div style="font-size:.78rem;color:var(--muted);line-height:1.6">
+              ✅ Clear front-facing photo<br>
+              ✅ Good lighting, no shadows<br>
+              ✅ Face clearly visible, not tilted<br>
+              ✅ No sunglasses / mask<br>
+              ✅ High resolution (500px+)<br>
+              ❌ Avoid group photos<br>
+              ❌ Avoid blurry images
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- HF Space URL config -->
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-        <label style="font-size:.78rem;color:var(--muted);white-space:nowrap">☁️ HF Space URL:</label>
-        <input id="fsHfUrl" type="url" placeholder="https://shajais-faceswap.hf.space"
-          style="flex:1;min-width:240px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--input-bg,rgba(255,255,255,.07));color:var(--text);font-size:.8rem"
-          oninput="localStorage.setItem('ghp_hf_faceswap_url', this.value)">
-        <span style="font-size:.72rem;color:var(--muted)">Leave blank to use local server</span>
-      </div>
-
-      <button id="fsSwapBtn" onclick="runFaceSwap()" class="btn btn-primary" style="width:100%;font-size:1rem;padding:12px;margin-bottom:14px" disabled>
-        🔄 Swap Faces
-      </button>
-
-      <!-- Progress / result -->
-      <div id="fsProgress" style="display:none;text-align:center;padding:12px;font-size:.85rem;color:var(--muted)">
-        <span id="fsSpinner">⏳</span> <span id="fsProgressMsg">Sending to HuggingFace Space…</span>
-      </div>
-      <div id="fsResultBox" style="display:none">
-        <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:8px">✨ Result</label>
-        <img id="fsResultImg" src="" alt="Face Swap Result"
-          style="width:100%;max-height:480px;object-fit:contain;border-radius:12px;border:1px solid var(--border)">
-        <div style="display:flex;gap:8px;margin-top:10px">
-          <button onclick="fsSaveResult()" class="btn btn-primary" style="flex:1">💾 Save Image</button>
-          <button onclick="fsUseAsNews()" class="btn btn-secondary" style="flex:1">📰 Use in News Studio</button>
-          <button onclick="fsReset()" class="btn btn-ghost" style="flex:1">🔄 New Swap</button>
+        <div style="display:flex;justify-content:space-between;margin-top:16px">
+          <button onclick="fsGoStep(1)" class="btn btn-ghost">← Back</button>
+          <button onclick="fsGoStep(3)" id="fsNext2" class="btn btn-primary" disabled style="min-width:120px">Next: Background →</button>
         </div>
-      </div>
-    </div><!-- end fsMainUI -->
+      </div><!-- end fsStep2 -->
+
+      <!-- ── STEP 3: Background ── -->
+      <div id="fsStep3" style="display:none">
+        <p style="font-size:.82rem;color:var(--muted);margin:0 0 14px">Choose what happens to the background in your video. Select <strong>Keep Original</strong> to leave it as-is.</p>
+
+        <!-- Background options -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:14px">
+          <!-- Keep original -->
+          <div class="fs-bg-opt selected" id="fsBgOpt_none" onclick="fsSelectBg('none',this)">
+            <div style="height:70px;border-radius:8px;background:linear-gradient(135deg,#1e1b4b,#312e81);display:flex;align-items:center;justify-content:center;font-size:1.4rem">🎬</div>
+            <div style="font-size:.73rem;color:var(--text);margin-top:4px;text-align:center;font-weight:600">Keep Original</div>
+          </div>
+          <!-- Solid black -->
+          <div class="fs-bg-opt" id="fsBgOpt_black" onclick="fsSelectBg('black',this)">
+            <div style="height:70px;border-radius:8px;background:#000;display:flex;align-items:center;justify-content:center;font-size:1.2rem">⬛</div>
+            <div style="font-size:.73rem;color:var(--text);margin-top:4px;text-align:center">Black</div>
+          </div>
+          <!-- Studio white -->
+          <div class="fs-bg-opt" id="fsBgOpt_white" onclick="fsSelectBg('white',this)">
+            <div style="height:70px;border-radius:8px;background:#f8fafc;display:flex;align-items:center;justify-content:center;font-size:1.2rem">⬜</div>
+            <div style="font-size:.73rem;color:var(--text);margin-top:4px;text-align:center">White Studio</div>
+          </div>
+          <!-- Nepal mountains -->
+          <div class="fs-bg-opt" id="fsBgOpt_nepal" onclick="fsSelectBg('nepal',this)">
+            <div style="height:70px;border-radius:8px;background:url('https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=200&q=60') center/cover;display:flex;align-items:flex-end;justify-content:center;font-size:.65rem;color:#fff;font-weight:700;padding-bottom:4px;text-shadow:0 1px 3px rgba(0,0,0,.8)">🇳🇵 Nepal</div>
+          </div>
+          <!-- Office -->
+          <div class="fs-bg-opt" id="fsBgOpt_office" onclick="fsSelectBg('office',this)">
+            <div style="height:70px;border-radius:8px;background:url('https://images.unsplash.com/photo-1497366216548-37526070297c?w=200&q=60') center/cover;display:flex;align-items:flex-end;justify-content:center;font-size:.65rem;color:#fff;font-weight:700;padding-bottom:4px;text-shadow:0 1px 3px rgba(0,0,0,.8)">🏢 Office</div>
+          </div>
+          <!-- Stage -->
+          <div class="fs-bg-opt" id="fsBgOpt_stage" onclick="fsSelectBg('stage',this)">
+            <div style="height:70px;border-radius:8px;background:url('https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=200&q=60') center/cover;display:flex;align-items:flex-end;justify-content:center;font-size:.65rem;color:#fff;font-weight:700;padding-bottom:4px;text-shadow:0 1px 3px rgba(0,0,0,.8)">🎤 Stage</div>
+          </div>
+          <!-- Custom BG upload -->
+          <div class="fs-bg-opt" id="fsBgOpt_custom" onclick="fsSelectBg('custom',this)">
+            <div onclick="document.getElementById('fsBgImgInput').click()" style="height:70px;border-radius:8px;border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:1.3rem;cursor:pointer;position:relative;overflow:hidden">
+              <img id="fsBgImgPreview" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;position:absolute;inset:0">
+              <span id="fsBgImgIcon">📤</span>
+            </div>
+            <div style="font-size:.73rem;color:var(--text);margin-top:4px;text-align:center">Upload BG</div>
+            <input type="file" id="fsBgImgInput" accept="image/*" style="display:none" onchange="fsBgImgChanged(event)">
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;margin-top:16px">
+          <button onclick="fsGoStep(2)" class="btn btn-ghost">← Back</button>
+          <button onclick="fsGoStep(4)" class="btn btn-primary" style="min-width:120px">Next: Create →</button>
+        </div>
+      </div><!-- end fsStep3 -->
+
+      <!-- ── STEP 4: Create ── -->
+      <div id="fsStep4" style="display:none">
+        <!-- Summary card -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px" id="fsSummary">
+          <div style="border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">🎬 Template</div>
+            <img id="fsSumThumb" src="" alt="" style="width:64px;height:64px;border-radius:6px;object-fit:cover;margin:auto;display:block">
+            <div id="fsSumTitle" style="font-size:.73rem;color:var(--text);margin-top:4px;font-weight:600"></div>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">👤 Face</div>
+            <img id="fsSumFace" src="" alt="" style="width:64px;height:64px;border-radius:50%;object-fit:cover;margin:auto;display:block;border:2px solid #7c3aed">
+            <div style="font-size:.73rem;color:var(--text);margin-top:4px;font-weight:600">Uploaded ✅</div>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">🖼️ Background</div>
+            <div id="fsSumBg" style="width:64px;height:64px;border-radius:6px;margin:auto;background:#111;display:flex;align-items:center;justify-content:center;font-size:1.5rem"></div>
+            <div id="fsSumBgLabel" style="font-size:.73rem;color:var(--text);margin-top:4px;font-weight:600"></div>
+          </div>
+        </div>
+
+        <!-- HF Space URL -->
+        <div style="margin-bottom:14px;padding:12px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.03)">
+          <label style="font-size:.78rem;color:var(--muted);display:block;margin-bottom:6px">☁️ HuggingFace Space URL <span style="opacity:.6">(required for video processing)</span></label>
+          <input id="fsHfUrl" type="url" placeholder="https://shajais-faceswap.hf.space"
+            style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.07);color:var(--text);font-size:.82rem"
+            oninput="localStorage.setItem('ghp_hf_faceswap_url',this.value)">
+          <p style="font-size:.7rem;color:var(--muted);margin:5px 0 0">Deploy the <code>hf_space/</code> folder to your HuggingFace Space. Free T4 GPU processes video in ~30s.</p>
+        </div>
+
+        <!-- Generate button -->
+        <button id="fsCreateBtn" onclick="runFaceSwap()" class="btn btn-primary"
+          style="width:100%;font-size:1.05rem;padding:14px;background:linear-gradient(135deg,#7c3aed,#ec4899);border:none;border-radius:12px;font-weight:800;letter-spacing:.3px;box-shadow:0 4px 20px rgba(124,58,237,.4)">
+          🎬 Create My Video
+        </button>
+
+        <!-- Progress -->
+        <div id="fsProgress" style="display:none;margin-top:14px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <div id="fsSpinner" style="font-size:1.4rem">⏳</div>
+            <div>
+              <div id="fsProgressMsg" style="font-size:.85rem;color:var(--text);font-weight:600">Processing…</div>
+              <div id="fsProgressSub" style="font-size:.72rem;color:var(--muted)">This may take 30–90 seconds on HF free tier</div>
+            </div>
+          </div>
+          <div style="height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden">
+            <div id="fsProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#7c3aed,#ec4899);border-radius:3px;transition:width .5s ease"></div>
+          </div>
+        </div>
+
+        <!-- Result -->
+        <div id="fsResultBox" style="display:none;margin-top:14px">
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:8px;font-weight:600">✨ Your video is ready!</div>
+          <video id="fsResultVideo" controls loop style="display:none;width:100%;border-radius:12px;border:1px solid var(--border);max-height:400px"></video>
+          <img id="fsResultImg" src="" alt="Result" style="display:none;width:100%;border-radius:12px;border:1px solid var(--border);max-height:400px;object-fit:contain">
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <button onclick="fsSaveResult()" class="btn btn-primary" style="flex:1;min-width:120px">💾 Download</button>
+            <button onclick="fsShareResult()" class="btn btn-secondary" style="flex:1;min-width:120px">📤 Share</button>
+            <button onclick="fsUseAsNews()" class="btn btn-secondary" style="flex:1;min-width:120px">📰 Use in News</button>
+            <button onclick="fsReset()" class="btn btn-ghost" style="flex:1;min-width:100px">🔄 New Video</button>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-start;margin-top:12px">
+          <button onclick="fsGoStep(3)" class="btn btn-ghost" style="font-size:.8rem">← Back</button>
+        </div>
+      </div><!-- end fsStep4 -->
+
+    </div><!-- end padding wrapper -->
   </div>
 </div><!-- end faceSwapModal -->
 
