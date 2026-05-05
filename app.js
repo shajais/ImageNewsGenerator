@@ -10514,13 +10514,19 @@ async function _fsCallHFSpace(baseUrl, setMsg) {
 
   setMsg('Queuing face swap job on GPU…', 45);
   const sessionHash = Math.random().toString(36).slice(2);
+
+  // Determine fn_index: video swap = 1, photo swap = 0
+  const isVideoSwap = !!(vidPath || (_fs.selectedTpl && !_fs.selectedTpl.custom));
+  const fn_index = isVideoSwap ? 1 : 0;
+  const api_name = isVideoSwap ? '/swap_video' : '/swap_photo';
+
   const payload = {
-    fn_index: 0,
+    fn_index,
     session_hash: sessionHash,
     data: [
       { path: facePath, orig_name: _fs.srcFile.name },
-      vidPath ? { path: vidPath, orig_name: _fs.selectedTpl.file.name }
-               : (_fs.selectedTpl.vidUrl || _fs.selectedTpl.url || null),
+      vidPath ? { path: vidPath, orig_name: _fs.selectedTpl.file?.name || 'video.mp4' }
+               : (_fs.selectedTpl?.vidUrl || _fs.selectedTpl?.url || null),
       _fs.selectedBg,
       bgPath ? { path: bgPath } : (FS_BG_OPTIONS[_fs.selectedBg]?.url || null),
     ]
@@ -10532,12 +10538,12 @@ async function _fsCallHFSpace(baseUrl, setMsg) {
     body: JSON.stringify(payload)
   });
   if (!joinRes.ok) throw new Error('HF queue/join failed: ' + joinRes.status);
-  const { event_id } = await joinRes.json();
+  await joinRes.json(); // Gradio 4: just confirms queued
 
   setMsg('Processing on GPU (this takes ~30–60s)…', 55);
 
   return await new Promise((resolve, reject) => {
-    const es = new EventSource(baseUrl + '/queue/data?session_hash=' + event_id);
+    const es = new EventSource(baseUrl + '/queue/data?session_hash=' + sessionHash);
     let pct = 55;
     const ticker = setInterval(() => {
       pct = Math.min(pct + 2, 92);

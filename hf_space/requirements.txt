@@ -1,7 +1,7 @@
-insightface>=0.7.3
-onnxruntime-gpu>=1.16.3
 opencv-python-headless>=4.8.0.76
 numpy>=1.24.0
 Pillow>=10.0.0
 gradio>=4.36.1
-rembg>=2.0.50
+onnxruntime>=1.16.3
+insightface>=0.7.3
+rembg[gpu]>=2.0.50
