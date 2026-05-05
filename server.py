@@ -5,7 +5,7 @@ Open:  http://localhost:3000
 
 Acts as a static file server + CORS proxy for Gemini and Remove.bg APIs.
 API keys are loaded from .env — the browser NEVER sees them.
-No extra packages needed — uses only Python standard library.
+On Render.com, PORT env var is injected automatically (defaults to 3000 locally).
 """
 import http.server
 import urllib.request
@@ -14,10 +14,39 @@ import os
 import sys
 import mimetypes
 import json
+import cgi
+import tempfile
+import base64
 from io import BytesIO
 from socketserver import ThreadingMixIn
 
-PORT = 3000
+# Render injects PORT; fall back to 3000 for local dev
+PORT = int(os.environ.get('PORT', 3000))
+
+# ── Optional: InsightFace face-swap (only available when pip deps installed) ──
+_faceswap_available = False
+try:
+    import cv2
+    import numpy as np
+    import insightface
+    from insightface.app import FaceAnalysis as _FaceAnalysis
+    from insightface.model_zoo import get_model as _get_model
+
+    _FACE_ANALYSER = _FaceAnalysis(
+        name='buffalo_l',
+        providers=['CPUExecutionProvider']
+    )
+    _FACE_ANALYSER.prepare(ctx_id=-1, det_size=(640, 640))
+
+    _SWAPPER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'inswapper_128.onnx')
+    if os.path.exists(_SWAPPER_PATH):
+        _SWAPPER = _get_model(_SWAPPER_PATH, providers=['CPUExecutionProvider'])
+        _faceswap_available = True
+        print('✅  InsightFace face-swap ready (inswapper_128.onnx found)')
+    else:
+        print('⚠️  InsightFace installed but inswapper_128.onnx not found — /api/faceswap disabled')
+except ImportError:
+    print('ℹ️  InsightFace not installed — /api/faceswap disabled (cloud HF Space used instead)')
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ── Load .env file ────────────────────────────────────────────
@@ -334,6 +363,71 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 'Content-Type': self.headers.get('Content-Type', 'application/octet-stream'),
                 'X-Api-Key': REMOVEBG_API_KEY,
             })
+            return
+
+        # ── Face Swap: /api/faceswap → InsightFace swap (requires pip deps) ──
+        if pathname == '/api/faceswap':
+            if not _faceswap_available:
+                err = json.dumps({'error': 'Face swap not available on this server. Use the HuggingFace Space.'}).encode()
+                self.send_response(503)
+                self.send_header('Content-Type', 'application/json')
+                self.send_cors()
+                self.end_headers()
+                self.wfile.write(err)
+                return
+            try:
+                # Parse multipart form: face_photo (source) + target_image (target)
+                content_type = self.headers.get('Content-Type', '')
+                if 'multipart/form-data' not in content_type:
+                    raise ValueError('Expected multipart/form-data')
+
+                # Use cgi.FieldStorage to parse multipart
+                environ = {
+                    'REQUEST_METHOD': 'POST',
+                    'CONTENT_TYPE': content_type,
+                    'CONTENT_LENGTH': self.headers.get('Content-Length', '0'),
+                }
+                fs = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ=environ)
+
+                face_data = fs['face_photo'].file.read()
+                target_data = fs['target_image'].file.read()
+
+                # Decode images
+                face_arr = cv2.imdecode(np.frombuffer(face_data, np.uint8), cv2.IMREAD_COLOR)
+                target_arr = cv2.imdecode(np.frombuffer(target_data, np.uint8), cv2.IMREAD_COLOR)
+
+                # Detect source face (largest)
+                src_faces = _FACE_ANALYSER.get(face_arr)
+                if not src_faces:
+                    raise ValueError('No face detected in source image')
+                src_face = sorted(src_faces, key=lambda f: f.bbox[2] - f.bbox[0], reverse=True)[0]
+
+                # Swap all faces in target
+                tgt_faces = _FACE_ANALYSER.get(target_arr)
+                if not tgt_faces:
+                    raise ValueError('No face detected in target image')
+                result = target_arr.copy()
+                for tgt_face in tgt_faces:
+                    result = _SWAPPER.get(result, tgt_face, src_face, paste_back=True)
+
+                # Encode result as JPEG
+                _, buf = cv2.imencode('.jpg', result, [cv2.IMWRITE_JPEG_QUALITY, 92])
+                resp_body = buf.tobytes()
+
+                self.send_response(200)
+                self.send_header('Content-Type', 'image/jpeg')
+                self.send_header('Content-Length', str(len(resp_body)))
+                self.send_cors()
+                self.end_headers()
+                self.wfile.write(resp_body)
+                print('  [faceswap] done ✅')
+            except Exception as e:
+                err = json.dumps({'error': str(e)}).encode()
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.send_cors()
+                self.end_headers()
+                self.wfile.write(err)
             return
 
         self.send_response(404)

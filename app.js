@@ -10061,4 +10061,202 @@ document.addEventListener('DOMContentLoaded', () => {
   ['puzzleShowAnswer','puzzleWatermark'].forEach(id => {
     document.getElementById(id)?.addEventListener('change', renderPuzzleCanvas);
   });
+});// ══════════════════════════════════════════════════════════════════════════════
+// FACE SWAP STUDIO
+// Primary: HuggingFace Space Gradio REST API (shajais/FaceSwap)
+// Fallback: local server /api/faceswap (requires InsightFace pip install)
+// ══════════════════════════════════════════════════════════════════════════════
+
+const _fs = { srcFile: null, tgtFile: null, resultBlob: null };
+
+function openFaceSwapStudio() {
+  const modal = document.getElementById('faceSwapModal');
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  const saved = localStorage.getItem('ghp_hf_faceswap_url') || '';
+  const urlInput = document.getElementById('fsHfUrl');
+  if (urlInput && saved) urlInput.value = saved;
+  if (localStorage.getItem('ghp_fs_disclaimer') === '1') {
+    document.getElementById('fsDisclaimerCheck').checked = true;
+    document.getElementById('fsDisclaimerBox').style.opacity = '.5';
+    document.getElementById('fsMainUI').style.opacity = '1';
+    document.getElementById('fsMainUI').style.pointerEvents = 'auto';
+  }
+  _fsUpdateSwapBtn();
+}
+
+function closeFaceSwapStudio() {
+  document.getElementById('faceSwapModal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function handleFsDisclaimer() {
+  const checked = document.getElementById('fsDisclaimerCheck').checked;
+  const ui = document.getElementById('fsMainUI');
+  ui.style.opacity = checked ? '1' : '.35';
+  ui.style.pointerEvents = checked ? 'auto' : 'none';
+  if (checked) {
+    localStorage.setItem('ghp_fs_disclaimer', '1');
+    document.getElementById('fsDisclaimerBox').style.opacity = '.5';
+  } else {
+    localStorage.removeItem('ghp_fs_disclaimer');
+    document.getElementById('fsDisclaimerBox').style.opacity = '1';
+  }
+  _fsUpdateSwapBtn();
+}
+
+function fsSrcChanged(e) {
+  const file = e.target.files[0]; if (!file) return;
+  _fs.srcFile = file;
+  _fsShowPreview('fsSrcPreview', 'fsSrcPlaceholder', file);
+  _fsUpdateSwapBtn();
+}
+
+function fsTgtChanged(e) {
+  const file = e.target.files[0]; if (!file) return;
+  _fs.tgtFile = file;
+  _fsShowPreview('fsTgtPreview', 'fsTgtPlaceholder', file);
+  _fsUpdateSwapBtn();
+}
+
+function _fsShowPreview(imgId, placeholderId, file) {
+  const img = document.getElementById(imgId);
+  img.src = URL.createObjectURL(file);
+  img.style.display = 'block';
+  document.getElementById(placeholderId).style.display = 'none';
+}
+
+function _fsUpdateSwapBtn() {
+  const btn = document.getElementById('fsSwapBtn');
+  if (!btn) return;
+  btn.disabled = !(_fs.srcFile && _fs.tgtFile && localStorage.getItem('ghp_fs_disclaimer') === '1');
+}
+
+async function runFaceSwap() {
+  if (!_fs.srcFile || !_fs.tgtFile) return;
+  const progress = document.getElementById('fsProgress');
+  const progressMsg = document.getElementById('fsProgressMsg');
+  const resultBox = document.getElementById('fsResultBox');
+  const swapBtn = document.getElementById('fsSwapBtn');
+  progress.style.display = 'block';
+  resultBox.style.display = 'none';
+  swapBtn.disabled = true;
+  try {
+    let resultBlob = null;
+    const hfUrl = (document.getElementById('fsHfUrl')?.value || '').trim().replace(/\/$/, '');
+    if (hfUrl) {
+      progressMsg.textContent = 'Uploading to HuggingFace Space...';
+      resultBlob = await _fsCallHFSpace(hfUrl);
+    }
+    if (!resultBlob && window._isNodeServer) {
+      progressMsg.textContent = 'Trying local server...';
+      resultBlob = await _fsCallLocalServer();
+    }
+    if (!resultBlob) throw new Error('No face swap backend available. Please enter a HuggingFace Space URL.');
+    _fs.resultBlob = resultBlob;
+    document.getElementById('fsResultImg').src = URL.createObjectURL(resultBlob);
+    resultBox.style.display = 'block';
+    progress.style.display = 'none';
+    showToast('Face swap complete!', 3000);
+  } catch (err) {
+    progress.style.display = 'none';
+    showToast('Face swap failed: ' + err.message, 8000);
+    console.error('[FaceSwap]', err);
+  } finally {
+    swapBtn.disabled = false;
+  }
+}
+
+async function _fsCallHFSpace(baseUrl) {
+  async function uploadFile(file) {
+    const fd = new FormData(); fd.append('files', file);
+    const r = await fetch(baseUrl + '/upload', { method: 'POST', body: fd });
+    if (!r.ok) throw new Error('HF upload failed: ' + r.status);
+    return (await r.json())[0];
+  }
+  document.getElementById('fsProgressMsg').textContent = 'Uploading source face...';
+  const srcPath = await uploadFile(_fs.srcFile);
+  document.getElementById('fsProgressMsg').textContent = 'Uploading target image...';
+  const tgtPath = await uploadFile(_fs.tgtFile);
+  document.getElementById('fsProgressMsg').textContent = 'Running face swap on GPU...';
+  const sessionHash = Math.random().toString(36).slice(2);
+  const joinRes = await fetch(baseUrl + '/queue/join', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fn_index: 0, data: [{ path: srcPath, orig_name: _fs.srcFile.name }, { path: tgtPath, orig_name: _fs.tgtFile.name }], session_hash: sessionHash })
+  });
+  if (!joinRes.ok) throw new Error('HF queue/join failed: ' + joinRes.status);
+  const { event_id } = await joinRes.json();
+  return await new Promise((resolve, reject) => {
+    const es = new EventSource(baseUrl + '/queue/data?session_hash=' + event_id);
+    const timeout = setTimeout(() => { es.close(); reject(new Error('HF Space timeout (60s)')); }, 60000);
+    es.onmessage = async (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.msg === 'process_completed') {
+          clearTimeout(timeout); es.close();
+          const output = msg.output?.data?.[0];
+          if (!output) { reject(new Error('No image returned')); return; }
+          if (typeof output === 'string' && output.startsWith('data:')) { resolve(await (await fetch(output)).blob()); }
+          else if (output?.url) {
+            const url = output.url.startsWith('http') ? output.url : baseUrl + '/file=' + output.url;
+            resolve(await (await fetch(url)).blob());
+          } else { reject(new Error('Unrecognised HF output')); }
+        } else if (msg.msg === 'queue_full') { clearTimeout(timeout); es.close(); reject(new Error('HF queue full')); }
+        else if (msg.msg === 'error') { clearTimeout(timeout); es.close(); reject(new Error('HF error: ' + (msg.output?.error || 'unknown'))); }
+      } catch(_) {}
+    };
+    es.onerror = () => { clearTimeout(timeout); es.close(); reject(new Error('HF connection error')); };
+  });
+}
+
+async function _fsCallLocalServer() {
+  const fd = new FormData();
+  fd.append('face_photo', _fs.srcFile);
+  fd.append('target_image', _fs.tgtFile);
+  const res = await fetch('http://localhost:3000/api/faceswap', { method: 'POST', body: fd });
+  if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || 'Local server error ' + res.status); }
+  return await res.blob();
+}
+
+function fsSaveResult() {
+  if (!_fs.resultBlob) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(_fs.resultBlob);
+  a.download = 'face-swap-result.jpg';
+  a.click();
+  showToast('Image saved!', 2500);
+}
+
+function fsUseAsNews() {
+  if (!_fs.resultBlob) return;
+  const file = new File([_fs.resultBlob], 'faceswap.jpg', { type: 'image/jpeg' });
+  const dt = new DataTransfer(); dt.items.add(file);
+  const bgInput = document.getElementById('customBgInput');
+  if (bgInput) { bgInput.files = dt.files; bgInput.dispatchEvent(new Event('change')); }
+  closeFaceSwapStudio();
+  if (typeof openNewsStudio === 'function') openNewsStudio();
+  showToast('Face swap image set as background!', 4000);
+}
+
+function fsReset() {
+  _fs.srcFile = null; _fs.tgtFile = null; _fs.resultBlob = null;
+  ['fsSrcPreview','fsTgtPreview'].forEach(id => { const el = document.getElementById(id); if (el) { el.src=''; el.style.display='none'; } });
+  ['fsSrcPlaceholder','fsTgtPlaceholder'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display=''; });
+  ['fsSrcInput','fsTgtInput'].forEach(id => { const el = document.getElementById(id); if (el) el.value=''; });
+  document.getElementById('fsResultBox').style.display = 'none';
+  document.getElementById('fsProgress').style.display = 'none';
+  _fsUpdateSwapBtn();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  function setupFsDrop(zoneId, handler) {
+    const zone = document.getElementById(zoneId);
+    if (!zone) return;
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.style.borderColor='#7c3aed'; });
+    zone.addEventListener('dragleave', () => { zone.style.borderColor=''; });
+    zone.addEventListener('drop', e => { e.preventDefault(); zone.style.borderColor=''; const f=e.dataTransfer.files[0]; if(f) handler({target:{files:[f]}}); });
+  }
+  setupFsDrop('fsSrcDrop', fsSrcChanged);
+  setupFsDrop('fsTgtDrop', fsTgtChanged);
 });

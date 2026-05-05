@@ -60,6 +60,7 @@
     <button class="btn meme-nav-btn" id="memeStudioBtn" onclick="openMemeStudio()" title="Meme Studio">😂 Meme Studio</button>
     <button class="btn puzzle-nav-btn" id="puzzleStudioBtn" onclick="openPuzzleStudio()" title="Puzzle Studio">🧩 Puzzle Studio</button>
     <button class="btn content-studio-nav-btn" id="contentStudioBtn" onclick="openContentStudio()" title="Content Studio">🎭 Content Studio</button>
+    <button class="btn faceswap-nav-btn" id="faceSwapBtn" onclick="openFaceSwapStudio()" title="Face Swap Studio">🎭 Face Swap</button>
     <button class="btn feedback-nav-btn" onclick="openFeedbackModal()" title="Feedback">📩 Feedback</button>
     <button id="aiBadge" class="btn ai-badge-btn" onclick="openAISettings()" title="AI key status">⏳ AI…</button>
   </div>
@@ -2162,6 +2163,84 @@
     </form>
   </div>
 </div>
+<!-- ══════════════════════════════════════════════════════════════
+     FACE SWAP STUDIO MODAL
+══════════════════════════════════════════════════════════════ -->
+<div id="faceSwapModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:flex-start;justify-content:center;overflow-y:auto;padding:16px">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:28px;max-width:860px;width:100%;margin:auto;box-shadow:0 8px 60px rgba(124,58,237,.25)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h2 style="font-size:1.25rem;font-weight:900;background:linear-gradient(90deg,#7c3aed,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">🎭 Face Swap Studio</h2>
+      <button onclick="closeFaceSwapStudio()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1">✕</button>
+    </div>
+
+    <!-- Legal disclaimer (shown once) -->
+    <div id="fsDisclaimerBox" style="background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.35);border-radius:12px;padding:16px;margin-bottom:18px">
+      <p style="font-size:.82rem;color:var(--text);margin:0 0 10px">⚖️ <strong>Legal Notice:</strong> By using Face Swap Studio you confirm that:
+        <br>• You own or have permission to use all uploaded images
+        <br>• You will not use results to deceive, harm or harass anyone
+        <br>• This feature is for creative/entertainment purposes only
+      </p>
+      <label style="display:flex;align-items:center;gap:8px;font-size:.82rem;cursor:pointer;color:var(--muted)">
+        <input type="checkbox" id="fsDisclaimerCheck" onchange="handleFsDisclaimer()">
+        I understand and agree to the above terms
+      </label>
+    </div>
+
+    <!-- Main UI (locked until disclaimer accepted) -->
+    <div id="fsMainUI" style="opacity:.35;pointer-events:none;transition:.3s">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <!-- Source face -->
+        <div>
+          <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:6px">👤 Source — Your Face Photo</label>
+          <div id="fsSrcDrop" onclick="document.getElementById('fsSrcInput').click()"
+            style="border:2px dashed var(--border);border-radius:12px;height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden;background:rgba(255,255,255,.03)">
+            <img id="fsSrcPreview" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:10px">
+            <span id="fsSrcPlaceholder" style="font-size:.8rem;color:var(--muted);text-align:center;padding:12px">📷 Click or drag &amp; drop<br><small>JPG / PNG / WebP</small></span>
+            <input type="file" id="fsSrcInput" accept="image/*" style="display:none" onchange="fsSrcChanged(event)">
+          </div>
+        </div>
+        <!-- Target image -->
+        <div>
+          <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:6px">🎯 Target — Image to Swap Into</label>
+          <div id="fsTgtDrop" onclick="document.getElementById('fsTgtInput').click()"
+            style="border:2px dashed var(--border);border-radius:12px;height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden;background:rgba(255,255,255,.03)">
+            <img id="fsTgtPreview" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:10px">
+            <span id="fsTgtPlaceholder" style="font-size:.8rem;color:var(--muted);text-align:center;padding:12px">📷 Click or drag &amp; drop<br><small>JPG / PNG / WebP</small></span>
+            <input type="file" id="fsTgtInput" accept="image/*" style="display:none" onchange="fsTgtChanged(event)">
+          </div>
+        </div>
+      </div>
+
+      <!-- HF Space URL config -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <label style="font-size:.78rem;color:var(--muted);white-space:nowrap">☁️ HF Space URL:</label>
+        <input id="fsHfUrl" type="url" placeholder="https://shajais-faceswap.hf.space"
+          style="flex:1;min-width:240px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--input-bg,rgba(255,255,255,.07));color:var(--text);font-size:.8rem"
+          oninput="localStorage.setItem('ghp_hf_faceswap_url', this.value)">
+        <span style="font-size:.72rem;color:var(--muted)">Leave blank to use local server</span>
+      </div>
+
+      <button id="fsSwapBtn" onclick="runFaceSwap()" class="btn btn-primary" style="width:100%;font-size:1rem;padding:12px;margin-bottom:14px" disabled>
+        🔄 Swap Faces
+      </button>
+
+      <!-- Progress / result -->
+      <div id="fsProgress" style="display:none;text-align:center;padding:12px;font-size:.85rem;color:var(--muted)">
+        <span id="fsSpinner">⏳</span> <span id="fsProgressMsg">Sending to HuggingFace Space…</span>
+      </div>
+      <div id="fsResultBox" style="display:none">
+        <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:8px">✨ Result</label>
+        <img id="fsResultImg" src="" alt="Face Swap Result"
+          style="width:100%;max-height:480px;object-fit:contain;border-radius:12px;border:1px solid var(--border)">
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button onclick="fsSaveResult()" class="btn btn-primary" style="flex:1">💾 Save Image</button>
+          <button onclick="fsUseAsNews()" class="btn btn-secondary" style="flex:1">📰 Use in News Studio</button>
+          <button onclick="fsReset()" class="btn btn-ghost" style="flex:1">🔄 New Swap</button>
+        </div>
+      </div>
+    </div><!-- end fsMainUI -->
+  </div>
+</div><!-- end faceSwapModal -->
 
 </body>
 </html>

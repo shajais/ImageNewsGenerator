@@ -1983,6 +1983,24 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
   transform: scale(1.04);
 }
 
+/* ── Face Swap nav button (purple/pink gradient) ── */
+.faceswap-nav-btn {
+  background: linear-gradient(135deg,#7c3aed,#db2777);
+  color: #fff;
+  font-weight: 800;
+  font-size: .82rem;
+  padding: 8px 16px;
+  border-radius: 20px;
+  box-shadow: 0 3px 12px rgba(124,58,237,.40);
+  border: none;
+  transition: all .2s;
+}
+.faceswap-nav-btn:hover, .faceswap-nav-btn.active-studio-btn {
+  background: linear-gradient(135deg,#8b5cf6,#ec4899);
+  box-shadow: 0 3px 18px rgba(139,92,246,.65);
+  transform: scale(1.04);
+}
+
 /* ── Feedback nav button (rose/pink — distinctive utility button) ── */
 .feedback-nav-btn {
   background: linear-gradient(135deg,#be185d,#9d174d);
