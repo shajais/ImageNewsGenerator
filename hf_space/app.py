@@ -1,7 +1,8 @@
 ﻿"""
 Shashi Face Swap - HuggingFace Space
-Supports: photo + VIDEO face swap + background replacement
-Falls back gracefully if InsightFace/ONNX is unavailable.
+Photo + VIDEO face compositing with background replacement.
+Uses Pillow canvas blend (no native compile needed = always works on HF free tier).
+InsightFace AI swap: optional, loaded only if pre-installed.
 """
 import os, cv2, numpy as np, tempfile, traceback, urllib.request
 import gradio as gr

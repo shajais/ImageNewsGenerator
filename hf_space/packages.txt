@@ -4,5 +4,3 @@ libsm6
 libxrender1
 libxext6
 ffmpeg
-cmake
-build-essential
