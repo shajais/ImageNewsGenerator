@@ -858,6 +858,13 @@ const _NEPAL_LOCAL_FEEDS = {
     { url: 'https://setopati.com/category/madhesh/feed', name: 'Setopati Madhesh', lang: 'ne' },
     { url: 'https://nagariknews.nagariknetwork.com/category/madhesh/feed', name: 'Nagarik Madhesh', lang: 'ne' },
     { url: 'https://annapurnapost.com/rss/', name: 'Annapurna Post', lang: 'ne' },
+    /* ── Social media (Facebook pages via RSSHub public instance) ── */
+    /* Popular Kalaiya/Bara FB news pages — newest posts first */
+    { url: 'https://rsshub.app/facebook/page/KalaiyaOnlineNews', name: 'FB: Kalaiya Online News', lang: 'ne', _isSocial: true },
+    { url: 'https://rsshub.app/facebook/page/BaraDistrictNews', name: 'FB: Bara District News', lang: 'ne', _isSocial: true },
+    { url: 'https://rsshub.app/facebook/page/MadheshKhabar', name: 'FB: Madhesh Khabar', lang: 'ne', _isSocial: true },
+    { url: 'https://rsshub.app/facebook/page/kalaiyasamachar', name: 'FB: Kalaiya Samachar', lang: 'ne', _isSocial: true },
+    { url: 'https://rsshub.app/facebook/page/BirgunjNews24', name: 'FB: Birgunj News 24', lang: 'ne', _isSocial: true },
     /* ── Google News — कलैया specific, newest first (when:2d) ── */
     { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कलैया')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: कलैया', lang: 'ne' },
     { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कलैया समाचार')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: कलैया समाचार', lang: 'ne' },
@@ -869,18 +876,7 @@ const _NEPAL_LOCAL_FEEDS = {
     /* ── Google News — Madhesh Pradesh (Province 2) ── */
     { url: `https://news.google.com/rss/search?q=${encodeURIComponent('मधेश प्रदेश')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: मधेश प्रदेश', lang: 'ne' },
   ],
-  'bara': [
-    /* Same as kalaiya — alias to same feeds list */
-    { url: 'https://madheshpost.com/feed/', name: 'Madhesh Post', lang: 'ne' },
-    { url: 'https://www.onlinekhabar.com/location/madhesh-pradesh/feed', name: 'OnlineKhabar Madhesh', lang: 'ne' },
-    { url: 'https://ratopati.com/category/madhesh/feed', name: 'Ratopati Madhesh', lang: 'ne' },
-    { url: 'https://setopati.com/category/madhesh/feed', name: 'Setopati Madhesh', lang: 'ne' },
-    { url: 'https://nagariknews.nagariknetwork.com/category/madhesh/feed', name: 'Nagarik Madhesh', lang: 'ne' },
-    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बारा')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: बारा', lang: 'ne' },
-    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बारा जिल्ला')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: बारा जिल्ला', lang: 'ne' },
-    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Bara Nepal')}&hl=en&gl=NP&ceid=NP:en&tbs=sbd:1`, name: 'Google: Bara EN', lang: 'en' },
-    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कलैया')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: कलैया', lang: 'ne' },
-  ],
+  'bara': 'kalaiya', /* alias — same feeds */
   /* ── Kathmandu ─────────────────────────────────────────────────── */
   'kathmandu': [
     { url: 'https://kathmandupost.com/rss', name: 'Kathmandu Post', lang: 'en' },
@@ -1261,10 +1257,10 @@ function _locationFeedsFor(label) {
   const encLabel   = encodeURIComponent(label);
   const encLabelNe = encodeURIComponent(label + ' समाचार');
   const genericFeeds = [
-    { url: `https://news.google.com/rss/search?q=${encLabel}+Nepal+when:7d&hl=en&gl=NP&ceid=NP:en&tbs=sbd:1`, name: 'Google (EN): ' + label, lang: 'en' },
-    { url: `https://news.google.com/rss/search?q=${encLabelNe}+when:7d&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`,     name: 'Google (NE): ' + label, lang: 'ne' },
-    { url: `https://news.google.com/rss/search?q=${encLabel}+Nepal&hl=en&gl=NP&ceid=NP:en`, name: 'Google (EN all): ' + label, lang: 'en' },
-    { url: `https://news.google.com/rss/search?q=${encLabelNe}&hl=ne&gl=NP&ceid=NP:ne`,     name: 'Google (NE all): ' + label, lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encLabel}+Nepal+when:2d&hl=en&gl=NP&ceid=NP:en&tbs=sbd:1`, name: 'Google (EN): ' + label, lang: 'en' },
+    { url: `https://news.google.com/rss/search?q=${encLabelNe}+when:2d&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`,     name: 'Google (NE): ' + label, lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encLabel}+Nepal&hl=en&gl=NP&ceid=NP:en&tbs=sbd:1`, name: 'Google (EN all): ' + label, lang: 'en' },
+    { url: `https://news.google.com/rss/search?q=${encLabelNe}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`,     name: 'Google (NE all): ' + label, lang: 'ne' },
   ];
 
   /* Combine: local-specific first, then generic — deduplicate by URL */
@@ -3148,28 +3144,40 @@ HOOK (max 18 words):
 • Make it feel urgent and emotionally compelling — trigger curiosity, excitement, outrage or pride
 • NEVER write generic phrases like "एउटा ठूलो खबर" or "महत्त्वपूर्ण समाचार"
 
-TITLE (MAXIMUM 3 LINES — clickbait/hooky style):
-• Write like a viral Facebook headline — SHORT, PUNCHY, EMOTIONALLY CHARGED
-• Use powerful words: "चौंकाउने", "अविश्वसनीय", "भाइरल", "ब्रेकिङ", "खुलासा", "सत्य" etc.
-• MUST contain the KEY noun (real name, place, event) from the story
-• EACH LINE should be a complete thought — use \\n to separate lines (max 3 lines total)
-• Example good format: "🔥 [Person/Place] ले गर्‍यो ठूलो काम!\\n[What happened exactly]\\n[Why it matters — shocking fact]"
+TITLE (1 to 2 LINES MAX — powerful and crisp):
+• MAX 12 words per line — SHORT, PUNCHY, DIRECT. Never write long rambling sentences.
+• Write like a breaking news headline on a Nepali TV ticker — sharp and hard-hitting
+• Use power words ONLY where they fit naturally: "ब्रेकिङ", "खुलासा", "चौंकाउने", "सत्य", "भाइरल" etc.
+• MUST contain the SPECIFIC subject (real name, place, or event) from this article
+• Line 1: The news hook — WHO + WHAT (max 10 words)
+• Line 2 (optional): The consequence or key fact (max 10 words)
+• Use \\n to separate lines. Do NOT write 3 lines.
+• Example good format: "🔥 [Name/Place] — [exactly what happened]\\n[The most shocking number or consequence]"
+• BAD examples (do NOT do this): "एउटा ठूलो खुलासा भयो जुन सबैलाई थाहा हुनुपर्छ" (too vague, too long)
 • ${cfg.titleTip}
-• SEO-optimised keywords included naturally
 
-DESCRIPTION (Facebook post format — well-formatted with emojis):
-• Write like a viral Nepali Facebook news page post (like "Nepal Khabar" or "Setopati" Facebook posts)
-• Start with a BOLD statement or shocking fact
+DESCRIPTION (Facebook post format — natural spoken Nepali prose):
+• Write like a knowledgeable Nepali person is explaining the news to their friends on Facebook — natural, fluent, easy to read
+• Use STANDARD NEPALI grammar: subject-object-verb order, correct verb conjugations, natural sentence connectors like "त्यसैले", "किनभने", "भने", "तर", "यसका साथै", "अर्कोतिर"
+• AVOID: unusual literary words, archaic terms, unnatural phrase constructions, awkward loan translations
+• AVOID "भएको छ", "गरेका छन्" overuse — vary with "भयो", "गर्नुभयो", "देखाएको छ", "बताए" etc.
 • Use emojis inline (🔴, 📌, ⚡, 👉, ✅, ❗, 🔥, 💥, etc.) — at least 1-2 per paragraph
 • Format with blank lines between paragraphs for readability
-• Paragraph 1: 🔴 WHAT happened + WHO was involved (2-3 sentences)
-• Paragraph 2: 📌 WHY it happened + background context (2-3 sentences)  
-• Paragraph 3: ⚡ KEY facts: numbers, quotes, dates (2-3 sentences)
-• Paragraph 4: 👥 Reactions from public, officials, fans (2 sentences)
-• Paragraph 5: 🔮 What happens next / impact (2 sentences)
-• End with: 👉 यो समाचार share गर्नुस् र comment मा आफ्नो विचार राख्नुस्! 💬
+• Paragraph 1: 🔴 के भयो र को थियो — सरल भाषामा (2-3 वाक्य)
+• Paragraph 2: 📌 किन भयो र पृष्ठभूमि के हो (2-3 वाक्य)
+• Paragraph 3: ⚡ मुख्य तथ्यहरू: संख्या, उद्धरण, मिति (2-3 वाक्य)
+• Paragraph 4: 👥 सार्वजनिक, अधिकारी वा विज्ञहरूको प्रतिक्रिया (2 वाक्य)
+• Paragraph 5: 🔮 अब के हुन्छ र यसको प्रभाव (2 वाक्य)
+• End with: 👉 यो खबर share गर्नुस् र आफ्नो विचार comment मा लेख्नुस्! 💬
 • ${cfg.descTip}
-• 200-400 words total — enough to be informative but shareable
+• 200-350 words total — informative but concise and shareable
+
+GRAMMAR CHECKLIST (always verify before outputting):
+• Each sentence ends properly — no half-finished thoughts
+• Verb tenses are consistent throughout
+• No mix of formal/informal forms in the same paragraph
+• Names and places are spelled consistently
+• No English words where a natural Nepali equivalent exists
 
 HASHTAGS (exactly 11 — the last MUST be #ShashiNewsGen — for viral Facebook SEO):
 • Tags 1-3: STORY-SPECIFIC in Devanagari — real name/film/place/event keyword from THIS article
@@ -3196,8 +3204,13 @@ OUTPUT: Raw JSON only — no \`\`\`json, no explanation, nothing else.`;
 HEADLINE: ${rawTitle}
 ${bodySnippet ? `ARTICLE BODY: ${bodySnippet.slice(0, 1000)}` : ''}
 
-Write in Nepali Devanagari script. Return ONLY this JSON (no markdown, no explanation):
-{"hook":"<1 punchy Nepali sentence, max 15 words>","title":"<detailed Nepali headline with real names/places/numbers>","description":"<full news article in Nepali — 5-6 paragraphs with blank lines between, WHO WHAT WHERE WHEN WHY HOW, reactions, impact>","hashtags":["#नेपाल","#BreakingNews","#Nepal","#viral","#trending","#नेपाल_समाचार","#NepaliNews","#ShashiNewsGen"]}` : prompt;
+RULES:
+- Title: max 2 lines, max 12 words per line, crisp and powerful, specific to this news
+- Description: natural fluent Nepali prose with correct grammar — like a knowledgeable person explaining news to friends. Use standard Nepali grammar, avoid archaic/unusual words, use natural sentence connectors.
+- All text MUST be in Nepali Devanagari script.
+
+Return ONLY this JSON (no markdown, no explanation):
+{"hook":"<1 punchy Nepali sentence, max 15 words>","title":"<crisp 1-2 line Nepali headline, real names/places/numbers, max 12 words per line>","description":"<natural conversational Nepali — 5-6 paragraphs with blank lines, WHO WHAT WHERE WHEN WHY HOW, reactions, impact, correct grammar>","hashtags":["#नेपाल","#BreakingNews","#Nepal","#viral","#trending","#नेपाल_समाचार","#NepaliNews","#ShashiNewsGen"]}` : prompt;
 
   let result;
   let _aiFailReason = null;
@@ -6456,6 +6469,92 @@ Output ONLY the image prompt text — no explanation, no JSON, just the prompt s
   const scene = category === 'world' ? 'international news setting' : (context || 'Nepal news, South Asian context');
 
   return `Photorealistic news photography, ${personDesc}, ${scene}, professional camera, high detail, soft natural lighting, cinematic composition, no text overlay, sharp focus, 8k quality, photojournalism style`;
+}
+
+/* ================================================================
+   REIMAGINE IMAGE WITH AI
+   Generates a fresh AI image using HuggingFace FLUX, always based
+   on news context + optional custom user prompt.
+   Called from the "✨ Reimagine with AI" button in the image panel.
+   ================================================================ */
+async function reimagineImage(useCustomPrompt = false) {
+  if (!selectedArticle || !generatedPost) {
+    toast('⚠️ Please generate a news post first.', 'error'); return;
+  }
+  if (!_browserHFKey) {
+    toast('⚠️ HuggingFace API key required for AI image generation. Add it in Settings.', 'error', 5000); return;
+  }
+
+  const statusEl = document.getElementById('reimagineImageStatus');
+  const btn      = document.getElementById('reimagineImageBtn');
+  const customPromptText = (document.getElementById('reimaginePromptInput')?.value || '').trim();
+
+  if (statusEl) statusEl.textContent = '⏳ AI is generating image…';
+  if (btn)      { btn.disabled = true; btn.textContent = '⏳ Generating…'; }
+  document.getElementById('imgSourceBadge').textContent = '🤖 AI ले image बनाउँदैछ…';
+
+  try {
+    /* Build the base contextual prompt from article */
+    const basePrompt = await _buildContextualImagePrompt(selectedArticle, generatedPost);
+
+    /* Merge with user custom prompt if provided */
+    let finalPrompt = basePrompt;
+    if (useCustomPrompt && customPromptText) {
+      finalPrompt = `${basePrompt}, ${customPromptText}`;
+    } else if (!useCustomPrompt && customPromptText) {
+      /* Even in quick-reimagine, append custom prompt if user has typed one */
+      finalPrompt = `${basePrompt}, ${customPromptText}`;
+    }
+
+    console.log('[Reimagine] Final AI image prompt:', finalPrompt);
+
+    const hfUrl = await fetchHuggingFaceImage(finalPrompt, 40000);
+
+    /* Load image and draw onto canvas */
+    const newsImg = new Image();
+    newsImg.crossOrigin = 'anonymous';
+    await new Promise((res, rej) => {
+      newsImg.onload = res;
+      newsImg.onerror = () => rej(new Error('Image load failed'));
+      newsImg.src = hfUrl;
+    });
+
+    _cachedNewsImg = newsImg;
+    _enhancedMode  = false;
+    _mainImgSprite = null;
+
+    const canvas = document.getElementById('newsCanvas');
+    const ctx    = canvas.getContext('2d');
+    canvas.width  = CANVAS_W;
+    canvas.height = CANVAS_H;
+
+    drawNewsImage(ctx, newsImg, CANVAS_W, CANVAS_H);
+    _drawNewsBanner(ctx, CANVAS_W);
+    await drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+
+    /* Cache for enhance tools */
+    const tmpCanvas = document.createElement('canvas');
+    tmpCanvas.width  = newsImg.naturalWidth  || newsImg.width;
+    tmpCanvas.height = newsImg.naturalHeight || newsImg.height;
+    tmpCanvas.getContext('2d').drawImage(newsImg, 0, 0);
+    try { _activeImageDataUrl = tmpCanvas.toDataURL('image/jpeg', 0.92); } catch { _activeImageDataUrl = null; }
+
+    document.getElementById('imgSourceBadge').textContent = '🤖 AI Reimagined';
+    document.getElementById('enhanceAIBtn').style.display = 'inline-flex';
+    _showCanvasEditor();
+
+    if (statusEl) statusEl.textContent = '✅ AI image ready!';
+    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+    toast('🤖 AI image reimagined!', 'success');
+
+  } catch (err) {
+    console.error('[Reimagine] Error:', err.message);
+    if (statusEl) statusEl.textContent = '❌ Failed — ' + err.message;
+    toast('❌ AI image generation failed: ' + err.message, 'error', 5000);
+    document.getElementById('imgSourceBadge').textContent = '❌ AI generation failed';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✨ Reimagine with AI'; }
+  }
 }
 
 async function generateImage() {
