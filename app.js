@@ -851,22 +851,35 @@ async function fetchCategoryFeeds(feedList, catKey) {
 const _NEPAL_LOCAL_FEEDS = {
   /* ── Bara / Kalaiya ───────────────────────────────────────────── */
   'kalaiya': [
-    { url: 'https://sajhedharipatrika.com/feed/', name: 'Sajhedhari Patrika', lang: 'ne' },
-    { url: 'https://baraupdate.com/feed/', name: 'Bara Update', lang: 'ne' },
-    { url: 'https://kalaiyanews.com/feed/', name: 'Kalaiya News', lang: 'ne' },
+    /* ── Confirmed working RSS feeds for Kalaiya / Bara / Madhesh ── */
     { url: 'https://madheshpost.com/feed/', name: 'Madhesh Post', lang: 'ne' },
-    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कलैया')}+when:7d&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: कलैया (7d)', lang: 'ne' },
-    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Kalaiya Bara')}+when:7d&hl=en&gl=NP&ceid=NP:en&tbs=sbd:1`, name: 'Google: Kalaiya (7d)', lang: 'en' },
-    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कलैया')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: कलैया', lang: 'ne' },
-    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Kalaiya Bara')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Kalaiya', lang: 'en' },
+    { url: 'https://www.onlinekhabar.com/location/madhesh-pradesh/feed', name: 'OnlineKhabar Madhesh', lang: 'ne' },
+    { url: 'https://ratopati.com/category/madhesh/feed', name: 'Ratopati Madhesh', lang: 'ne' },
+    { url: 'https://setopati.com/category/madhesh/feed', name: 'Setopati Madhesh', lang: 'ne' },
+    { url: 'https://nagariknews.nagariknetwork.com/category/madhesh/feed', name: 'Nagarik Madhesh', lang: 'ne' },
+    { url: 'https://annapurnapost.com/rss/', name: 'Annapurna Post', lang: 'ne' },
+    /* ── Google News — कलैया specific, newest first (when:2d) ── */
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कलैया')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: कलैया', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कलैया समाचार')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: कलैया समाचार', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Kalaiya Nepal')}&hl=en&gl=NP&ceid=NP:en&tbs=sbd:1`, name: 'Google: Kalaiya EN', lang: 'en' },
+    /* ── Google News — बारा district ── */
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बारा')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: बारा', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बारा जिल्ला')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: बारा जिल्ला', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Bara district Nepal')}&hl=en&gl=NP&ceid=NP:en&tbs=sbd:1`, name: 'Google: Bara EN', lang: 'en' },
+    /* ── Google News — Madhesh Pradesh (Province 2) ── */
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('मधेश प्रदेश')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: मधेश प्रदेश', lang: 'ne' },
   ],
   'bara': [
-    { url: 'https://sajhedharipatrika.com/feed/', name: 'Sajhedhari Patrika', lang: 'ne' },
-    { url: 'https://baraupdate.com/feed/', name: 'Bara Update', lang: 'ne' },
-    { url: 'https://kalaiyanews.com/feed/', name: 'Kalaiya News', lang: 'ne' },
+    /* Same as kalaiya — alias to same feeds list */
     { url: 'https://madheshpost.com/feed/', name: 'Madhesh Post', lang: 'ne' },
-    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बारा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: बारा', lang: 'ne' },
-    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Bara Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Bara', lang: 'en' },
+    { url: 'https://www.onlinekhabar.com/location/madhesh-pradesh/feed', name: 'OnlineKhabar Madhesh', lang: 'ne' },
+    { url: 'https://ratopati.com/category/madhesh/feed', name: 'Ratopati Madhesh', lang: 'ne' },
+    { url: 'https://setopati.com/category/madhesh/feed', name: 'Setopati Madhesh', lang: 'ne' },
+    { url: 'https://nagariknews.nagariknetwork.com/category/madhesh/feed', name: 'Nagarik Madhesh', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बारा')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: बारा', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बारा जिल्ला')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: बारा जिल्ला', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Bara Nepal')}&hl=en&gl=NP&ceid=NP:en&tbs=sbd:1`, name: 'Google: Bara EN', lang: 'en' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कलैया')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: कलैया', lang: 'ne' },
   ],
   /* ── Kathmandu ─────────────────────────────────────────────────── */
   'kathmandu': [
@@ -1295,15 +1308,20 @@ async function _loadLocationArticles(loc) {
      an outlet's own feed that doesn't mention the city name in every headline) */
   if (relevant.length >= 3) items = relevant;
 
-  /* ── 2. Date filter: strictly prefer articles from the last 7 days; show 30d if nothing fresh ── */
+  /* ── 2. Date filter: max 2 days. Cascade: 24h → 48h → 7d. NEVER show older silently. ── */
   const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
+  const cutoff48h = Date.now() - 2  * 24 * 60 * 60 * 1000;   // 2 days hard limit
   const cutoff7d  = Date.now() - 7  * 24 * 60 * 60 * 1000;
-  const cutoff30d = Date.now() - 30 * 24 * 60 * 60 * 1000;
   const fresh24h  = items.filter(a => { const t = new Date(a.pubDate).getTime(); return !isNaN(t) && t >= cutoff24h; });
+  const fresh48h  = items.filter(a => { const t = new Date(a.pubDate).getTime(); return !isNaN(t) && t >= cutoff48h; });
   const fresh7d   = items.filter(a => { const t = new Date(a.pubDate).getTime(); return !isNaN(t) && t >= cutoff7d; });
-  const fresh30d  = items.filter(a => { const t = new Date(a.pubDate).getTime(); return !isNaN(t) && t >= cutoff30d; });
-  /* Cascade: prefer 24h → 7d → 30d → all */
-  items = fresh24h.length >= 3 ? fresh24h : fresh7d.length >= 3 ? fresh7d : fresh30d.length >= 1 ? fresh30d : items;
+  /* Cascade: prefer 24h ≥3 → 48h ≥2 → 7d ≥1 → empty (show "no fresh news" instead of stale) */
+  let staleWarning = false;
+  if (fresh24h.length >= 3)      { items = fresh24h; }
+  else if (fresh48h.length >= 2) { items = fresh48h; }
+  else if (fresh7d.length >= 1)  { items = fresh7d;  staleWarning = (fresh48h.length === 0); }
+  else                           { items = [];        staleWarning = true; }
+  loc.staleWarning = staleWarning;
   /* Sort by date newest-first */
   items.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
 
@@ -1318,10 +1336,10 @@ async function _loadLocationArticles(loc) {
     const badge = document.getElementById('statusBadge');
     const freshCount = _locationFeeds.reduce((s, f) => {
       if (!f.loaded) return s;
-      const cut = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const cut = Date.now() - 2 * 24 * 60 * 60 * 1000;
       return s + f.articles.filter(a => new Date(a.pubDate).getTime() >= cut).length;
     }, 0);
-    if (badge) badge.textContent = total ? `${total} articles · ${freshCount} last 7 days` : 'No news found';
+    if (badge) badge.textContent = total ? `${total} articles · ${freshCount} last 2 days` : 'No news found';
   }
 }
 
@@ -1472,11 +1490,19 @@ function renderCategoryList(tab, filterText) {
     });
     if (!items.length) {
       list.innerHTML = `<div class="empty-state"><div class="icon">🕐</div>
-        <p>No articles about <strong>${escHtml(_locationFeeds.map(f=>f.label).join(', '))}</strong> in the last 24 hours.</p>
+        <p>No articles about <strong>${escHtml(_locationFeeds.map(f=>f.label).join(', '))}</strong> in the last 2 days.</p>
         <p style="font-size:.78rem;color:var(--muted);margin-top:6px">Try again later — local news is updated periodically.</p>
         <button class="btn btn-ghost" style="margin-top:10px;font-size:.8rem" onclick="_locationFeeds.forEach(f=>{f.loaded=false;f.articles=[];_loadLocationArticles(f)});renderCategoryList('locations')">🔄 Refresh</button>
         </div>`;
       return;
+    }
+    /* Show stale warning banner if any location had to fall back beyond 48h */
+    const hasStale = _locationFeeds.some(f => f.loaded && f.staleWarning);
+    if (hasStale) {
+      const warningBanner = document.createElement('div');
+      warningBanner.style.cssText = 'background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:.82rem;display:flex;align-items:center;gap:8px';
+      warningBanner.innerHTML = '⚠️ No news from the last 2 days was found — showing the most recent available articles instead.';
+      list.prepend(warningBanner);
     }
     /* Sort: top-2-fresh first, then by viralScore */
     items.sort((a, b) => {
