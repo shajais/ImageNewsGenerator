@@ -6416,85 +6416,129 @@ function panImage(dx, dy) {
 async function _buildContextualImagePrompt(article, post) {
   const hasAI = _geminiKey || _browserGeminiKey;
   const titleText = article.title || '';
-  const bodyText  = (article.fullArticleText || article.description || '').slice(0, 1200);
+  const bodyText  = (article.fullArticleText || article.description || '').slice(0, 1500);
+  const combined  = titleText + ' ' + bodyText;
+  const lower     = combined.toLowerCase();
 
   /* ── AI-powered precise prompt generation (Gemini) ── */
   if (hasAI) {
     try {
-      const aiPrompt = `You are an expert at writing precise image generation prompts for Stable Diffusion / FLUX AI.
+      const aiPrompt = `You are an expert at writing precise photorealistic image generation prompts for FLUX AI / Stable Diffusion.
 
 NEWS ARTICLE:
 Title: ${titleText}
-Body: ${bodyText.slice(0, 800)}
+Body: ${bodyText.slice(0, 1000)}
 
-Your task: Write a detailed, photorealistic image prompt for this news story.
-The prompt MUST:
-1. Accurately reflect the ETHNICITY and APPEARANCE of people in the story:
-   - Nepal/Nepali context → South Asian / Nepali appearance (NOT Western/American)
-   - Indian context → South Asian / Indian appearance
-   - Mention specific characteristics: "South Asian man in formal kurta", "Nepali woman in traditional dhaka dress", "Nepali politician in formal suit" etc.
-   - If article is about Nepal president/Rashtrapati → show a Nepali man, not American
-2. Accurately reflect the LOCATION:
-   - Nepal → include Himalayan backdrop, or Nepali-style government building, or kathmandu cityscape
-   - India → include Indian architectural elements
-   - Use specific visual cues: "Nepali Parliament building", "Himalayan mountain backdrop", "Kathmandu street scene"
-3. Include the EVENT TYPE visually:
-   - Press conference → podium, microphones, formal setting
-   - Flood/disaster → dramatic weather, water, emergency response
-   - Election → ballot boxes, voters, flags
-   - Crime/arrest → police uniform (Nepal Police blue uniform)
-4. Be photorealistic, high-quality news photography style
-5. NO text overlays in the image
-6. Keep it under 120 words
+Your task: Write a single detailed image generation prompt that ACCURATELY depicts this news story.
 
-Output ONLY the image prompt text — no explanation, no JSON, just the prompt string.`;
+CRITICAL RULES — read carefully:
 
-      const result = await callAI(aiPrompt, 12000);
-      /* callAI may return string or object */
+1. ETHNICITY must be 100% accurate:
+   - Nepal, Nepali context → people must look NEPALI: brown skin, South Asian Nepali facial features, NOT Indian, NOT Western, NOT Arab
+   - Terai/Madhesh region (Bara, Kalaiya, Janakpur, Birgunj, Rautahat, Sarlahi) → Madhesi Nepali people, darker brown complexion, South Asian features
+   - Hill/Pahadi Nepal → Pahadi Nepali, lighter brown, often mongoloid features
+   - Nepali Newari → distinct Newari South Asian features
+   - Write explicitly: "Nepali man with South Asian features", "Madhesi Nepali person", NOT just "South Asian"
+
+2. CLOTHING must be context-accurate for Nepal:
+   - Nepal Police → MUST wear Nepal Police blue uniform (dark navy blue shirt, blue trousers, Nepal Police cap/beret) — NOT black, NOT khaki, NOT Indian police
+   - Armed Police Force Nepal → olive green uniform
+   - Nepal Army → olive green uniform with Nepal Army insignia
+   - Government official → formal suit or daura suruwal
+   - Common Nepali person → kurta suruwal, casual local clothes
+   - Write the clothing VERY specifically
+
+3. LOCATION must be visually accurate:
+   - Kathmandu → narrow streets, pagoda temples, brick buildings, Nepal flag
+   - Terai/Madhesh (Bara, Birgunj, Janakpur) → flat plains, simple buildings, hot dusty environment
+   - Hill districts → hilly terrain, terraced fields, mountain backdrop
+   - Court/jail → Nepali court building style
+   - Use specific Nepali architectural details
+
+4. EVENT TYPE — depict the actual event:
+   - Arrest/crime → Nepal Police officers in NAVY BLUE uniform handcuffing suspect(s), outdoor Nepal setting
+   - Press conference → podium with Nepali flag, microphones, formal indoor setting
+   - Flood/disaster → people in distress, water, Nepali village or town
+   - Election → Nepali voters, ballot boxes, Nepal Election Commission banner
+   - Road accident → Nepali road, vehicles, emergency workers
+   - Political meeting → Nepali politicians in formal dress, party banners with Nepali text
+
+5. PHOTO STYLE:
+   - Photorealistic news photography, documentary style
+   - Natural lighting, candid feel
+   - No text, no watermarks, no logos in the image
+   - High detail, sharp focus
+
+6. NUMBER OF PEOPLE: match the article — if "two arrested" show two people, if "protest" show crowd
+
+Output ONLY the image prompt — under 150 words, plain text, no explanation.`;
+
+      const result = await callAI(aiPrompt, 15000);
       const promptText = typeof result === 'string'
         ? result.trim()
         : (result && (result.prompt || result.text || Object.values(result).find(v => typeof v === 'string' && v.length > 20)));
       if (promptText && promptText.length > 20) return promptText;
     } catch (e) {
-      console.warn('[ImagePrompt] Gemini prompt generation failed:', e.message);
+      console.warn('[ImagePrompt] AI prompt generation failed:', e.message);
     }
   }
 
-  /* ── Fallback: rule-based contextual prompt ── */
-  const lower = (titleText + ' ' + bodyText).toLowerCase();
-  let context = '';
+  /* ── Fallback: detailed rule-based contextual prompt ── */
 
-  /* Location context */
-  if (lower.includes('nepal') || lower.includes('नेपाल') || lower.includes('kathmandu') || lower.includes('काठमाडौं')) {
-    context = 'Nepal, South Asian, Himalayan backdrop, Kathmandu';
-  } else if (lower.includes('india') || lower.includes('भारत') || lower.includes('delhi') || lower.includes('mumbai')) {
-    context = 'India, South Asian, Indian city backdrop';
+  /* Detect location for ethnicity/setting */
+  let ethnicity = 'Nepali person with South Asian features, brown skin';
+  let setting   = 'Nepal, hilly terrain, Himalayan backdrop';
+
+  /* Terai/Madhesh districts — Madhesi ethnicity */
+  const teraiDistricts = ['bara','kalaiya','janakpur','birgunj','rautahat','sarlahi','parsa','mahottari','dhanusha','siraha','saptari','sunsari','morang','jhapa','rupandehi','nawalparasi','kapilvastu','dang','banke','bardiya','kailali','kanchanpur'];
+  const isTerai = teraiDistricts.some(d => lower.includes(d)) ||
+    lower.includes('तराई') || lower.includes('मधेश') || lower.includes('terai') || lower.includes('madhesh');
+  if (isTerai) {
+    ethnicity = 'Madhesi Nepali person, South Asian features, brown complexion, Terai Nepal';
+    setting   = 'Terai region Nepal, flat plains, simple brick buildings, dusty road, hot environment';
+  } else if (lower.includes('kathmandu') || lower.includes('काठमाडौं') || lower.includes('patan') || lower.includes('bhaktapur')) {
+    ethnicity = 'Nepali person, South Asian features, Kathmandu Valley';
+    setting   = 'Kathmandu city, narrow streets, brick pagoda temples, Nepal flag visible';
+  } else if (lower.includes('india') || lower.includes('भारत')) {
+    ethnicity = 'Indian person, South Asian features';
+    setting   = 'India, urban Indian setting';
   } else if (lower.includes('china') || lower.includes('चीन')) {
-    context = 'China, East Asian, Chinese city backdrop';
+    ethnicity = 'Chinese person, East Asian features';
+    setting   = 'China, urban Chinese setting';
   }
 
-  /* Person context */
-  let personDesc = 'South Asian person in formal attire';
-  if (lower.includes('राष्ट्रपति') || lower.includes('president') || lower.includes('pm') || lower.includes('प्रधानमन्त्री')) {
-    personDesc = 'South Asian male politician in formal suit, press conference podium with microphones';
+  /* Event/person type — very specific clothing and scene */
+  let scene = '';
+  if (lower.includes('पक्राउ') || lower.includes('arrest') || lower.includes('detained') || lower.includes('गिरफ्तार')) {
+    const count = (lower.match(/दुई|two|2/) ? 'two suspects' : lower.match(/तीन|three|3/) ? 'three suspects' : 'a suspect');
+    scene = `Nepal Police officers in dark navy blue Nepal Police uniform and blue cap handcuffing ${count}, outdoor Nepal street scene, documentary news photo`;
+  } else if (lower.includes('राष्ट्रपति') || lower.includes('president')) {
+    scene = 'Nepali male politician in formal suit, podium with Nepal flag, press conference, indoor formal setting Nepal';
+  } else if (lower.includes('प्रधानमन्त्री') || lower.includes('prime minister') || lower.includes('pm ')) {
+    scene = 'Nepali male politician in formal suit or daura suruwal, press conference podium, Nepal Parliament building background';
   } else if (lower.includes('minister') || lower.includes('मन्त्री')) {
-    personDesc = 'South Asian official in formal suit giving speech';
-  } else if (lower.includes('police') || lower.includes('प्रहरी')) {
-    personDesc = 'Nepal Police officers in blue uniform';
-  } else if (lower.includes('election') || lower.includes('vote') || lower.includes('निर्वाचन')) {
-    personDesc = 'South Asian voters at polling station, ballot boxes, democratic election';
-  } else if (lower.includes('flood') || lower.includes('बाढी') || lower.includes('earthquake') || lower.includes('भूकम्प')) {
-    personDesc = 'disaster relief workers, damaged infrastructure, emergency response Nepal';
-  } else if (lower.includes('film') || lower.includes('movie') || lower.includes('actor') || lower.includes('actress') || lower.includes('चलचित्र')) {
-    personDesc = 'South Asian film celebrity on red carpet or movie set';
-  } else if (lower.includes('hospital') || lower.includes('health') || lower.includes('अस्पताल')) {
-    personDesc = 'South Asian doctors and nurses in hospital, medical setting Nepal';
+    scene = 'Nepali official in formal suit, podium, Nepal government building';
+  } else if (lower.includes('election') || lower.includes('निर्वाचन') || lower.includes('vote')) {
+    scene = 'Nepali voters at polling station, ballot boxes, Nepal Election Commission banner, Nepali people in local attire';
+  } else if (lower.includes('flood') || lower.includes('बाढी')) {
+    scene = 'Nepali villagers affected by flood, damaged houses, muddy water, emergency workers, Terai or hilly Nepal landscape';
+  } else if (lower.includes('earthquake') || lower.includes('भूकम्प')) {
+    scene = 'earthquake damaged buildings Nepal, rubble, emergency rescue workers in Nepal, distressed Nepali civilians';
+  } else if (lower.includes('protest') || lower.includes('प्रदर्शन') || lower.includes('आन्दोलन')) {
+    scene = 'Nepali protesters in street holding banners with Nepali text, crowd, Nepal Police in navy blue uniform keeping order';
+  } else if (lower.includes('fire') || lower.includes('आगलागी')) {
+    scene = 'fire burning building or market in Nepal, Nepali fire brigade workers, crowd watching, Nepal setting';
+  } else if (lower.includes('accident') || lower.includes('दुर्घटना')) {
+    scene = 'road accident scene Nepal, damaged vehicle on Nepali highway or mountain road, Nepal Police navy blue uniform, bystanders';
+  } else if (lower.includes('film') || lower.includes('actor') || lower.includes('actress') || lower.includes('चलचित्र')) {
+    scene = 'Nepali film celebrity on red carpet or movie set, Nepali entertainment event, stylish clothing';
+  } else if (lower.includes('hospital') || lower.includes('अस्पताल') || lower.includes('health')) {
+    scene = 'Nepali doctors and nurses in hospital, white coats, Nepali government hospital setting';
+  } else {
+    scene = `Nepali people in ${setting}, news event, documentary photo`;
   }
 
-  const category = article._category || _activeNewsTab || 'nepal';
-  const scene = category === 'world' ? 'international news setting' : (context || 'Nepal news, South Asian context');
-
-  return `Photorealistic news photography, ${personDesc}, ${scene}, professional camera, high detail, soft natural lighting, cinematic composition, no text overlay, sharp focus, 8k quality, photojournalism style`;
+  return `Photorealistic news photography documentary style: ${ethnicity}, ${scene}, ${setting}, natural light, candid realistic faces, no text overlay, no watermarks, sharp focus, high detail, 8k quality`;
 }
 
 /* ================================================================
@@ -6510,6 +6554,9 @@ async function reimagineImage(useCustomPrompt = false) {
   if (!_browserHFKey) {
     toast('⚠️ HuggingFace API key required for AI image generation. Add it in Settings.', 'error', 5000); return;
   }
+
+  /* Pick a fresh random banner label for this reimagined image */
+  _pickRandomBanner();
 
   const statusEl = document.getElementById('reimagineImageStatus');
   const btn      = document.getElementById('reimagineImageBtn');
@@ -6594,6 +6641,8 @@ async function generateImage() {
   if (!selectedArticle || !generatedPost) {
     toast('⚠️ Please select a news article first.', 'error'); return;
   }
+  /* Pick a fresh random banner label for this image */
+  _pickRandomBanner();
   /* Regenerate always exits enhanced/composite mode — user wants the original image */
   _enhancedMode    = false;
   _mainImgSprite   = null;
@@ -7168,12 +7217,10 @@ function _drawNewsBanner(ctx, W) {
   ctx.fillRect(0, 0, 12, BANNER_H);
 
   /* ── Banner text with glow ── */
-  /* Pick a random label if user hasn't customised it (default value) */
-  const _BANNER_LABELS = ['🚨  BREAKING', '📢  LATEST UPDATE', '⚡  UPDATE', '🔴  BREAKING NEWS', '📰  NEWS UPDATE', '🔥  TRENDING'];
-  const isDefaultBanner = !_textOpts.bannerText || _textOpts.bannerText === '🚨  BREAKING' || _textOpts.bannerText === '🗞️  NEWS UPDATE';
-  const bannerLabel = isDefaultBanner
-    ? _BANNER_LABELS[Math.floor(Math.random() * _BANNER_LABELS.length)]
-    : _textOpts.bannerText;
+  /* Use cached label (set once per image generation) or user-customised text */
+  const bannerLabel = (_textOpts.bannerText && _textOpts.bannerText.trim())
+    ? _textOpts.bannerText.trim()
+    : _currentBannerLabel;
   ctx.font = 'bold 52px "Segoe UI",Arial,sans-serif';
   ctx.textAlign = 'center';
   /* Glow layer */
