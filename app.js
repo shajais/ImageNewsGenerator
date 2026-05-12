@@ -322,7 +322,7 @@ let _authorImgPromise = null;
 
 /* Text overlay customisation (editable via the Text Editor modal) */
 let _textOpts = {
-  bannerText:  '🗞️  NEWS UPDATE',
+  bannerText:  '�  BREAKING',
   bannerColor: '#c0392b',
   titleColor:  '#ffffff',
   titleSize:   62,
@@ -1296,13 +1296,23 @@ async function _loadLocationArticles(loc) {
          that return ALL their articles regardless of location.
          Build a set of match tokens: English label + known Devanagari equivalents. ── */
   const matchTokens = _locationMatchTokens(loc.label);
+
+  /* For location filtering, use STRICT tokens — only the primary city/district name.
+     Broad tokens like "मधेश" or "nepal" are excluded from the strict set to avoid
+     pulling in all-Nepal articles from Madhesh-wide feeds. */
+  const strictTokens = matchTokens.filter(t => {
+    const broad = ['nepal','नेपाल','madhesh','मधेश','madhes','province','pradesh','प्रदेश'];
+    return !broad.some(b => t === b);
+  });
+  const filterTokens = strictTokens.length > 0 ? strictTokens : matchTokens;
+
   const relevant = items.filter(a => {
     const haystack = (a.title + ' ' + a.description).toLowerCase();
-    return matchTokens.some(t => haystack.includes(t));
+    return filterTokens.some(t => haystack.includes(t));
   });
-  /* Use relevance-filtered set only if it returns ≥3 results (avoids stripping
-     an outlet's own feed that doesn't mention the city name in every headline) */
-  if (relevant.length >= 3) items = relevant;
+  /* Always use the relevance filter — never show unrelated articles.
+     Only skip if it would give 0 results (feeds that ARE location-specific, like direct Google queries) */
+  if (relevant.length > 0) items = relevant;
 
   /* ── 2. Date filter: max 2 days. Cascade: 24h → 48h → 7d. NEVER show older silently. ── */
   const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
@@ -3411,15 +3421,31 @@ async function selectArticle(idx) {
     }, 800);
   }
 
-  document.getElementById('outHook').textContent   = hook;
+  /* ── Build a clean label-based hook prefix (Breaking: / Update: / etc.) ── */
+  const _HOOK_LABELS = ['Breaking:', 'Update:', 'Latest:', 'Alert:', 'Exclusive:', 'Just In:'];
+  /* Pick based on keywords in title/hook, or random */
+  const hookLower = (hook || '').toLowerCase() + (nepaliTitle || '').toLowerCase();
+  let hookPrefix;
+  if (hookLower.includes('ब्रेकिङ') || hookLower.includes('breaking') || hookLower.includes('तत्काल') || hookLower.includes('urgent')) {
+    hookPrefix = 'Breaking:';
+  } else if (hookLower.includes('update') || hookLower.includes('अपडेट')) {
+    hookPrefix = 'Update:';
+  } else if (hookLower.includes('exclusive') || hookLower.includes('खुलासा')) {
+    hookPrefix = 'Exclusive:';
+  } else if (hookLower.includes('alert') || hookLower.includes('चेतावनी')) {
+    hookPrefix = 'Alert:';
+  } else {
+    hookPrefix = _HOOK_LABELS[Math.floor(Math.random() * _HOOK_LABELS.length)];
+  }
+  document.getElementById('outHook').textContent = hookPrefix;
 
-  /* Show title as-is from AI (already max 3 lines), or prepend hook for template mode */
-  const displayTitle = aiUsed ? nepaliTitle : (hook ? hook + '\n' + nepaliTitle : nepaliTitle);
+  /* Show title as-is from AI (already max 2 lines), or just the translated title for template mode */
+  const displayTitle = nepaliTitle;
   document.getElementById('outTitle').textContent  = displayTitle;
   document.getElementById('outDesc').textContent   = desc;
 
-  /* generatedPost keeps hook + title separate so sharing still uses correct fields */
-  generatedPost = { hook, title: displayTitle, description: desc, hashtags, link: selectedArticle.link || '' };
+  /* generatedPost — hook is stored separately from title now */
+  generatedPost = { hook: hookPrefix, title: displayTitle, description: desc, hashtags, link: selectedArticle.link || '' };
   renderHashtags(hashtags);
 
   /* ── Update AI/Template badges on all content fields ── */
@@ -6489,6 +6515,13 @@ async function reimagineImage(useCustomPrompt = false) {
   const btn      = document.getElementById('reimagineImageBtn');
   const customPromptText = (document.getElementById('reimaginePromptInput')?.value || '').trim();
 
+  /* Make sure image panel is visible */
+  const imgPanel = document.getElementById('imagePanel');
+  if (imgPanel) {
+    imgPanel.style.display = 'block';
+    imgPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
   if (statusEl) statusEl.textContent = '⏳ AI is generating image…';
   if (btn)      { btn.disabled = true; btn.textContent = '⏳ Generating…'; }
   document.getElementById('imgSourceBadge').textContent = '🤖 AI ले image बनाउँदैछ…';
@@ -7135,7 +7168,12 @@ function _drawNewsBanner(ctx, W) {
   ctx.fillRect(0, 0, 12, BANNER_H);
 
   /* ── Banner text with glow ── */
-  const bannerLabel = _textOpts.bannerText || '🗞️  NEWS UPDATE';
+  /* Pick a random label if user hasn't customised it (default value) */
+  const _BANNER_LABELS = ['🚨  BREAKING', '📢  LATEST UPDATE', '⚡  UPDATE', '🔴  BREAKING NEWS', '📰  NEWS UPDATE', '🔥  TRENDING'];
+  const isDefaultBanner = !_textOpts.bannerText || _textOpts.bannerText === '🚨  BREAKING' || _textOpts.bannerText === '🗞️  NEWS UPDATE';
+  const bannerLabel = isDefaultBanner
+    ? _BANNER_LABELS[Math.floor(Math.random() * _BANNER_LABELS.length)]
+    : _textOpts.bannerText;
   ctx.font = 'bold 52px "Segoe UI",Arial,sans-serif';
   ctx.textAlign = 'center';
   /* Glow layer */
