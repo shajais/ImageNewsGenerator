@@ -519,41 +519,58 @@ async function fetchNews() {
   });
 
   /* ── SORT STRATEGY ───────────────────────────────────────────────
-     TOP 2  : The 2 freshest articles that have at least some viral
-              potential (published < 6h AND has ≥1 viral keyword or
-              cross-source match, or published < 1h regardless).
-              If fewer than 2 qualify, fill up with the next-newest.
-              Both top-2 slots are ordered newest-first.
+     TOP 10 : The 10 freshest UNIQUE articles with some viral potential
+              (published < 24h). All unique (strict title dedup).
+              Ordered newest-first.
      REST   : Remaining articles sorted by viralScore (trending /
               popularity / cross-source) descending.
      ─────────────────────────────────────────────────────────────── */
 
-  /* Candidates: articles < 6h old with some viral potential */
-  const freshViralCandidates = allItems
+  /* Candidates: articles < 24h old with some potential */
+  const freshCandidates = allItems
     .filter(a => {
       const ageH = Math.max(0, (now - new Date(a.pubDate).getTime()) / 3600000);
-      const hasPotential = a.viralScore > 0.25 || a._crossCount >= 1 || ageH < 1;
-      return ageH < 6 && hasPotential;
+      const hasPotential = a.viralScore > 0.15 || a._crossCount >= 1 || ageH < 2;
+      return ageH < 24 && hasPotential;
     })
     .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
 
-  /* If we have fewer than 2 fresh-viral candidates, fill with next-newest articles */
+  /* Fill top-10 set with unique articles — strict title similarity check */
   const allByDate = [...allItems].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-  const top2Set = new Set();
-  for (const a of freshViralCandidates) { if (top2Set.size < 2) top2Set.add(a); }
-  if (top2Set.size < 2) {
-    for (const a of allByDate) { if (!top2Set.has(a) && top2Set.size < 2) top2Set.add(a); }
+  const top10Set = new Set();
+  const top10Titles = [];
+  const _isSimilarTitle = (t1, t2) => {
+    const w1 = new Set(t1.toLowerCase().replace(/[^\w\s\u0900-\u097F]/g,'').split(/\s+/).filter(w=>w.length>3));
+    const w2 = new Set(t2.toLowerCase().replace(/[^\w\s\u0900-\u097F]/g,'').split(/\s+/).filter(w=>w.length>3));
+    const common = [...w1].filter(w => w2.has(w)).length;
+    return common >= 3; // 3+ shared significant words = duplicate story
+  };
+  for (const a of freshCandidates) {
+    if (top10Set.size >= 10) break;
+    if (top10Titles.some(t => _isSimilarTitle(t, a.title))) continue; // skip near-duplicate
+    top10Set.add(a);
+    top10Titles.push(a.title);
+  }
+  // If we still have fewer than 10, fill with next-newest unique articles
+  if (top10Set.size < 10) {
+    for (const a of allByDate) {
+      if (top10Set.size >= 10) break;
+      if (top10Set.has(a)) continue;
+      if (top10Titles.some(t => _isSimilarTitle(t, a.title))) continue;
+      top10Set.add(a);
+      top10Titles.push(a.title);
+    }
   }
 
-  /* Mark top-2 articles so UI can badge them */
-  top2Set.forEach(a => { a._isLatestTop = true; });
+  /* Mark top-10 articles so UI can badge them */
+  top10Set.forEach(a => { a._isLatestTop = true; });
 
-  const top2    = [...top2Set].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  const top10   = [...top10Set].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
   const theRest = allItems
-    .filter(a => !top2Set.has(a))
+    .filter(a => !top10Set.has(a))
     .sort((a, b) => b.viralScore - a.viralScore || new Date(b.pubDate) - new Date(a.pubDate));
 
-  allItems = [...top2, ...theRest];
+  allItems = [...top10, ...theRest];
 
   articles = allItems;
   _catArticles['nepal'] = allItems;
@@ -770,31 +787,46 @@ async function fetchCategoryFeeds(feedList, catKey) {
     a._crossCount = 0; a._trendsMatch = false; a._isLatestTop = false;
   });
 
-  /* ── Same top-2 strategy as fetchNews():
-     TOP 2  : Freshest articles (<6h) with some viral potential, ordered newest-first.
+  /* ── Same top-10 unique strategy as fetchNews():
+     TOP 10 : Freshest unique articles (<24h) with some viral potential, newest-first.
      REST   : Remaining articles sorted by viralScore descending.
   ── */
-  const freshCandidates = allItems
+  const freshCandidates2 = allItems
     .filter(a => {
       const ageH = Math.max(0, (now - new Date(a.pubDate).getTime()) / 3600000);
-      return ageH < 6 && (a.viralScore > 0.25 || a._crossCount >= 1 || ageH < 1);
+      return ageH < 24 && (a.viralScore > 0.15 || a._crossCount >= 1 || ageH < 2);
     })
     .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
 
-  const allByDate = [...allItems].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-  const top2Set = new Set();
-  for (const a of freshCandidates) { if (top2Set.size < 2) top2Set.add(a); }
-  if (top2Set.size < 2) {
-    for (const a of allByDate) { if (!top2Set.has(a) && top2Set.size < 2) top2Set.add(a); }
+  const allByDate2 = [...allItems].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  const _simTitle2 = (t1, t2) => {
+    const w1 = new Set(t1.toLowerCase().replace(/[^\w\s\u0900-\u097F]/g,'').split(/\s+/).filter(w=>w.length>3));
+    const w2 = new Set(t2.toLowerCase().replace(/[^\w\s\u0900-\u097F]/g,'').split(/\s+/).filter(w=>w.length>3));
+    return [...w1].filter(w => w2.has(w)).length >= 3;
+  };
+  const top10Set2 = new Set();
+  const top10Titles2 = [];
+  for (const a of freshCandidates2) {
+    if (top10Set2.size >= 10) break;
+    if (top10Titles2.some(t => _simTitle2(t, a.title))) continue;
+    top10Set2.add(a); top10Titles2.push(a.title);
   }
-  top2Set.forEach(a => { a._isLatestTop = true; });
+  if (top10Set2.size < 10) {
+    for (const a of allByDate2) {
+      if (top10Set2.size >= 10) break;
+      if (top10Set2.has(a)) continue;
+      if (top10Titles2.some(t => _simTitle2(t, a.title))) continue;
+      top10Set2.add(a); top10Titles2.push(a.title);
+    }
+  }
+  top10Set2.forEach(a => { a._isLatestTop = true; });
 
-  const top2    = [...top2Set].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-  const theRest = allItems
-    .filter(a => !top2Set.has(a))
+  const top10_2  = [...top10Set2].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  const theRest2 = allItems
+    .filter(a => !top10Set2.has(a))
     .sort((a, b) => b.viralScore - a.viralScore || new Date(b.pubDate) - new Date(a.pubDate));
 
-  allItems = [...top2, ...theRest];
+  allItems = [...top10_2, ...theRest2];
   if (catKey) {
     /* Tag each article with its category so AI prompts can adapt */
     allItems.forEach(a => { a._category = catKey; });
@@ -823,6 +855,8 @@ const _NEPAL_LOCAL_FEEDS = {
     { url: 'https://baraupdate.com/feed/', name: 'Bara Update', lang: 'ne' },
     { url: 'https://kalaiyanews.com/feed/', name: 'Kalaiya News', lang: 'ne' },
     { url: 'https://madheshpost.com/feed/', name: 'Madhesh Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कलैया')}+when:7d&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: कलैया (7d)', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Kalaiya Bara')}+when:7d&hl=en&gl=NP&ceid=NP:en&tbs=sbd:1`, name: 'Google: Kalaiya (7d)', lang: 'en' },
     { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कलैया')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: कलैया', lang: 'ne' },
     { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Kalaiya Bara')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Kalaiya', lang: 'en' },
   ],
@@ -1209,14 +1243,15 @@ function _locationFeedsFor(label) {
     }
   }
 
-  /* 3. Generic Google News queries — scope to location keyword.
-     Note: `tbs=qdr:d` is ignored by Google News RSS; date filtering is done
-     in _loadLocationArticles instead.                                         */
+  /* 3. Generic Google News queries — scope to location keyword with recency sorting.
+     &tbs=sbd:1 = sort by date (newest first) in Google News RSS              */
   const encLabel   = encodeURIComponent(label);
   const encLabelNe = encodeURIComponent(label + ' समाचार');
   const genericFeeds = [
-    { url: `https://news.google.com/rss/search?q=${encLabel}+Nepal&hl=en&gl=NP&ceid=NP:en`, name: 'Google (EN): ' + label, lang: 'en' },
-    { url: `https://news.google.com/rss/search?q=${encLabelNe}&hl=ne&gl=NP&ceid=NP:ne`,     name: 'Google (NE): ' + label, lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encLabel}+Nepal+when:7d&hl=en&gl=NP&ceid=NP:en&tbs=sbd:1`, name: 'Google (EN): ' + label, lang: 'en' },
+    { url: `https://news.google.com/rss/search?q=${encLabelNe}+when:7d&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`,     name: 'Google (NE): ' + label, lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encLabel}+Nepal&hl=en&gl=NP&ceid=NP:en`, name: 'Google (EN all): ' + label, lang: 'en' },
+    { url: `https://news.google.com/rss/search?q=${encLabelNe}&hl=ne&gl=NP&ceid=NP:ne`,     name: 'Google (NE all): ' + label, lang: 'ne' },
   ];
 
   /* Combine: local-specific first, then generic — deduplicate by URL */
@@ -1260,13 +1295,17 @@ async function _loadLocationArticles(loc) {
      an outlet's own feed that doesn't mention the city name in every headline) */
   if (relevant.length >= 3) items = relevant;
 
-  /* ── 2. Date filter: prefer articles from the last 48 h ── */
-  const cutoff48 = Date.now() - 48 * 60 * 60 * 1000;
-  const cutoff7d = Date.now() - 7  * 24 * 60 * 60 * 1000;
-  const fresh48  = items.filter(a => { const t = new Date(a.pubDate).getTime(); return !isNaN(t) && t >= cutoff48; });
-  const fresh7d  = items.filter(a => { const t = new Date(a.pubDate).getTime(); return !isNaN(t) && t >= cutoff7d;  });
-  /* Cascade: prefer 48h → 7d → all (Google RSS often strips pubDate) */
-  items = fresh48.length > 0 ? fresh48 : fresh7d.length > 0 ? fresh7d : items;
+  /* ── 2. Date filter: strictly prefer articles from the last 7 days; show 30d if nothing fresh ── */
+  const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
+  const cutoff7d  = Date.now() - 7  * 24 * 60 * 60 * 1000;
+  const cutoff30d = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const fresh24h  = items.filter(a => { const t = new Date(a.pubDate).getTime(); return !isNaN(t) && t >= cutoff24h; });
+  const fresh7d   = items.filter(a => { const t = new Date(a.pubDate).getTime(); return !isNaN(t) && t >= cutoff7d; });
+  const fresh30d  = items.filter(a => { const t = new Date(a.pubDate).getTime(); return !isNaN(t) && t >= cutoff30d; });
+  /* Cascade: prefer 24h → 7d → 30d → all */
+  items = fresh24h.length >= 3 ? fresh24h : fresh7d.length >= 3 ? fresh7d : fresh30d.length >= 1 ? fresh30d : items;
+  /* Sort by date newest-first */
+  items.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
 
   /* ── 3. Tag each article with location for the UI badge ── */
   items.forEach(a => { a._locationLabel = loc.label; });
@@ -1277,7 +1316,12 @@ async function _loadLocationArticles(loc) {
     renderCategoryList('locations');
     const total = _locationFeeds.reduce((s, f) => s + (f.loaded ? f.articles.length : 0), 0);
     const badge = document.getElementById('statusBadge');
-    if (badge) badge.textContent = total ? `${total} articles · last 48h` : 'No recent news found';
+    const freshCount = _locationFeeds.reduce((s, f) => {
+      if (!f.loaded) return s;
+      const cut = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      return s + f.articles.filter(a => new Date(a.pubDate).getTime() >= cut).length;
+    }, 0);
+    if (badge) badge.textContent = total ? `${total} articles · ${freshCount} last 7 days` : 'No news found';
   }
 }
 
@@ -3055,7 +3099,7 @@ HEADLINE (${langNote}): ${rawTitle}
 ${hasBody ? `FULL ARTICLE BODY:\n${bodySnippet}` : '(No article body available — work from headline only)'}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Your job: Write viral social media content that will get MAXIMUM shares, comments and reach.
+Your job: Write viral social media content that will get MAXIMUM shares, comments and reach on Facebook.
 CRITICAL: Every output field MUST be based on ACTUAL specific details in this article.
 - Use the REAL names of people, places, films, songs, organisations mentioned
 - Use the REAL numbers (box office, awards, dates, figures) from the article
@@ -3065,48 +3109,56 @@ CRITICAL: Every output field MUST be based on ACTUAL specific details in this ar
 
 {
   "hook": "<ONE punchy viral opening line>",
-  "title": "<Detailed headline — around 35-40 words>",
-  "description": "<Compelling story — 100 to 200 words across 4-6 sentences>",
-  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5", "#tag6", "#tag7", "#tag8", "#tag9", "#tag10", "#ShashiNewsGen"]
+  "title": "<Clickbait headline — 1 to 3 lines MAX>",
+  "description": "<Facebook-ready post with emojis, proper paragraphs>",
+  "hashtags": ["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#tag9","#tag10","#ShashiNewsGen"]
 }
 
 ━━━ RULES FOR EACH FIELD ━━━
 
-HOOK (max 20 words):
+HOOK (max 18 words):
 • Start with ONE emoji matching the mood — choose from: ${cfg.hookEmojis}
 • ${cfg.hookTip}
 • Make it feel urgent and emotionally compelling — trigger curiosity, excitement, outrage or pride
-• NEVER write generic phrases like "एउटा ठूलो खबर" or "महत्त्वपूर्ण समाचार" or vague fillers
+• NEVER write generic phrases like "एउटा ठूलो खबर" or "महत्त्वपूर्ण समाचार"
 
-TITLE (35-40 words):
-• Write a detailed, informative headline — NOT just a short teaser
+TITLE (MAXIMUM 3 LINES — clickbait/hooky style):
+• Write like a viral Facebook headline — SHORT, PUNCHY, EMOTIONALLY CHARGED
+• Use powerful words: "चौंकाउने", "अविश्वसनीय", "भाइरल", "ब्रेकिङ", "खुलासा", "सत्य" etc.
+• MUST contain the KEY noun (real name, place, event) from the story
+• EACH LINE should be a complete thought — use \\n to separate lines (max 3 lines total)
+• Example good format: "🔥 [Person/Place] ले गर्‍यो ठूलो काम!\\n[What happened exactly]\\n[Why it matters — shocking fact]"
 • ${cfg.titleTip}
-• Should read like a detailed front-page headline that tells the full story
-• SEO-optimised — naturally include keywords people would search for
+• SEO-optimised keywords included naturally
 
-DESCRIPTION (200-600 words, well-formatted paragraphs — NO word limit, write as much as the story needs):
-• Paragraph 1: WHAT happened, WHO was involved, WHERE and WHEN (use real names, 3-4 sentences)
-• Paragraph 2: HOW it happened and WHY — key cause, background or context (3-4 sentences)
-• Paragraph 3: KEY numbers, quotes, and evidence — box office, awards, injuries, amounts, dates (3-4 sentences)
-• Paragraph 4: Reactions — fans, critics, co-stars, government, public — what did they say/do? (2-3 sentences)
-• Paragraph 5: IMPACT, significance, and what happens next (2-3 sentences)
-• Separate paragraphs with a blank line for readability
+DESCRIPTION (Facebook post format — well-formatted with emojis):
+• Write like a viral Nepali Facebook news page post (like "Nepal Khabar" or "Setopati" Facebook posts)
+• Start with a BOLD statement or shocking fact
+• Use emojis inline (🔴, 📌, ⚡, 👉, ✅, ❗, 🔥, 💥, etc.) — at least 1-2 per paragraph
+• Format with blank lines between paragraphs for readability
+• Paragraph 1: 🔴 WHAT happened + WHO was involved (2-3 sentences)
+• Paragraph 2: 📌 WHY it happened + background context (2-3 sentences)  
+• Paragraph 3: ⚡ KEY facts: numbers, quotes, dates (2-3 sentences)
+• Paragraph 4: 👥 Reactions from public, officials, fans (2 sentences)
+• Paragraph 5: 🔮 What happens next / impact (2 sentences)
+• End with: 👉 यो समाचार share गर्नुस् र comment मा आफ्नो विचार राख्नुस्! 💬
 • ${cfg.descTip}
-• NEVER use vague fillers — write like a full news article
+• 200-400 words total — enough to be informative but shareable
 
-HASHTAGS (exactly 11 — the last one MUST be #ShashiNewsGen):
-• Tags 1-3: STORY-SPECIFIC in Devanagari script — the real name, film, song, place or event keyword from THIS article
+HASHTAGS (exactly 11 — the last MUST be #ShashiNewsGen — for viral Facebook SEO):
+• Tags 1-3: STORY-SPECIFIC in Devanagari — real name/film/place/event keyword from THIS article
 • Tags 4-6: STORY-SPECIFIC in English — transliterated or translated key terms
-• Tags 7-9: Category-relevant trending hashtags — choose from: ${cfg.hashtagSeed}, #viral, #trending, #NepalNews, #ShashiNews
-• Tag 10: ONE broad reach tag like #viral, #trending, #news, or #breakingnews
+• Tags 7-9: Viral trending tags — from: ${cfg.hashtagSeed}, #viral, #trending, #FacebookNepal
+• Tag 10: ONE super-broad reach tag: #viral OR #trending OR #news
 • Tag 11: MUST be exactly #ShashiNewsGen
-• No spaces within any hashtag
+• No spaces within any hashtag — Facebook-compatible
 
-VIRAL WRITING TIPS:
-• Use specific numbers whenever possible (box office crores, award counts, dates, figures)
-• Include emotional language that resonates with the audience
-• The description should make the reader feel they MUST share this
-• Use active, direct language — avoid passive voice
+VIRAL WRITING TIPS FOR FACEBOOK:
+• Use specific numbers whenever possible (crores, awards, dates, figures)
+• Include emotional language — make reader feel they MUST comment and share
+• Use "tapai" language occasionally to make it personal ("tapailai tha cha?")
+• Descriptions should feel like they were written by a real person, not a robot
+• Emojis should be copy-paste-ready standard Unicode (no custom/special chars)
 
 LANGUAGE: ${cfg.langInstruction}
 OUTPUT: Raw JSON only — no \`\`\`json, no explanation, nothing else.`;
@@ -3322,13 +3374,13 @@ async function selectArticle(idx) {
 
   document.getElementById('outHook').textContent   = hook;
 
-  /* Merge hook as a punchy first line only when AI generated it — template titles stay clean */
-  const hookyTitle = (aiUsed && hook) ? hook + '\n' + nepaliTitle : nepaliTitle;
-  document.getElementById('outTitle').textContent  = hookyTitle;
+  /* Show title as-is from AI (already max 3 lines), or prepend hook for template mode */
+  const displayTitle = aiUsed ? nepaliTitle : (hook ? hook + '\n' + nepaliTitle : nepaliTitle);
+  document.getElementById('outTitle').textContent  = displayTitle;
   document.getElementById('outDesc').textContent   = desc;
 
   /* generatedPost keeps hook + title separate so sharing still uses correct fields */
-  generatedPost = { hook, title: hookyTitle, description: desc, hashtags, link: selectedArticle.link || '' };
+  generatedPost = { hook, title: displayTitle, description: desc, hashtags, link: selectedArticle.link || '' };
   renderHashtags(hashtags);
 
   /* ── Update AI/Template badges on all content fields ── */
@@ -6291,6 +6343,95 @@ function panImage(dx, dy) {
   fastRedraw();
 }
 
+/**
+ * Build a highly contextual AI image generation prompt based on the article.
+ * Uses Gemini to extract precise visual context — ethnicity, location, persons,
+ * event type — so the image matches the ACTUAL story (e.g., Nepal president ≠ Donald Trump).
+ */
+async function _buildContextualImagePrompt(article, post) {
+  const hasAI = _geminiKey || _browserGeminiKey;
+  const titleText = article.title || '';
+  const bodyText  = (article.fullArticleText || article.description || '').slice(0, 1200);
+
+  /* ── AI-powered precise prompt generation (Gemini) ── */
+  if (hasAI) {
+    try {
+      const aiPrompt = `You are an expert at writing precise image generation prompts for Stable Diffusion / FLUX AI.
+
+NEWS ARTICLE:
+Title: ${titleText}
+Body: ${bodyText.slice(0, 800)}
+
+Your task: Write a detailed, photorealistic image prompt for this news story.
+The prompt MUST:
+1. Accurately reflect the ETHNICITY and APPEARANCE of people in the story:
+   - Nepal/Nepali context → South Asian / Nepali appearance (NOT Western/American)
+   - Indian context → South Asian / Indian appearance
+   - Mention specific characteristics: "South Asian man in formal kurta", "Nepali woman in traditional dhaka dress", "Nepali politician in formal suit" etc.
+   - If article is about Nepal president/Rashtrapati → show a Nepali man, not American
+2. Accurately reflect the LOCATION:
+   - Nepal → include Himalayan backdrop, or Nepali-style government building, or kathmandu cityscape
+   - India → include Indian architectural elements
+   - Use specific visual cues: "Nepali Parliament building", "Himalayan mountain backdrop", "Kathmandu street scene"
+3. Include the EVENT TYPE visually:
+   - Press conference → podium, microphones, formal setting
+   - Flood/disaster → dramatic weather, water, emergency response
+   - Election → ballot boxes, voters, flags
+   - Crime/arrest → police uniform (Nepal Police blue uniform)
+4. Be photorealistic, high-quality news photography style
+5. NO text overlays in the image
+6. Keep it under 120 words
+
+Output ONLY the image prompt text — no explanation, no JSON, just the prompt string.`;
+
+      const result = await callAI(aiPrompt, 12000);
+      /* callAI may return string or object */
+      const promptText = typeof result === 'string'
+        ? result.trim()
+        : (result && (result.prompt || result.text || Object.values(result).find(v => typeof v === 'string' && v.length > 20)));
+      if (promptText && promptText.length > 20) return promptText;
+    } catch (e) {
+      console.warn('[ImagePrompt] Gemini prompt generation failed:', e.message);
+    }
+  }
+
+  /* ── Fallback: rule-based contextual prompt ── */
+  const lower = (titleText + ' ' + bodyText).toLowerCase();
+  let context = '';
+
+  /* Location context */
+  if (lower.includes('nepal') || lower.includes('नेपाल') || lower.includes('kathmandu') || lower.includes('काठमाडौं')) {
+    context = 'Nepal, South Asian, Himalayan backdrop, Kathmandu';
+  } else if (lower.includes('india') || lower.includes('भारत') || lower.includes('delhi') || lower.includes('mumbai')) {
+    context = 'India, South Asian, Indian city backdrop';
+  } else if (lower.includes('china') || lower.includes('चीन')) {
+    context = 'China, East Asian, Chinese city backdrop';
+  }
+
+  /* Person context */
+  let personDesc = 'South Asian person in formal attire';
+  if (lower.includes('राष्ट्रपति') || lower.includes('president') || lower.includes('pm') || lower.includes('प्रधानमन्त्री')) {
+    personDesc = 'South Asian male politician in formal suit, press conference podium with microphones';
+  } else if (lower.includes('minister') || lower.includes('मन्त्री')) {
+    personDesc = 'South Asian official in formal suit giving speech';
+  } else if (lower.includes('police') || lower.includes('प्रहरी')) {
+    personDesc = 'Nepal Police officers in blue uniform';
+  } else if (lower.includes('election') || lower.includes('vote') || lower.includes('निर्वाचन')) {
+    personDesc = 'South Asian voters at polling station, ballot boxes, democratic election';
+  } else if (lower.includes('flood') || lower.includes('बाढी') || lower.includes('earthquake') || lower.includes('भूकम्प')) {
+    personDesc = 'disaster relief workers, damaged infrastructure, emergency response Nepal';
+  } else if (lower.includes('film') || lower.includes('movie') || lower.includes('actor') || lower.includes('actress') || lower.includes('चलचित्र')) {
+    personDesc = 'South Asian film celebrity on red carpet or movie set';
+  } else if (lower.includes('hospital') || lower.includes('health') || lower.includes('अस्पताल')) {
+    personDesc = 'South Asian doctors and nurses in hospital, medical setting Nepal';
+  }
+
+  const category = article._category || _activeNewsTab || 'nepal';
+  const scene = category === 'world' ? 'international news setting' : (context || 'Nepal news, South Asian context');
+
+  return `Photorealistic news photography, ${personDesc}, ${scene}, professional camera, high detail, soft natural lighting, cinematic composition, no text overlay, sharp focus, 8k quality, photojournalism style`;
+}
+
 async function generateImage() {
   if (!selectedArticle || !generatedPost) {
     toast('⚠️ Please select a news article first.', 'error'); return;
@@ -6328,8 +6469,26 @@ async function generateImage() {
     }
   }
 
-  /* ── If no article image, fall back to the Nepal default image ── */
+  /* ── If no article image, try AI (HuggingFace) image generation ── */
   let usedDefaultImg = false;
+  let usedAIImg = false;
+  if (!newsImg && (_browserHFKey || (_geminiKey || _browserGeminiKey))) {
+    try {
+      document.getElementById('imgSourceBadge').textContent = '🤖 AI ले image बनाउँदैछ…';
+      const aiImgPrompt = await _buildContextualImagePrompt(selectedArticle, generatedPost);
+      if (aiImgPrompt && _browserHFKey) {
+        const hfUrl = await fetchHuggingFaceImage(aiImgPrompt);
+        newsImg = new Image();
+        newsImg.crossOrigin = 'anonymous';
+        await new Promise((res, rej) => { newsImg.onload = res; newsImg.onerror = rej; newsImg.src = hfUrl; });
+        imgSource = '🤖 AI Generated';
+        usedAIImg = true;
+      }
+    } catch (aiErr) {
+      console.warn('[ImageGen] AI image failed:', aiErr.message, '— using default');
+      newsImg = null;
+    }
+  }
   if (!newsImg) {
     try {
       newsImg = await new Promise((resolve, reject) => {
@@ -6359,7 +6518,7 @@ async function generateImage() {
     tmpCanvas.getContext('2d').drawImage(newsImg, 0, 0);
     try { _activeImageDataUrl = tmpCanvas.toDataURL('image/jpeg', 0.92); } catch { _activeImageDataUrl = customImageDataUrl; }
     /* AI enhance and adjust tools available for real photos; hide for default placeholder */
-    document.getElementById('enhanceAIBtn').style.display = usedDefaultImg ? 'none' : 'inline-flex';
+    document.getElementById('enhanceAIBtn').style.display = (usedDefaultImg) ? 'none' : 'inline-flex';
   } else {
     _cachedNewsImg = null;   /* no image available */
     drawBackground(ctx, CANVAS_W, CANVAS_H);
@@ -7349,11 +7508,11 @@ const BRAND_NAME = 'Shashi Creator Studio 🇳🇵';
 const BRAND_URL  = 'https://shajais.github.io/ShashiNewsGen/';
 
 function buildPostText(post, rawTitle, { includeUrl = true } = {}) {
-  const icon   = getNewsIcon(rawTitle || post.title || '');
   const credit = includeUrl
     ? `— ${BRAND_NAME}\n🌐 ${BRAND_URL}`
     : `— ${BRAND_NAME}`;
-  return `${icon} ${post.title}\n\n${post.description}\n\n${post.hashtags.join(' ')}\n\n${credit}`;
+  /* When sharing/copying: NO title — only description, hashtags, brand */
+  return `${post.description}\n\n${post.hashtags.join(' ')}\n\n${credit}`;
 }
 
 function getPostText() {
@@ -7393,7 +7552,9 @@ function shareOnInstagram() {
 function shareOnX() {
   if (!generatedPost) { toast('⚠️ पहिले समाचार छान्नुहोस्।','error'); return; }
   const post = generatedPost;
-  const tweet = `📢 ${post.title}\n\n${post.hashtags.slice(0, 3).join(' ')}\n\n— ${BRAND_NAME}`;
+  /* Truncate description to 200 chars for tweet */
+  const descSnippet = (post.description || '').slice(0, 200).trim();
+  const tweet = `${descSnippet}…\n\n${post.hashtags.slice(0, 4).join(' ')}\n\n— ${BRAND_NAME}`;
   setTimeout(() => { const btn = document.getElementById('downloadBtn'); if (btn) btn.click(); }, 400);
   _shareUrl    = `https://x.com/intent/tweet?text=${encodeURIComponent(tweet)}`;
   _shareTarget = 'x';
