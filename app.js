@@ -322,11 +322,19 @@ let _authorImgPromise = null;
 
 /* Text overlay customisation (editable via the Text Editor modal) */
 let _textOpts = {
-  bannerText:  '�  BREAKING',
+  bannerText:  '',
   bannerColor: '#c0392b',
   titleColor:  '#ffffff',
   titleSize:   62,
 };
+
+/* Cached banner label - picked once per generateImage / reimagineImage call.
+   Plain-text ONLY - emojis render as boxes on HTML Canvas. */
+let _currentBannerLabel = 'BREAKING NEWS';
+const _BANNER_LABELS_POOL = ['BREAKING NEWS', 'LATEST UPDATE', 'UPDATE', 'BREAKING', 'NEWS UPDATE', 'TRENDING NOW', 'JUST IN'];
+function _pickRandomBanner() {
+  _currentBannerLabel = _BANNER_LABELS_POOL[Math.floor(Math.random() * _BANNER_LABELS_POOL.length)];
+}
 
 /* ── Image colour tint / grade settings ─────────────────────────
    preset  = 'cinematic' | 'warm' | 'cool' | 'dramatic' | 'vintage' |
