@@ -14,18 +14,21 @@ const AIVS = {
   style:       'cinematic',
   voiceStyle:  'energetic',
   musicMood:   'epic',
+  videoModel:  'none',   // 'none' | 'wan2' | 'cogvideox'
   script:      null,   // {title, hook, scenes:[{narration,imagePrompt,duration}], cta}
-  scenes:      [],     // [{narration, imagePrompt, duration, imageB64, audioB64, status}]
+  scenes:      [],     // [{narration, imagePrompt, duration, imageB64, videoB64, audioB64, status}]
   musicB64:    null,
   jobId:       null,
   finalVideoUrl: null,
-  services:    { ollama:false, comfyui:false, xtts:false, audiocraft:false, ffmpeg:false },
+  services:    { ollama:false, comfyui:false, wan2:false, cogvideox:false, xtts:false, audiocraft:false, ffmpeg:false },
 };
 
 // ── Service endpoints (local AI stack) ────────────────────────────────────────
 const AIVS_EP = {
   script:   '/api/aivideo/script',
   image:    '/api/aivideo/image',
+  wan2:     '/api/aivideo/wan2',
+  cogvideo: '/api/aivideo/cogvideox',
   tts:      '/api/aivideo/tts',
   music:    '/api/aivideo/music',
   assemble: '/api/aivideo/assemble',
@@ -63,11 +66,13 @@ async function aivsPingServices() {
 
 function renderServiceBadges() {
   const map = {
-    ollama:      { label:'🧠 Ollama LLaMA3',  tip:'Script generation' },
-    comfyui:     { label:'🖼️ ComfyUI/SDXL',   tip:'Image generation'  },
-    xtts:        { label:'🎙️ XTTS v2',         tip:'Voice synthesis'   },
-    audiocraft:  { label:'🎵 AudioCraft',       tip:'Music generation'  },
-    ffmpeg:      { label:'🎞️ FFmpeg',           tip:'Video assembly'    },
+    ollama:      { label:'🧠 Ollama LLaMA3',    tip:'Script generation' },
+    comfyui:     { label:'🖼️ ComfyUI/SDXL',     tip:'Image generation'  },
+    wan2:        { label:'🌊 Wan 2.1',           tip:'Text-to-Video'     },
+    cogvideox:   { label:'🧠 CogVideoX-5B',      tip:'Text/Img-to-Video' },
+    xtts:        { label:'🎙️ XTTS v2',           tip:'Voice synthesis'   },
+    audiocraft:  { label:'🎵 AudioCraft',         tip:'Music generation'  },
+    ffmpeg:      { label:'🎞️ FFmpeg',             tip:'Video assembly'    },
   };
   let html = '';
   for (const [key, info] of Object.entries(map)) {
@@ -103,6 +108,7 @@ async function aivsGenerateScript() {
   if (!topic) { aivsToast('Please enter a topic/idea first!', 'warn'); return; }
 
   Object.assign(AIVS, { topic, niche, lang, duration, style, voiceStyle, musicMood });
+  AIVS.videoModel = document.getElementById('aivsVideoModel')?.value || 'none';
 
   const btn = document.getElementById('aivsGenScriptBtn');
   btn.disabled = true;
@@ -210,7 +216,141 @@ function aivsApplyScriptEdit() {
   }
 }
 
-// ── STEP 3 → Generate Images via ComfyUI ─────────────────────────────────────
+// ── Video model selector handler ──────────────────────────────────────────────
+function aivsOnVideoModelChange(val) {
+  const noteEl = document.getElementById('aivsVideoModelNote');
+  const notes = {
+    none:       'Static images will be generated per scene and assembled into a slideshow video.',
+    wan2:       '🌊 Wan 2.1 will generate a real video clip (~5s) per scene. Requires local Wan2.1 server on port 8189. ~28GB VRAM recommended.',
+    cogvideox:  '🧠 CogVideoX-5B will generate a video clip per scene from text prompts. Requires local CogVideoX server on port 8190. ~16GB VRAM.',
+  };
+  if (noteEl) noteEl.textContent = notes[val] || notes.none;
+}
+
+// ── Unified visuals dispatcher (images OR video) ──────────────────────────────
+async function aivsGenerateVisuals() {
+  const model = AIVS.videoModel || 'none';
+  const titleEl  = document.getElementById('aivsStep3Title');
+  const badgeEl  = document.getElementById('aivsVideoModelBadge');
+  const btnEl    = document.getElementById('aivsGenVisualsBtn');
+
+  if (model === 'wan2') {
+    if (titleEl) titleEl.textContent = '🌊 Step 3 — Video Generation (Wan 2.1)';
+    if (badgeEl) { badgeEl.style.display='block'; badgeEl.textContent = '🌊 Using Wan 2.1 Text-to-Video — generating ~5s video clips per scene…'; }
+    if (btnEl) btnEl.textContent = '🌊 Generate Scene Videos (Wan 2.1)';
+    await aivsGenerateVideoClips('wan2');
+  } else if (model === 'cogvideox') {
+    if (titleEl) titleEl.textContent = '🧠 Step 3 — Video Generation (CogVideoX-5B)';
+    if (badgeEl) { badgeEl.style.display='block'; badgeEl.textContent = '🧠 Using CogVideoX-5B — generating AI video clips per scene…'; }
+    if (btnEl) btnEl.textContent = '🧠 Generate Scene Videos (CogVideoX)';
+    await aivsGenerateVideoClips('cogvideox');
+  } else {
+    if (titleEl) titleEl.textContent = '🖼️ Step 3 — AI Image Generation';
+    if (badgeEl) badgeEl.style.display = 'none';
+    if (btnEl) btnEl.textContent = '🖼️ Generate All Scene Images';
+    await aivsGenerateImages();
+  }
+}
+
+// ── Generate video clips (Wan 2.1 or CogVideoX) per scene ────────────────────
+async function aivsGenerateVideoClips(model) {
+  const endpoint = model === 'wan2' ? AIVS_EP.wan2 : AIVS_EP.cogvideo;
+  const modelLabel = model === 'wan2' ? 'Wan 2.1' : 'CogVideoX-5B';
+  const progress = document.getElementById('aivsImageProgress');
+  const progressBar = document.getElementById('aivsImageProgressBar');
+
+  const modelConfigs = {
+    wan2: {
+      size: '832x480', num_frames: 81, fps: 16,
+      sample_steps: 50, guide_scale: 5.0,
+    },
+    cogvideox: {
+      width: 720, height: 480, num_frames: 49, fps: 8,
+      num_inference_steps: 50, guidance_scale: 6.0,
+    },
+  };
+
+  for (let i = 0; i < AIVS.scenes.length; i++) {
+    const scene = AIVS.scenes[i];
+    const statusEl = document.getElementById(`sceneStatus${i}`);
+    if (statusEl) statusEl.textContent = `⏳ Generating (${modelLabel})…`;
+    updateSceneCard(i, 'generating');
+    progress.textContent = `Generating video clip ${i+1} of ${AIVS.scenes.length} with ${modelLabel}…`;
+    if (progressBar) progressBar.style.width = `${Math.round((i / AIVS.scenes.length) * 100)}%`;
+
+    const videoPrompt = scene.imagePrompt + `, ${AIVS.style} style, smooth cinematic motion, high quality`;
+
+    try {
+      const body = model === 'wan2'
+        ? { prompt: videoPrompt, negative_prompt: 'blurry, low quality, watermark, distorted', ...modelConfigs.wan2 }
+        : { prompt: videoPrompt, negative_prompt: 'blurry, low quality, watermark, distorted, static', ...modelConfigs.cogvideox };
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      // Store as videoB64 (mp4 base64) or videoUrl
+      scene.videoB64  = data.video || null;
+      scene.videoUrl  = data.url   || null;
+      scene.status    = 'video_done';
+
+      const previewEl = document.getElementById(`scenePreview${i}`);
+      if (previewEl) {
+        const src = scene.videoUrl || (scene.videoB64 ? `data:video/mp4;base64,${scene.videoB64}` : null);
+        if (src) {
+          previewEl.innerHTML = `<video controls loop src="${src}" style="width:100%;border-radius:8px;margin-top:6px"></video>`;
+        }
+      }
+      if (statusEl) statusEl.textContent = `🎬 Video ready (${modelLabel})`;
+      aivsLog(`✅ Scene ${i+1} video generated with ${modelLabel}`);
+    } catch (e) {
+      scene.status = 'video_error';
+      if (statusEl) statusEl.textContent = '❌ Video failed';
+      aivsLog(`❌ Scene ${i+1} video failed (${modelLabel}): ${e.message}`, 'error');
+      // Fallback: try static image
+      aivsLog(`⚠️ Falling back to static image for scene ${i+1}…`, 'warn');
+      await aivsFallbackImage(i, scene);
+    }
+  }
+  if (progressBar) progressBar.style.width = '100%';
+  progress.textContent = `✅ All scene videos generated with ${modelLabel}!`;
+}
+
+// ── Fallback: generate a static image if video model fails ───────────────────
+async function aivsFallbackImage(i, scene) {
+  try {
+    const res = await fetch(AIVS_EP.image, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: scene.imagePrompt + `, ${AIVS.style} style, ultra HD, cinematic lighting, 8K`,
+        negative_prompt: 'blurry, low quality, watermark, text, ugly, distorted',
+        width: 576, height: 1024,
+        steps: 25, cfg_scale: 7.5,
+        model: 'juggernautXL'
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    scene.imageB64 = data.image;
+    scene.status   = 'image_done';
+    const previewEl = document.getElementById(`scenePreview${i}`);
+    if (previewEl && data.image) {
+      previewEl.innerHTML = `<img src="data:image/png;base64,${data.image}" style="width:100%;border-radius:8px;margin-top:6px"><div style="font-size:.65rem;color:#fbbf24;margin-top:3px">⚠️ Fallback static image used</div>`;
+    }
+    const statusEl = document.getElementById(`sceneStatus${i}`);
+    if (statusEl) statusEl.textContent = '🖼️ Fallback image';
+    aivsLog(`ℹ️ Scene ${i+1} used fallback static image`);
+  } catch (e2) {
+    aivsLog(`❌ Scene ${i+1} fallback image also failed: ${e2.message}`, 'error');
+  }
+}
+
+
 async function aivsGenerateImages() {
   aivsGoStep(3);
   const style    = AIVS.style;
@@ -353,14 +493,17 @@ async function aivsAssembleVideo() {
       scenes:  AIVS.scenes.map(s => ({
         narration:  s.narration,
         duration:   s.duration,
-        image:      s.imageB64 || null,
-        audio:      s.audioB64 || null,
+        image:      s.imageB64  || null,
+        video:      s.videoB64  || null,
+        video_url:  s.videoUrl  || null,
+        audio:      s.audioB64  || null,
       })),
       music:       AIVS.musicB64 || null,
       music_vol:   0.25,
       resolution:  '1080x1920',
       fps:         30,
       style:       AIVS.style,
+      video_model: AIVS.videoModel,
       fade:        true,
     };
 
@@ -404,7 +547,7 @@ async function aivsRunFullPipeline() {
   document.getElementById('aivsPipelineBtn').disabled = true;
   document.getElementById('aivsPipelineBtn').textContent = '⏳ Running AI Pipeline…';
   try {
-    await aivsGenerateImages();
+    await aivsGenerateVisuals();
     await aivsGenerateTTS();
     await aivsGenerateMusic();
     await aivsAssembleVideo();
@@ -454,9 +597,12 @@ function aivsShareToSocial() {
 
 function aivsStartOver() {
   Object.assign(AIVS, {
-    topic:'', script:null, scenes:[], musicB64:null, jobId:null, finalVideoUrl:null
+    topic:'', script:null, scenes:[], musicB64:null, jobId:null, finalVideoUrl:null, videoModel:'none'
   });
   document.getElementById('aivsTopic').value = '';
+  const vmEl = document.getElementById('aivsVideoModel');
+  if (vmEl) vmEl.value = 'none';
+  aivsOnVideoModelChange('none');
   document.getElementById('aivsScriptPreview').innerHTML = '';
   document.getElementById('aivsScriptJson').value = '';
   document.getElementById('aivsResultArea').innerHTML = '';
