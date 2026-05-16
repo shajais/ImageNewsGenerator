@@ -61,6 +61,7 @@
     <button class="btn puzzle-nav-btn" id="puzzleStudioBtn" onclick="openPuzzleStudio()" title="Puzzle Studio">🧩 Puzzle Studio</button>
     <button class="btn content-studio-nav-btn" id="contentStudioBtn" onclick="openContentStudio()" title="Content Studio">🎭 Content Studio</button>
     <button class="btn video-studio-nav-btn"   id="videoStudioBtn"   onclick="openVideoStudio()"   title="Video Studio">🎬 Video Studio</button>
+    <button class="btn aivideo-nav-btn"         id="aiVideoStudioBtn" onclick="openAIVideoStudio()" title="AI Short Video Generator">🤖 AI Video</button>
     <button class="btn faceswap-nav-btn" id="faceSwapBtn" onclick="openFaceSwapStudio()" title="Face Swap Studio">🎭 Face Swap</button>
     <button class="btn feedback-nav-btn" onclick="openFeedbackModal()" title="Feedback">📩 Feedback</button>
     <button id="aiBadge" class="btn ai-badge-btn" onclick="openAISettings()" title="AI key status">⏳ AI…</button>
@@ -2849,5 +2850,298 @@
 </div><!-- end videoStudioModal -->
 
 <script src="video-studio.js?v=20260516"></script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     🤖 AI SHORT-FORM VIDEO GENERATOR MODAL
+     ═══════════════════════════════════════════════════════════════════════ -->
+<div id="aiVideoStudioModal" style="display:none;position:fixed;inset:0;z-index:16000;background:#06060f;overflow-y:auto;flex-direction:column">
+<style>
+/* ── AI Video Studio Styles ──────────────────────────────── */
+.aivideo-nav-btn{background:linear-gradient(135deg,#059669,#0d9488)!important;color:#fff!important;font-weight:700;border:none!important;border-radius:8px;padding:6px 14px;cursor:pointer;transition:.2s}
+.aivideo-nav-btn:hover{background:linear-gradient(135deg,#047857,#0f766e)!important;box-shadow:0 0 12px rgba(5,150,105,.5)}
+.aivs-header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid rgba(255,255,255,.06);background:rgba(0,0,0,.4);flex-shrink:0}
+.aivs-title{font-size:1.3rem;font-weight:900;background:linear-gradient(90deg,#34d399,#06b6d4,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.aivs-body{display:flex;flex:1;gap:0;min-height:0}
+.aivs-sidebar{width:260px;flex-shrink:0;border-right:1px solid rgba(255,255,255,.06);background:rgba(0,0,0,.3);padding:0;overflow-y:auto}
+.aivs-main{flex:1;padding:20px 24px;overflow-y:auto}
+.aivs-log-panel{width:280px;flex-shrink:0;border-left:1px solid rgba(255,255,255,.06);background:rgba(0,0,0,.3);padding:12px;overflow-y:auto;font-family:monospace;font-size:.68rem}
+.aivs-stepper{display:flex;flex-direction:column;padding:12px 8px;gap:4px}
+.aivs-stepper-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:.2s;color:#64748b;font-size:.8rem}
+.aivs-stepper-item:hover{background:rgba(255,255,255,.04);color:#94a3b8}
+.aivs-stepper-item.active{background:linear-gradient(135deg,rgba(52,211,153,.15),rgba(6,182,212,.1));color:#34d399;font-weight:700;border:1px solid rgba(52,211,153,.2)}
+.aivs-stepper-item.done{color:#22c55e}
+.aivs-step-num{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:.7rem;flex-shrink:0}
+.aivs-stepper-item.active .aivs-step-num{background:rgba(52,211,153,.25);color:#34d399}
+.aivs-stepper-item.done .aivs-step-num{background:rgba(34,197,94,.2);color:#22c55e}
+.aivs-step-pane{display:none}
+.aivs-pane-title{font-size:1.1rem;font-weight:900;color:#e2e8f0;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.aivs-field-group{margin-bottom:14px}
+.aivs-label{font-size:.75rem;font-weight:700;color:#94a3b8;margin-bottom:5px;display:block;text-transform:uppercase;letter-spacing:.06em}
+.aivs-input,.aivs-select,.aivs-textarea{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#e2e8f0;padding:9px 12px;font-size:.85rem;outline:none;transition:.2s;font-family:inherit;box-sizing:border-box}
+.aivs-input:focus,.aivs-select:focus,.aivs-textarea:focus{border-color:#34d399;background:rgba(52,211,153,.04)}
+.aivs-textarea{resize:vertical;min-height:120px;font-family:monospace;font-size:.72rem}
+.aivs-select option{background:#1e1e2e}
+.aivs-btn{padding:10px 18px;border-radius:9px;border:none;cursor:pointer;font-weight:700;font-size:.85rem;transition:.2s;display:inline-flex;align-items:center;gap:6px}
+.aivs-btn.primary{background:linear-gradient(135deg,#059669,#0d9488);color:#fff}
+.aivs-btn.primary:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.aivs-btn.secondary{background:rgba(255,255,255,.07);color:#94a3b8;border:1px solid rgba(255,255,255,.1)}
+.aivs-btn.secondary:hover{background:rgba(255,255,255,.1);color:#e2e8f0}
+.aivs-btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important}
+.aivs-pipeline-btn{width:100%;padding:14px;font-size:1rem;background:linear-gradient(135deg,#059669,#06b6d4,#818cf8);color:#fff;border:none;border-radius:12px;cursor:pointer;font-weight:900;letter-spacing:.02em;transition:.2s;margin-top:8px}
+.aivs-pipeline-btn:hover{filter:brightness(1.1);transform:translateY(-2px);box-shadow:0 6px 24px rgba(52,211,153,.35)}
+.aivs-pipeline-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.aivs-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:.68rem;font-weight:700;margin:2px}
+.aivs-badge.ok{background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.2)}
+.aivs-badge.off{background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.2)}
+.aivs-service-row{padding:10px 12px;display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid rgba(255,255,255,.05)}
+.aivs-script-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px}
+.aivs-script-title{font-size:1rem;font-weight:900;color:#34d399;margin-bottom:8px}
+.aivs-hook{font-size:.8rem;color:#fbbf24;margin-bottom:12px;padding:8px;background:rgba(251,191,36,.07);border-radius:8px;border-left:3px solid #fbbf24}
+.aivs-scene-item{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:12px;margin-bottom:8px;transition:.3s}
+.aivs-scene-item.aivs-scene-generating{border-color:#fbbf24;background:rgba(251,191,36,.04)}
+.aivs-scene-item.aivs-scene-done{border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.03)}
+.aivs-scene-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.aivs-scene-num{font-size:.7rem;font-weight:900;color:#818cf8;background:rgba(129,140,248,.1);padding:2px 8px;border-radius:5px}
+.aivs-scene-dur{font-size:.68rem;color:#64748b}
+.aivs-scene-status{font-size:.68rem;margin-left:auto;color:#94a3b8}
+.aivs-scene-narr{font-size:.78rem;color:#cbd5e1;margin-bottom:4px}
+.aivs-scene-prompt{font-size:.68rem;color:#475569;font-style:italic}
+.aivs-cta{font-size:.8rem;color:#f472b6;margin-top:10px;padding:6px 10px;background:rgba(244,114,182,.07);border-radius:7px}
+.aivs-tags{margin-top:8px;display:flex;flex-wrap:wrap;gap:4px}
+.aivs-tag{font-size:.65rem;color:#818cf8;background:rgba(129,140,248,.1);padding:2px 7px;border-radius:12px}
+.aivs-progress-bar{background:rgba(255,255,255,.04);border-radius:8px;overflow:hidden;height:6px;margin:8px 0}
+.aivs-progress-inner{height:100%;border-radius:8px;background:linear-gradient(90deg,#34d399,#06b6d4);transition:width .5s}
+.aivs-progress-text{font-size:.75rem;color:#94a3b8;margin-bottom:4px}
+.aivs-result-box{text-align:center;padding:30px 20px;background:rgba(255,255,255,.02);border-radius:16px;border:1px solid rgba(52,211,153,.2)}
+.aivs-download-btn{background:linear-gradient(135deg,#059669,#0d9488);color:#fff;padding:10px 20px;border-radius:9px;text-decoration:none;font-weight:700;font-size:.88rem}
+.aivs-share-btn{background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;padding:10px 20px;border-radius:9px;border:none;cursor:pointer;font-weight:700;font-size:.88rem}
+.aivs-reset-btn{background:rgba(255,255,255,.07);color:#94a3b8;padding:10px 20px;border-radius:9px;border:1px solid rgba(255,255,255,.1);cursor:pointer;font-weight:700;font-size:.88rem}
+.aivs-setup-card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px;margin-bottom:12px}
+.aivs-setup-title{font-size:.85rem;font-weight:900;color:#e2e8f0;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.aivs-setup-cmd{font-family:monospace;font-size:.72rem;background:rgba(0,0,0,.4);padding:8px 12px;border-radius:7px;color:#34d399;overflow-x:auto;white-space:nowrap}
+.aivs-divider{height:1px;background:rgba(255,255,255,.06);margin:16px 0}
+.aivs-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:900px){.aivs-log-panel{display:none}.aivs-sidebar{width:200px}.aivs-2col{grid-template-columns:1fr}}
+@media(max-width:600px){.aivs-sidebar{display:none}}
+</style>
+
+<!-- Header -->
+<div class="aivs-header">
+  <div style="display:flex;align-items:center;gap:12px">
+    <span style="font-size:1.8rem">🤖</span>
+    <div>
+      <div class="aivs-title">AI Short-Form Video Generator</div>
+      <div style="font-size:.7rem;color:#64748b">LLaMA3 · SDXL/ComfyUI · XTTS v2 · AudioCraft · FFmpeg</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <button onclick="aivsPingServices()" class="aivs-btn secondary" style="font-size:.75rem">🔄 Check Services</button>
+    <button onclick="closeAIVideoStudio()" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:.82rem">✕ Close</button>
+  </div>
+</div>
+
+<!-- Service status bar -->
+<div class="aivs-service-row" id="aivsServiceStatus">
+  <span style="color:#64748b;font-size:.72rem">⏳ Checking services…</span>
+</div>
+
+<!-- Body: sidebar stepper + main content + log -->
+<div class="aivs-body">
+
+  <!-- LEFT: Stepper -->
+  <div class="aivs-sidebar">
+    <div style="padding:12px;font-size:.68rem;color:#475569;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid rgba(255,255,255,.05)">Pipeline Steps</div>
+    <div class="aivs-stepper">
+      <div class="aivs-stepper-item active" onclick="aivsGoStep(1)"><span class="aivs-step-num">1</span><span>📝 Script</span></div>
+      <div class="aivs-stepper-item" onclick="aivsGoStep(2)"><span class="aivs-step-num">2</span><span>✏️ Review / Edit</span></div>
+      <div class="aivs-stepper-item" onclick="aivsGoStep(3)"><span class="aivs-step-num">3</span><span>🖼️ Images</span></div>
+      <div class="aivs-stepper-item" onclick="aivsGoStep(4)"><span class="aivs-step-num">4</span><span>🎙️ Voiceover</span></div>
+      <div class="aivs-stepper-item" onclick="aivsGoStep(5)"><span class="aivs-step-num">5</span><span>🎵 Music</span></div>
+      <div class="aivs-stepper-item" onclick="aivsGoStep(6)"><span class="aivs-step-num">6</span><span>🎞️ Assemble</span></div>
+    </div>
+    <div style="padding:12px;border-top:1px solid rgba(255,255,255,.05);margin-top:auto">
+      <button id="aivsPipelineBtn" class="aivs-pipeline-btn" onclick="aivsRunFullPipeline()">🚀 Run Full AI Pipeline</button>
+      <div style="font-size:.62rem;color:#475569;margin-top:6px;text-align:center">Runs all 6 steps automatically</div>
+    </div>
+  </div>
+
+  <!-- CENTER: Step panes -->
+  <div class="aivs-main">
+
+    <!-- ── STEP 1: Setup & Script ── -->
+    <div class="aivs-step-pane" id="aivsPane1" style="display:block">
+      <div class="aivs-pane-title">📝 Step 1 — Configure &amp; Generate Script</div>
+
+      <div class="aivs-field-group">
+        <label class="aivs-label">Topic / Idea *</label>
+        <input id="aivsTopic" class="aivs-input" placeholder="e.g. 5 mindblowing facts about Nepal mountains…" />
+      </div>
+      <div class="aivs-2col">
+        <div class="aivs-field-group">
+          <label class="aivs-label">Niche / Category</label>
+          <select id="aivsNiche" class="aivs-select">
+            <option value="motivation">💪 Motivation</option>
+            <option value="education">📚 Education / Facts</option>
+            <option value="travel">✈️ Travel Vlog</option>
+            <option value="lifestyle">🌿 Lifestyle</option>
+            <option value="news">📰 News / Current Affairs</option>
+            <option value="health">❤️ Health & Wellness</option>
+            <option value="technology">💻 Technology</option>
+            <option value="business">💼 Business / Finance</option>
+            <option value="entertainment">🎭 Entertainment</option>
+            <option value="nepali-culture">🇳🇵 Nepali Culture</option>
+          </select>
+        </div>
+        <div class="aivs-field-group">
+          <label class="aivs-label">Language</label>
+          <select id="aivsLang" class="aivs-select">
+            <option value="nepali">🇳🇵 Nepali (Devanagari)</option>
+            <option value="english">🇬🇧 English</option>
+            <option value="hinglish">🌐 Hinglish</option>
+          </select>
+        </div>
+      </div>
+      <div class="aivs-2col">
+        <div class="aivs-field-group">
+          <label class="aivs-label">Duration: <span id="aivsDurationLabel">30s</span></label>
+          <input type="range" id="aivsDuration" min="15" max="90" step="5" value="30" oninput="aivsUpdateDurationLabel(this.value)" style="width:100%;accent-color:#34d399">
+          <div style="display:flex;justify-content:space-between;font-size:.62rem;color:#475569;margin-top:2px"><span>15s</span><span>90s</span></div>
+        </div>
+        <div class="aivs-field-group">
+          <label class="aivs-label">Visual Style</label>
+          <select id="aivsStyle" class="aivs-select">
+            <option value="cinematic">🎬 Cinematic</option>
+            <option value="aesthetic">🌸 Aesthetic</option>
+            <option value="documentary">📹 Documentary</option>
+            <option value="anime">🎌 Anime / Illustrated</option>
+            <option value="realistic">📸 Hyper-Realistic</option>
+            <option value="neon">🌃 Neon / Cyberpunk</option>
+            <option value="vintage">🎞️ Vintage Film</option>
+            <option value="nepali-art">🏔️ Nepali Art Style</option>
+          </select>
+        </div>
+      </div>
+      <div class="aivs-2col">
+        <div class="aivs-field-group">
+          <label class="aivs-label">Voice Style</label>
+          <select id="aivsVoiceStyle" class="aivs-select">
+            <option value="energetic">⚡ Energetic</option>
+            <option value="calm">😌 Calm & Soothing</option>
+            <option value="serious">🎙️ News / Serious</option>
+            <option value="friendly">😊 Friendly</option>
+            <option value="dramatic">🎭 Dramatic</option>
+          </select>
+        </div>
+        <div class="aivs-field-group">
+          <label class="aivs-label">Music Mood</label>
+          <select id="aivsMusicMood" class="aivs-select">
+            <option value="epic">🔥 Epic / Cinematic</option>
+            <option value="lofi">🎵 Lo-Fi Chill</option>
+            <option value="upbeat">🎉 Upbeat / Pop</option>
+            <option value="motivational">💪 Motivational Rock</option>
+            <option value="sad">😢 Emotional / Sad</option>
+            <option value="ambient">🌿 Ambient / Peaceful</option>
+            <option value="nepali">🥁 Nepali Folk Fusion</option>
+            <option value="trap">🎧 Trap / Modern</option>
+          </select>
+        </div>
+      </div>
+
+      <button id="aivsGenScriptBtn" class="aivs-btn primary" onclick="aivsGenerateScript()" style="margin-top:8px">
+        🧠 Generate Script with LLaMA3
+      </button>
+      <div style="font-size:.68rem;color:#475569;margin-top:6px">Requires Ollama running locally: <code style="color:#34d399">ollama serve</code> + <code style="color:#34d399">ollama pull llama3</code></div>
+
+      <!-- Setup guide -->
+      <div class="aivs-divider"></div>
+      <div style="font-size:.8rem;font-weight:700;color:#94a3b8;margin-bottom:10px">🛠️ Local AI Services Setup</div>
+      <div class="aivs-setup-card">
+        <div class="aivs-setup-title">🧠 Ollama LLaMA3 — Script Generation</div>
+        <div class="aivs-setup-cmd">ollama serve</div>
+        <div class="aivs-setup-cmd" style="margin-top:4px">ollama pull llama3</div>
+      </div>
+      <div class="aivs-setup-card">
+        <div class="aivs-setup-title">🖼️ ComfyUI + JuggernautXL — Image Generation</div>
+        <div class="aivs-setup-cmd">cd ComfyUI && python main.py --port 8188</div>
+        <div style="font-size:.65rem;color:#64748b;margin-top:4px">Place <b>juggernautXL_v9.safetensors</b> in ComfyUI/models/checkpoints/</div>
+      </div>
+      <div class="aivs-setup-card">
+        <div class="aivs-setup-title">🎙️ XTTS v2 — Voice Synthesis</div>
+        <div class="aivs-setup-cmd">pip install TTS && python -m TTS.server.server --model_name tts_models/multilingual/multi-dataset/xtts_v2 --port 8020</div>
+      </div>
+      <div class="aivs-setup-card">
+        <div class="aivs-setup-title">🎵 AudioCraft MusicGen — Background Music</div>
+        <div class="aivs-setup-cmd">cd audiocraft && python demos/musicgen_app.py --server_port 7861</div>
+      </div>
+      <div class="aivs-setup-card">
+        <div class="aivs-setup-title">🎞️ FFmpeg — Video Assembly</div>
+        <div class="aivs-setup-cmd">winget install ffmpeg</div>
+        <div style="font-size:.65rem;color:#64748b;margin-top:2px">Or download from ffmpeg.org and add to PATH</div>
+      </div>
+    </div>
+
+    <!-- ── STEP 2: Review / Edit Script ── -->
+    <div class="aivs-step-pane" id="aivsPane2">
+      <div class="aivs-pane-title">✏️ Step 2 — Review &amp; Edit Script</div>
+      <div id="aivsScriptPreview" style="margin-bottom:16px"></div>
+      <div class="aivs-field-group">
+        <label class="aivs-label">Raw JSON (editable)</label>
+        <textarea id="aivsScriptJson" class="aivs-textarea" style="min-height:200px"></textarea>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="aivs-btn primary" onclick="aivsApplyScriptEdit()">✅ Apply Edits</button>
+        <button class="aivs-btn secondary" onclick="aivsGoStep(3)">➡️ Continue to Images</button>
+      </div>
+    </div>
+
+    <!-- ── STEP 3: Image Generation ── -->
+    <div class="aivs-step-pane" id="aivsPane3">
+      <div class="aivs-pane-title">🖼️ Step 3 — AI Image Generation</div>
+      <div class="aivs-progress-text" id="aivsImageProgress">Press button below to generate scene images…</div>
+      <div class="aivs-progress-bar"><div class="aivs-progress-inner" id="aivsImageProgressBar" style="width:0%"></div></div>
+      <button class="aivs-btn primary" onclick="aivsGenerateImages()" style="margin-bottom:16px">🖼️ Generate All Scene Images</button>
+      <div id="aivsScenePreviewList"></div>
+    </div>
+
+    <!-- ── STEP 4: TTS Voiceover ── -->
+    <div class="aivs-step-pane" id="aivsPane4">
+      <div class="aivs-pane-title">🎙️ Step 4 — AI Voiceover (XTTS v2)</div>
+      <div class="aivs-progress-text" id="aivsTTSProgress">Press button below to generate voiceovers…</div>
+      <div class="aivs-progress-bar"><div class="aivs-progress-inner" id="aivsTTSProgressBar" style="width:0%"></div></div>
+      <button class="aivs-btn primary" onclick="aivsGenerateTTS()" style="margin-bottom:16px">🎙️ Generate All Voiceovers</button>
+      <div style="font-size:.72rem;color:#64748b">Each scene narration will be converted to speech in the selected language.</div>
+    </div>
+
+    <!-- ── STEP 5: Background Music ── -->
+    <div class="aivs-step-pane" id="aivsPane5">
+      <div class="aivs-pane-title">🎵 Step 5 — Background Music (AudioCraft)</div>
+      <div class="aivs-progress-text" id="aivsMusicProgress">Press button below to generate background music…</div>
+      <div class="aivs-progress-bar"><div class="aivs-progress-inner" id="aivsMusicProgressBar" style="width:0%"></div></div>
+      <button class="aivs-btn primary" onclick="aivsGenerateMusic()" style="margin-bottom:16px">🎵 Generate Background Music</button>
+      <div id="aivsMusicPreview"></div>
+      <div style="font-size:.72rem;color:#64748b;margin-top:8px">Music mood selected: <b id="aivsMusicMoodLabel" style="color:#34d399">—</b></div>
+    </div>
+
+    <!-- ── STEP 6: Assemble Video ── -->
+    <div class="aivs-step-pane" id="aivsPane6">
+      <div class="aivs-pane-title">🎞️ Step 6 — Assemble Final Video</div>
+      <div class="aivs-progress-text" id="aivsAssembleProgress">Ready to assemble. Press button below…</div>
+      <div class="aivs-progress-bar"><div class="aivs-progress-inner" id="aivsAssembleProgressBar" style="width:0%"></div></div>
+      <button class="aivs-btn primary" onclick="aivsAssembleVideo()" style="margin-bottom:16px">🎞️ Assemble with FFmpeg</button>
+      <div id="aivsResultArea"></div>
+    </div>
+
+  </div><!-- end aivs-main -->
+
+  <!-- RIGHT: Log panel -->
+  <div class="aivs-log-panel">
+    <div style="font-size:.68rem;font-weight:900;color:#475569;margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em">📋 Pipeline Log</div>
+    <div id="aivsLog" style="line-height:1.7"></div>
+  </div>
+
+</div><!-- end aivs-body -->
+</div><!-- end aiVideoStudioModal -->
+
+<script src="ai-video-studio.js?v=20260516"></script>
 </body>
 </html>

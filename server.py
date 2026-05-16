@@ -209,8 +209,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(msg)
             return
 
+        # Serve AI video outputs from aivs_output/
+        if pathname.startswith('/aivs_output/'):
+            file_path = os.path.normpath(os.path.join(BASE_DIR, pathname.lstrip('/')))
+            if os.path.isfile(file_path):
+                with open(file_path, 'rb') as f:
+                    data = f.read()
+                self.send_response(200)
+                self.send_header('Content-Type', 'video/mp4')
+                self.send_header('Content-Length', str(len(data)))
+                self.send_header('Accept-Ranges', 'bytes')
+                self.send_cors()
+                self.end_headers()
+                self.wfile.write(data)
+            else:
+                self.send_response(404); self.end_headers()
+            return
+
         if pathname == '/':
-            pathname = '/index.html'
             pathname = '/index.html'
 
         # Security: block path traversal
@@ -430,8 +446,419 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(err)
             return
 
+        # ── AI Video: /api/aivideo/status → ping local AI services ──
+        if pathname == '/api/aivideo/status':
+            self._aivideo_status()
+            return
+
+        # ── AI Video: /api/aivideo/script → Ollama LLaMA3 script generation ──
+        if pathname == '/api/aivideo/script':
+            self._aivideo_script(body)
+            return
+
+        # ── AI Video: /api/aivideo/image → ComfyUI / SDXL image generation ──
+        if pathname == '/api/aivideo/image':
+            self._aivideo_image(body)
+            return
+
+        # ── AI Video: /api/aivideo/tts → XTTS v2 / Bark voice synthesis ──
+        if pathname == '/api/aivideo/tts':
+            self._aivideo_tts(body)
+            return
+
+        # ── AI Video: /api/aivideo/music → AudioCraft MusicGen ──
+        if pathname == '/api/aivideo/music':
+            self._aivideo_music(body)
+            return
+
+        # ── AI Video: /api/aivideo/assemble → FFmpeg video assembly ──
+        if pathname == '/api/aivideo/assemble':
+            self._aivideo_assemble(body)
+            return
+
         self.send_response(404)
         self.end_headers()
+
+    # ══════════════════════════════════════════════════════════════
+    #  AI VIDEO STUDIO  —  local AI pipeline helpers
+    # ══════════════════════════════════════════════════════════════
+
+    def _aivideo_ping(self, url, timeout=3):
+        """Return True if a local service is reachable."""
+        try:
+            req = urllib.request.Request(url, method='GET')
+            with urllib.request.urlopen(req, timeout=timeout):
+                return True
+        except Exception:
+            return False
+
+    def _aivideo_status(self):
+        """Ping all local AI services and return their availability."""
+        import shutil
+        services = {
+            'ollama':     self._aivideo_ping('http://localhost:11434'),
+            'comfyui':    self._aivideo_ping('http://localhost:8188'),
+            'xtts':       self._aivideo_ping('http://localhost:8020'),
+            'audiocraft': self._aivideo_ping('http://localhost:7861'),
+            'ffmpeg':     shutil.which('ffmpeg') is not None,
+        }
+        payload = json.dumps({'services': services}).encode()
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(payload)))
+        self.send_cors()
+        self.end_headers()
+        self.wfile.write(payload)
+        print(f'  [aivideo/status] {services}')
+
+    def _aivideo_script(self, body):
+        """Proxy to Ollama LLaMA3 for script generation."""
+        try:
+            data = json.loads(body.decode('utf-8'))
+            model  = data.get('model', 'llama3')
+            prompt = data.get('prompt', '')
+            system = data.get('system', '')
+
+            ollama_payload = json.dumps({
+                'model':  model,
+                'prompt': prompt,
+                'system': system,
+                'stream': False,
+                'options': {'temperature': 0.85, 'num_predict': 2048}
+            }).encode()
+
+            req = urllib.request.Request(
+                'http://localhost:11434/api/generate',
+                data=ollama_payload,
+                headers={'Content-Type': 'application/json'},
+                method='POST'
+            )
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                resp_data = json.loads(resp.read().decode('utf-8'))
+                result = json.dumps({'response': resp_data.get('response', '')}).encode()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(result)))
+                self.send_cors()
+                self.end_headers()
+                self.wfile.write(result)
+                print('  [aivideo/script] Ollama script generated ✅')
+        except Exception as e:
+            err = json.dumps({'error': f'Ollama error: {e}. Is Ollama running? Run: ollama serve'}).encode()
+            self.send_response(502)
+            self.send_header('Content-Type', 'application/json')
+            self.send_cors()
+            self.end_headers()
+            self.wfile.write(err)
+
+    def _aivideo_image(self, body):
+        """Generate image via ComfyUI API or fallback to Automatic1111."""
+        import base64, io
+        try:
+            data = json.loads(body.decode('utf-8'))
+            prompt   = data.get('prompt', '')
+            neg      = data.get('negative_prompt', 'blurry, low quality')
+            width    = data.get('width', 576)
+            height   = data.get('height', 1024)
+            steps    = data.get('steps', 25)
+            cfg      = data.get('cfg_scale', 7.5)
+
+            # Try ComfyUI first (prompt via /prompt endpoint)
+            comfy_payload = json.dumps({
+                'prompt': {
+                    '3': {'class_type': 'KSampler', 'inputs': {
+                        'seed': int.from_bytes(os.urandom(4), 'big'),
+                        'steps': steps, 'cfg': cfg,
+                        'sampler_name': 'euler', 'scheduler': 'karras',
+                        'denoise': 1.0,
+                        'model': ['4', 0],
+                        'positive': ['6', 0], 'negative': ['7', 0],
+                        'latent_image': ['5', 0]
+                    }},
+                    '4': {'class_type': 'CheckpointLoaderSimple', 'inputs': {'ckpt_name': 'juggernautXL_v9.safetensors'}},
+                    '5': {'class_type': 'EmptyLatentImage', 'inputs': {'width': width, 'height': height, 'batch_size': 1}},
+                    '6': {'class_type': 'CLIPTextEncode', 'inputs': {'text': prompt, 'clip': ['4', 1]}},
+                    '7': {'class_type': 'CLIPTextEncode', 'inputs': {'text': neg,    'clip': ['4', 1]}},
+                    '8': {'class_type': 'VAEDecode',     'inputs': {'samples': ['3', 0], 'vae': ['4', 2]}},
+                    '9': {'class_type': 'SaveImage',     'inputs': {'images': ['8', 0], 'filename_prefix': 'aivs_'}},
+                }
+            }).encode()
+
+            req = urllib.request.Request(
+                'http://localhost:8188/prompt',
+                data=comfy_payload,
+                headers={'Content-Type': 'application/json'},
+                method='POST'
+            )
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                resp_data = json.loads(resp.read().decode('utf-8'))
+                prompt_id = resp_data.get('prompt_id')
+
+            # Poll for result
+            import time
+            img_b64 = None
+            for _ in range(60):
+                time.sleep(2)
+                hist_req = urllib.request.Request(
+                    f'http://localhost:8188/history/{prompt_id}', method='GET'
+                )
+                with urllib.request.urlopen(hist_req, timeout=10) as hr:
+                    hist = json.loads(hr.read().decode('utf-8'))
+                if prompt_id in hist:
+                    outputs = hist[prompt_id].get('outputs', {})
+                    for node_out in outputs.values():
+                        imgs = node_out.get('images', [])
+                        if imgs:
+                            img_name = imgs[0]['filename']
+                            img_req = urllib.request.Request(
+                                f'http://localhost:8188/view?filename={img_name}&type=output',
+                                method='GET'
+                            )
+                            with urllib.request.urlopen(img_req, timeout=15) as ir:
+                                img_b64 = base64.b64encode(ir.read()).decode()
+                            break
+                    break
+
+            if not img_b64:
+                raise Exception('ComfyUI did not return image in time')
+
+            result = json.dumps({'image': img_b64}).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(result)))
+            self.send_cors()
+            self.end_headers()
+            self.wfile.write(result)
+            print(f'  [aivideo/image] ComfyUI image generated ✅')
+
+        except Exception as e:
+            err = json.dumps({'error': f'Image gen error: {e}. Is ComfyUI running on port 8188?'}).encode()
+            self.send_response(502)
+            self.send_header('Content-Type', 'application/json')
+            self.send_cors()
+            self.end_headers()
+            self.wfile.write(err)
+
+    def _aivideo_tts(self, body):
+        """Synthesise voice via XTTS v2 REST API."""
+        import base64
+        try:
+            data  = json.loads(body.decode('utf-8'))
+            text  = data.get('text', '')
+            lang  = data.get('language', 'en')
+            speed = data.get('speed', 1.0)
+
+            # XTTS v2 API endpoint (coqui/xtts-v2 server)
+            tts_payload = json.dumps({
+                'text': text,
+                'language': lang,
+                'speaker_wav': None,
+                'speed': speed
+            }).encode()
+
+            req = urllib.request.Request(
+                'http://localhost:8020/tts_to_audio/',
+                data=tts_payload,
+                headers={'Content-Type': 'application/json'},
+                method='POST'
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                audio_bytes = resp.read()
+                audio_b64   = base64.b64encode(audio_bytes).decode()
+
+            result = json.dumps({'audio': audio_b64}).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(result)))
+            self.send_cors()
+            self.end_headers()
+            self.wfile.write(result)
+            print(f'  [aivideo/tts] XTTS voice generated ✅ ({len(audio_bytes)} bytes)')
+
+        except Exception as e:
+            err = json.dumps({'error': f'TTS error: {e}. Is XTTS v2 running on port 8020?'}).encode()
+            self.send_response(502)
+            self.send_header('Content-Type', 'application/json')
+            self.send_cors()
+            self.end_headers()
+            self.wfile.write(err)
+
+    def _aivideo_music(self, body):
+        """Generate background music via AudioCraft MusicGen (Gradio API)."""
+        import base64
+        try:
+            data     = json.loads(body.decode('utf-8'))
+            prompt   = data.get('prompt', 'cinematic epic music')
+            duration = int(data.get('duration', 30))
+
+            # AudioCraft Gradio API (predict endpoint)
+            ac_payload = json.dumps({
+                'data': [prompt, 'melody', duration]
+            }).encode()
+
+            req = urllib.request.Request(
+                'http://localhost:7861/run/predict',
+                data=ac_payload,
+                headers={'Content-Type': 'application/json'},
+                method='POST'
+            )
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                resp_data = json.loads(resp.read().decode('utf-8'))
+                # Gradio returns audio file path or base64
+                output = resp_data.get('data', [None])[0]
+                if isinstance(output, dict):
+                    # New Gradio format: {'name': '/tmp/...', 'data': None}
+                    audio_path = output.get('name', '')
+                    with open(audio_path, 'rb') as af:
+                        audio_b64 = base64.b64encode(af.read()).decode()
+                elif isinstance(output, str) and output.startswith('data:'):
+                    audio_b64 = output.split(',', 1)[1]
+                else:
+                    raise Exception('Unexpected AudioCraft response format')
+
+            result = json.dumps({'audio': audio_b64}).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(result)))
+            self.send_cors()
+            self.end_headers()
+            self.wfile.write(result)
+            print('  [aivideo/music] AudioCraft music generated ✅')
+
+        except Exception as e:
+            err = json.dumps({'error': f'Music gen error: {e}. Is AudioCraft running on port 7861?'}).encode()
+            self.send_response(502)
+            self.send_header('Content-Type', 'application/json')
+            self.send_cors()
+            self.end_headers()
+            self.wfile.write(err)
+
+    def _aivideo_assemble(self, body):
+        """Assemble final video using FFmpeg from images + audio per scene."""
+        import base64, tempfile, subprocess, shutil
+        tmp = tempfile.mkdtemp(prefix='aivs_')
+        try:
+            data       = json.loads(body.decode('utf-8'))
+            scenes     = data.get('scenes', [])
+            music_b64  = data.get('music')
+            music_vol  = float(data.get('music_vol', 0.25))
+            fps        = int(data.get('fps', 30))
+            fade       = data.get('fade', True)
+
+            if not scenes:
+                raise ValueError('No scenes provided')
+            if not shutil.which('ffmpeg'):
+                raise RuntimeError('FFmpeg not found. Install FFmpeg and add to PATH.')
+
+            # Write each scene image + audio, produce clip
+            clip_files = []
+            for i, scene in enumerate(scenes):
+                dur = float(scene.get('duration', 5))
+                img_path   = os.path.join(tmp, f'img_{i}.png')
+                audio_path = os.path.join(tmp, f'audio_{i}.wav')
+                clip_path  = os.path.join(tmp, f'clip_{i}.mp4')
+
+                # Write image
+                if scene.get('image'):
+                    with open(img_path, 'wb') as f:
+                        f.write(base64.b64decode(scene['image']))
+                else:
+                    # Black frame fallback
+                    subprocess.run([
+                        'ffmpeg', '-y', '-f', 'lavfi',
+                        '-i', 'color=c=black:s=1080x1920:r=30',
+                        '-t', str(dur), img_path.replace('.png', '.mp4')
+                    ], check=True, capture_output=True)
+                    img_path = img_path.replace('.png', '.mp4')
+
+                # Write audio
+                if scene.get('audio'):
+                    with open(audio_path, 'wb') as f:
+                        f.write(base64.b64decode(scene['audio']))
+                    # Build clip: image + audio, Ken Burns zoom
+                    cmd = [
+                        'ffmpeg', '-y',
+                        '-loop', '1', '-i', img_path,
+                        '-i', audio_path,
+                        '-filter_complex',
+                        f'[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,'
+                        f'zoompan=z=\'min(zoom+0.0008,1.5)\':x=\'iw/2-(iw/zoom/2)\':y=\'ih/2-(ih/zoom/2)\':d={int(dur*fps)}:s=1080x1920:fps={fps},'
+                        f'{"fade=t=out:st=" + str(dur-0.5) + ":d=0.5," if fade else ""}setsar=1[v]',
+                        '-map', '[v]', '-map', '1:a',
+                        '-t', str(dur), '-c:v', 'libx264', '-preset', 'fast',
+                        '-c:a', 'aac', '-b:a', '128k', '-shortest', clip_path
+                    ]
+                else:
+                    cmd = [
+                        'ffmpeg', '-y',
+                        '-loop', '1', '-i', img_path,
+                        '-filter_complex',
+                        f'[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,'
+                        f'zoompan=z=\'min(zoom+0.0008,1.5)\':x=\'iw/2-(iw/zoom/2)\':y=\'ih/2-(ih/zoom/2)\':d={int(dur*fps)}:s=1080x1920:fps={fps},'
+                        f'setsar=1[v]',
+                        '-map', '[v]', '-an',
+                        '-t', str(dur), '-c:v', 'libx264', '-preset', 'fast', clip_path
+                    ]
+                subprocess.run(cmd, check=True, capture_output=True, timeout=120)
+                clip_files.append(clip_path)
+
+            # Concat all clips
+            concat_list = os.path.join(tmp, 'concat.txt')
+            with open(concat_list, 'w') as f:
+                for cf in clip_files:
+                    f.write(f"file '{cf}'\n")
+
+            concat_path = os.path.join(tmp, 'concat.mp4')
+            subprocess.run([
+                'ffmpeg', '-y', '-f', 'concat', '-safe', '0',
+                '-i', concat_list, '-c', 'copy', concat_path
+            ], check=True, capture_output=True, timeout=60)
+
+            # Mix background music
+            final_path = os.path.join(tmp, 'final.mp4')
+            if music_b64:
+                music_path = os.path.join(tmp, 'music.wav')
+                with open(music_path, 'wb') as f:
+                    f.write(base64.b64decode(music_b64))
+                subprocess.run([
+                    'ffmpeg', '-y',
+                    '-i', concat_path, '-i', music_path,
+                    '-filter_complex',
+                    f'[0:a]volume=1.0[a0];[1:a]volume={music_vol}[a1];[a0][a1]amix=inputs=2:duration=first[aout]',
+                    '-map', '0:v', '-map', '[aout]',
+                    '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', final_path
+                ], check=True, capture_output=True, timeout=120)
+            else:
+                final_path = concat_path
+
+            # Copy final to output dir for serving
+            out_name    = f'aivs_output_{os.urandom(4).hex()}.mp4'
+            out_dir     = os.path.join(BASE_DIR, 'aivs_output')
+            os.makedirs(out_dir, exist_ok=True)
+            out_path    = os.path.join(out_dir, out_name)
+            shutil.copy2(final_path, out_path)
+
+            result = json.dumps({'url': f'/aivs_output/{out_name}', 'ok': True}).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(result)))
+            self.send_cors()
+            self.end_headers()
+            self.wfile.write(result)
+            print(f'  [aivideo/assemble] Video assembled ✅ → {out_name}')
+
+        except Exception as e:
+            err = json.dumps({'error': str(e)}).encode()
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.send_cors()
+            self.end_headers()
+            self.wfile.write(err)
+        finally:
+            try:
+                shutil.rmtree(tmp, ignore_errors=True)
+            except Exception:
+                pass
 
     # ── GET: /proxy/fetch?url=... → fetch any external URL ──
     def _proxy_fetch(self, target_url):
