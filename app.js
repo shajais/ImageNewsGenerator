@@ -3235,48 +3235,58 @@ ${researchContext ? '- Weave in the additional researched context naturally to m
   "hashtags": ["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#tag9","#tag10","#ShashiNewsGen"]
 }
 
+━━━ STRICT NO-REPETITION RULE (read first) ━━━
+EACH of the four fields (hook, title, description, hashtags) must carry DIFFERENT information.
+• hook ≠ title — do NOT restate the same sentence in both
+• title ≠ first sentence of description — the description must ADD new info, not repeat the headline
+• description paragraphs must NOT repeat the same fact in different words
+• If a fact is stated in the hook or title, do NOT repeat it verbatim in the description
+Think of it as: hook = tease → title = what happened → description = full story with details → hashtags = SEO
+
 ━━━ RULES FOR EACH FIELD ━━━
 
-HOOK (max 18 words):
+HOOK (max 15 words — teaser only):
 • Start with ONE emoji matching the mood — choose from: ${cfg.hookEmojis}
 • ${cfg.hookTip}
-• Make it feel urgent and emotionally compelling — trigger curiosity, excitement, outrage or pride
-• NEVER write generic phrases like "एउटा ठूलो खबर" or "महत्त्वपूर्ण समाचार"
+• The hook is a TEASER — it hints at the news without stating it fully. Make the reader curious.
+• NEVER copy or paraphrase the title. NEVER write generic phrases like "एउटा ठूलो खबर" or "महत्त्वपूर्ण समाचार"
+• Example: hook says WHO is involved + emotional trigger; title reveals WHAT happened
 
-TITLE (1 to 2 LINES MAX — powerful and crisp):
-• MAX 12 words per line — SHORT, PUNCHY, DIRECT. Never write long rambling sentences.
+TITLE (1 to 2 LINES MAX — the headline):
+• MAX 10 words per line — SHORT, PUNCHY, DIRECT.
 • Write like a breaking news headline on a Nepali TV ticker — sharp and hard-hitting
 • Use power words ONLY where they fit naturally: "ब्रेकिङ", "खुलासा", "चौंकाउने", "सत्य", "भाइरल" etc.
 • MUST contain the SPECIFIC subject (real name, place, or event) from this article
-• Line 1: The news hook — WHO + WHAT (max 10 words)
-• Line 2 (optional): The consequence or key fact (max 10 words)
+• Line 1: WHO + WHAT happened (max 10 words)
+• Line 2 (optional): The key consequence or number (max 10 words) — only if it adds NEW info
 • Use \\n to separate lines. Do NOT write 3 lines.
-• Example good format: "🔥 [Name/Place] — [exactly what happened]\\n[The most shocking number or consequence]"
-• BAD examples (do NOT do this): "एउटा ठूलो खुलासा भयो जुन सबैलाई थाहा हुनुपर्छ" (too vague, too long)
+• Do NOT repeat the hook wording. The title reveals the news; the hook teases it.
 • ${cfg.titleTip}
 
-DESCRIPTION (Facebook post format — natural spoken Nepali prose):
-• Write like a knowledgeable Nepali person is explaining the news to their friends on Facebook — natural, fluent, easy to read
-• Use STANDARD NEPALI grammar: subject-object-verb order, correct verb conjugations, natural sentence connectors like "त्यसैले", "किनभने", "भने", "तर", "यसका साथै", "अर्कोतिर"
-• AVOID: unusual literary words, archaic terms, unnatural phrase constructions, awkward loan translations
+DESCRIPTION (Facebook news post — the full story):
+• NEVER repeat the hook sentence or the title headline verbatim — the description is the FULL STORY
+• Each paragraph must cover a DIFFERENT aspect of the news — no paragraph repeats what another says
+• Write like a knowledgeable Nepali person explaining the news to friends on Facebook — natural, fluent
+• Use STANDARD NEPALI grammar: subject-object-verb order, correct verb conjugations, natural connectors like "त्यसैले", "किनभने", "भने", "तर", "यसका साथै", "अर्कोतिर"
 • AVOID "भएको छ", "गरेका छन्" overuse — vary with "भयो", "गर्नुभयो", "देखाएको छ", "बताए" etc.
-• Use emojis inline (🔴, 📌, ⚡, 👉, ✅, ❗, 🔥, 💥, etc.) — at least 1-2 per paragraph
-• Format with blank lines between paragraphs for readability
-• Paragraph 1: 🔴 के भयो र को थियो — सरल भाषामा (2-3 वाक्य)
-• Paragraph 2: 📌 किन भयो र पृष्ठभूमि के हो (2-3 वाक्य)
-• Paragraph 3: ⚡ मुख्य तथ्यहरू: संख्या, उद्धरण, मिति (2-3 वाक्य)
-• Paragraph 4: 👥 सार्वजनिक, अधिकारी वा विज्ञहरूको प्रतिक्रिया (2 वाक्य)
-• Paragraph 5: 🔮 अब के हुन्छ र यसको प्रभाव (2 वाक्य)
+• Use emojis inline (🔴, 📌, ⚡, 👉, ✅, ❗, 🔥, 💥) — 1-2 per paragraph
+• Blank line between each paragraph
+• Paragraph 1 🔴: घटना/समाचारको सारांश — के भयो, को थियो (2-3 वाक्य, but DO NOT copy the title)
+• Paragraph 2 📌: पृष्ठभूमि — किन भयो, कसरी भयो (2-3 वाक्य with NEW information not in para 1)
+• Paragraph 3 ⚡: मुख्य तथ्य — संख्या, उद्धरण, मिति, स्थान (2-3 वाक्य, specific details)
+• Paragraph 4 👥: प्रतिक्रिया — सार्वजनिक, अधिकारी वा विज्ञको भनाइ (2 वाक्य, NEW info)
+• Paragraph 5 🔮: प्रभाव र भविष्य — अब के हुन्छ (2 वाक्य, forward-looking, not repetition)
 • End with: 👉 यो खबर share गर्नुस् र आफ्नो विचार comment मा लेख्नुस्! 💬
 • ${cfg.descTip}
-• 200-350 words total — informative but concise and shareable
+• 200-300 words total
 
-GRAMMAR CHECKLIST (always verify before outputting):
-• Each sentence ends properly — no half-finished thoughts
-• Verb tenses are consistent throughout
-• No mix of formal/informal forms in the same paragraph
-• Names and places are spelled consistently
-• No English words where a natural Nepali equivalent exists
+QUALITY CHECK before outputting (mentally verify each):
+✓ Does the hook TEASE without giving away the full story?
+✓ Does the title STATE what happened (different wording from hook)?
+✓ Does paragraph 1 of description expand on the title with NEW details (not a copy)?
+✓ Does each description paragraph cover a DIFFERENT aspect?
+✓ Are there any sentences that say the same thing twice in different words? If yes, DELETE one.
+✓ Verb tenses consistent, sentences complete, Nepali grammar correct
 
 HASHTAGS (exactly 11 — the last MUST be #ShashiNewsGen — for viral Facebook SEO):
 • Tags 1-3: STORY-SPECIFIC in Devanagari — real name/film/place/event keyword from THIS article
@@ -3303,13 +3313,21 @@ OUTPUT: Raw JSON only — no \`\`\`json, no explanation, nothing else.`;
 HEADLINE: ${rawTitle}
 ${bodySnippet ? `ARTICLE BODY: ${bodySnippet.slice(0, 1000)}` : ''}
 
+STRICT NO-REPETITION RULE:
+- hook must TEASE the news (don't give away the full story)
+- title must STATE what happened (different wording from hook)
+- description must tell the FULL STORY — never copy or paraphrase the hook or title
+- Each paragraph of description must cover a DIFFERENT aspect (event → background → facts → reactions → impact)
+- Delete any sentence that repeats information already stated
+
 RULES:
-- Title: max 2 lines, max 12 words per line, crisp and powerful, specific to this news
-- Description: natural fluent Nepali prose with correct grammar — like a knowledgeable person explaining news to friends. Use standard Nepali grammar, avoid archaic/unusual words, use natural sentence connectors.
+- Hook: max 15 words, teaser only, one emoji, specific to this news
+- Title: max 2 lines, max 10 words per line, crisp headline with real names/places/numbers
+- Description: natural fluent Nepali prose — 5 paragraphs with blank lines between them. WHO/WHAT/WHERE/WHEN/WHY/HOW across paragraphs, reactions, impact. Correct standard Nepali grammar. End with: 👉 यो खबर share गर्नुस् र आफ्नो विचार comment मा लेख्नुस्! 💬
 - All text MUST be in Nepali Devanagari script.
 
 Return ONLY this JSON (no markdown, no explanation):
-{"hook":"<1 punchy Nepali sentence, max 15 words>","title":"<crisp 1-2 line Nepali headline, real names/places/numbers, max 12 words per line>","description":"<natural conversational Nepali — 5-6 paragraphs with blank lines, WHO WHAT WHERE WHEN WHY HOW, reactions, impact, correct grammar>","hashtags":["#नेपाल","#BreakingNews","#Nepal","#viral","#trending","#नेपाल_समाचार","#NepaliNews","#ShashiNewsGen"]}` : prompt;
+{"hook":"<tease, 1 Nepali sentence, max 15 words>","title":"<crisp 1-2 line Nepali headline, real names/places/numbers, max 10 words per line>","description":"<full story in natural Nepali — 5 paragraphs with blank lines, no repetition of hook or title, WHO WHAT WHERE WHEN WHY HOW reactions impact, end with share line>","hashtags":["#नेपाल","#BreakingNews","#Nepal","#viral","#trending","#नेपाल_समाचार","#NepaliNews","#ShashiNewsGen"]}` : prompt;
 
   let result;
   let _aiFailReason = null;
