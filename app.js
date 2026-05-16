@@ -2863,7 +2863,7 @@ async function callGemini(prompt, timeoutMs = 18000) {
 
   const body = JSON.stringify({
     contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.85, topK: 40, topP: 0.95, maxOutputTokens: 2048 },
+    generationConfig: { temperature: 0.85, topK: 40, topP: 0.95, maxOutputTokens: 4096 },
   });
 
   let lastError = 'Unknown Gemini error';
@@ -3264,14 +3264,14 @@ DESCRIPTION (Facebook news post in proper Nepali — the full accurate story):
 • NEVER repeat the hook or title — the description EXPANDS with more detail
 • Blank line between each paragraph
 • Use emojis inline (🔴, 📌, ⚡, 👉, ✅, ❗, 🔥, 💥) — 1-2 per paragraph
-• Paragraph 1 🔴: के भयो, को थियो — घटनाको सारांश (article को मुख्य तथ्य)
-• Paragraph 2 📌: पृष्ठभूमि र कारण (किन र कसरी — article मा भएको विवरण)
-• Paragraph 3 ⚡: मुख्य तथ्य — संख्या, स्थान, मिति, उद्धरण (सटीक article को डेटा)
-• Paragraph 4 👥: प्रतिक्रिया वा परिणाम (article मा उल्लेख भएको)
-• Paragraph 5 🔮: प्रभाव र अगाडि के हुन्छ (article मा भएको वा logical conclusion)
+• Paragraph 1 🔴: के भयो, को थियो — घटनाको सारांश (article को मुख्य तथ्य) — 3-4 वाक्य
+• Paragraph 2 📌: पृष्ठभूमि र कारण (किन र कसरी — article मा भएको विवरण) — 3-4 वाक्य
+• Paragraph 3 ⚡: मुख्य तथ्य — संख्या, स्थान, मिति, उद्धरण (सटीक article को डेटा) — 3-4 वाक्य
+• Paragraph 4 👥: प्रतिक्रिया वा परिणाम (article मा उल्लेख भएको) — 3 वाक्य
+• Paragraph 5 🔮: प्रभाव र अगाडि के हुन्छ (article मा भएको वा logical conclusion) — 3 वाक्य
 • End with: 👉 यो खबर share गर्नुस् र आफ्नो विचार comment मा लेख्नुस्! 💬
 • ${cfg.descTip}
-• 200-300 words total
+• 300-450 words total — write a FULL, detailed news article. Do NOT cut short.
 
 ━━━ NEPALI GRAMMAR RULES (MANDATORY — apply to every sentence) ━━━
 
@@ -3390,7 +3390,7 @@ NEPALI GRAMMAR — MANDATORY:
 FORMAT RULES:
 - hook = teaser (1 sentence, max 15 words, one emoji, creates curiosity without changing facts)
 - title = accurate Nepali headline (1-2 lines, max 10 words/line, real names/places/results)
-- description = accurate full story (5 paragraphs, blank lines between, 200-280 words, correct Nepali grammar, zero Hindi words). End: 👉 यो खबर share गर्नुस् र आफ्नो विचार comment मा लेख्नुस्! 💬
+- description = accurate full story (5 paragraphs, blank lines between, 300-450 words, correct Nepali grammar, zero Hindi words). Do NOT write short — write a full detailed article. End: 👉 यो खबर share गर्नुस् र आफ्नो विचार comment मा लेख्नुस्! 💬
 
 Return ONLY this JSON (no markdown):
 {"hook":"<accurate tease, 1 Nepali sentence, max 15 words>","title":"<accurate 1-2 line Nepali headline, real names/results/numbers from article>","description":"<accurate full story — 5 paragraphs, blank lines, correct Nepali verb forms, zero Hindi words>","hashtags":["#नेपाल","#BreakingNews","#Nepal","#viral","#trending","#नेपाल_समाचार","#NepaliNews","#ShashiNewsGen"]}` : prompt;
