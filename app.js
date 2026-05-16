@@ -2765,6 +2765,77 @@ function _classifyAIError(status, rawMsg, isFetchError) {
 }
 
 /**
+ * Use Gemini with Google Search grounding to research a news topic.
+ * Returns plain-text summary of additional facts found online.
+ * Falls back silently to empty string on any error.
+ * @param {string} title - news headline
+ * @param {string} bodySnippet - article body excerpt
+ * @returns {Promise<string>}
+ */
+async function _researchWithGemini(title, bodySnippet) {
+  const effectiveKey = _browserGeminiKey || (_geminiKey ? '__server__' : '');
+  if (!effectiveKey) return '';
+
+  const urlsToTry = [];
+  if (_isNodeServer && _browserGeminiKey) {
+    urlsToTry.push({ url: '/proxy/gemini-withkey', label: 'proxy(browser key)', headers: { 'X-Gemini-Key': _browserGeminiKey } });
+  }
+  if (_geminiProxyBase && _geminiKey) {
+    urlsToTry.push({ url: _geminiProxyBase, label: 'proxy(.env key)', headers: {} });
+  }
+  if (!_isNodeServer && _browserGeminiKey) {
+    urlsToTry.push({ url: `${GEMINI_API_URL}?key=${encodeURIComponent(_browserGeminiKey)}`, label: 'direct', headers: {} });
+  }
+  if (!urlsToTry.length) return '';
+
+  const researchPrompt = `You are a news researcher. A journalist needs additional context about the following news story to write an accurate, informative article.
+
+NEWS HEADLINE: ${title}
+${bodySnippet ? `ARTICLE EXCERPT:\n${bodySnippet.slice(0, 1000)}` : ''}
+
+Using your knowledge and web search, provide 4-6 additional key facts, background context, or related recent developments that would help a journalist write a more complete and accurate Nepali news article about this topic.
+
+Focus on:
+- Key people involved and their roles/background
+- Timeline of events leading up to this
+- Specific numbers, statistics or data points
+- Related recent developments or context
+- Why this matters / impact
+
+Write in plain English, bullet points, concise. Max 300 words.`;
+
+  const body = JSON.stringify({
+    contents: [{ parts: [{ text: researchPrompt }] }],
+    tools: [{ google_search: {} }],
+    generationConfig: { temperature: 0.3, maxOutputTokens: 512 },
+  });
+
+  for (const endpoint of urlsToTry) {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 15000);
+    try {
+      const res = await fetch(endpoint.url, {
+        method: 'POST', signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json', ...endpoint.headers },
+        body,
+      });
+      clearTimeout(tid);
+      if (!res.ok) { continue; }
+      const data = await res.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (text) {
+        console.log('[Gemini Research] got context:', text.slice(0, 200));
+        return text.trim();
+      }
+    } catch (e) {
+      clearTimeout(tid);
+      console.warn('[Gemini Research] failed:', e.message);
+    }
+  }
+  return '';
+}
+
+/**
  * Call Gemini 2.0-flash (free tier) with a structured prompt.
  * Returns parsed JSON from the model or throws a descriptive error.
  * @param {string} prompt
@@ -3063,6 +3134,14 @@ async function rewriteWithAI(rawTitle, articleBody, sourceLang, category) {
   const langNote = sourceLang === 'ne' ? 'Nepali' : sourceLang === 'hi' ? 'Hindi' : 'English';
   const hasBody = bodySnippet.length > 100;
 
+  /* ── Google Search grounding: research the topic for richer context ── */
+  let researchContext = '';
+  if (hasGemini && rawTitle && rawTitle.length > 5) {
+    console.log('[AI] Running Google Search grounding for extra context…');
+    researchContext = await _researchWithGemini(rawTitle, bodySnippet).catch(() => '');
+    if (researchContext) console.log('[AI] Research context obtained — injecting into prompt');
+  }
+
   /* ── Category-specific prompt configuration ── */
   const catCfg = {
     'nepali-ent': {
@@ -3137,13 +3216,15 @@ READ THIS ARTICLE CAREFULLY:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HEADLINE (${langNote}): ${rawTitle}
 ${hasBody ? `FULL ARTICLE BODY:\n${bodySnippet}` : '(No article body available — work from headline only)'}
+${researchContext ? `\nADDITIONAL RESEARCHED CONTEXT (from Google Search — use these facts to enrich your content):\n${researchContext}` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Your job: Write viral social media content that will get MAXIMUM shares, comments and reach on Facebook.
-CRITICAL: Every output field MUST be based on ACTUAL specific details in this article.
+CRITICAL: Every output field MUST be based on ACTUAL specific details in this article${researchContext ? ' and the additional researched context' : ''}.
 - Use the REAL names of people, places, films, songs, organisations mentioned
 - Use the REAL numbers (box office, awards, dates, figures) from the article
 - Use the REAL event/action described — do NOT invent or guess details
+${researchContext ? '- Weave in the additional researched context naturally to make the content more informative and accurate' : ''}
 
 ━━━ OUTPUT FORMAT (strict JSON, no markdown) ━━━
 
