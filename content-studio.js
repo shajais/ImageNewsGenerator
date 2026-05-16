@@ -822,7 +822,12 @@ function csQuick(tab) {
     atomic:    { caption: '☢️ Improve 1% Every Day!\nIn 365 days you will be 37x better! 🚀\n#AtomicHabits #Nepal', render: _csRenderAtomic },
     quiz:      { caption: '🧠 Brain Teaser - Write your answer in comments!\n#Quiz #Nepal #Brain', render: _csRenderQuiz },
     success:   { caption: '🏆 Inspirational Success Story!\nNever give up - Keep moving forward!\n#Success #Nepal #Inspiration', render: _csRenderSuccess },
-    poll:      { caption: '📊 के तपाईंलाई यो कुरा मन पर्छ?\n\n✅ YES   ❌ NO\n\n#Poll #Nepal #Opinion', render: _csRenderPoll },
+    poll:      { caption: '📊 के तपाईंलाई यो कुरा मन पर्छ?\n\n✅ YES   ❌ NO\n\n#Poll #Nepal #Opinion', render: () => {
+      // Pre-fill question if blank
+      const qEl = document.getElementById('csPollCaption');
+      if (qEl && !qEl.value.trim()) qEl.value = 'के तपाईंलाई यो कुरा मन पर्छ? / Do you agree with this?';
+      _csRenderPoll(null);
+    }},
   };
   const q = quick[tab];
   if (!q) return;
@@ -1007,19 +1012,48 @@ Format as JSON: { "title": "...", "story": "...", "lesson": "...", "closing": ".
       break;
     }
     case 'poll': {
-      const topic   = document.getElementById('csPollTopic')?.value?.trim() || 'Nepal social issue';
+      const topic   = document.getElementById('csPollTopic')?.value?.trim() || '';
       const caption = document.getElementById('csPollCaption')?.value?.trim() || '';
       const type    = document.getElementById('csPollType')?.value || 'yesno';
-      prompt = `Create an engaging social media poll post for Nepal in Nepali/English.
-Topic: "${topic}". ${caption ? 'Caption hint: ' + caption : ''}
-${type === 'yesno' ? 'Choices must be YES and NO (in Nepali: हो / होइन).' : 'Create 4 interesting multiple choice options.'}
-Write:
-1. A compelling, engaging poll question (1 sentence, bilingual preferred)
-2. ${type === 'yesno' ? 'Two choices: YES (✅ हो) and NO (❌ होइन)' : 'Four engaging choices (A/B/C/D)'}
-3. Short post caption encouraging engagement (2 lines)
-4. 5 relevant hashtags
-Format as JSON: { "question": "...", "choices": ["choice1","choice2"${type !== 'yesno' ? ',"choice3","choice4"' : ''}], "caption": "...", "hashtags": "..." }`;
-      renderFn = _csRenderPoll;
+      if (!topic) {
+        _csShowSpinner(false);
+        _csSetStatus('⚠️ Please enter a Topic/Context above the generate button first!');
+        return;
+      }
+      prompt = `You are a viral Nepali social media content creator. Create a highly specific, engaging poll post about: "${topic}".
+${caption ? `Additional context: ${caption}` : ''}
+The poll MUST be directly about "${topic}" — do NOT write generic questions.
+${type === 'yesno' ? 'It is a YES/NO poll.' : 'Create 4 specific multiple choice options directly about the topic.'}
+
+Rules:
+- The question must mention the specific topic/person/event by name
+- Write in a mix of Nepali (Devanagari) and English for maximum reach
+- Be bold, opinionated and engaging — not neutral
+
+Return ONLY valid JSON (no markdown, no code blocks):
+{ "question": "specific poll question mentioning ${topic}", "choices": [${type === 'yesno' ? '"✅ हो / YES","❌ होइन / NO"' : '"choice1","choice2","choice3","choice4"'}], "caption": "2-line engaging caption with emojis", "hashtags": "#hashtag1 #hashtag2 #hashtag3 #hashtag4 #hashtag5", "imageSearch": "1-4 word Wikipedia image search keyword for ${topic}" }`;
+      renderFn = async (aiResult) => {
+        // 1. Push AI result into form fields
+        if (aiResult?.question) {
+          const qEl = document.getElementById('csPollCaption');
+          if (qEl) qEl.value = aiResult.question;
+        }
+        if (aiResult?.choices && type === 'custom') {
+          const cEl = document.getElementById('csPollChoices');
+          if (cEl) cEl.value = aiResult.choices.join('\n');
+        }
+        // 2. Render canvas immediately with AI data
+        _csRenderPoll(aiResult);
+        // 3. Auto-search and load image if no image already uploaded
+        const hasImage = _pollImages.length > 0;
+        if (!hasImage && aiResult?.imageSearch) {
+          _csSetStatus('🖼️ Loading relevant image for "' + aiResult.imageSearch + '"…');
+          await _csPollAutoLoadWikiImage(aiResult.imageSearch, topic);
+          _csRenderPoll(aiResult);
+        }
+        _csShowSpinner(false);
+        _csSetStatus('🤖 AI Poll generated for: ' + topic);
+      };
       break;
     }
   }
@@ -1035,8 +1069,14 @@ Format as JSON: { "question": "...", "choices": ["choice1","choice2"${type !== '
 
   _csShowSpinner(false);
   if (!aiResult) {
-    _csSetStatus('⭐ Quick template ready!');
-    csQuick(tab);
+    _csSetStatus(tab === 'poll' ? '❌ AI failed — check your topic and try again.' : '⭐ Quick template ready!');
+    if (tab !== 'poll') csQuick(tab);
+    return;
+  }
+
+  // Poll tab: renderFn is async and manages spinner + status itself
+  if (tab === 'poll') {
+    renderFn && renderFn(aiResult);
     return;
   }
 
@@ -2206,7 +2246,7 @@ function csFestClearBgImage() {
 /* ── Photo position ── */
 let _festPhotoPos = 'center';
 function csFestSetPhotoPos(btn) {
-  document.querySelectorAll('#csFestPhotoPos .cs-border-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#csFestPhotoPos .cs-seg-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   _festPhotoPos = btn.dataset.pos;
   csQuick('festival');
@@ -2465,9 +2505,7 @@ function _csRenderFestival(data) {
   glow.addColorStop(0,'rgba(255,255,255,0.07)'); glow.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
 
-  /* ── 5. Decorative border ── */
-  const borderStyle = document.getElementById('csBorderGrid')?.querySelector('.active')?.dataset.border || theme.border;
-  _csDrawBorder(ctx, W, H, borderStyle);
+  /* ── 5. Decorative border — disabled ── */
 
   /* ── 6. Layout constants ── */
   const bi          = Math.round(W * 0.045); // border inset safe margin
@@ -2787,7 +2825,13 @@ function _csRenderPolitician(data) {
   const partyLineH    = party   ? Math.round(partyFontSize * 1.3) + gap : 0;
   const occasionLineH = occasion ? Math.round(occasionFontSize * 1.25) + gap : 0;
   const msgLineH      = message  ? Math.round(msgFontSize * 1.4) * Math.max(1, Math.ceil(message.length / 35)) + gap : 0;
-  const totalTextH    = nameLineH + partyLineH + dividerH + occasionLineH + msgLineH;
+
+  /* Pre-measure name wrapping to get accurate total height */
+  ctx.font = `900 ${nameFontSize}px serif`;
+  const nameActualLines = name ? _csWrapTextArray(ctx, name, textW).length : 1;
+  const nameActualH = nameLineH * nameActualLines;
+
+  const totalTextH    = nameActualH + gap + partyLineH + dividerH + occasionLineH + msgLineH;
 
   const blockTopY = photo
     ? Math.max(photoY, photoY + (photoH - totalTextH) / 2)
@@ -2814,9 +2858,9 @@ function _csRenderPolitician(data) {
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = textAlign; ctx.textBaseline = 'top';
   ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 10;
-  _csWrapText(ctx, name, textAnchorX, curY, textW, nameLineH);
+  const nameLines = _csWrapText(ctx, name, textAnchorX, curY, textW, nameLineH);
   ctx.restore();
-  curY += nameLineH + gap;
+  curY += nameLineH * nameLines + gap;
 
   // Accent divider line
   ctx.save();
@@ -4450,14 +4494,10 @@ async function csAiEnhanceCaption() {
 
 /* -- Share -- */
 function csShare(platform) {
-  const text = encodeURIComponent(_csCaption || 'Shashi Creator Studio  ');
-  const url  = encodeURIComponent('https://shajais.github.io/ShashiNewsGen/');
-  const links = {
-    whatsapp: `https://wa.me/?text=${text}`,
-    facebook: `https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${text}`,
-    twitter:  `https://twitter.com/intent/tweet?text=${text}&url=${url}`,
-  };
-  if (links[platform]) window.open(links[platform], '_blank');
+  const caption = (_csCaption || 'Shashi Creator Studio 🇳🇵') + '\n\n#ShashiCreatorStudio #Nepal #Viral #Trending';
+  if (typeof _shareCanvasToSocial === 'function') {
+    _shareCanvasToSocial(platform, 'csCanvas', caption, csDownload);
+  }
 }
 
 /* ================================================================
@@ -4581,6 +4621,51 @@ function csPollClearImages() {
   csQuick('poll');
 }
 
+/* Auto-search Wikipedia for a relevant image and load it into _pollImages */
+async function _csPollAutoLoadWikiImage(searchTerm, fallbackTopic) {
+  const tryLoad = async (term) => {
+    const apiUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(term)}&prop=pageimages&format=json&pithumbsize=600&origin=*`;
+    try {
+      const r = await fetch(apiUrl);
+      const data = await r.json();
+      const pages = data?.query?.pages || {};
+      const imgs = Object.values(pages).filter(p => p.thumbnail).map(p => p.thumbnail.source);
+      return imgs[0] || null;
+    } catch { return null; }
+  };
+
+  const tryOpenSearch = async (term) => {
+    try {
+      const r = await fetch(`https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(term)}&limit=3&format=json&origin=*`);
+      const d = await r.json();
+      const titles = d[1] || [];
+      for (const title of titles) {
+        const url = await tryLoad(title);
+        if (url) return url;
+      }
+    } catch {}
+    return null;
+  };
+
+  let imgUrl = await tryLoad(searchTerm) || await tryOpenSearch(searchTerm);
+  if (!imgUrl && fallbackTopic !== searchTerm) {
+    imgUrl = await tryOpenSearch(fallbackTopic);
+  }
+  if (!imgUrl) return;
+
+  return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      _pollImages = [{ img, ox: 0, oy: 0 }];
+      _csPollRenderThumbs();
+      resolve();
+    };
+    img.onerror = () => resolve();
+    img.src = imgUrl;
+  });
+}
+
 function _csRenderPoll(data) {
   const { ctx, W, H } = _csGetCanvas();
   if (!ctx) return;
@@ -4646,7 +4731,7 @@ function _csRenderPoll(data) {
   }
 
   // ── PHOTO placement ──
-  const photoH_top    = Math.round(H * 0.38);
+  const photoH_top    = Math.round(H * 0.50);  // large image fills top half
   const photoH_middle = Math.round(H * 0.32);
 
   if (photo && layout === 'image-top') {
@@ -4670,7 +4755,7 @@ function _csRenderPoll(data) {
         }
         ctx.restore();
       });
-      curY = stripH + 10;
+      curY = stripH + 6;
     } else {
       ctx.save();
       ctx.beginPath(); ctx.rect(0, 0, W, photoH_top); ctx.clip();
@@ -4680,7 +4765,7 @@ function _csRenderPoll(data) {
       ov.addColorStop(0,'rgba(0,0,0,0)'); ov.addColorStop(1,'rgba(0,0,0,0.40)');
       ctx.fillStyle = ov; ctx.fillRect(0,0,W,photoH_top);
       ctx.restore();
-      curY = photoH_top + 10;
+      curY = photoH_top + 6;
     }
   } else if (photo && layout === 'fullbg') {
     ctx.save();
@@ -4694,10 +4779,39 @@ function _csRenderPoll(data) {
     ctx.fillStyle = vig; ctx.fillRect(0,0,W,H);
     ctx.restore();
     curY = 18;
+    // For fullbg, we'll pin the text block to bottom — mark this so question/buttons anchor there
   }
 
   // ── Question text ──
   const qFS = Math.round(Math.min(W*0.052, 30));
+
+  // For fullbg: pre-compute total block height and anchor to bottom
+  if (layout === 'fullbg') {
+    // Estimate question lines
+    ctx.save();
+    ctx.font = `bold ${qFS}px "Segoe UI", Arial, sans-serif`;
+    const qLinesEst = _csWrapTextArray(ctx, question, innerW);
+    ctx.restore();
+    const qBlockH = qFS * 1.35 * qLinesEst.length + 14;
+
+    // Estimate customMsg lines
+    const scale2 = Math.min(W / 600, H / 600, 1.4);
+    const msgFS2 = customMsg ? Math.round(Math.min(W * 0.038, 20) * scale2) : 0;
+    let msgBlockH2 = 0;
+    if (customMsg && msgFS2) {
+      ctx.save();
+      ctx.font = `600 ${msgFS2}px "Segoe UI", Arial, sans-serif`;
+      const ml = _csWrapTextArray(ctx, customMsg, innerW);
+      msgBlockH2 = ml.length * msgFS2 * 1.3 + 8;
+      ctx.restore();
+    }
+
+    // Estimate button block height
+    const btnHEst = Math.round(Math.min(W * 0.15, H * 0.14, 72) * scale2);
+    const totalEst = qBlockH + msgBlockH2 + btnHEst + 16;
+    curY = H - WMARK_H - totalEst - 18;
+  }
+
   ctx.save();
   ctx.font = `bold ${qFS}px "Segoe UI", Arial, sans-serif`;
   ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
@@ -4705,10 +4819,11 @@ function _csRenderPoll(data) {
   const qLines = _csWrapTextArray(ctx, question, innerW);
   qLines.forEach((line, i) => ctx.fillText(line, W/2, curY + i * qFS * 1.35));
   ctx.restore();
-  curY += qFS * 1.35 * qLines.length + 14;
+  curY += qFS * 1.35 * qLines.length + (layout === 'image-top' ? 6 : 14);
 
   // ── Image Middle (centred between question and choices) ──
   if (photo && layout === 'image-middle') {
+    curY += 18; // extra top padding so image sits lower
     if (photos.length > 1) {
       // Horizontal strip across full width
       const stripH = photoH_middle;
@@ -4756,7 +4871,6 @@ function _csRenderPoll(data) {
   // Pre-measure custom message height so buttons sit below it
   let msgBlockH = 0;
   if (customMsg && msgFS) {
-    // Measure line count with a temporary font measure
     ctx.save();
     ctx.font = `600 ${msgFS}px "Segoe UI", Arial, sans-serif`;
     const msgLines = _csWrapTextArray(ctx, customMsg, innerW);
@@ -4767,13 +4881,19 @@ function _csRenderPoll(data) {
   const maxBtnH    = Math.round(Math.min(W * 0.15, H * 0.14, 72) * scale);
   const choiceCount  = choices.length;
   const sideBySide   = choiceCount === 2;
-  const btnH       = sideBySide
+
+  // Button size same across all layouts
+  const btnH = sideBySide
     ? Math.min(maxBtnH, Math.round((remainingH - msgBlockH) * 0.70))
     : Math.min(maxBtnH, Math.round((remainingH - msgBlockH - (choiceCount - 1) * 8) / choiceCount));
+
   const btnFS      = Math.round(Math.min(btnH * 0.34, W * 0.042, 22));
   const btnAreaH   = sideBySide ? btnH : choiceCount * btnH + (choiceCount - 1) * 8;
   const totalBlock = msgBlockH + btnAreaH;
-  const blockStartY = curY + Math.round((remainingH - totalBlock) / 2);
+  // For image-top: flow directly below question (no centering gap). Other layouts: centre vertically.
+  const blockStartY = (layout === 'image-top')
+    ? curY + 8
+    : curY + Math.round((remainingH - totalBlock) / 2);
 
   // ── Custom message — rendered directly above choices ──
   if (customMsg && msgFS) {

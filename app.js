@@ -7819,50 +7819,42 @@ function downloadImage() {
  */
 async function shareWithImage() {
   if (!generatedPost) { toast('⚠️ पहिले समाचार छान्नुहोस्।', 'error'); return; }
-
-  const text = buildPostText(generatedPost, selectedArticle?.title, { includeUrl: false });
+  const text   = buildPostText(generatedPost, selectedArticle?.title, { includeUrl: false });
   const canvas = document.getElementById('newsCanvas');
 
-  /* Hide handles during export */
+  /* Hide selection handles during export */
   const prevSelected = _selectedSpriteId;
-  _selectedSpriteId = null;
+  _selectedSpriteId  = null;
   const hc = document.getElementById('compositeHandleCanvas');
   const hcWasVisible = hc && hc.style.display !== 'none';
   if (hc) { hc.style.display = 'none'; hc.style.pointerEvents = 'none'; }
 
   try {
-    /* Convert canvas to blob */
     const blob = await new Promise((resolve, reject) => {
       try { canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas empty')), 'image/png'); }
-      catch(e) { reject(e); }
+      catch (e) { reject(e); }
     });
-
     const file = new File([blob], 'shashinewsgen-' + Date.now() + '.png', { type: 'image/png' });
 
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      /* ✅ Web Share API with image (mobile/modern desktop) */
-      await navigator.share({ text, files: [file] });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Shashi Creator Studio', text });
       toast('✅ साझा गरियो!', 'success');
     } else if (navigator.share) {
-      /* Web Share without file (older browsers) — share text only */
       await navigator.share({ text });
       toast('✅ Text साझा गरियो! Image छुट्टै download गर्नुहोस्।', 'success');
     } else {
-      /* ❌ No Web Share API — copy text + trigger download */
       try { await navigator.clipboard.writeText(text); } catch {}
-      /* Trigger download */
+      const url  = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.download = 'shashinewsgen-' + Date.now() + '.png';
-      link.href = URL.createObjectURL(blob);
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+      link.href = url; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
       toast('✅ Text copied + Image downloaded! Social media मा paste गर्नुहोस्।', 'success', 5000);
     }
   } catch (e) {
     if (e.name !== 'AbortError') {
-      /* Canvas tainted — fall back to text-only */
       try { await navigator.clipboard.writeText(text); } catch {}
-      toast('⚠️ Text copied! Image generate गरेपछि पुनः प्रयास गर्नुहोस्।', 'info', 4000);
+      toast('⚠️ Text copied! Canvas export गर्न समस्या भयो।', 'info', 4000);
     }
   } finally {
     _selectedSpriteId = prevSelected;
@@ -7908,44 +7900,21 @@ let _shareUrl = '', _shareTarget = '';
 function shareOnFacebook() {
   if (!generatedPost) { toast('⚠️ पहिले समाचार छान्नुहोस्।','error'); return; }
   const text = buildPostText(generatedPost, selectedArticle?.title, { includeUrl: false });
-  /* Auto-download the image so user can attach it on Facebook */
-  setTimeout(() => { const btn = document.getElementById('downloadBtn'); if (btn) btn.click(); }, 600);
-  _shareUrl    = 'https://www.facebook.com/';
-  _shareTarget = 'facebook';
-  openShareModal(
-    '📘 Facebook मा साझा गर्नुहोस्',
-    '✅ Text copied + Image downloading!\n\nFacebook खुल्नेछ → "Photo/Video" post बनाउनुस् → downloaded image select गर्नुस् → caption Paste गर्नुस्।\n\n💡 Image watermark मा website URL छ — by Shashi News Gen',
-    text
-  );
+  _shareCanvasToSocial('facebook', 'newsCanvas', text, () => document.getElementById('downloadBtn')?.click());
 }
 
 function shareOnInstagram() {
   if (!generatedPost) { toast('⚠️ पहिले समाचार छान्नुहोस्।','error'); return; }
   const caption = buildPostText(generatedPost, selectedArticle?.title, { includeUrl: false });
-  setTimeout(() => { const btn = document.getElementById('downloadBtn'); if (btn) btn.click(); }, 400);
-  _shareUrl    = 'https://www.instagram.com/';
-  _shareTarget = 'instagram';
-  openShareModal(
-    '📸 Instagram मा साझा गर्नुहोस्',
-    '✅ Caption copied + Image downloading!\n\n① Downloaded image Instagram app मा खोल्नुहोस्।\n② New Post/Story → image select → caption Paste गर्नुस्।\n\n📱 Mobile मा राम्रो काम गर्छ',
-    caption
-  );
+  _shareCanvasToSocial('instagram', 'newsCanvas', caption, () => document.getElementById('downloadBtn')?.click());
 }
 
 function shareOnX() {
   if (!generatedPost) { toast('⚠️ पहिले समाचार छान्नुहोस्।','error'); return; }
   const post = generatedPost;
-  /* Truncate description to 200 chars for tweet */
   const descSnippet = (post.description || '').slice(0, 200).trim();
   const tweet = `${descSnippet}…\n\n${post.hashtags.slice(0, 4).join(' ')}\n\n— ${BRAND_NAME}`;
-  setTimeout(() => { const btn = document.getElementById('downloadBtn'); if (btn) btn.click(); }, 400);
-  _shareUrl    = `https://x.com/intent/tweet?text=${encodeURIComponent(tweet)}`;
-  _shareTarget = 'x';
-  openShareModal(
-    '𝕏 X (Twitter) मा साझा गर्नुहोस्',
-    '✅ Tweet ready + Image downloading!\n\n"Share Now" थिच्नुहोस् → X खुल्छ → downloaded image पनि attach गर्न सक्नुहुन्छ।',
-    tweet
-  );
+  _shareCanvasToSocial('twitter', 'newsCanvas', tweet, () => document.getElementById('downloadBtn')?.click());
 }
 
 function openShareModal(title, note, preview) {
@@ -9228,6 +9197,8 @@ function setMemeSize(w, h, btn) {
   canvas.width = w; canvas.height = h;
   document.querySelectorAll('.meme-size-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
+  const dimLabel = document.getElementById('memeCanvasDims');
+  if (dimLabel) dimLabel.textContent = `${w} × ${h}`;
   // Reset manual text positions so they recalculate for new dimensions
   _memeTextPositions = { top:{x:null,y:null,fontSize:0}, mid1:{x:null,y:null,fontSize:0}, mid2:{x:null,y:null,fontSize:0}, bot:{x:null,y:null,fontSize:0} };
   // Re-layout overlays for new canvas size
@@ -9248,40 +9219,64 @@ async function renderMemeCanvas() {
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
 
-  /* ── 1. Background — slot panels stacked vertically, or single image, or gradient ──
-     Pre-compute ribbon/watermark heights first so slot zones align exactly.          */
-  const _fontSize_pre = parseInt(document.getElementById('memeFontSize')?.value || 27);
-  const _font_pre     = _memeFontFamily || 'Impact';
-  const _topText_pre  = (document.getElementById('memeTopText')   ?.value || '').toUpperCase().trim();
-  const _botText_pre  = (document.getElementById('memeBottomText')?.value || '').toUpperCase().trim();
-  const _PAD_V_pre    = 14, _ACCENT_H_pre = 5;
-  function _preRibbonH(text, fs) {
-    if (!text) return _ACCENT_H_pre;
-    ctx.font = `900 ${fs}px "${_font_pre}", Impact, "Arial Black", sans-serif`;
-    const maxW = W - 36, words = text.split(' ');
-    let line = '', lines = [];
-    for (const w of words) {
+  /* ── Read all inputs once ── */
+  const fontSize  = parseInt(document.getElementById('memeFontSize')?.value || 42);
+  const fontFam   = _memeFontFamily || 'Impact';
+  const topText   = (document.getElementById('memeTopText')    ?.value || '').toUpperCase().trim();
+  const mid1Text  = (document.getElementById('memeMiddleText1')?.value || '').toUpperCase().trim();
+  const mid2Text  = (document.getElementById('memeMiddleText2')?.value || '').toUpperCase().trim();
+  const botText   = (document.getElementById('memeBottomText') ?.value || '').toUpperCase().trim();
+  const useStroke = document.getElementById('memeStroke')?.checked ?? true;
+  const textColor = _memeTextColor || '#ffffff';
+
+  /* ── Layout constants ── */
+  const PAD_V    = 16;
+  const PAD_H    = 18;
+  const ACCENT_H = 6;   // thin accent bar when no text
+  const WM_H     = 72;  // watermark strip height
+
+  /* ── Helper: measure word-wrapped lines ── */
+  function measureLines(text, fs) {
+    if (!text) return { lines: [], lineH: fs * 1.25, totalH: 0 };
+    ctx.font = `900 ${fs}px "${fontFam}", Impact, "Arial Black", sans-serif`;
+    const maxW = W - PAD_H * 2;
+    const lines = [];
+    let line = '';
+    for (const w of text.split(' ')) {
       const test = line ? line + ' ' + w : w;
       if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
       else line = test;
     }
     if (line) lines.push(line);
-    return lines.length * fs * 1.28 + _PAD_V_pre * 2;
+    const lineH = fs * 1.25;
+    return { lines, lineH, totalH: lines.length * lineH };
   }
-  const _topRH  = _preRibbonH(_topText_pre, _fontSize_pre);
-  const _botRH  = _preRibbonH(_botText_pre, _fontSize_pre);
-  const _wmH    = 72; // watermark always 72px
-  const zoneTop_bg = _topRH;           // images start right below top ribbon
-  const zoneBot_bg = H - _botRH - _wmH; // images end right above bottom ribbon
-  const zoneH_bg   = Math.max(0, zoneBot_bg - zoneTop_bg);
 
+  /* ── Compute ribbon heights ── */
+  const topRibbonH = topText ? measureLines(topText, fontSize).totalH + PAD_V * 2 : ACCENT_H;
+  const botRibbonH = botText ? measureLines(botText, fontSize).totalH + PAD_V * 2 : ACCENT_H;
+
+  /* ── Zone boundaries ── */
+  const zoneTop = topRibbonH;
+  const zoneBot = H - botRibbonH - WM_H;
+  const zoneH   = Math.max(0, zoneBot - zoneTop);
+
+  /* ════════════════════════════════════════════
+     STEP 1 — Clear + full dark base
+     ════════════════════════════════════════════ */
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0d0d0d';
+  ctx.fillRect(0, 0, W, H);
+
+  /* ════════════════════════════════════════════
+     STEP 2 — Draw image / panels in content zone ONLY
+     ════════════════════════════════════════════ */
   if (_memeSlots.length > 0) {
     if (_memeVertical) {
-      // Vertical stacking (original behaviour): each slot is a horizontal strip
-      const rowH = Math.floor(zoneH_bg / _memeSlots.length);
+      const rowH = Math.floor(zoneH / _memeSlots.length);
       _memeSlots.forEach((slot, i) => {
-        const sy = zoneTop_bg + i * rowH;
-        const sh = (i === _memeSlots.length - 1) ? (zoneBot_bg - sy) : rowH;
+        const sy = zoneTop + i * rowH;
+        const sh = (i === _memeSlots.length - 1) ? (zoneBot - sy) : rowH;
         if (slot.type === 'color') {
           ctx.fillStyle = slot.color; ctx.fillRect(0, sy, W, sh);
         } else if (slot.img) {
@@ -9290,318 +9285,209 @@ async function renderMemeCanvas() {
           ctx.beginPath(); ctx.rect(0, sy, W, sh); ctx.clip();
           const scale = Math.max(W / iw, sh / ih) * (slot.zoom || 1);
           const dw = iw * scale, dh = ih * scale;
-          const baseX = (W - dw) / 2, baseY = sy + (sh - dh) / 2;
-          const maxPanX = Math.max(0, (dw - W) / 2), maxPanY = Math.max(0, (dh - sh) / 2);
-          const px = Math.max(-maxPanX, Math.min(maxPanX, slot.panX || 0));
-          const py = Math.max(-maxPanY, Math.min(maxPanY, slot.panY || 0));
-          ctx.drawImage(slot.img, baseX + px, baseY + py, dw, dh);
+          const bx = (W - dw) / 2, by = sy + (sh - dh) / 2;
+          const mpx = Math.max(0, (dw - W) / 2), mpy = Math.max(0, (dh - sh) / 2);
+          ctx.drawImage(slot.img, bx + Math.max(-mpx, Math.min(mpx, slot.panX||0)), by + Math.max(-mpy, Math.min(mpy, slot.panY||0)), dw, dh);
           if (i === _memeSelSlotIdx) {
             ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 3; ctx.setLineDash([6,3]);
-            ctx.strokeRect(1, sy + 1, W - 2, sh - 2); ctx.setLineDash([]);
-            ctx.fillStyle = 'rgba(245,158,11,0.85)'; ctx.font = 'bold 13px sans-serif';
-            ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-            ctx.fillText('✥ drag to pan panel ' + (i+1), W/2, sy + 4);
+            ctx.strokeRect(1, sy+1, W-2, sh-2); ctx.setLineDash([]);
+            ctx.fillStyle='rgba(245,158,11,0.85)'; ctx.font='bold 13px sans-serif';
+            ctx.textAlign='center'; ctx.textBaseline='top';
+            ctx.fillText('✥ drag to pan panel '+(i+1), W/2, sy+4);
           }
-          const ov = ctx.createLinearGradient(0, sy, 0, sy + sh);
-          ov.addColorStop(0,'rgba(0,0,0,0.45)'); ov.addColorStop(0.5,'rgba(0,0,0,0.20)'); ov.addColorStop(1,'rgba(0,0,0,0.55)');
-          ctx.fillStyle = ov; ctx.fillRect(0, sy, W, sh);
+          const ov = ctx.createLinearGradient(0,sy,0,sy+sh);
+          ov.addColorStop(0,'rgba(0,0,0,0.4)'); ov.addColorStop(0.5,'rgba(0,0,0,0.15)'); ov.addColorStop(1,'rgba(0,0,0,0.5)');
+          ctx.fillStyle=ov; ctx.fillRect(0,sy,W,sh);
           ctx.restore();
         }
       });
     } else {
-      // Horizontal layout (default): each slot is a vertical column side-by-side
       const colW = Math.floor(W / _memeSlots.length);
       _memeSlots.forEach((slot, i) => {
         const sx = i * colW;
         const sw = (i === _memeSlots.length - 1) ? (W - sx) : colW;
         if (slot.type === 'color') {
-          ctx.fillStyle = slot.color; ctx.fillRect(sx, zoneTop_bg, sw, zoneH_bg);
+          ctx.fillStyle = slot.color; ctx.fillRect(sx, zoneTop, sw, zoneH);
         } else if (slot.img) {
           const iw = slot.img.naturalWidth, ih = slot.img.naturalHeight;
           ctx.save();
-          ctx.beginPath(); ctx.rect(sx, zoneTop_bg, sw, zoneH_bg); ctx.clip();
-          const scale = Math.max(sw / iw, zoneH_bg / ih) * (slot.zoom || 1);
+          ctx.beginPath(); ctx.rect(sx, zoneTop, sw, zoneH); ctx.clip();
+          const scale = Math.max(sw / iw, zoneH / ih) * (slot.zoom || 1);
           const dw = iw * scale, dh = ih * scale;
-          const baseX = sx + (sw - dw) / 2, baseY = zoneTop_bg + (zoneH_bg - dh) / 2;
-          const maxPanX = Math.max(0, (dw - sw) / 2), maxPanY = Math.max(0, (dh - zoneH_bg) / 2);
-          const px = Math.max(-maxPanX, Math.min(maxPanX, slot.panX || 0));
-          const py = Math.max(-maxPanY, Math.min(maxPanY, slot.panY || 0));
-          ctx.drawImage(slot.img, baseX + px, baseY + py, dw, dh);
+          const bx = sx + (sw - dw) / 2, by = zoneTop + (zoneH - dh) / 2;
+          const mpx = Math.max(0, (dw - sw) / 2), mpy = Math.max(0, (dh - zoneH) / 2);
+          ctx.drawImage(slot.img, bx + Math.max(-mpx, Math.min(mpx, slot.panX||0)), by + Math.max(-mpy, Math.min(mpy, slot.panY||0)), dw, dh);
           if (i === _memeSelSlotIdx) {
-            ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 3; ctx.setLineDash([6,3]);
-            ctx.strokeRect(sx + 1, zoneTop_bg + 1, sw - 2, zoneH_bg - 2); ctx.setLineDash([]);
-            ctx.fillStyle = 'rgba(245,158,11,0.85)'; ctx.font = 'bold 13px sans-serif';
-            ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-            ctx.fillText('✥ pan ' + (i+1), sx + sw/2, zoneTop_bg + 4);
+            ctx.strokeStyle='#f59e0b'; ctx.lineWidth=3; ctx.setLineDash([6,3]);
+            ctx.strokeRect(sx+1, zoneTop+1, sw-2, zoneH-2); ctx.setLineDash([]);
+            ctx.fillStyle='rgba(245,158,11,0.85)'; ctx.font='bold 13px sans-serif';
+            ctx.textAlign='center'; ctx.textBaseline='top';
+            ctx.fillText('✥ pan '+(i+1), sx+sw/2, zoneTop+4);
           }
-          const ov = ctx.createLinearGradient(sx, 0, sx + sw, 0);
-          ov.addColorStop(0,'rgba(0,0,0,0.45)'); ov.addColorStop(0.5,'rgba(0,0,0,0.20)'); ov.addColorStop(1,'rgba(0,0,0,0.45)');
-          ctx.fillStyle = ov; ctx.fillRect(sx, zoneTop_bg, sw, zoneH_bg);
+          const ov = ctx.createLinearGradient(sx,0,sx+sw,0);
+          ov.addColorStop(0,'rgba(0,0,0,0.4)'); ov.addColorStop(0.5,'rgba(0,0,0,0.15)'); ov.addColorStop(1,'rgba(0,0,0,0.4)');
+          ctx.fillStyle=ov; ctx.fillRect(sx, zoneTop, sw, zoneH);
           ctx.restore();
         }
       });
     }
-    // Fill top banner area + strip with dark if not covered
-    ctx.fillStyle = 'rgba(0,0,0,0.0)';
   } else if (_memeImgObj) {
-    ctx.clearRect(0, 0, W, H);
+    /* Single image — draw inside content zone only */
     const iw = _memeImgObj.naturalWidth, ih = _memeImgObj.naturalHeight;
-    const scale = Math.max(W / iw, H / ih);
-    const dw = iw * scale, dh = ih * scale;
-    ctx.drawImage(_memeImgObj, (W - dw) / 2, (H - dh) / 2, dw, dh);
-
-    /* Subtle dark gradient overlay so text & banner are readable */
-    const ov = ctx.createLinearGradient(0, 0, 0, H);
-    ov.addColorStop(0,   'rgba(0,0,0,0.55)');
-    ov.addColorStop(0.30,'rgba(0,0,0,0.25)');
-    ov.addColorStop(0.70,'rgba(0,0,0,0.30)');
-    ov.addColorStop(1,   'rgba(0,0,0,0.72)');
-    ctx.fillStyle = ov; ctx.fillRect(0, 0, W, H);
-  } else {
-    /* Rich dark gradient background matching news image style */
-    const bg = ctx.createLinearGradient(0, 0, W, H);
-    const bgCol = document.getElementById('memeBgColor') ? document.getElementById('memeBgColor').value : '#0f172a';
-    bg.addColorStop(0,    bgCol);
-    bg.addColorStop(0.35, _shadeColor(bgCol, -20));
-    bg.addColorStop(0.65, _shadeColor(bgCol, -40));
-    bg.addColorStop(1,    _shadeColor(bgCol, -60));
-    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-
-    /* Diagonal grid pattern (like news image) */
     ctx.save();
-    ctx.strokeStyle = 'rgba(192,57,43,0.07)';
-    ctx.lineWidth   = 1;
-    const STEP = Math.round(W / 10);
-    for (let x = -H; x < W + H; x += STEP) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + H, H); ctx.stroke();
-    }
+    ctx.beginPath(); ctx.rect(0, zoneTop, W, zoneH); ctx.clip();
+    const scale = Math.max(W / iw, zoneH / ih);
+    const dw = iw * scale, dh = ih * scale;
+    ctx.drawImage(_memeImgObj, (W - dw) / 2, zoneTop + (zoneH - dh) / 2, dw, dh);
     ctx.restore();
-
-    /* Radial crimson glow top-right */
-    const glow1 = ctx.createRadialGradient(W*0.85, H*0.1, 20, W*0.85, H*0.1, 260);
-    glow1.addColorStop(0, 'rgba(220,38,38,0.22)'); glow1.addColorStop(1, 'rgba(220,38,38,0)');
-    ctx.fillStyle = glow1; ctx.fillRect(0, 0, W, H);
-
-    /* Radial violet glow bottom-left */
-    const glow2 = ctx.createRadialGradient(W*0.15, H*0.9, 10, W*0.15, H*0.9, 220);
-    glow2.addColorStop(0, 'rgba(99,38,180,0.18)'); glow2.addColorStop(1, 'rgba(99,38,180,0)');
-    ctx.fillStyle = glow2; ctx.fillRect(0, 0, W, H);
+    /* Dark gradient overlay for text readability */
+    const ov = ctx.createLinearGradient(0, zoneTop, 0, zoneBot);
+    ov.addColorStop(0, 'rgba(0,0,0,0.45)'); ov.addColorStop(0.4,'rgba(0,0,0,0.15)');
+    ov.addColorStop(0.7,'rgba(0,0,0,0.20)'); ov.addColorStop(1,'rgba(0,0,0,0.60)');
+    ctx.fillStyle = ov; ctx.fillRect(0, zoneTop, W, zoneH);
+  } else {
+    /* Gradient background — fill only the content zone */
+    const bgCol = document.getElementById('memeBgColor')?.value || '#0f172a';
+    const bg = ctx.createLinearGradient(0, zoneTop, 0, zoneBot);
+    bg.addColorStop(0,    bgCol);
+    bg.addColorStop(0.5,  _shadeColor(bgCol, -30));
+    bg.addColorStop(1,    _shadeColor(bgCol, -55));
+    ctx.fillStyle = bg; ctx.fillRect(0, zoneTop, W, zoneH);
+    /* Diagonal grid */
+    ctx.save();
+    ctx.strokeStyle = 'rgba(192,57,43,0.07)'; ctx.lineWidth = 1;
+    const STEP = Math.round(W / 10);
+    for (let x = -H; x < W + H; x += STEP) { ctx.beginPath(); ctx.moveTo(x, zoneTop); ctx.lineTo(x + H, zoneBot + H); ctx.stroke(); }
+    ctx.restore();
+    /* Glows */
+    const glow1 = ctx.createRadialGradient(W*0.85,zoneTop+zoneH*0.1,20,W*0.85,zoneTop+zoneH*0.1,260);
+    glow1.addColorStop(0,'rgba(220,38,38,0.22)'); glow1.addColorStop(1,'rgba(220,38,38,0)');
+    ctx.fillStyle=glow1; ctx.fillRect(0,zoneTop,W,zoneH);
+    const glow2 = ctx.createRadialGradient(W*0.15,zoneBot-zoneH*0.1,10,W*0.15,zoneBot-zoneH*0.1,220);
+    glow2.addColorStop(0,'rgba(99,38,180,0.18)'); glow2.addColorStop(1,'rgba(99,38,180,0)');
+    ctx.fillStyle=glow2; ctx.fillRect(0,zoneTop,W,zoneH);
   }
 
-  /* ── 2. Top & Bottom TEXT RIBBONS (replace old static banner & bot text) ──
-     • Top ribbon  = dark semi-transparent band at very top, height fits topText
-     • Bottom ribbon = same style at bottom, above watermark strip, fits botText
-     • If no text, ribbons collapse to a thin accent line only              ── */
-  const ribbonFont     = _memeFontFamily || 'Impact';
-  const ribbonFontSize = parseInt(document.getElementById('memeFontSize')?.value || 27);
-  const ribbonStroke   = document.getElementById('memeStroke')?.checked ?? true;
-  const ribbonColor    = _memeTextColor || '#ffffff';
-  const ribbonBgColor  = 'rgba(0,0,0,0.72)';
-  const ACCENT_H       = 5;   // thin gold accent line height when ribbon is empty
-  const PAD_V          = 14;  // vertical padding inside ribbon
-  const PAD_H          = 18;  // horizontal padding inside ribbon
-
-  const topText   = (document.getElementById('memeTopText')    ?.value || '').toUpperCase().trim();
-  const mid1Text  = (document.getElementById('memeMiddleText1')?.value || '').toUpperCase().trim();
-  const mid2Text  = (document.getElementById('memeMiddleText2')?.value || '').toUpperCase().trim();
-  const botText   = (document.getElementById('memeBottomText') ?.value || '').toUpperCase().trim();
-  const fontSize  = ribbonFontSize;
-  const useStroke = ribbonStroke;
-
-  /* Helper: measure wrapped lines for a text at a given font size */
-  function measureRibbonLines(text, fs) {
-    if (!text) return { lines: [], lineH: fs * 1.28, totalH: 0 };
-    ctx.font = `900 ${fs}px "${ribbonFont}", Impact, "Arial Black", sans-serif`;
-    const maxW = W - PAD_H * 2;
-    const words = text.split(' ');
-    const lines = [];
-    let line = '';
-    for (const w of words) {
-      const test = line ? line + ' ' + w : w;
-      if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
-      else line = test;
-    }
-    if (line) lines.push(line);
-    const lineH = fs * 1.28;
-    return { lines, lineH, totalH: lines.length * lineH };
-  }
-
-  /* Helper: draw a ribbon band */
-  function drawRibbon(text, fs, bandY, bandH, textBaseline) {
-    /* Background */
-    ctx.fillStyle = ribbonBgColor;
+  /* ════════════════════════════════════════════
+     STEP 3 — TOP ribbon (always on top of image)
+     ════════════════════════════════════════════ */
+  function drawRibbon(text, bandY, bandH, anchorTop) {
+    ctx.fillStyle = 'rgba(0,0,0,0.82)';
     ctx.fillRect(0, bandY, W, bandH);
-    /* Gold left accent bar */
+    /* Gold left bar */
     ctx.fillStyle = '#f59e0b';
     ctx.fillRect(0, bandY, 7, bandH);
-    /* Gold top/bottom rule */
+    /* Gold rule */
     ctx.fillStyle = 'rgba(245,158,11,0.6)';
-    if (textBaseline === 'top')    ctx.fillRect(7, bandY + bandH - 2, W - 7, 2);
-    else                           ctx.fillRect(7, bandY, W - 7, 2);
-
+    if (anchorTop) ctx.fillRect(7, bandY + bandH - 2, W - 7, 2);
+    else           ctx.fillRect(7, bandY, W - 7, 2);
     if (!text) return;
-    const { lines, lineH, totalH } = measureRibbonLines(text, fs);
-    ctx.font         = `900 ${fs}px "${ribbonFont}", Impact, "Arial Black", sans-serif`;
-    ctx.textAlign    = 'center';
-    ctx.textBaseline = 'alphabetic';
-
-    let startY;
-    if (textBaseline === 'top')
-      startY = bandY + PAD_V + fs * 0.85;    // first baseline from top
-    else
-      startY = bandY + bandH - PAD_V - (totalH - lineH) - fs * 0.15; // anchor from bottom
-
+    const { lines, lineH, totalH } = measureLines(text, fontSize);
+    ctx.font = `900 ${fontSize}px "${fontFam}", Impact, "Arial Black", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    const startY = anchorTop
+      ? bandY + PAD_V + fontSize * 0.88
+      : bandY + bandH - PAD_V - (totalH - lineH) - fontSize * 0.12;
     lines.forEach((l, i) => {
       const y = startY + i * lineH;
       if (useStroke) {
-        ctx.save();
-        ctx.shadowColor = 'rgba(0,0,0,0.95)'; ctx.shadowBlur = 4;
-        ctx.lineWidth   = Math.max(3, fs * 0.12);
-        ctx.strokeStyle = '#000'; ctx.lineJoin = 'round';
-        ctx.strokeText(l, W / 2, y); ctx.restore();
+        ctx.save(); ctx.shadowColor='rgba(0,0,0,0.95)'; ctx.shadowBlur=4;
+        ctx.lineWidth=Math.max(3,fontSize*0.12); ctx.strokeStyle='#000'; ctx.lineJoin='round';
+        ctx.strokeText(l, W/2, y); ctx.restore();
       }
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 5;
-      ctx.fillStyle   = ribbonColor;
-      ctx.fillText(l, W / 2, y); ctx.restore();
+      ctx.save(); ctx.shadowColor='rgba(0,0,0,0.8)'; ctx.shadowBlur=5;
+      ctx.fillStyle=textColor; ctx.fillText(l, W/2, y); ctx.restore();
     });
   }
 
-  /* Compute ribbon heights based on content */
-  const { totalH: topTotalH }  = measureRibbonLines(topText, fontSize);
-  const { totalH: botTotalH }  = measureRibbonLines(botText, fontSize);
-  const TOP_RIBBON_H  = topText  ? topTotalH  + PAD_V * 2 : ACCENT_H;
-  const BOT_RIBBON_H  = botText  ? botTotalH  + PAD_V * 2 : ACCENT_H;
+  drawRibbon(topText, 0,           topRibbonH,  true);   // top ribbon
+  drawRibbon(botText, zoneBot,     botRibbonH,  false);  // bottom ribbon (above watermark)
 
-  /* Watermark strip is always 72px at the very bottom.
-     Bottom ribbon sits ABOVE the watermark — never overlapping it. */
-  const WATERMARK_H = 72;
-  const BANNER_H    = TOP_RIBBON_H;
-  const STRIP_H     = BOT_RIBBON_H + WATERMARK_H; // total reserved at bottom
-
-  /* Draw top ribbon */
-  drawRibbon(topText, fontSize, 0, TOP_RIBBON_H, 'top');
-
-  /* Draw bottom ribbon — sits directly above the watermark strip */
-  const botRibbonY = H - STRIP_H;
-  drawRibbon(botText, fontSize, botRibbonY, BOT_RIBBON_H, 'bottom');
-
-  /* Left red accent bar on content zone sides */
+  /* Red side accent bar */
   ctx.fillStyle = 'rgba(192,57,43,0.85)';
-  ctx.fillRect(0, TOP_RIBBON_H + 2, 5, H - TOP_RIBBON_H - STRIP_H - 4);
+  ctx.fillRect(0, zoneTop + 2, 5, zoneH - 4);
 
-  /* ── 3. Middle floating text (Mid1, Mid2) ── */
-  const textZoneT = TOP_RIBBON_H + 10;
-  const textZoneB = H - STRIP_H - 8;
-
+  /* ════════════════════════════════════════════
+     STEP 4 — Middle floating texts (mid1, mid2)
+     ════════════════════════════════════════════ */
+  const textZoneT = zoneTop + 10;
+  const textZoneB = zoneBot - 8;
   ctx.textAlign = 'center';
 
-  function drawMemeTextAt(text, key, defaultY, baseline) {
+  function drawMemeTextAt(text, key, defaultY) {
     if (!text) return;
     const pos = _memeTextPositions[key] || { x: null, y: null, fontSize: 0 };
-    const fs  = pos.fontSize > 0 ? pos.fontSize : (baseline === 'middle_custom' ? Math.round(fontSize * 0.82) : fontSize);
+    const fs  = pos.fontSize > 0 ? pos.fontSize : Math.round(fontSize * 0.88);
     const cx  = pos.x != null ? pos.x : W / 2;
     const cy  = pos.y != null ? pos.y : defaultY;
-
-    ctx.font         = `900 ${fs}px "${_memeFontFamily}", Impact, "Arial Black", sans-serif`;
+    ctx.font = `900 ${fs}px "${fontFam}", Impact, "Arial Black", sans-serif`;
     ctx.textBaseline = 'alphabetic';
-    const maxW  = W * 0.88;
-    const words = text.split(' ');
-    const lines = [];
-    let line = '';
-    for (const w of words) {
+    const maxW = W * 0.88;
+    const lines = []; let line = '';
+    for (const w of text.split(' ')) {
       const test = line ? line + ' ' + w : w;
       if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
       else line = test;
     }
     if (line) lines.push(line);
-    const lineH  = fs * 1.22;
+    const lineH = fs * 1.22;
     const totalH = lines.length * lineH;
-    // Anchor: top=draw from cy down, bottom=draw up, middle=centre
-    let startY;
-    if (baseline === 'top')           startY = cy;
-    else if (baseline === 'bottom')   startY = cy - totalH + lineH;
-    else                              startY = cy - totalH / 2 + lineH / 2;
-
+    const startY = cy - totalH / 2 + lineH / 2;
     lines.forEach((l, i) => {
       const y = startY + i * lineH;
       if (useStroke) {
-        ctx.save();
-        ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 4;
-        ctx.lineWidth   = Math.max(3, fs * 0.12);
-        ctx.strokeStyle = '#000'; ctx.lineJoin = 'round';
+        ctx.save(); ctx.shadowColor='rgba(0,0,0,0.9)'; ctx.shadowBlur=4;
+        ctx.lineWidth=Math.max(3,fs*0.12); ctx.strokeStyle='#000'; ctx.lineJoin='round';
         ctx.strokeText(l, cx, y); ctx.restore();
       }
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 6;
-      ctx.fillStyle   = _memeTextColor;
-      ctx.fillText(l, cx, y); ctx.restore();
+      ctx.save(); ctx.shadowColor='rgba(0,0,0,0.8)'; ctx.shadowBlur=6;
+      ctx.fillStyle=textColor; ctx.fillText(l, cx, y); ctx.restore();
     });
-
-    /* Draw selection highlight handle if this text is selected */
+    /* Selection handle */
     if (_memeSelText === key) {
-      ctx.save();
-      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2;
-      ctx.setLineDash([5, 3]);
-      // startY is the alphabetic baseline of the first line.
-      // The text ascenders go ~fs*0.85 above baseline; descenders ~fs*0.2 below last line.
-      const bx = cx - W * 0.45;
-      const by = startY - fs * 0.85;          // top of ascenders
-      const bw = W * 0.9;
-      const bh = totalH + fs * 0.2;           // cover full height incl. descenders
+      ctx.save(); ctx.strokeStyle='#f59e0b'; ctx.lineWidth=2; ctx.setLineDash([5,3]);
+      const bx=cx-W*0.45, by=startY-fs*0.85, bw=W*0.9, bh=totalH+fs*0.2;
       ctx.strokeRect(bx, by, bw, bh);
-      /* Resize handle — small square at bottom-right */
-      ctx.fillStyle = '#f59e0b'; ctx.setLineDash([]);
-      ctx.fillRect(bx + bw - 10, by + bh - 10, 10, 10);
+      ctx.fillStyle='#f59e0b'; ctx.setLineDash([]);
+      ctx.fillRect(bx+bw-10, by+bh-10, 10, 10);
       ctx.restore();
     }
   }
 
-  const midCenterY = (textZoneT + textZoneB) / 2;
-  /* Top text and Bottom text are now rendered inside ribbons above — only draw mid texts here */
-  drawMemeTextAt(mid1Text, 'mid1', midCenterY - Math.round(fontSize * 0.5),      'middle_custom');
-  drawMemeTextAt(mid2Text, 'mid2', midCenterY + Math.round(fontSize * 0.8),      'middle_custom');
+  const midCY = (textZoneT + textZoneB) / 2;
+  drawMemeTextAt(mid1Text, 'mid1', midCY - Math.round(fontSize * 0.6));
+  drawMemeTextAt(mid2Text, 'mid2', midCY + Math.round(fontSize * 0.9));
 
-  /* ── 3b. Overlay images (rendered after text so they sit on top) ── */
+  /* ════════════════════════════════════════════
+     STEP 5 — Circle overlays
+     ════════════════════════════════════════════ */
   for (let i = 0; i < _memeOverlays.length; i++) {
     const ov = _memeOverlays[i];
     ctx.save();
     if (ov.circle) {
       ctx.beginPath();
-      ctx.arc(ov.x + ov.w / 2, ov.y + ov.h / 2, Math.min(ov.w, ov.h) / 2, 0, Math.PI * 2);
+      ctx.arc(ov.x + ov.w/2, ov.y + ov.h/2, Math.min(ov.w,ov.h)/2, 0, Math.PI*2);
       ctx.clip();
     }
-    // Cover-fit the image into the overlay rectangle
-    const iw = ov.img.naturalWidth, ih = ov.img.naturalHeight;
-    const scale = Math.max(ov.w / iw, ov.h / ih);
-    const dw = iw * scale, dh = ih * scale;
-    ctx.drawImage(ov.img, ov.x + (ov.w - dw)/2, ov.y + (ov.h - dh)/2, dw, dh);
+    const iw=ov.img.naturalWidth, ih=ov.img.naturalHeight;
+    const scale=Math.max(ov.w/iw, ov.h/ih);
+    const dw=iw*scale, dh=ih*scale;
+    ctx.drawImage(ov.img, ov.x+(ov.w-dw)/2, ov.y+(ov.h-dh)/2, dw, dh);
     ctx.restore();
-
-    /* Selection border */
     if (i === _memeSelOverlayIdx) {
-      ctx.save();
-      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 3; ctx.setLineDash([6,3]);
-      if (ov.circle) {
-        ctx.beginPath();
-        ctx.arc(ov.x + ov.w/2, ov.y + ov.h/2, Math.min(ov.w,ov.h)/2 + 4, 0, Math.PI*2);
-        ctx.stroke();
-      } else {
-        ctx.strokeRect(ov.x - 2, ov.y - 2, ov.w + 4, ov.h + 4);
-      }
-      /* Resize grip — bottom-right corner */
-      ctx.setLineDash([]);
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(ov.x + ov.w - 12, ov.y + ov.h - 12, 12, 12);
+      ctx.save(); ctx.strokeStyle='#f59e0b'; ctx.lineWidth=3; ctx.setLineDash([6,3]);
+      if (ov.circle) { ctx.beginPath(); ctx.arc(ov.x+ov.w/2,ov.y+ov.h/2,Math.min(ov.w,ov.h)/2+4,0,Math.PI*2); ctx.stroke(); }
+      else ctx.strokeRect(ov.x-2,ov.y-2,ov.w+4,ov.h+4);
+      ctx.setLineDash([]); ctx.fillStyle='#f59e0b';
+      ctx.fillRect(ov.x+ov.w-12,ov.y+ov.h-12,12,12);
       ctx.restore();
     }
   }
 
-  /* ── 4. Author watermark strip (avatar + name + URL) ── */
-  const showWatermark = true; // always on — watermark cannot be disabled
-  if (showWatermark) {
-    await _drawAuthorWatermark(ctx, W, 0, 'Meme');
-  }
+  /* ════════════════════════════════════════════
+     STEP 6 — Watermark strip (always last)
+     ════════════════════════════════════════════ */
+  await _drawAuthorWatermark(ctx, W, 0, 'Meme');
 }
 
 /* Helper: darken/lighten a hex colour by `amount` (negative = darker) */
@@ -9618,7 +9504,7 @@ function _shadeColor(hex, amount) {
 /* ── AI meme text via Gemini ── */
 async function memeGenerateAI() {
   const topic = (document.getElementById('memeTopicInput') ? document.getElementById('memeTopicInput').value : '').trim();
-  if (!topic) { toast('⚠️ Step 2 मा topic लेख्नुस्', 'error'); return; }
+  if (!topic) { toast('⚠️ Topic / Prompt मा आफ्नो topic लेख्नुस् (e.g. KP Oli, Balen Shah, traffic jam)', 'error'); return; }
 
   const hasAI = (_geminiKey || _browserGeminiKey || _browserGroqKey);
   if (!hasAI) {
@@ -9632,38 +9518,49 @@ async function memeGenerateAI() {
   /* Show spinner */
   const spinner = document.getElementById('memeCanvasSpinner');
   if (spinner) spinner.style.display = 'flex';
-  memeSetStatus(`🤖 ${aiLabel} AI ले meme text तयार गर्दैछ…`);
+  memeSetStatus(`🤖 ${aiLabel} AI ले "${topic}" को लागि meme बनाउँदैछ…`);
 
-  const prompt = `You are a master Nepali viral meme creator. Create a funny, highly shareable two-line meme for Nepal's social media (Facebook, TikTok, Instagram, Twitter).
+  const prompt = `You are a master Nepali viral meme creator. Create a funny, highly shareable meme specifically about: "${topic}".
 
-TOPIC: ${topic}
+CRITICAL RULES:
+- The meme MUST be directly about "${topic}" — use the actual name/event/person
+- Write in Nepali Devanagari script mixed with English for maximum viral potential
+- TOP TEXT: sets up the situation/context about "${topic}" — max 8 words
+- BOTTOM TEXT: delivers the punchline/subverted expectation — max 8 words, HILARIOUS
+- MIDDLE1 (optional): use only if you need an extra line for a 3-part joke format (e.g. "Expectation / Reality / Nepal Reality" or setup/twist/punchline). Leave empty string "" if not needed.
+- MIDDLE2 (optional): use only if you need a 4th line. Leave empty string "" if not needed.
+- Make it SPECIFIC to "${topic}" — mention the topic by name, reference actual events, real situations
+- Style: deeply relatable Nepali humor — irony, exaggeration, "expectation vs reality", political satire, everyday life
+- The meme must feel like something a Nepali person shares saying "यो त सत्य कुरो हो!" about "${topic}"
+- Image search: 3-5 English words for a funny/expressive image that matches the meme vibe for "${topic}"
+- Caption: 2 fun sentences about "${topic}" (Nepali+English mix) + 8 hashtags including #ShashiNewsGen
 
-RULES:
-- Write naturally in Nepali Devanagari script (mixing English words is totally fine and even encouraged for punchlines)
-- TOP TEXT: sets up situation, expectation, or context — max 8 words, punchy
-- BOTTOM TEXT: delivers the punchline or subverted expectation — max 8 words, HILARIOUS
-- Style: deeply RELATABLE Nepal everyday life humor — real situations Nepali people face daily (load shedding, traffic, expensive prices, government promises, board exams, abroad dreams, TikTok addiction). Use exaggeration, irony, self-deprecating humor, mild political satire, or "expectation vs reality" format.
-- The meme MUST feel like something a Nepali person would immediately share saying "यो त मेरो कुरो हो!" (this is so me!)
-- Avoid anything offensive, harmful, or targeting specific individuals
-- Image search query: 3-4 English words describing a FUNNY, RELATABLE, or VISUALLY EXPRESSIVE image perfectly matching the meme vibe (e.g. "confused student books", "traffic jam car honk", "empty wallet sad", "politician pointing crowd"). Choose an image that makes the meme funnier or more relatable when seen with the text.
-- Caption: 1-2 fun sentences (Nepali + English mix) that explain the relatable situation + exactly 8 relevant hashtags ending with #ShashiNewsGen
-
-Output ONLY valid JSON (no markdown, no extra text):
-{"top":"<TOP TEXT>","bottom":"<BOTTOM TEXT>","img":"<image search query>","caption":"<caption with hashtags>"}`;
+Return ONLY valid JSON, no markdown, no code fences:
+{"top":"<TOP TEXT about ${topic}>","middle1":"<MIDDLE LINE 1 or empty string>","middle2":"<MIDDLE LINE 2 or empty string>","bottom":"<PUNCHLINE about ${topic}>","img":"<image search query>","caption":"<caption with hashtags>"}`;
 
   try {
-    const result = await callAI(prompt, 22000);
+    const result = await callAI(prompt, 25000);
     if (spinner) spinner.style.display = 'none';
-    if (result && result.top && result.bottom) {
-      document.getElementById('memeTopText').value    = result.top;
-      document.getElementById('memeBottomText').value = result.bottom;
-      if (result.caption) document.getElementById('memeCaptionText').value = result.caption;
+    if (result && (result.top || result.bottom)) {
+      // Fill all 4 text fields
+      const topEl  = document.getElementById('memeTopText');
+      const mid1El = document.getElementById('memeMiddleText1');
+      const mid2El = document.getElementById('memeMiddleText2');
+      const botEl  = document.getElementById('memeBottomText');
+      if (topEl)  topEl.value  = result.top    || '';
+      if (mid1El) mid1El.value = result.middle1 || '';
+      if (mid2El) mid2El.value = result.middle2 || '';
+      if (botEl)  botEl.value  = result.bottom  || '';
+      if (result.caption) {
+        const capEl = document.getElementById('memeCaptionText');
+        if (capEl) capEl.value = result.caption;
+      }
 
-      const imgQ = result.img || topic.split(' ').slice(0,3).join(' ');
+      const imgQ = result.img || topic.split(' ').slice(0,4).join(' ');
 
       /* ── Try HuggingFace FLUX image generation first ── */
       if (_browserHFKey) {
-        memeSetStatus('🎨 HuggingFace AI ले meme image बनाउँदैछ…');
+        memeSetStatus('🎨 HuggingFace AI ले image बनाउँदैछ…');
         try {
           const hfUrl = await fetchHuggingFaceImage(imgQ);
           const img   = new Image();
@@ -9673,34 +9570,34 @@ Output ONLY valid JSON (no markdown, no extra text):
           _memeImgObj = null;
           _renderSlotList();
           await renderMemeCanvas();
-          memeSetStatus('✅ AI मिम + HuggingFace image तयार भयो! 🎨😂');
-          toast(`🎨 ${aiLabel} text + HuggingFace AI image — Meme ready!`, 'success', 4000);
+          memeSetStatus(`✅ AI meme "${topic}" को लागि तयार भयो! 🎨😂`);
+          toast(`🎨 ${aiLabel} text + HuggingFace image — Meme ready!`, 'success', 4000);
         } catch (hfErr) {
-          console.warn('[MemeHF] HuggingFace failed:', hfErr.message, '— falling back to web search');
-          memeSetStatus('ℹ️ HF image failed — web search प्रयोग गर्दैछ…');
+          console.warn('[MemeHF] HuggingFace failed:', hfErr.message);
+          memeSetStatus('ℹ️ HF image failed — web search गर्दैछ…');
           document.getElementById('memeImgQuery').value = imgQ;
           switchMemeImgSrc('search');
           searchMemeImages();
           await renderMemeCanvas();
-          memeSetStatus('✅ AI मिम तयार भयो! 😂');
-          toast(`😂 ${aiLabel} Meme ready! (web image fallback)`, 'success', 3500);
+          memeSetStatus(`✅ AI meme "${topic}" को लागि तयार भयो! 😂`);
+          toast(`😂 ${aiLabel} Meme ready! (web image search)`, 'success', 3500);
         }
       } else {
-        /* No HF key — use web image search as before */
         document.getElementById('memeImgQuery').value = imgQ;
         switchMemeImgSrc('search');
         searchMemeImages();
         await renderMemeCanvas();
-        memeSetStatus('✅ AI मिम तयार भयो! 😂');
-        toast(`😂 ${aiLabel} Meme ready! Image पनि search गर्दैछ…`, 'success', 3500);
+        memeSetStatus(`✅ AI meme "${topic}" को लागि तयार भयो! 😂`);
+        toast(`😂 ${aiLabel} Meme ready! Image search: "${imgQ}"`, 'success', 3500);
       }
     } else {
-      throw new Error('Bad AI response');
+      throw new Error('Bad AI response — missing top/bottom fields');
     }
   } catch (e) {
     if (spinner) spinner.style.display = 'none';
     console.warn('[MemeAI]', e.message);
-    memeSetStatus('⚠️ AI failed — template प्रयोग गर्दैछ');
+    memeSetStatus(`⚠️ AI failed: ${e.message.slice(0,60)} — template प्रयोग गर्दैछ`);
+    toast('⚠️ AI meme generation failed — check console', 'error', 4000);
     memeGenerateTemplate();
   }
 }
@@ -9807,55 +9704,85 @@ async function memeCopyImage() {
 }
 
 /* ── Share (all studios) ── */
+/* ═══════════════════════════════════════════════════════════════════
+   _shareCanvasToSocial — unified image sharing for ALL studios
+   Strategy:
+     1. Always try Web Share API with the actual image file first
+        (works on Android Chrome, iOS Safari — shares to any installed app)
+     2. On desktop / unsupported browsers: download image + open platform
+        with pre-filled text, showing a clear instruction toast.
+   ═══════════════════════════════════════════════════════════════════ */
 async function _shareCanvasToSocial(platform, canvasId, captionText, downloadFn) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
-  const caption = captionText + '\n\nCreate yours → https://shajais.github.io/ShashiNewsGen/';
 
-  if (platform === 'whatsapp') {
-    const encoded = encodeURIComponent(caption);
-    window.open('https://api.whatsapp.com/send?text=' + encoded, '_blank', 'noopener,width=620,height=520');
-    return;
+  const siteUrl = 'https://shajais.github.io/ShashiNewsGen/';
+  const caption = captionText + '\n\nCreate yours → ' + siteUrl;
+  const filename = 'shashi-creator-studio.png';
+
+  /* ── Helper: get canvas blob ── */
+  async function getBlob() {
+    return new Promise((res, rej) =>
+      canvas.toBlob(b => b ? res(b) : rej(new Error('Canvas empty')), 'image/png')
+    );
   }
 
-  if (platform === 'instagram') {
-    /* Instagram doesn't have a web share API for images — best UX: download + instruct */
-    if (typeof downloadFn === 'function') downloadFn();
-    toast('📸 Image downloaded! Instagram app खोलेर Story/Post मा upload गर्नुस्', 'info', 8000);
-    return;
-  }
-
-  /* Try Web Share API (works on mobile Chrome/Safari) */
-  if (navigator.canShare && platform === 'native') {
+  /* ── Helper: download the canvas image ── */
+  async function downloadImage() {
     try {
-      const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
-      const file = new File([blob], 'shashi-news-gen.png', { type: 'image/png' });
+      const blob = await getBlob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e) {
+      if (typeof downloadFn === 'function') downloadFn();
+    }
+  }
+
+  /* ── Step 1: Try Web Share API with image file (mobile-first) ── */
+  if (navigator.canShare) {
+    try {
+      const blob = await getBlob();
+      const file = new File([blob], filename, { type: 'image/png' });
       if (navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'Shashi News Gen', text: caption });
-        return;
+        await navigator.share({ files: [file], title: 'Shashi Creator Studio', text: caption });
+        return; /* ✅ success — native share sheet opened */
       }
-    } catch (e) { console.warn('Web Share:', e); }
+    } catch (e) {
+      if (e.name === 'AbortError') return; /* user cancelled */
+      /* fall through to platform-specific desktop fallback */
+    }
   }
 
-  /* Facebook — shares the site URL + quote text (images can't be shared directly via web) */
-  if (platform === 'facebook') {
-    const siteEnc = encodeURIComponent('https://shajais.github.io/ShashiNewsGen/');
-    const textEnc = encodeURIComponent(caption);
-    /* Download the image first so user can attach it manually */
-    if (typeof downloadFn === 'function') downloadFn();
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${siteEnc}&quote=${textEnc}`, '_blank', 'noopener,width=620,height=520');
-    toast('� Image downloaded! Facebook खुल्यो — Post मा image attach गर्न सक्नुहुन्छ', 'info', 7000);
-    return;
+  /* ── Step 2: Desktop fallback — download image + open platform ── */
+  await downloadImage(); /* always download the image first */
+
+  const textEnc = encodeURIComponent(caption);
+  const urlEnc  = encodeURIComponent(siteUrl);
+
+  const MSGS = {
+    facebook:  '👍 Image downloaded!\n① Facebook.com खोल्नुस् → "Photo/Video" post बनाउनुस्\n② Downloaded image select गर्नुस् → Caption paste गर्नुस्',
+    instagram: '📸 Image downloaded!\n① Instagram app खोल्नुस् → New Post/Story\n② Downloaded image select गर्नुस् → Caption paste गर्नुस्',
+    twitter:   '🐦 Image downloaded!\n① X/Twitter खुल्नेछ → "Add photos" थिच्नुस्\n② Downloaded image select गर्नुस् → Post गर्नुस्',
+    whatsapp:  '💬 Image downloaded!\n① WhatsApp खुल्नेछ → Chat/Status खोल्नुस्\n② Downloaded image attach गर्नुस् → Caption paste गर्नुस्',
+  };
+
+  const URLS = {
+    facebook:  `https://www.facebook.com/`,
+    instagram: `https://www.instagram.com/`,
+    twitter:   `https://x.com/intent/post?text=${textEnc}`,
+    whatsapp:  `https://web.whatsapp.com/`,
+  };
+
+  /* Copy caption to clipboard for easy paste */
+  try { await navigator.clipboard.writeText(caption); } catch (_) {}
+
+  if (URLS[platform]) {
+    window.open(URLS[platform], '_blank', 'noopener,width=960,height=680');
   }
 
-  /* Twitter / X */
-  if (platform === 'twitter') {
-    if (typeof downloadFn === 'function') downloadFn();
-    const textEnc = encodeURIComponent(caption);
-    window.open(`https://twitter.com/intent/tweet?text=${textEnc}`, '_blank', 'noopener,width=620,height=520');
-    toast('💡 Image downloaded! Tweet मा image attach गर्नुस् 🐦', 'info', 6000);
-    return;
-  }
+  toast(MSGS[platform] || '✅ Image downloaded!', 'info', 9000);
 }
 
 function shareMeme(platform) {
@@ -9885,16 +9812,52 @@ const PUZZLE_THEMES = [
 
 const PUZZLE_PRESETS = [
   { expr:'3 - 3 × 6 + 2 = ??',      answer:'-13' },
-  { expr:'6 ÷ 2(1+2) = ??',        answer:'9'   },
-  { expr:'1 + 1 + 1 + 1 × 0 = ??', answer:'3'   },
-  { expr:'8 ÷ 2(2+2) = ??',        answer:'16'  },
-  { expr:'5 + 5 × 5 - 5 = ??',     answer:'25'  },
-  { expr:'2² + 2 × 2 - 2 = ??',    answer:'6'   },
-  { expr:'10 - 1 - 2 × 3 = ??',    answer:'3'   },
-  { expr:'√9 + 3² - 5 = ??',       answer:'7'   },
-  { expr:'100 ÷ 4 × 0 + 8 = ??',   answer:'8'   },
-  { expr:'4 + 4 ÷ 4 + 4 × 4 = ??', answer:'21'  },
+  { expr:'6 ÷ 2(1+2) = ??',          answer:'9'   },
+  { expr:'1 + 1 + 1 + 1 × 0 = ??',  answer:'3'   },
+  { expr:'8 ÷ 2(2+2) = ??',          answer:'16'  },
+  { expr:'5 + 5 × 5 - 5 = ??',       answer:'25'  },
+  { expr:'2² + 2 × 2 - 2 = ??',      answer:'6'   },
+  { expr:'10 - 1 - 2 × 3 = ??',      answer:'3'   },
+  { expr:'√9 + 3² - 5 = ??',         answer:'7'   },
+  { expr:'100 ÷ 4 × 0 + 8 = ??',     answer:'8'   },
+  { expr:'4 + 4 ÷ 4 + 4 × 4 = ??',  answer:'21'  },
+  { expr:'7 × 7 - 7 + 7 ÷ 7 = ??',  answer:'43'  },
+  { expr:'2 + 2 × 0 + 2 = ??',       answer:'4'   },
+  { expr:'50 ÷ 5 × 2 - 8 = ??',      answer:'12'  },
+  { expr:'3² × 2 - 4 × 3 = ??',      answer:'6'   },
+  { expr:'12 ÷ 4 + 3 × 2 = ??',      answer:'9'   },
+  { expr:'(5 + 3) × 2 - 6 = ??',     answer:'10'  },
+  { expr:'15 - 3 × 4 + 2 = ??',      answer:'5'   },
+  { expr:'2³ + 4 ÷ 2 - 3 = ??',      answer:'7'   },
+  { expr:'9 × 9 - 9 × 8 = ??',       answer:'9'   },
+  { expr:'√16 × √9 - 5 = ??',        answer:'7'   },
+  { expr:'6 × 6 ÷ 6 + 6 - 6 = ??',  answer:'6'   },
+  { expr:'100 - 10 × 9 + 1 = ??',    answer:'11'  },
+  { expr:'3 + 3 × 3 - 3 ÷ 3 = ??',  answer:'11'  },
+  { expr:'2 × (3 + 4) - 5 = ??',     answer:'9'   },
+  { expr:'5! ÷ 20 - 2 = ??',         answer:'4'   },
+  { expr:'4² - 4 × 3 + 4 = ??',      answer:'8'   },
+  { expr:'√64 + 2³ - 6 = ??',        answer:'10'  },
+  { expr:'11 × 11 - 11 × 10 = ??',   answer:'11'  },
+  { expr:'(2 + 3)² - 20 = ??',       answer:'5'   },
+  { expr:'48 ÷ (2 + 4) × 3 = ??',    answer:'24'  },
+  { expr:'7 + 7 ÷ 7 + 7 × 7 = ??',  answer:'57'  },
+  { expr:'1000 ÷ 8 ÷ 5 × 2 = ??',   answer:'50'  },
+  { expr:'3 × (2 + 1) - 3² = ??',    answer:'0'   },
+  { expr:'√(4 + 5) × √9 = ??',       answer:'9'   },
+  { expr:'5 × 4 - 3 × 6 + 2 = ??',  answer:'4'   },
 ];
+
+/* Return a random puzzle NOT the same as current */
+let _liveUsedIdxs = [];
+function _livePickRandomPuzzle() {
+  if (_liveUsedIdxs.length >= PUZZLE_PRESETS.length) _liveUsedIdxs = [];
+  let idx;
+  do { idx = Math.floor(Math.random() * PUZZLE_PRESETS.length); }
+  while (_liveUsedIdxs.includes(idx));
+  _liveUsedIdxs.push(idx);
+  return PUZZLE_PRESETS[idx];
+}
 
 let _puzzleTheme      = 'viral';
 let _puzzleEinsteinId = null;
@@ -10237,6 +10200,7 @@ async function renderPuzzleCanvas() {
 
   /* ═══════════════════════════════════════════════════════
      STEP 2 — TOP HEADER BAR (full width)
+     Skip static text when live — overlay animates it instead
      ═══════════════════════════════════════════════════════ */
   /* Solid accent fill */
   ctx.save();
@@ -10250,38 +10214,40 @@ async function renderPuzzleCanvas() {
   ctx.fillRect(0, 0, W, TOP_H);
   ctx.restore();
 
-  /* Line 1: "CAN YOU SOLVE IT?" — big, full width, Impact */
-  {
-    ctx.save();
-    const line1Y = Math.round(TOP_H * 0.08);
-    const line1H = Math.round(TOP_H * 0.52);
-    let fs1 = Math.round(line1H * 0.78);
-    ctx.font = `900 ${fs1}px Impact,Arial Black,sans-serif`;
-    while (ctx.measureText(topText).width > W - PAD * 2 && fs1 > 12) {
-      fs1--; ctx.font = `900 ${fs1}px Impact,Arial Black,sans-serif`;
+  if (!_liveActive) {
+    /* Line 1: "CAN YOU SOLVE IT?" — big, full width, Impact */
+    {
+      ctx.save();
+      const line1Y = Math.round(TOP_H * 0.08);
+      const line1H = Math.round(TOP_H * 0.52);
+      let fs1 = Math.round(line1H * 0.78);
+      ctx.font = `900 ${fs1}px Impact,Arial Black,sans-serif`;
+      while (ctx.measureText(topText).width > W - PAD * 2 && fs1 > 12) {
+        fs1--; ctx.font = `900 ${fs1}px Impact,Arial Black,sans-serif`;
+      }
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 8;
+      ctx.fillText(topText, W / 2, line1Y);
+      ctx.restore();
     }
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 8;
-    ctx.fillText(topText, W / 2, line1Y);
-    ctx.restore();
-  }
 
-  /* Line 2: "90% FAIL THIS!" — slightly smaller, accent colour */
-  {
-    ctx.save();
-    const line2Y = Math.round(TOP_H * 0.58);
-    const line2H = Math.round(TOP_H * 0.36);
-    let fs2 = Math.round(line2H * 0.72);
-    ctx.font = `800 ${fs2}px Arial Black,Impact,sans-serif`;
-    while (ctx.measureText(subText).width > W - PAD * 4 && fs2 > 10) {
-      fs2--; ctx.font = `800 ${fs2}px Arial Black,Impact,sans-serif`;
+    /* Line 2: "90% FAIL THIS!" — slightly smaller, accent colour */
+    {
+      ctx.save();
+      const line2Y = Math.round(TOP_H * 0.58);
+      const line2H = Math.round(TOP_H * 0.36);
+      let fs2 = Math.round(line2H * 0.72);
+      ctx.font = `800 ${fs2}px Arial Black,Impact,sans-serif`;
+      while (ctx.measureText(subText).width > W - PAD * 4 && fs2 > 10) {
+        fs2--; ctx.font = `800 ${fs2}px Arial Black,Impact,sans-serif`;
+      }
+      ctx.fillStyle = '#ffffffcc';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 5;
+      ctx.fillText(subText, W / 2, line2Y);
+      ctx.restore();
     }
-    ctx.fillStyle = '#ffffffcc';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 5;
-    ctx.fillText(subText, W / 2, line2Y);
-    ctx.restore();
   }
 
   /* Thin accent bottom border on header */
@@ -10374,9 +10340,11 @@ async function renderPuzzleCanvas() {
   const ctaFs     = Math.round(H * 0.026);
   const spacing   = Math.round(H * 0.018);
 
-  /* Pre-calculate total block height so we can centre it */
-  const geniusLabelH  = geniusFs * 1.3 + spacing;
-  const underlineH    = spacing;
+  /* Pre-calculate total block height so we can centre it.
+     During live mode the overlay animates genius label & header,
+     so exclude them from static layout to avoid duplicates. */
+  const geniusLabelH  = _liveActive ? 0 : (geniusFs * 1.3 + spacing);
+  const underlineH    = _liveActive ? 0 : spacing;
   const answerBlockH  = (showAnswer && answer) ? (ansFs * 1.4 + spacing * 0.5) : 0;
   const ctaBlockH     = ctaFs * 1.3;
   const totalBlockH   = geniusLabelH + underlineH + exprBoxH + spacing + answerBlockH + ctaBlockH;
@@ -10384,32 +10352,34 @@ async function renderPuzzleCanvas() {
   let rightY = MID_Y + Math.round((MID_H - totalBlockH) / 2);
   if (rightY < MID_Y + spacing) rightY = MID_Y + spacing;   // safety clamp
 
-  /* 4a. "ONLY FOR GENIUS" label */
-  {
-    ctx.save();
-    ctx.font = `italic 900 ${geniusFs}px Georgia,serif`;
-    ctx.fillStyle = theme.accent;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    ctx.shadowColor = theme.accent; ctx.shadowBlur = 14;
-    let sz = geniusFs;
-    while (ctx.measureText(bottomText).width > rxW && sz > 12) {
-      sz--; ctx.font = `italic 900 ${sz}px Georgia,serif`;
+  /* 4a. "ONLY FOR GENIUS" label — skip during live (overlay animates it) */
+  if (!_liveActive) {
+    {
+      ctx.save();
+      ctx.font = `italic 900 ${geniusFs}px Georgia,serif`;
+      ctx.fillStyle = theme.accent;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.shadowColor = theme.accent; ctx.shadowBlur = 14;
+      let sz = geniusFs;
+      while (ctx.measureText(bottomText).width > rxW && sz > 12) {
+        sz--; ctx.font = `italic 900 ${sz}px Georgia,serif`;
+      }
+      ctx.fillText(bottomText, rxX + rxW / 2, rightY);
+      ctx.restore();
+      rightY += geniusFs * 1.3 + spacing;
     }
-    ctx.fillText(bottomText, rxX + rxW / 2, rightY);
-    ctx.restore();
-    rightY += geniusFs * 1.3 + spacing;
-  }
 
-  /* Thin accent underline below genius label */
-  ctx.save();
-  ctx.strokeStyle = theme.accent + 'aa';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(rxX, rightY - spacing * 0.5);
-  ctx.lineTo(rxX + rxW, rightY - spacing * 0.5);
-  ctx.stroke();
-  ctx.restore();
-  rightY += spacing * 0.5;
+    /* Thin accent underline below genius label */
+    ctx.save();
+    ctx.strokeStyle = theme.accent + 'aa';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(rxX, rightY - spacing * 0.5);
+    ctx.lineTo(rxX + rxW, rightY - spacing * 0.5);
+    ctx.stroke();
+    ctx.restore();
+    rightY += spacing * 0.5;
+  }
 
   /* 4b. Puzzle expression box */
   {
@@ -10594,6 +10564,1430 @@ function sharePuzzle(platform) {
   const expr    = document.getElementById('puzzleExpr')?.value || 'Math Puzzle';
   const caption = `🧩 Can you solve it??\n\n${expr}\n\n90% fail! Only for genius 🧠\n#MathPuzzle #ShashiNewsGen #viral #nepal #puzzle #genius #mathchallenge #trending`;
   _shareCanvasToSocial(platform, 'puzzleCanvas', caption, downloadPuzzle);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PUZZLE LIVE MODE
+   • Fullscreen animated canvas: puzzle question for 3 min →
+     answer reveal for 10 sec → random next puzzle → repeat
+   • Web Speech API: random AI-style voice phrases
+   • MediaRecorder: records canvas stream as .webm download
+   ═══════════════════════════════════════════════════════════════════ */
+
+let _liveActive       = false;
+let _livePhase        = 'question';   // 'question' | 'answer'
+let _liveSecondsLeft  = 180;
+let _liveTimer        = null;
+let _liveAnimFrame    = null;
+let _liveAnimT        = 0;
+let _livePuzzleIdx    = 0;
+let _liveRecorder     = null;
+
+/* ── Background music (Web Audio API) ── */
+let _liveAudioCtx     = null;
+let _liveMusicNodes   = [];   // active oscillator/gain nodes
+let _liveMusicTimer   = null;
+let _liveTikTokPlayed = false; // guard: play countdown beeps once per answer phase
+let _liveRecChunks    = [];
+let _liveIsRecording  = false;
+let _liveSpeaking     = false;
+let _liveSessionVoice = null; /* locked-in voice for current live session */
+let _liveSessionLang  = 'en'; /* language code for current session */
+let _liveVoiceIsNative = false; /* true only if an actual native voice was found */
+
+/* ── Multilingual phrase tables ─────────────────────────────────────────── */
+/* Each language has two variants:
+   'native' = pure script (used only when a real native TTS voice is found)
+   'roman'  = romanised / code-mixed (Hinglish, Nepanglish etc) — works on
+              any English voice and sounds natural for bilingual audiences   */
+const _LIVE_PHRASES = {
+  en: {
+    intros: [
+      'Are you a genius? Very few people can answer this!',
+      'Only 10 percent of people get this right. Can you?',
+      'This one is tricky! 90 percent fail. Think carefully!',
+      'Here is a challenge for you. Only geniuses can solve this!',
+      'Warning! This puzzle will test your brain. Ready?',
+      'Most people get this wrong. Are you smarter than average?',
+      'Can you solve it before time runs out? Let us find out!',
+      'Brain test time! This one is harder than it looks!',
+    ],
+    answerIntros: [
+      'Time is up! Let us see the answer now!',
+      'Did you get it right? Here is the answer!',
+      'The correct answer is coming up. How did you do?',
+      'Reveal time! Let us check if you are a genius!',
+    ],
+    engage: [
+      'Drop your answer in the comments — I will read it out live!',
+      'Most people fail this one. Are you different?',
+      'Remember: order of operations is everything here!',
+      'No calculator — solve it in your head!',
+      'Share this live with a friend right now!',
+      'Tag someone who thinks they are a math genius!',
+      'Clock is ticking! Have you got an answer yet?',
+      'Think step by step — do not skip any operation!',
+      'If you get this right you are in the top ten percent!',
+      'I can see your comments coming in! Keep them coming!',
+      'The answer might surprise you — stay till the end!',
+      'I will reveal the answer when the timer hits zero — not a moment before!',
+      'Confident? Tell me your answer and how sure you are out of ten!',
+    ],
+    wrong:   ['Ooh, that is not quite right — keep trying!', 'Close but no cigar! Think again!', 'Nice try! But the answer is hiding somewhere else.', 'Not this time! Give it another shot!', 'Almost! You are on the right track though!'],
+    correct: ['Yes! That is absolutely right! Genius confirmed!', 'Correct! You are in the top ten percent!', 'Nailed it! You crushed this puzzle!', 'Brilliant! You really are a math genius!', 'Outstanding! Perfect answer!'],
+    twoMin:  'Two minutes left. Have you worked it out yet?',
+    oneMin:  'One minute remaining! Final stretch! Think carefully!',
+    thirty:  'Thirty seconds! Lock in your answer now!',
+    ten:     'Ten! Nine! Eight! Almost time!',
+    timeUp:  (ans) => `Time is up! The answer is ${ans}! How many got it right?`,
+    answerSpeak: (intro, ans) => `${intro} The answer is ${ans}! Check your comments — let me see who got it!`,
+    newPuzzle: (n) => `Puzzle ${n} — Can YOU solve it? Comment your answer!`,
+    welcome: 'Welcome to the LIVE Math Puzzle Game! Drop your answer in the comments!',
+    equation: (intro, expr) => `${intro} Here is the equation: ${expr}`,
+    correct_r: (name) => `${name} got it right! Genius!`,
+    wrong_r:   (name, ans) => `${name} said ${ans}. Not quite! The correct answer is different.`,
+    wait_r:    (name, num) => `${name} says ${num}. Will that be right? We will find out when the timer ends!`,
+    interesting_r: (name, num) => `${name} says ${num}. Interesting! Wait for the timer — no spoilers!`,
+    general_r: (name, text) => `${name} says: ${text}`,
+  },
+
+  /* ── Hindi ── */
+  /* Native Devanagari — used only when hi-IN voice is available on the device */
+  hi_native: {
+    intros: [
+      'क्या आप प्रतिभाशाली हैं? बहुत कम लोग यह हल कर सकते हैं!',
+      'केवल दस प्रतिशत लोग यह सही करते हैं। क्या आप कर सकते हैं?',
+      'यह सवाल मुश्किल है! नब्बे प्रतिशत लोग गलत करते हैं। ध्यान से सोचिए!',
+      'यह चुनौती केवल प्रतिभाशाली लोग हल कर सकते हैं!',
+      'सावधान! यह पहेली आपके दिमाग की परीक्षा लेगी। तैयार हैं?',
+      'ज़्यादातर लोग यह गलत करते हैं। क्या आप होशियार हैं?',
+    ],
+    answerIntros: ['समय समाप्त! अब उत्तर देखते हैं!', 'क्या आप सही थे? यह रहा उत्तर!', 'खुलासे का समय! देखते हैं आप प्रतिभाशाली हैं या नहीं!'],
+    engage: [
+      'कमेंट में अपना उत्तर लिखें — मैं इसे live पढ़ूंगा!',
+      'ज़्यादातर लोग यह हल नहीं कर पाते। क्या आप अलग हैं?',
+      'याद रखें: गणित में order of operations बहुत ज़रूरी है!',
+      'बिना calculator के — दिमाग से हल करें!',
+      'घड़ी चल रही है! क्या आपका answer तैयार है?',
+      'step by step सोचें — कोई भी step न छोड़ें!',
+      'यदि आप यह सही करते हैं तो आप top 10 percent में हैं!',
+      'आपके comments आ रहे हैं! जारी रखें!',
+      'उत्तर आपको चौंका सकता है — अंत तक रुकें!',
+    ],
+    wrong:   ['ओह, यह सही नहीं है — फिर कोशिश करें!', 'लगभग सही! फिर सोचें!', 'कोशिश अच्छी थी! लेकिन उत्तर कहीं और है।', 'इस बार नहीं! एक और बार प्रयास करें!'],
+    correct: ['हाँ! बिल्कुल सही! आप genius हैं!', 'सही! आप top 10 percent में हैं!', 'शानदार! आपने यह puzzle जीत ली!', 'Brilliant! एकदम सही उत्तर!'],
+    twoMin: 'दो मिनट बचे हैं। क्या आपने हल कर लिया?',
+    oneMin: 'एक मिनट बचा है! आखिरी chance! ध्यान से सोचें!',
+    thirty: 'तीस seconds! अब अपना answer पक्का करें!',
+    ten:    'दस! नौ! आठ! लगभग time खत्म!',
+    timeUp:  (ans) => `Time up! Answer है ${ans}! कितने लोगों ने सही किया?`,
+    answerSpeak: (intro, ans) => `${intro} Answer है ${ans}! Comments देखें!`,
+    newPuzzle: (n) => `Puzzle number ${n} — क्या आप solve कर सकते हैं? Comment में answer दें!`,
+    welcome: 'Live Math Puzzle Game में आपका स्वागत है! Comment में अपना answer दें!',
+    equation: (intro, expr) => `${intro} यह है equation: ${expr}`,
+    correct_r: (name) => `${name} ने सही किया! Genius confirmed!`,
+    wrong_r:   (name, ans) => `${name} का answer गलत था। सही answer अलग है।`,
+    wait_r:    (name, num) => `${name} ने ${num} लिखा है। Time खत्म होने पर पता चलेगा!`,
+    interesting_r: (name, num) => `${name} ने ${num} कहा। Interesting! Timer का wait करें!`,
+    general_r: (name, text) => `${name} कहते हैं: ${text}`,
+  },
+  /* Hinglish (romanised) — works on any English TTS voice, sounds natural */
+  hi: {
+    intros: [
+      'Kya aap genius hain? Bahut kam log yeh puzzle solve kar sakte hain!',
+      'Sirf 10 percent log yeh sahi karte hain. Kya aap kar sakte hain?',
+      'Yeh question bahut tricky hai! 90 percent log fail hote hain. Dhyan se socho!',
+      'Yeh ek challenge hai — sirf genius log hi is puzzle ko solve kar sakte hain!',
+      'Khabardar! Yeh puzzle aapke dimaag ki pareeksha lega. Ready hain?',
+      'Zyaadatar log yeh galat karte hain. Kya aap average se zyaada hoshiyaar hain?',
+      'Kya aap time khatam hone se pehle solve kar sakte hain? Chaliye dekhte hain!',
+      'Brain test time! Yeh utna aasaan nahi jitna dikhta hai!',
+    ],
+    answerIntros: [
+      'Time up! Ab answer dekhte hain!',
+      'Kya aap sahi the? Yeh raha answer!',
+      'Sahi answer aa raha hai. Aapne kaisa kiya?',
+      'Reveal time! Dekhte hain aap genius hain ya nahi!',
+    ],
+    engage: [
+      'Comment mein apna answer likho — main ise live padhenge!',
+      'Zyaadatar log yeh solve nahi kar paate. Kya aap alag hain?',
+      'Yaad rakhein: maths mein order of operations bahut zaroori hai!',
+      'Bina calculator ke — dimaag se solve karo!',
+      'Is live ko abhi kisi dost ke saath share karo!',
+      'Ghadi tick kar rahi hai! Kya aapka answer ready hai?',
+      'Step by step socho — koi bhi step mat chhodo!',
+      'Agar aap yeh sahi karte hain toh aap top 10 percent mein hain!',
+      'Aapke comments aa rahe hain! Jaari rakhein!',
+      'Answer aapko chauka sakta hai — end tak ruko!',
+      'Confident hain? Comment mein batao kitne confident hain 10 mein se!',
+      'Main timer zero hone par answer reveal karunga — ek second bhi pehle nahi!',
+    ],
+    wrong:   ['Ooh, yeh bilkul sahi nahi hai — phir koshish karo!', 'Lagbhag sahi! Phir socho!', 'Achhi koshish! Lekin answer kahin aur chhupa hai.', 'Is baar nahi! Ek aur baar try karo!', 'Aap sahi raaste par hain!'],
+    correct: ['Haan! Bilkul sahi! Genius confirmed!', 'Correct! Aap top 10 percent mein hain!', 'Shandaar! Aapne yeh puzzle jeet li!', 'Brilliant! Sach mein maths genius ho aap!', 'Outstanding! Ekdum sahi answer!'],
+    twoMin: 'Do minute bache hain. Kya aapne solve kar liya?',
+    oneMin: 'Ek minute bacha hai! Aakhiri stretch! Dhyan se socho!',
+    thirty: 'Tees seconds! Ab apna answer pakka karo!',
+    ten:    'Das! Nau! Aath! Lagbhag time khatam!',
+    timeUp:  (ans) => `Time khatam! Answer hai ${ans}! Kitne logon ne sahi kiya?`,
+    answerSpeak: (intro, ans) => `${intro} Answer hai ${ans}! Comments dekho — dekhte hain kisne sahi kiya!`,
+    newPuzzle: (n) => `Puzzle number ${n} — Kya aap solve kar sakte hain? Comment mein answer do!`,
+    welcome: 'Live Math Puzzle Game mein aapka swagat hai! Comment mein apna answer do!',
+    equation: (intro, expr) => `${intro} Yeh hai equation: ${expr}`,
+    correct_r: (name) => `${name} ne sahi kiya! Shabash! Genius confirmed!`,
+    wrong_r:   (name, ans) => `${name} ka answer sahi nahi tha. Sahi answer alag hai.`,
+    wait_r:    (name, num) => `${name} ne ${num} likha hai. Sahi hoga kya? Timer khatam hone par pata chalega!`,
+    interesting_r: (name, num) => `${name} ne ${num} kaha. Interesting! Timer ka wait karo — no spoilers!`,
+    general_r: (name, text) => `${name} kehte hain: ${text}`,
+  },
+
+  /* ── Nepali ── */
+  /* Native Devanagari — used only when ne-NP voice is available */
+  ne_native: {
+    intros: [
+      'के तपाईं genius हुनुहुन्छ? धेरै थोरै मान्छेहरूले यो solve गर्न सक्छन्!',
+      'केवल 10 percent मान्छेहरूले यो सही गर्छन्। के तपाईं गर्न सक्नुहुन्छ?',
+      'यो question गाह्रो छ! 90 percent मान्छे गलत गर्छन्। ध्यानले सोच्नुस्!',
+      'यो challenge केवल genius मान्छेहरूले हल गर्न सक्छन्!',
+      'सावधान! यो puzzle ले तपाईंको दिमागको परीक्षा लिनेछ। तयार हुनुहुन्छ?',
+    ],
+    answerIntros: ['Time सकियो! अब answer हेरौं!', 'के तपाईं सही हुनुहुन्थ्यो? यो रह्यो answer!', 'Reveal time! हेरौं तपाईं genius हुनुहुन्छ कि छैन!'],
+    engage: [
+      'Comment मा आफ्नो answer लेख्नुस् — म यसलाई live मा पढ्नेछु!',
+      'धेरैजसो मान्छेहरू यो solve गर्न सक्दैनन्। के तपाईं फरक हुनुहुन्छ?',
+      'याद गर्नुस्: maths मा order of operations धेरै महत्त्वपूर्ण छ!',
+      'Calculator बिना — दिमागले solve गर्नुस्!',
+      'घडी चलिरहेको छ! के तपाईंको answer तयार छ?',
+      'यदि तपाईं यो सही गर्नुभयो भने तपाईं top 10 percent मा हुनुहुन्छ!',
+    ],
+    wrong:   ['ओह, त्यो सही छैन — फेरि try गर्नुस्!', 'लगभग सही! फेरि सोच्नुस्!', 'राम्रो try! तर answer अन्त छ।'],
+    correct: ['Correct! तपाईं top 10 percent मा हुनुहुन्छ!', 'Brilliant! तपाईंले यो puzzle जित्नुभयो!', 'Shandaar! तपाईं साँच्चै maths genius हुनुहुन्छ!'],
+    twoMin: 'दुई minute बाँकी छ। के तपाईंले solve गर्नुभयो?',
+    oneMin: 'एक minute बाँकी छ! अन्तिम stretch! ध्यानले सोच्नुस्!',
+    thirty: 'तीस seconds! अब आफ्नो answer पक्का गर्नुस्!',
+    ten:    'दस! नौ! आठ! लगभग time सकियो!',
+    timeUp:  (ans) => `Time सकियो! Answer हो ${ans}! कतिजनाले सही गरे?`,
+    answerSpeak: (intro, ans) => `${intro} Answer हो ${ans}! Comments हेर्नुस्!`,
+    newPuzzle: (n) => `Puzzle number ${n} — के तपाईं solve गर्न सक्नुहुन्छ? Comment मा answer दिनुस्!`,
+    welcome: 'Live Math Puzzle Game मा स्वागत छ! Comment मा आफ्नो answer दिनुस्!',
+    equation: (intro, expr) => `${intro} यो हो equation: ${expr}`,
+    correct_r: (name) => `${name} ले सही गर्नुभयो! Shabash! Genius!`,
+    wrong_r:   (name, ans) => `${name} को answer सही थिएन। सही answer फरक छ।`,
+    wait_r:    (name, num) => `${name} ले ${num} लेख्नुभयो। Time सकिएपछि थाहा हुन्छ!`,
+    interesting_r: (name, num) => `${name} ले ${num} भन्नुभयो। Interesting! Timer को wait गर्नुस्!`,
+    general_r: (name, text) => `${name} भन्नुहुन्छ: ${text}`,
+  },
+  /* Nepanglish (romanised) — works on any English TTS voice */
+  ne: {
+    intros: [
+      'K tapai genius hunuhunchha? Dherai thorai manchheharu le yo puzzle solve garna sakchhan!',
+      'Sirf 10 percent manchheharu le yo sahi garchhan. K tapai garna saknu hunchha?',
+      'Yo question gaaro chha! 90 percent manchhe galat garchhan. Dhyan le sochnus!',
+      'Yo challenge sirf genius manchheharu le hal garna sakchhan!',
+      'Sawdhan! Yo puzzle le tapai ko dimag ko pareeksha linechha. Tayaar hunuhunchha?',
+      'Dhereijaso manchhe yo solve garna sakdainan. K tapai farak hunuhunchha?',
+    ],
+    answerIntros: [
+      'Time sakiyo! Ab answer herau!',
+      'K tapai sahi hunuhunthyo? Yo rayo answer!',
+      'Reveal time! Herau tapai genius hunuhunchha ki chhainas!',
+    ],
+    engage: [
+      'Comment ma afno answer lekhnus — ma yeslai live ma padhne chhu!',
+      'Dherai manchhe yo solve garna sakdainan. K tapai farak hunuhunchha?',
+      'Yaad garnus: maths ma order of operations dherai important chha!',
+      'Bina calculator — dimag le solve garnus!',
+      'Yo live lai abhi kisi sathi sanga share garnus!',
+      'Ghadi chalirako chha! K tapai ko answer tayaar chha?',
+      'Step by step sochus — koi step na chhadnus!',
+      'Yadi tapai yo sahi garnu bhayo bhane tapai top 10 percent ma hunuhunchha!',
+      'Tapai ka comments aai rahekan chhan! Jaari rakhnus!',
+      'Answer tapai lai chaukaa sakchha — end samma roknus!',
+    ],
+    wrong:   ['Oh, tyo sahi chhainas — pheri try garnus!', 'Lagbhag sahi! Pheri sochnus!', 'Ramro try! Tara answer anta chha.', 'Yo patak hoina! Arko patak try garnus!'],
+    correct: ['Hoo! Bilkul sahi! Genius confirmed!', 'Correct! Tapai top 10 percent ma hunuhunchha!', 'Shandaar! Tapai le yo puzzle jitnu bhayo!', 'Brilliant! Tapai sachai maths genius hunuhunchha!'],
+    twoMin: 'Dui minute baaki chha. K tapai le solve garnu bhayo?',
+    oneMin: 'Ek minute baaki chha! Antim chance! Dhyan le sochnus!',
+    thirty: 'Tees seconds! Ab afno answer pakka garnus!',
+    ten:    'Das! Nau! Aath! Lagbhag time sakiyo!',
+    timeUp:  (ans) => `Time sakiyo! Answer ho ${ans}! Katijana le sahi gare?`,
+    answerSpeak: (intro, ans) => `${intro} Answer ho ${ans}! Comments hernus — herau kasle sahi garyo!`,
+    newPuzzle: (n) => `Puzzle number ${n} — K tapai solve garna saknu hunchha? Comment ma answer dinus!`,
+    welcome: 'Live Math Puzzle Game ma swagat chha! Comment ma afno answer dinus!',
+    equation: (intro, expr) => `${intro} Yo ho equation: ${expr}`,
+    correct_r: (name) => `${name} le sahi garnu bhayo! Shabash! Genius!`,
+    wrong_r:   (name, ans) => `${name} ko answer sahi thiena. Sahi answer farak chha.`,
+    wait_r:    (name, num) => `${name} le ${num} lekhnu bhayo. Sahi hola? Time sakiepachhi thaha hunchha!`,
+    interesting_r: (name, num) => `${name} le ${num} bhannubhayo. Interesting! Timer ko wait garnus!`,
+    general_r: (name, text) => `${name} bhannu hunchha: ${text}`,
+  },
+
+  fr: {
+    intros: ['Êtes-vous un génie? Très peu de gens peuvent répondre à ça!', 'Seulement dix pour cent des gens répondent correctement. Et vous?', 'C\'est difficile! Quatre-vingt-dix pour cent échouent. Réfléchissez bien!'],
+    answerIntros: ['Le temps est écoulé! Voyons la réponse maintenant!', 'Avez-vous trouvé? Voici la réponse!', 'La bonne réponse arrive. Comment vous en êtes-vous sorti?'],
+    engage: ['Donnez votre réponse dans les commentaires!', 'La plupart des gens échouent. Êtes-vous différent?', 'La montre tourne! Avez-vous votre réponse?'],
+    wrong:   ['Ce n\'est pas tout à fait ça — réessayez!', 'Presque! Réfléchissez encore!'],
+    correct: ['Oui! C\'est absolument correct! Génie confirmé!', 'Correct! Vous êtes dans le top dix pour cent!'],
+    twoMin: 'Deux minutes restantes. Avez-vous trouvé?',
+    oneMin: 'Une minute restante! Dernière ligne droite!',
+    thirty: 'Trente secondes! Confirmez votre réponse!',
+    ten: 'Dix! Neuf! Huit! Presque fini!',
+    timeUp: (ans) => `Temps écoulé! La réponse est ${ans}!`,
+    answerSpeak: (intro, ans) => `${intro} La réponse est ${ans}!`,
+    newPuzzle: (n) => `Puzzle ${n} — Pouvez-vous le résoudre? Commentez votre réponse!`,
+    welcome: 'Bienvenue dans le jeu de puzzles mathématiques en direct!',
+    equation: (intro, expr) => `${intro} Voici l'équation: ${expr}`,
+    correct_r: (name) => `${name} a trouvé la bonne réponse! Bravo!`,
+    wrong_r: (name) => `${name} n'a pas la bonne réponse.`,
+    wait_r: (name, num) => `${name} dit ${num}. On verra à la fin!`,
+    interesting_r: (name, num) => `${name} dit ${num}. Intéressant!`,
+    general_r: (name, text) => `${name} dit: ${text}`,
+  },
+  es: {
+    intros: ['¿Eres un genio? ¡Muy poca gente puede responder esto!', 'Solo el diez por ciento lo responde bien. ¿Puedes tú?', '¡Esto es difícil! El noventa por ciento falla. ¡Piensa bien!'],
+    answerIntros: ['¡Se acabó el tiempo! ¡Veamos la respuesta!', '¿Lo acertaste? ¡Aquí está la respuesta!', '¡Es hora de revelar! Veamos si eres un genio.'],
+    engage: ['¡Deja tu respuesta en los comentarios!', 'La mayoría de la gente falla esto. ¿Eres diferente?', '¡El reloj corre! ¿Ya tienes tu respuesta?'],
+    wrong:   ['¡Eso no es correcto — sigue intentando!', '¡Casi! Piensa de nuevo.'],
+    correct: ['¡Sí! ¡Absolutamente correcto! ¡Genio confirmado!', '¡Correcto! ¡Estás en el diez por ciento superior!'],
+    twoMin: 'Dos minutos restantes. ¿Ya lo resolviste?',
+    oneMin: '¡Un minuto! ¡Recta final!',
+    thirty: '¡Treinta segundos! ¡Confirma tu respuesta ahora!',
+    ten: '¡Diez! ¡Nueve! ¡Ocho! ¡Casi termina!',
+    timeUp: (ans) => `¡Tiempo! La respuesta es ${ans}.`,
+    answerSpeak: (intro, ans) => `${intro} La respuesta es ${ans}.`,
+    newPuzzle: (n) => `Puzzle ${n} — ¿Puedes resolverlo? ¡Comenta tu respuesta!`,
+    welcome: '¡Bienvenido al juego de puzzles matemáticos en vivo!',
+    equation: (intro, expr) => `${intro} Aquí está la ecuación: ${expr}`,
+    correct_r: (name) => `¡${name} lo tiene bien! ¡Bravo!`,
+    wrong_r: (name) => `${name} no acertó esta vez.`,
+    wait_r: (name, num) => `${name} dice ${num}. ¡Lo veremos al final!`,
+    interesting_r: (name, num) => `${name} dice ${num}. ¡Interesante!`,
+    general_r: (name, text) => `${name} dice: ${text}`,
+  },
+  de: {
+    intros: ['Bist du ein Genie? Sehr wenige können das lösen!', 'Nur zehn Prozent antworten richtig. Schaffst du es?', 'Das ist knifflig! Neunzig Prozent scheitern. Denk genau nach!'],
+    answerIntros: ['Zeit abgelaufen! Schauen wir uns die Antwort an!', 'Hattest du recht? Hier ist die Antwort!', 'Die Lösung kommt jetzt. Wie hast du abgeschnitten?'],
+    engage: ['Schreib deine Antwort in die Kommentare!', 'Die meisten scheitern daran. Bist du anders?', 'Die Uhr tickt! Hast du schon eine Antwort?'],
+    wrong:   ['Das ist leider nicht ganz richtig — versuch es nochmal!', 'Fast! Denk nochmal nach.'],
+    correct: ['Ja! Das ist absolut richtig! Genie bestätigt!', 'Richtig! Du gehörst zu den besten zehn Prozent!'],
+    twoMin: 'Noch zwei Minuten. Hast du es schon gelöst?',
+    oneMin: 'Noch eine Minute! Letzte Runde!',
+    thirty: 'Dreißig Sekunden! Bestätige jetzt deine Antwort!',
+    ten: 'Zehn! Neun! Acht! Fast fertig!',
+    timeUp: (ans) => `Zeit abgelaufen! Die Antwort ist ${ans}!`,
+    answerSpeak: (intro, ans) => `${intro} Die Antwort ist ${ans}!`,
+    newPuzzle: (n) => `Rätsel ${n} — Kannst du es lösen? Kommentiere deine Antwort!`,
+    welcome: 'Willkommen beim Live-Mathe-Rätsel-Spiel!',
+    equation: (intro, expr) => `${intro} Hier ist die Gleichung: ${expr}`,
+    correct_r: (name) => `${name} hat es richtig! Großartig!`,
+    wrong_r: (name) => `${name} hatte leider nicht die richtige Antwort.`,
+    wait_r: (name, num) => `${name} sagt ${num}. Wir sehen es am Ende!`,
+    interesting_r: (name, num) => `${name} sagt ${num}. Interessant!`,
+    general_r: (name, text) => `${name} sagt: ${text}`,
+  },
+  ja: {
+    intros: ['あなたは天才ですか？これを解ける人はほとんどいません！', '正解するのは10パーセントだけです。あなたはできますか？', 'これは難しい！90パーセントが失敗します。よく考えてください！'],
+    answerIntros: ['時間切れ！答えを見てみましょう！', '正解でしたか？答えはこちらです！', '正解発表です！あなたは天才ですか？'],
+    engage: ['コメントに答えを書いてください！', 'ほとんどの人がこれに失敗します。あなたは違いますか？', '時計が刻んでいます！答えはありますか？'],
+    wrong:   ['惜しい！もう一度考えてみてください。', 'ほぼ正解です！再度挑戦してください。'],
+    correct: ['はい！完全に正解です！天才確認！', '正解！あなたは上位10パーセントです！'],
+    twoMin: 'あと2分です。解けましたか？',
+    oneMin: 'あと1分！最終局面です！',
+    thirty: '30秒！今すぐ答えを確定してください！',
+    ten: '10！9！8！もうすぐ終わりです！',
+    timeUp: (ans) => `時間切れ！答えは${ans}です！`,
+    answerSpeak: (intro, ans) => `${intro} 答えは${ans}です！`,
+    newPuzzle: (n) => `問題${n} — 解けますか？コメントで答えてください！`,
+    welcome: 'ライブ数学パズルゲームへようこそ！コメントで答えを教えてください！',
+    equation: (intro, expr) => `${intro} 方程式はこちらです: ${expr}`,
+    correct_r: (name) => `${name}さんが正解しました！すごい！`,
+    wrong_r: (name) => `${name}さんの答えは残念ながら違います。`,
+    wait_r: (name, num) => `${name}さんは${num}と答えました。終わりに確認します！`,
+    interesting_r: (name, num) => `${name}さんは${num}と言っています。興味深い！`,
+    general_r: (name, text) => `${name}さん: ${text}`,
+  },
+  zh: {
+    intros: ['你是天才吗？很少人能回答这个！', '只有10%的人能答对，你能吗？', '这道题很难！90%的人都答错了，仔细思考！'],
+    answerIntros: ['时间到！让我们看看答案！', '你答对了吗？答案来了！', '揭晓时刻！看看你是不是天才！'],
+    engage: ['把你的答案写在评论里！', '大多数人都做不到这道题，你与众不同吗？', '时钟在滴答！你有答案了吗？'],
+    wrong:   ['哦，那不太对——再试试！', '差不多！再想想。'],
+    correct: ['是的！完全正确！天才确认！', '正确！你在前10%！'],
+    twoMin: '还有两分钟，你解出来了吗？',
+    oneMin: '还有一分钟！最后冲刺！',
+    thirty: '三十秒！现在锁定你的答案！',
+    ten: '十！九！八！快结束了！',
+    timeUp: (ans) => `时间到！答案是${ans}！`,
+    answerSpeak: (intro, ans) => `${intro} 答案是${ans}！`,
+    newPuzzle: (n) => `第${n}道题——你能解出来吗？在评论里留下答案！`,
+    welcome: '欢迎来到直播数学谜题游戏！在评论里写下你的答案！',
+    equation: (intro, expr) => `${intro} 方程式是：${expr}`,
+    correct_r: (name) => `${name}答对了！太棒了！`,
+    wrong_r: (name) => `${name}的答案不对。`,
+    wait_r: (name, num) => `${name}说${num}，计时结束后我们来看看！`,
+    interesting_r: (name, num) => `${name}说${num}，有意思！`,
+    general_r: (name, text) => `${name}说：${text}`,
+  },
+  ar: {
+    intros: ['هل أنت عبقري؟ قليل جداً من الناس يمكنهم حل هذا!', 'فقط عشرة بالمئة يجيبون بشكل صحيح. هل يمكنك ذلك؟', 'هذا السؤال صعب! تسعون بالمئة يفشلون. فكر بعناية!'],
+    answerIntros: ['انتهى الوقت! لنرَ الإجابة الآن!', 'هل أجبت بشكل صحيح؟ ها هي الإجابة!', 'وقت الكشف! لنتحقق إن كنت عبقرياً!'],
+    engage: ['اكتب إجابتك في التعليقات!', 'معظم الناس يفشلون في هذا. هل أنت مختلف؟', 'الساعة تدق! هل لديك إجابة؟'],
+    wrong:   ['هذا ليس صحيحاً تماماً — حاول مرة أخرى!', 'تقريباً! فكر مجدداً.'],
+    correct: ['نعم! صحيح تماماً! تم تأكيد العبقرية!', 'صحيح! أنت في أفضل عشرة بالمئة!'],
+    twoMin: 'دقيقتان متبقيتان. هل حللتها؟',
+    oneMin: 'دقيقة واحدة! الجولة الأخيرة!',
+    thirty: 'ثلاثون ثانية! أكد إجابتك الآن!',
+    ten: 'عشرة! تسعة! ثمانية! أوشك الوقت على الانتهاء!',
+    timeUp: (ans) => `انتهى الوقت! الإجابة هي ${ans}!`,
+    answerSpeak: (intro, ans) => `${intro} الإجابة هي ${ans}!`,
+    newPuzzle: (n) => `اللغز ${n} — هل يمكنك حله؟ علق بإجابتك!`,
+    welcome: 'مرحباً بك في لعبة الألغاز الرياضية المباشرة!',
+    equation: (intro, expr) => `${intro} هذه هي المعادلة: ${expr}`,
+    correct_r: (name) => `${name} أجاب بشكل صحيح! رائع!`,
+    wrong_r: (name) => `${name} لم يكن لديه الإجابة الصحيحة.`,
+    wait_r: (name, num) => `${name} قال ${num}. سنرى في النهاية!`,
+    interesting_r: (name, num) => `${name} قال ${num}. مثير للاهتمام!`,
+    general_r: (name, text) => `${name} يقول: ${text}`,
+  },
+};
+
+
+/* ── BCP-47 tag map for language codes ──────────────────────────────────── */
+const _LIVE_LANG_BCP47 = {
+  en:'en-US', hi:'hi-IN', ne:'ne-NP', fr:'fr-FR',
+  es:'es-ES', de:'de-DE', ja:'ja-JP', zh:'zh-CN', ar:'ar-SA'
+};
+
+/* Helper: get phrases for current session language.
+   For hi/ne: use romanised variant unless a native voice was actually found. */
+function _liveP() {
+  const lang = _liveSessionLang;
+  if ((lang === 'hi' || lang === 'ne') && !_liveVoiceIsNative) {
+    return _LIVE_PHRASES[lang]; // romanised Hinglish/Nepanglish
+  }
+  if ((lang === 'hi' || lang === 'ne') && _liveVoiceIsNative) {
+    return _LIVE_PHRASES[lang + '_native'] || _LIVE_PHRASES[lang];
+  }
+  return _LIVE_PHRASES[lang] || _LIVE_PHRASES.en;
+}
+
+/* Backward-compat shims for the old named arrays */
+const _LIVE_INTROS            = _LIVE_PHRASES.en.intros;
+const _LIVE_ANSWER_INTROS     = _LIVE_PHRASES.en.answerIntros;
+const _LIVE_ENGAGE            = _LIVE_PHRASES.en.engage;
+const _LIVE_WRONG_REACTIONS   = _LIVE_PHRASES.en.wrong;
+const _LIVE_CORRECT_REACTIONS = _LIVE_PHRASES.en.correct;
+
+let _liveEngageIdx   = 0;
+let _liveSpeechTimer = null;   /* interval for continuous speech */
+
+function _liveSpeak(text, rate, pitch) {
+  if (!document.getElementById('liveSpeechToggle')?.checked) return;
+  if (!window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  /* Always set language so TTS engine uses correct phonetics */
+  u.lang = _LIVE_LANG_BCP47[_liveSessionLang] || 'en-US';
+  /* Randomise tone: excited or calm */
+  const tones = [
+    { rate:1.05, pitch:1.2 },  // excited
+    { rate:0.92, pitch:1.0 },  // calm
+    { rate:1.0,  pitch:1.1 },  // neutral-bright
+    { rate:0.88, pitch:0.95},  // deep-calm
+    { rate:1.1,  pitch:1.25},  // hyped
+  ];
+  const tone = tones[Math.floor(Math.random() * tones.length)];
+  u.rate   = rate  ?? tone.rate;
+  u.pitch  = pitch ?? tone.pitch;
+  u.volume = 1;
+  if (_liveSessionVoice) u.voice = _liveSessionVoice;
+  /* Only set u.lang when we have a real native voice — otherwise the English
+     voice will refuse to speak and stay silent for hi-IN / ne-NP text */
+  if (_liveVoiceIsNative) u.lang = _LIVE_LANG_BCP47[_liveSessionLang] || 'en-US';
+  speechSynthesis.speak(u);
+}
+
+/* Pick and lock a voice for the current live session based on gender + language */
+function _liveLockVoice() {
+  if (!window.speechSynthesis) return;
+  const gender = document.getElementById('preLiveVoiceGender')?.value || 'random';
+  const langCode = document.getElementById('preLiveVoiceLang')?.value || 'en';
+  _liveSessionLang = langCode;
+  const bcp47 = _LIVE_LANG_BCP47[langCode] || 'en-US';
+
+  const _doLock = () => {
+    const voices = speechSynthesis.getVoices();
+    /* Filter by full BCP-47 first, then by language prefix */
+    let nativePool = voices.filter(v => v.lang.toLowerCase() === bcp47.toLowerCase());
+    if (!nativePool.length) nativePool = voices.filter(v => v.lang.toLowerCase().startsWith(langCode.toLowerCase()));
+
+    /* Did we actually find a voice for this language? */
+    _liveVoiceIsNative = nativePool.length > 0;
+
+    /* If no native voice found, fall back to English — but keep romanised phrases */
+    let pool = nativePool.length ? nativePool : voices.filter(v => v.lang.toLowerCase().startsWith('en'));
+    if (!pool.length) pool = voices;
+
+    const femaleNames = /zira|samantha|karen|moira|tessa|fiona|victoria|susan|alice|allison|ava|kate|serena|hazel|nicky|female|lekha|heera|kalpana/i;
+    const maleNames   = /david|mark|daniel|alex|fred|tom|james|lee|rishi|google uk english male|microsoft david|microsoft mark|jorge|reed|rocko|male|hemant|kailash/i;
+
+    let chosen;
+    if (gender === 'female') {
+      chosen = pool.find(v => femaleNames.test(v.name)) || pool[0];
+    } else if (gender === 'male') {
+      chosen = pool.find(v => maleNames.test(v.name)) || pool[0];
+    } else {
+      const femPool = pool.filter(v => femaleNames.test(v.name));
+      const malPool = pool.filter(v => maleNames.test(v.name));
+      const src = (Math.random() < 0.5 ? femPool : malPool);
+      chosen = (src.length ? src : pool)[Math.floor(Math.random() * (src.length || pool.length))];
+    }
+    _liveSessionVoice = chosen || pool[0] || null;
+    console.log(`[Live] Voice locked: ${_liveSessionVoice?.name} | lang: ${bcp47} | native: ${_liveVoiceIsNative} | gender: ${gender}`);
+  };
+
+  /* Voices may not be loaded yet — use onvoiceschanged if list is empty */
+  if (speechSynthesis.getVoices().length > 0) {
+    _doLock();
+  } else {
+    speechSynthesis.onvoiceschanged = () => { _doLock(); speechSynthesis.onvoiceschanged = null; };
+  }
+}
+
+/* Starts the continuous engagement voice loop — speaks every ~12 seconds */
+function _liveStartEngagement(exprText) {
+  _liveStopEngagement();
+  const p = _liveP();
+  /* Speak the intro + equation immediately in selected language */
+  const intro = _liveRandom(p.intros);
+  const exprSpoken = exprText.replace(/×/g,'times').replace(/÷/g,'divided by').replace(/\?\?/g,'question mark');
+  _liveSpeak(p.equation(intro, exprSpoken));
+
+  /* Engagement phrase every 12 seconds — randomly shuffle order */
+  const shuffledEngage = [...p.engage].sort(() => Math.random() - 0.5);
+  _liveEngageIdx = 0;
+
+  _liveSpeechTimer = setInterval(() => {
+    if (!_liveActive || _livePhase !== 'question') return;
+    if (!document.getElementById('liveSpeechToggle')?.checked) return;
+    if (speechSynthesis.speaking) return;
+    /* Every 2nd cycle, try to read a pending comment */
+    if (_liveEngageIdx % 2 === 1) {
+      const read = _liveReadNextComment();
+      if (read) { _liveEngageIdx++; return; }
+    }
+    const phrase = shuffledEngage[_liveEngageIdx % shuffledEngage.length];
+    _liveEngageIdx++;
+    _liveSpeak(phrase);
+  }, 12000);
+}
+
+function _liveStopEngagement() {
+  clearInterval(_liveSpeechTimer);
+  _liveSpeechTimer = null;
+  speechSynthesis.cancel();
+}
+
+function _liveRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+/* ══════════════════════════════════════════════════
+   LIVE COMMENT SYSTEM
+   ══════════════════════════════════════════════════ */
+let _liveComments        = [];   // { name, text, ts, read }
+let _liveCommentReadIdx  = 0;
+
+function _liveAddComment(name, text, isHost) {
+  const el   = document.getElementById('liveCommentFeed');
+  if (!el) return;
+  const item = document.createElement('div');
+  item.className = 'live-comment-item';
+  item.innerHTML = `<span class="live-comment-name" style="color:${isHost ? '#f59e0b' : '#a78bfa'}">${name}</span>` +
+                   `<span class="live-comment-text"> ${text}</span>`;
+  el.appendChild(item);
+  el.scrollTop = el.scrollHeight;
+  if (!isHost) _liveComments.push({ name, text, ts: Date.now(), read: false });
+}
+
+/* Called by engagement loop to read pending comments */
+function _liveReadNextComment() {
+  const ans = document.getElementById('puzzleAnswer')?.value || '';
+  const unread = _liveComments.filter(c => !c.read);
+  if (!unread.length) return false;
+  const c  = unread[0];
+  c.read   = true;
+  const p  = _liveP();
+  /* Check answer: strip spaces/symbols and compare numerically */
+  const userNum = parseFloat(c.text.replace(/[^0-9.\-]/g,''));
+  const corrNum = parseFloat(ans);
+  const isAnswerPhase = _livePhase === 'answer';
+  if (!isNaN(userNum) && !isNaN(corrNum)) {
+    if (Math.abs(userNum - corrNum) < 0.001) {
+      /* Correct — but only say so after answer phase */
+      if (isAnswerPhase) {
+        _liveSpeak(p.correct_r(c.name, ans));
+        _liveAddComment('🎙️ Host', `@${c.name} ✅ Correct! The answer is ${ans}`, true);
+      } else {
+        _liveSpeak(p.wait_r(c.name, userNum));
+        _liveAddComment('🎙️ Host', `@${c.name} We will check your answer at the end! 🤫`, true);
+      }
+    } else {
+      if (isAnswerPhase) {
+        _liveSpeak(p.wrong_r(c.name, ans));
+        _liveAddComment('🎙️ Host', `@${c.name} ❌ Not quite! Answer is ${ans}`, true);
+      } else {
+        _liveSpeak(p.interesting_r(c.name, userNum));
+        _liveAddComment('🎙️ Host', `@${c.name} Interesting guess! Wait for the reveal! 🤫`, true);
+      }
+    }
+  } else {
+    _liveSpeak(p.general_r(c.name, c.text));
+  }
+  return true;
+}
+
+/* Called by the comment submit button */
+function liveSubmitComment() {
+  const nameEl = document.getElementById('liveCommentName');
+  const textEl = document.getElementById('liveCommentInput');
+  if (!nameEl || !textEl) return;
+  const name = nameEl.value.trim() || 'Guest';
+  const text = textEl.value.trim();
+  if (!text) return;
+  _liveAddComment(name, text, false);
+  textEl.value = '';
+  /* Immediate read if AI host is free */
+  if (!speechSynthesis.speaking && _liveActive) {
+    setTimeout(_liveReadNextComment, 500);
+  }
+}
+
+function _liveLoadNextPuzzle() {
+  const p = _livePickRandomPuzzle();
+
+  /* Pick a photo that is DIFFERENT from the current one */
+  let photo;
+  do { photo = EINSTEIN_PHOTOS[Math.floor(Math.random() * EINSTEIN_PHOTOS.length)]; }
+  while (EINSTEIN_PHOTOS.length > 1 && photo.id === _puzzleEinsteinId);
+
+  /* Pick a theme that is DIFFERENT from the current one */
+  let theme;
+  do { theme = PUZZLE_THEMES[Math.floor(Math.random() * PUZZLE_THEMES.length)]; }
+  while (PUZZLE_THEMES.length > 1 && theme.id === _puzzleTheme);
+
+  document.getElementById('puzzleExpr').value   = p.expr;
+  document.getElementById('puzzleAnswer').value = p.answer;
+  const showEl = document.getElementById('puzzleShowAnswer');
+  if (showEl) showEl.checked = false;
+
+  /* Apply new theme */
+  _puzzleTheme = theme.id;
+  /* Update theme grid UI so studio reflects the change */
+  PUZZLE_THEMES.forEach(tt => {
+    const b = document.getElementById('puzzleThemeBtn_' + tt.id);
+    if (b) b.style.opacity = (tt.id === theme.id) ? '1' : '0.65';
+  });
+
+  /* Apply new photo — also updates Einstein grid UI and calls renderPuzzleCanvas */
+  _selectEinsteinPhoto(photo.id);
+  _livePuzzleIdx++;
+}
+
+/* ── Draw live canvas overlay — NEVER redraws existing canvas text,
+      only adds glow effects ON the already-drawn text regions       ── */
+function _liveDrawOverlay(liveCanvas, phase, secsLeft, t) {
+  const src = document.getElementById('puzzleCanvas');
+  if (!src) return;
+  const ctx = liveCanvas.getContext('2d');
+  const W = liveCanvas.width, H = liveCanvas.height;
+
+  /* 1. Blit the puzzle canvas as the base */
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(src, 0, 0, W, H);
+
+  const totalSecs = phase === 'question' ? 180 : 10;
+  const elapsed   = totalSecs - secsLeft;
+  const progress  = Math.min(1, elapsed / totalSecs);
+
+  /* ── Re-read live text values so we can animate them ── */
+  const topText    = (document.getElementById('puzzleTopText')?.value    || 'CAN YOU SOLVE IT?').trim();
+  const subText    = (document.getElementById('puzzleSubText')?.value    || '90% FAIL THIS!').trim();
+  const bottomText = (document.getElementById('puzzleBottomText')?.value || 'ONLY FOR GENIUS').trim();
+  const theme      = (window.PUZZLE_THEMES || []).find(th => th.id === (window._puzzleTheme || 'dark')) || { badge:'#1a0533', accent:'#7c3aed', expr:'#fff' };
+
+  /* ── Heartbeat timer ── */
+  const hbT    = (t * 1.4) % (Math.PI * 2);
+  const beat1  = Math.max(0, Math.sin(hbT * 3)) * 0.5;
+  const beat2  = Math.max(0, Math.sin(hbT * 3 - 1.2)) * 0.35;
+  const hbScale = 1 + beat1 + beat2;
+
+  /* ── Timer (bottom-right, pulsing) ── */
+  const mins     = String(Math.floor(secsLeft / 60)).padStart(1,'0');
+  const secs     = String(secsLeft % 60).padStart(2,'0');
+  const timerStr = `${mins}:${secs}`;
+  const timerFs  = Math.round(H * 0.072);
+  const timerX   = W - 24;
+  const timerY   = H - 24;
+  const isUrgent = secsLeft <= 30;
+  const timerCol = phase === 'answer' ? '#22c55e' : isUrgent ? '#dc2626' : '#f59e0b';
+
+  ctx.save();
+  ctx.translate(timerX, timerY);
+  ctx.scale(hbScale, hbScale);
+  ctx.translate(-timerX, -timerY);
+  ctx.font = `900 ${timerFs}px "Courier New",monospace`;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+  ctx.shadowColor = timerCol; ctx.shadowBlur = 20 + beat1 * 30;
+  ctx.fillStyle = timerCol;
+  ctx.fillText(timerStr, timerX, timerY);
+  ctx.restore(); ctx.shadowBlur = 0;
+
+  /* ── Bottom progress bar ── */
+  const barH = 8;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(0, H - barH, W, barH);
+  const barGrad = ctx.createLinearGradient(0, 0, W, 0);
+  if (phase === 'answer') {
+    barGrad.addColorStop(0, '#22c55e'); barGrad.addColorStop(1, '#86efac');
+  } else {
+    barGrad.addColorStop(0, '#22c55e'); barGrad.addColorStop(0.6, '#f59e0b'); barGrad.addColorStop(1, '#dc2626');
+  }
+  ctx.fillStyle = barGrad;
+  ctx.fillRect(0, H - barH, progress * W, barH);
+
+  /* ── Shared layout constants used by both question and answer phases ── */
+  const TOP_H = Math.round(H * 0.20);
+  const PAD   = Math.round(W * 0.035);
+
+  if (phase === 'question') {
+    /* ════════════════════════════════════════════════════════
+       RE-DRAW THE TOP HEADER BAR with animated flashing text
+       The static puzzle canvas text cannot flash, so we overdraw
+       the entire header zone with our own animated version.
+       ════════════════════════════════════════════════════════ */
+
+    /* Cycling hue for the header background */
+    const hue    = (t * 30) % 360;
+    const hue2   = (hue + 60) % 360;
+    const hdrGrd = ctx.createLinearGradient(0, 0, W, TOP_H);
+    hdrGrd.addColorStop(0, `hsl(${hue},90%,20%)`);
+    hdrGrd.addColorStop(1, `hsl(${hue2},90%,15%)`);
+    ctx.fillStyle = hdrGrd;
+    ctx.fillRect(0, 0, W, TOP_H);
+
+    /* Flash cycle for text */
+    const flashPhase = Math.sin(t * 4);                    // -1 → +1, ~2 Hz
+    const flashScale = 1 + flashPhase * 0.06;              // subtle size pulse
+    const flashAlpha = 0.85 + flashPhase * 0.15;           // opacity pulse
+
+    /* ── LINE 1: "CAN YOU SOLVE IT?" ── */
+    {
+      const line1Y  = Math.round(TOP_H * 0.08);
+      const line1H  = Math.round(TOP_H * 0.52);
+      let fs1 = Math.round(line1H * 0.78);
+      ctx.save();
+      ctx.font = `900 ${fs1}px Impact,Arial Black,sans-serif`;
+      while (ctx.measureText(topText).width > W - PAD * 2 && fs1 > 12) {
+        fs1--; ctx.font = `900 ${fs1}px Impact,Arial Black,sans-serif`;
+      }
+      /* Colour cycles through white → yellow → orange → white */
+      const textHue  = (t * 45) % 360;
+      ctx.fillStyle  = `hsl(${textHue < 60 ? 55 : textHue < 120 ? 30 : 0},100%,${85 + flashPhase * 10}%)`;
+      ctx.globalAlpha = flashAlpha;
+      ctx.textAlign   = 'center'; ctx.textBaseline = 'top';
+      ctx.shadowColor = `hsl(${textHue},100%,70%)`; ctx.shadowBlur = 18 + flashPhase * 12;
+      /* Scale the text in-place */
+      const cx1 = W / 2, cy1 = line1Y + fs1 / 2;
+      ctx.translate(cx1, cy1); ctx.scale(flashScale, flashScale); ctx.translate(-cx1, -cy1);
+      ctx.fillText(topText, cx1, line1Y);
+      ctx.restore();
+    }
+
+    /* ── LINE 2: "90% FAIL THIS!" ── fast alternate flash colour ── */
+    {
+      const line2Y = Math.round(TOP_H * 0.58);
+      const line2H = Math.round(TOP_H * 0.36);
+      let fs2 = Math.round(line2H * 0.72);
+      ctx.save();
+      ctx.font = `800 ${fs2}px Arial Black,Impact,sans-serif`;
+      while (ctx.measureText(subText).width > W - PAD * 4 && fs2 > 10) {
+        fs2--; ctx.font = `800 ${fs2}px Arial Black,Impact,sans-serif`;
+      }
+      /* Alternates between white and accent yellow/red */
+      const subFlash = Math.sin(t * 6);   // faster, ~3 Hz
+      ctx.fillStyle   = subFlash > 0 ? '#ffffff' : '#f59e0b';
+      ctx.globalAlpha = 0.8 + subFlash * 0.2;
+      ctx.textAlign   = 'center'; ctx.textBaseline = 'top';
+      ctx.shadowColor = subFlash > 0 ? '#f59e0b' : '#dc2626'; ctx.shadowBlur = 14 + Math.abs(subFlash) * 10;
+      ctx.fillText(subText, W / 2, line2Y);
+      ctx.restore();
+    }
+
+    /* Bottom border of header — cycling colour */
+    ctx.save();
+    ctx.strokeStyle = `hsl(${hue},100%,60%)`;
+    ctx.lineWidth   = 4;
+    ctx.shadowColor = `hsl(${hue},100%,60%)`; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.moveTo(0, TOP_H - 2); ctx.lineTo(W, TOP_H - 2); ctx.stroke();
+    ctx.restore(); ctx.shadowBlur = 0;
+
+    /* ════════════════════════════════════════════════════════
+       RE-DRAW "ONLY FOR GENIUS" at bottom of middle-right zone
+       with its own flash independent of top header.
+       ════════════════════════════════════════════════════════ */
+    const WM_H   = Math.round(H * 0.06);
+    const MID_Y  = TOP_H;
+    const MID_H  = H - TOP_H - WM_H;
+    const HALF   = Math.round(W * 0.5);
+    const rxPad  = Math.round(W * 0.035);
+    const rxPadR = Math.round(W * 0.06);
+    const rxX    = HALF + rxPad;
+    const rxW    = W - HALF - rxPad - rxPadR;
+
+    /* "ONLY FOR GENIUS" flash — phase-offset so it's different from top header */
+    const gFlash = Math.sin(t * 5 + 1.5);   // ~2.5 Hz, offset
+    const gHue   = (t * 50 + 180) % 360;    // complementary hue
+    {
+      const geniusFs  = Math.round(H * 0.052);
+      const spacing   = Math.round(H * 0.018);
+      const exprBoxH  = Math.round(MID_H * 0.38);
+      const ctaBlockH = Math.round(H * 0.026) * 1.3;
+
+      /* Mirror exactly how the static canvas positions the equation box during live.
+         During live: geniusLabelH=0, underlineH=0, answerBlockH=0 (question phase),
+         so totalBlockH = exprBoxH + spacing + ctaBlockH, centred in MID_H. */
+      const staticTotalH = exprBoxH + spacing + ctaBlockH;
+      let exprBoxY = MID_Y + Math.round((MID_H - staticTotalH) / 2);
+      if (exprBoxY < MID_Y + spacing) exprBoxY = MID_Y + spacing;
+
+      /* Genius label sits directly above the equation box */
+      const gY = exprBoxY - Math.round(geniusFs * 1.3) - spacing;
+
+      ctx.save();
+      /* Overdraw a narrow strip behind the genius label to ensure legibility */
+      const stripH = Math.round(geniusFs * 1.6);
+      ctx.fillStyle = `hsla(${gHue},60%,10%,0.6)`;
+      ctx.fillRect(rxX, gY - 4, rxW, stripH);
+
+      let sz = geniusFs;
+      ctx.font = `italic 900 ${sz}px Georgia,serif`;
+      while (ctx.measureText(bottomText).width > rxW && sz > 12) {
+        sz--; ctx.font = `italic 900 ${sz}px Georgia,serif`;
+      }
+      ctx.fillStyle   = gFlash > 0 ? `hsl(${gHue},100%,75%)` : '#ffffff';
+      ctx.globalAlpha = 0.8 + gFlash * 0.2;
+      ctx.textAlign   = 'center'; ctx.textBaseline = 'top';
+      ctx.shadowColor = `hsl(${gHue},100%,60%)`; ctx.shadowBlur = 16 + Math.abs(gFlash) * 12;
+      const cx2 = rxX + rxW / 2;
+      ctx.translate(cx2, gY + sz / 2);
+      ctx.scale(1 + gFlash * 0.04, 1 + gFlash * 0.04);
+      ctx.translate(-cx2, -(gY + sz / 2));
+      ctx.fillText(bottomText, cx2, gY);
+      ctx.restore();
+    }
+
+    /* ── Thin animated rainbow border around the whole canvas ── */
+    const bHue = (t * 40) % 360;
+    ctx.strokeStyle = `hsl(${bHue},100%,60%)`;
+    ctx.lineWidth   = 5;
+    ctx.shadowColor = `hsl(${bHue},100%,60%)`; ctx.shadowBlur = 14;
+    ctx.strokeRect(3, 3, W - 6, H - 6);
+    ctx.shadowBlur = 0;
+
+    /* ── LIVE badge top-left ── */
+    const badgePulse = 0.85 + Math.sin(t * 3.5) * 0.15;
+    ctx.save();
+    ctx.globalAlpha = badgePulse;
+    ctx.fillStyle   = '#dc2626';
+    ctx.shadowColor = '#dc2626'; ctx.shadowBlur = 16;
+    _liveRoundRect(ctx, 10, 10, 82, 30, 15);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle  = '#fff';
+    ctx.font       = `900 16px sans-serif`;
+    ctx.textAlign  = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('● LIVE', 20, 25);
+    ctx.restore();
+
+  } else {
+    /* ══════════════════════════════════════════════════════
+       ANSWER PHASE — reveal shown in the TOP header zone
+       (the blank area between the "90% fail" line and the
+       bottom of the header bar), so it never overlaps Einstein
+       or the equation box.
+       ══════════════════════════════════════════════════════ */
+
+    /* Re-draw the header background for the answer phase with green tint */
+    const aHue   = (t * 25) % 360;
+    const aHdrGr = ctx.createLinearGradient(0, 0, W, TOP_H);
+    aHdrGr.addColorStop(0, `hsl(140,80%,10%)`);
+    aHdrGr.addColorStop(1, `hsl(160,80%,8%)`);
+    ctx.fillStyle = aHdrGr;
+    ctx.fillRect(0, 0, W, TOP_H);
+
+    /* Glowing animated border around just the TOP zone */
+    const bFlash = 0.7 + Math.sin(t * 6) * 0.3;
+    ctx.save();
+    ctx.strokeStyle = `rgba(34,197,94,${bFlash})`;
+    ctx.lineWidth = 4;
+    ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 18;
+    ctx.strokeRect(3, 3, W - 6, TOP_H - 3);
+    ctx.restore(); ctx.shadowBlur = 0;
+
+    /* ── "✅ ANSWER REVEALED!" banner label (top row of header) ── */
+    const labelFs   = Math.round(TOP_H * 0.28);
+    const labelY    = Math.round(TOP_H * 0.06);
+    const labelFlip = Math.sin(t * 4);
+    ctx.save();
+    ctx.font        = `900 ${labelFs}px Impact,Arial Black,sans-serif`;
+    ctx.textAlign   = 'center'; ctx.textBaseline = 'top';
+    ctx.fillStyle   = labelFlip > 0 ? '#22c55e' : '#86efac';
+    ctx.globalAlpha = 0.85 + labelFlip * 0.15;
+    ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 18 + Math.abs(labelFlip) * 10;
+    ctx.fillText('✅  ANSWER REVEALED!', W / 2, labelY);
+    ctx.restore(); ctx.shadowBlur = 0;
+
+    /* ── The answer value — big, centred in lower portion of header ── */
+    const ans    = document.getElementById('puzzleAnswer')?.value || '';
+    const ansFs  = Math.round(TOP_H * 0.52);
+    const scaleA = 1 + Math.sin(t * 3) * 0.07;
+    const ansY   = Math.round(TOP_H * 0.40);
+    ctx.save();
+    ctx.font        = `900 ${ansFs}px "Courier New",Impact,monospace`;
+    ctx.textAlign   = 'center'; ctx.textBaseline = 'top';
+    ctx.shadowColor = '#f59e0b'; ctx.shadowBlur = 32 + Math.sin(t * 2.5) * 12;
+    ctx.fillStyle   = '#f59e0b';
+    ctx.globalAlpha = 0.95;
+    ctx.translate(W / 2, ansY + ansFs / 2);
+    ctx.scale(scaleA, scaleA);
+    ctx.translate(-W / 2, -(ansY + ansFs / 2));
+    ctx.fillText(ans, W / 2, ansY);
+    ctx.restore(); ctx.shadowBlur = 0;
+
+    /* ── "CORRECT ANSWER ↑" sub-label just below answer ── */
+    ctx.save();
+    ctx.globalAlpha = 0.75;
+    ctx.fillStyle   = 'rgba(255,255,255,0.9)';
+    ctx.font        = `700 ${Math.round(TOP_H * 0.14)}px Arial,sans-serif`;
+    ctx.textAlign   = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('— CORRECT ANSWER —', W / 2, Math.round(TOP_H * 0.85));
+    ctx.restore();
+
+    /* Header bottom border — green pulse */
+    ctx.save();
+    ctx.strokeStyle = `rgba(34,197,94,${bFlash})`;
+    ctx.lineWidth   = 4;
+    ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.moveTo(0, TOP_H - 2); ctx.lineTo(W, TOP_H - 2); ctx.stroke();
+    ctx.restore(); ctx.shadowBlur = 0;
+
+    /* Sparkle particles above the TOP zone only */
+    const spark = (t * 2) % (Math.PI * 2);
+    ctx.save();
+    for (let i = 0; i < 16; i++) {
+      const px    = (((i * 0.618 + t * 0.3) % 1)) * W;
+      const py    = (Math.sin(spark + i * 0.9) * 0.5 + 0.5) * (TOP_H - 8) + 4;
+      const sc    = ['#f59e0b','#22c55e','#7c3aed','#fff','#f472b6'][i % 5];
+      ctx.fillStyle   = sc;
+      ctx.globalAlpha = 0.4 + Math.sin(spark + i * 1.2) * 0.35;
+      ctx.beginPath(); ctx.arc(px, py, 2.5 + Math.sin(spark + i) * 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+
+    /* Top-left "✅ REVEALED" badge */
+    const ap2 = 0.75 + Math.sin(t * 4) * 0.25;
+    ctx.save();
+    ctx.globalAlpha = ap2;
+    ctx.fillStyle   = '#22c55e'; ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 14;
+    _liveRoundRect(ctx, 10, 10, 180, 28, 14); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = '#fff'; ctx.font = `800 13px sans-serif`;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('✅ ANSWER REVEALED!', 18, 24);
+    ctx.restore();
+
+    /* Rainbow border around full canvas */
+    const bHue2 = (t * 40) % 360;
+    ctx.strokeStyle = `hsl(${bHue2},100%,55%)`;
+    ctx.lineWidth   = 5;
+    ctx.shadowColor = `hsl(${bHue2},100%,55%)`; ctx.shadowBlur = 14;
+    ctx.strokeRect(3, 3, W - 6, H - 6);
+    ctx.shadowBlur = 0;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   ANSWER REVEAL FANFARE — dramatic trumpet-style stab + drum roll
+   Plays the moment the answer phase begins. No files needed.
+   ════════════════════════════════════════════════════════════════════ */
+function _liveAnswerFanfare() {
+  try {
+    const ac   = new (window.AudioContext || window.webkitAudioContext)();
+    const now  = ac.currentTime;
+    const masterGain = ac.createGain();
+    masterGain.gain.setValueAtTime(0.55, now);
+    masterGain.connect(ac.destination);
+
+    /* ── Trumpet fanfare: ascending 5-note stab (C major chord run) ── */
+    const fanfare = [
+      { f: 523.25, t: 0.00, d: 0.12, type: 'sawtooth' },  // C5
+      { f: 659.25, t: 0.10, d: 0.12, type: 'sawtooth' },  // E5
+      { f: 783.99, t: 0.20, d: 0.12, type: 'sawtooth' },  // G5
+      { f: 1046.5, t: 0.30, d: 0.24, type: 'sawtooth' },  // C6
+      { f: 1318.5, t: 0.52, d: 0.35, type: 'sawtooth' },  // E6 — top note held
+    ];
+    fanfare.forEach(({ f, t: nt, d, type }) => {
+      const osc = ac.createOscillator();
+      const env = ac.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(f, now + nt);
+      env.gain.setValueAtTime(0, now + nt);
+      env.gain.linearRampToValueAtTime(0.9, now + nt + 0.015);
+      env.gain.exponentialRampToValueAtTime(0.001, now + nt + d);
+      osc.connect(env); env.connect(masterGain);
+      osc.start(now + nt); osc.stop(now + nt + d + 0.01);
+    });
+
+    /* ── Snare roll burst (4 fast hits) ── */
+    for (let i = 0; i < 4; i++) {
+      const bufSz = ac.sampleRate * 0.06;
+      const buf   = ac.createBuffer(1, bufSz, ac.sampleRate);
+      const data  = buf.getChannelData(0);
+      for (let s = 0; s < bufSz; s++) data[s] = (Math.random() * 2 - 1) * Math.pow(1 - s / bufSz, 2.5);
+      const src  = ac.createBufferSource();
+      const filt = ac.createBiquadFilter();
+      const sEnv = ac.createGain();
+      src.buffer = buf;
+      filt.type  = 'bandpass'; filt.frequency.value = 2200; filt.Q.value = 0.9;
+      sEnv.gain.setValueAtTime(0.6, now + 0.52 + i * 0.07);
+      sEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.52 + i * 0.07 + 0.06);
+      src.connect(filt); filt.connect(sEnv); sEnv.connect(masterGain);
+      src.start(now + 0.52 + i * 0.07);
+    }
+
+    /* ── Bass drum hit on the top note ── */
+    const bdBuf  = ac.createBuffer(1, Math.round(ac.sampleRate * 0.25), ac.sampleRate);
+    const bdData = bdBuf.getChannelData(0);
+    for (let s = 0; s < bdData.length; s++) bdData[s] = (Math.random() * 2 - 1) * Math.pow(1 - s / bdData.length, 4);
+    const bdSrc  = ac.createBufferSource();
+    const bdOsc  = ac.createOscillator();
+    const bdEnv  = ac.createGain();
+    bdOsc.frequency.setValueAtTime(120, now + 0.52);
+    bdOsc.frequency.exponentialRampToValueAtTime(40, now + 0.72);
+    bdEnv.gain.setValueAtTime(0.8, now + 0.52);
+    bdEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.72);
+    bdOsc.connect(bdEnv); bdEnv.connect(masterGain);
+    bdSrc.buffer = bdBuf;
+    bdOsc.start(now + 0.52); bdOsc.stop(now + 0.73);
+
+    /* ── Shimmer: rising sweep synth over the whole fanfare ── */
+    const sweep = ac.createOscillator();
+    const swEnv = ac.createGain();
+    sweep.type  = 'sine';
+    sweep.frequency.setValueAtTime(300, now);
+    sweep.frequency.exponentialRampToValueAtTime(1800, now + 0.88);
+    swEnv.gain.setValueAtTime(0.15, now);
+    swEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+    sweep.connect(swEnv); swEnv.connect(masterGain);
+    sweep.start(now); sweep.stop(now + 0.91);
+
+    /* Stop & close after fanfare completes */
+    setTimeout(() => { try { ac.close(); } catch(e){} }, 1400);
+  } catch(e) { /* AudioContext unavailable */ }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   LIVE BACKGROUND MUSIC — generated via Web Audio API (no files needed)
+   Three royalty-free generative tracks, played randomly each live session
+   ════════════════════════════════════════════════════════════════════ */
+
+/* Music track definitions: each is a list of {freq, dur} note sequences
+   played on a simple synth. BPM ~120. */
+const _LIVE_TRACKS = [
+  /* Track 0 — upbeat looping arp (major pentatonic, C) */
+  [523,261,392,523,659,784,659,523,392,329,261,392,523,659,784,659].map((f,i)=>({f,d:0.18+(i%3===0?0.06:0)})),
+  /* Track 1 — mysterious minor (A minor chord tones) */
+  [220,277,330,440,330,277,220,165,196,220,262,330,220,196,165,220].map((f,i)=>({f,d:0.22+(i%4===0?0.08:0)})),
+  /* Track 2 — tense quiz-show groove (D dorian feel) */
+  [294,370,440,587,440,370,294,247,294,370,494,587,494,370,294,247].map((f,i)=>({f,d:0.16+(i%2===0?0.04:0)})),
+];
+
+function _liveStartMusic() {
+  if (!document.getElementById('liveMusicToggle')?.checked) return;
+  _liveStopMusic();
+  try {
+    _liveAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const trackNotes = _LIVE_TRACKS[Math.floor(Math.random() * _LIVE_TRACKS.length)];
+    let noteIdx = 0;
+    let startTime = _liveAudioCtx.currentTime + 0.1;
+
+    /* Master gain (low volume — background only) */
+    const master = _liveAudioCtx.createGain();
+    master.gain.setValueAtTime(0.06, _liveAudioCtx.currentTime);
+    master.connect(_liveAudioCtx.destination);
+
+    function scheduleNote() {
+      if (!_liveActive) return;
+      const note = trackNotes[noteIdx % trackNotes.length];
+      noteIdx++;
+
+      const osc  = _liveAudioCtx.createOscillator();
+      const gain = _liveAudioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(note.f, startTime);
+      gain.gain.setValueAtTime(0.9,  startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + note.d * 0.95);
+      osc.connect(gain); gain.connect(master);
+      osc.start(startTime);
+      osc.stop(startTime + note.d);
+      startTime += note.d;
+
+      /* Schedule next note 50ms before current ends */
+      const delay = Math.max(10, (note.d - 0.05) * 1000);
+      _liveMusicTimer = setTimeout(scheduleNote, delay);
+    }
+    scheduleNote();
+  } catch(e) { /* AudioContext not available */ }
+}
+
+function _liveStopMusic() {
+  clearTimeout(_liveMusicTimer);
+  _liveMusicTimer = null;
+  if (_liveAudioCtx) {
+    try { _liveAudioCtx.close(); } catch(e) {}
+    _liveAudioCtx = null;
+  }
+}
+
+/* TikTok-style last-10-seconds countdown beeps:
+   ascending tones, each beat higher pitch, last beat a distinct double-beep */
+function _liveTikTokCountdown(secondsLeft) {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const basePitch = 440 + (10 - secondsLeft) * 55;  /* 440→990 Hz as count increases */
+    const isLast    = secondsLeft === 1;
+    const beepCount = isLast ? 2 : 1;
+
+    for (let i = 0; i < beepCount; i++) {
+      const osc  = ac.createOscillator();
+      const gain = ac.createGain();
+      osc.type = isLast ? 'square' : 'sine';
+      osc.frequency.setValueAtTime(isLast ? 880 : basePitch, ac.currentTime + i * 0.12);
+      gain.gain.setValueAtTime(0.35, ac.currentTime + i * 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + i * 0.12 + 0.09);
+      osc.connect(gain); gain.connect(ac.destination);
+      osc.start(ac.currentTime + i * 0.12);
+      osc.stop(ac.currentTime + i * 0.12 + 0.1);
+    }
+    setTimeout(() => { try { ac.close(); } catch(e){} }, 500);
+  } catch(e) {}
+}
+
+/* Helper: draw rounded rectangle path */
+function _liveRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function _liveAnimLoop() {
+  if (!_liveActive) return;
+  _liveAnimT += 0.035;
+  const lc = document.getElementById('puzzleLiveCanvas');
+  if (lc) _liveDrawOverlay(lc, _livePhase, _liveSecondsLeft, _liveAnimT);
+  _liveAnimFrame = requestAnimationFrame(_liveAnimLoop);
+}
+
+function _liveTick() {
+  if (!_liveActive) return;
+  _liveSecondsLeft--;
+
+  /* Update HUD timer display */
+  const mins = String(Math.floor(_liveSecondsLeft / 60)).padStart(1, '0');
+  const secs = String(_liveSecondsLeft % 60).padStart(2, '0');
+  const el = document.getElementById('liveCountdownDisplay');
+  if (el) {
+    el.textContent = `${mins}:${secs}`;
+    el.style.color = _livePhase === 'answer' ? '#22c55e' : _liveSecondsLeft <= 30 ? '#dc2626' : '#f59e0b';
+  }
+
+  if (_livePhase === 'question') {
+    const p = _liveP();
+    /* Milestone voice cues — only if speech engine is not mid-sentence */
+    if (_liveSecondsLeft === 120 && !speechSynthesis.speaking)
+      _liveSpeak(p.twoMin);
+    if (_liveSecondsLeft === 60  && !speechSynthesis.speaking)
+      _liveSpeak(p.oneMin);
+    if (_liveSecondsLeft === 30  && !speechSynthesis.speaking)
+      _liveSpeak(p.thirty, 0.95);
+    if (_liveSecondsLeft === 10  && !speechSynthesis.speaking)
+      _liveSpeak(p.ten, 1.05, 1.1);
+
+    /* TikTok countdown beeps for last 10 seconds of question phase */
+    if (_liveSecondsLeft <= 10 && _liveSecondsLeft > 0) {
+      _liveTikTokCountdown(_liveSecondsLeft);
+    }
+
+    if (_liveSecondsLeft <= 0) {
+      /* → Switch to answer phase */
+      _liveStopEngagement();
+      _liveTikTokPlayed = false;
+      _livePhase = 'answer';
+      _liveSecondsLeft = 15;
+
+      /* 🎺 Play dramatic answer-reveal fanfare */
+      _liveAnswerFanfare();
+
+      /* Show answer on the puzzle canvas */
+      const showEl = document.getElementById('puzzleShowAnswer');
+      if (showEl) { showEl.checked = true; renderPuzzleCanvas(); }
+
+      /* Host announces answer in selected language */
+      const ans = document.getElementById('puzzleAnswer')?.value || '?';
+      _liveAddComment('🎙️ Host', `⏰ Time's up! The answer is ${ans}! How many got it right?`, true);
+      const ansIntro = _liveRandom(p.answerIntros);
+      _liveSpeak(p.answerSpeak(ansIntro, ans));
+      /* After 2s, check pending comments now that answer is revealed */
+      setTimeout(() => {
+        _liveComments.filter(c => !c.read).forEach(c => {
+          setTimeout(() => _liveReadNextComment(), 0);
+        });
+      }, 2000);
+
+      document.getElementById('livePhaseLabel').textContent = '✅ Answer Reveal';
+      document.getElementById('liveStatusBar').textContent  = 'Answer revealed! Checking your comments…';
+    }
+  } else {
+    /* Answer phase countdown → next puzzle */
+    if (_liveSecondsLeft <= 0 && document.getElementById('liveAutoAdvance')?.checked) {
+      const showEl = document.getElementById('puzzleShowAnswer');
+      if (showEl) showEl.checked = false;
+
+      _liveLoadNextPuzzle();
+      _livePhase = 'question';
+      _liveSecondsLeft = 180;
+      _liveAnimT = 0;
+      _liveEngageIdx = 0;
+      _liveComments = [];   /* clear comments for fresh puzzle */
+
+      const puzzleNum = _livePuzzleIdx;
+      document.getElementById('livePhaseLabel').textContent = `Puzzle ${puzzleNum}`;
+      document.getElementById('liveStatusBar').textContent  = 'New puzzle! 3 minutes on the clock…';
+      _liveAddComment('🎙️ Host', _liveP().newPuzzle(puzzleNum), true);
+
+      /* Restart engagement voice */
+      setTimeout(() => {
+        const expr = document.getElementById('puzzleExpr')?.value || 'this equation';
+        _liveStartEngagement(expr);
+      }, 700);
+    }
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   PRE-LIVE MODAL — opens before puzzleStartLive()
+   ════════════════════════════════════════════════════════ */
+const _PRELIVE_LANGS = [
+  { code:'en', flag:'🇬🇧', label:'English' },
+  { code:'ne', flag:'🇳🇵', label:'Nepali'  },
+  { code:'hi', flag:'🇮🇳', label:'Hindi'   },
+  { code:'fr', flag:'🇫🇷', label:'French'  },
+  { code:'es', flag:'🇪🇸', label:'Spanish' },
+  { code:'de', flag:'🇩🇪', label:'German'  },
+  { code:'ja', flag:'🇯🇵', label:'Japanese'},
+  { code:'zh', flag:'🇨🇳', label:'Chinese' },
+  { code:'ar', flag:'🇸🇦', label:'Arabic'  },
+];
+
+function puzzleOpenPreLive() {
+  if (_liveActive) { puzzleStopLive(); return; }
+  /* Build language grid on first open */
+  const grid = document.getElementById('preLiveLangGrid');
+  if (grid && !grid.dataset.built) {
+    grid.dataset.built = '1';
+    _PRELIVE_LANGS.forEach((l, i) => {
+      const btn = document.createElement('label');
+      btn.style.cssText = 'display:flex;align-items:center;gap:5px;background:#1f2937;border:2px solid transparent;border-radius:8px;padding:7px 8px;cursor:pointer;font-size:.78rem;color:#fff;transition:.15s';
+      btn.innerHTML = `<input type="radio" name="preLiveLang" value="${l.code}" ${i===0?'checked':''} style="accent-color:#7c3aed"> ${l.flag} ${l.label}`;
+      btn.querySelector('input').addEventListener('change', () => {
+        document.getElementById('preLiveVoiceLang').value = l.code;
+        grid.querySelectorAll('label').forEach(lb => lb.style.borderColor = 'transparent');
+        btn.style.borderColor = '#7c3aed';
+      });
+      if (i === 0) { btn.style.borderColor = '#7c3aed'; document.getElementById('preLiveVoiceLang').value = 'en'; }
+      grid.appendChild(btn);
+    });
+  }
+  /* Wire gender radio buttons */
+  ['Female','Male','Random'].forEach(g => {
+    const r = document.getElementById(`preLiveGender${g}`);
+    if (r) r.addEventListener('change', () => {
+      document.getElementById('preLiveVoiceGender').value = g.toLowerCase();
+      document.querySelectorAll('#preLiveModal label[id$="Btn"]').forEach(lb => lb.style.borderColor='transparent');
+      document.getElementById(`gender${g}Btn`).style.borderColor = '#7c3aed';
+    });
+  });
+  document.getElementById('preLiveModal').style.display = 'flex';
+}
+
+function _preLiveConfirm() {
+  /* Copy pre-live settings into live toggles */
+  const speechOn = document.getElementById('preLiveSpeechOn')?.checked ?? true;
+  const musicOn  = document.getElementById('preLiveMusicOn')?.checked ?? true;
+  const autoAdv  = document.getElementById('preLiveAutoAdv')?.checked ?? true;
+  const st = document.getElementById('liveSpeechToggle'); if (st) st.checked = speechOn;
+  const mt = document.getElementById('liveMusicToggle');  if (mt) mt.checked = musicOn;
+  const at = document.getElementById('liveAutoAdvance');  if (at) at.checked = autoAdv;
+  document.getElementById('preLiveModal').style.display = 'none';
+  puzzleStartLive();
+}
+
+function puzzleStartLive() {
+  if (_liveActive) return;
+  _liveActive      = true;
+  _livePhase       = 'question';
+  _liveSecondsLeft = 180;
+  _liveAnimT       = 0;
+  _livePuzzleIdx   = 1;
+  _liveUsedIdxs    = [];
+  _liveComments    = [];
+  _liveSessionVoice = null;
+
+  /* Lock the voice for this session BEFORE any speech */
+  /* Voices may not be loaded yet — try immediately, then retry once loaded */
+  const _doLockVoice = () => {
+    _liveLockVoice();
+  };
+  if (speechSynthesis.getVoices().length) {
+    _doLockVoice();
+  } else {
+    speechSynthesis.addEventListener('voiceschanged', _doLockVoice, { once: true });
+  }
+
+  /* Size live canvas to 800×800 */
+  const lc = document.getElementById('puzzleLiveCanvas');
+  lc.width = 800; lc.height = 800;
+
+  /* Hide answer, load first puzzle with a fresh random photo + theme */
+  const showEl = document.getElementById('puzzleShowAnswer');
+  if (showEl) showEl.checked = false;
+  /* Randomise photo and theme for puzzle 1 */
+  {
+    const photo0 = EINSTEIN_PHOTOS[Math.floor(Math.random() * EINSTEIN_PHOTOS.length)];
+    const theme0 = PUZZLE_THEMES[Math.floor(Math.random() * PUZZLE_THEMES.length)];
+    _puzzleTheme = theme0.id;
+    PUZZLE_THEMES.forEach(tt => {
+      const b = document.getElementById('puzzleThemeBtn_' + tt.id);
+      if (b) b.style.opacity = (tt.id === theme0.id) ? '1' : '0.65';
+    });
+    _selectEinsteinPhoto(photo0.id);   /* triggers renderPuzzleCanvas */
+  }
+
+  /* Show overlay */
+  const ov = document.getElementById('puzzleLiveOverlay');
+  ov.style.display = 'flex';
+
+  /* Update Live button */
+  const liveBtn = document.getElementById('puzzleLiveBtn');
+  if (liveBtn) {
+    liveBtn.textContent = '⏹ Stop Live';
+    liveBtn.style.background = '#374151';
+    liveBtn.style.animation  = 'none';
+    liveBtn.style.boxShadow  = 'none';
+    liveBtn.setAttribute('onclick', 'puzzleStopLive()');
+  }
+
+  /* Speak intro + start continuous engagement loop */
+  setTimeout(() => {
+    const expr = document.getElementById('puzzleExpr')?.value || 'this equation';
+    _liveAddComment('🎙️ Host', _liveP().welcome, true);
+    _liveStartEngagement(expr);
+  }, 800);
+
+  /* Start tick (1s interval) and animation loop */
+  _liveTikTokPlayed = false;
+  _liveTimer     = setInterval(_liveTick, 1000);
+  _liveAnimFrame = requestAnimationFrame(_liveAnimLoop);
+
+  /* Start background music after a short delay */
+  setTimeout(_liveStartMusic, 600);
+
+  document.getElementById('livePhaseLabel').textContent = 'Puzzle 1';
+  document.getElementById('liveStatusBar').textContent  = 'Puzzle in progress… 3 minutes on the clock!';
+}
+
+function puzzleStopLive() {
+  _liveActive = false;
+  _liveSessionVoice = null;
+  clearInterval(_liveTimer);
+  cancelAnimationFrame(_liveAnimFrame);
+  _liveStopEngagement();
+  _liveStopMusic();
+
+  /* Stop recording if active */
+  if (_liveIsRecording && _liveRecorder) {
+    _liveRecorder.stop();
+  }
+
+  /* Hide overlay */
+  document.getElementById('puzzleLiveOverlay').style.display = 'none';
+
+  /* Reset answer checkbox */
+  const showEl = document.getElementById('puzzleShowAnswer');
+  if (showEl) { showEl.checked = false; renderPuzzleCanvas(); }
+
+  /* Restore Live button */
+  const liveBtn = document.getElementById('puzzleLiveBtn');
+  if (liveBtn) {
+    liveBtn.textContent = '🔴 GO LIVE';
+    liveBtn.style.background = 'linear-gradient(135deg,#dc2626,#f59e0b)';
+    liveBtn.style.animation  = 'livePulse 1.8s infinite';
+    liveBtn.style.boxShadow  = '0 0 18px rgba(220,38,38,.5)';
+    liveBtn.setAttribute('onclick', 'puzzleOpenPreLive()');
+  }
+
+  toast('🎬 Live session ended!', 'success', 3000);
+}
+
+async function puzzleLiveToggleRecord() {
+  const btn = document.getElementById('liveRecordBtn');
+  const dot = document.getElementById('liveRecordingDot');
+
+  if (!_liveIsRecording) {
+    /* Start recording */
+    try {
+      const lc     = document.getElementById('puzzleLiveCanvas');
+      const stream = lc.captureStream(30);
+      _liveRecChunks  = [];
+      _liveRecorder   = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+      _liveRecorder.ondataavailable = e => { if (e.data.size > 0) _liveRecChunks.push(e.data); };
+      _liveRecorder.onstop = () => {
+        const blob = new Blob(_liveRecChunks, { type: 'video/webm' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = `puzzle-live-${Date.now()}.webm`; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 8000);
+        toast('🎬 Video saved! Open in VLC or upload to YouTube/Facebook.', 'success', 6000);
+      };
+      _liveRecorder.start(500);
+      _liveIsRecording = true;
+      btn.textContent  = '⏹ Stop Rec';
+      btn.style.background = '#374151';
+      dot.style.display = 'inline';
+      toast('⏺ Recording started! Video saved when you stop.', 'info', 3000);
+    } catch (e) {
+      toast('⚠️ Recording failed: ' + e.message, 'error', 4000);
+    }
+  } else {
+    /* Stop recording */
+    if (_liveRecorder) _liveRecorder.stop();
+    _liveIsRecording = false;
+    btn.textContent  = '⏺ Record';
+    btn.style.background = '#dc2626';
+    dot.style.display = 'none';
+  }
 }
 
 /* ── Puzzle Studio live-render bindings ── */
