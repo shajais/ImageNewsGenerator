@@ -3212,68 +3212,63 @@ async function rewriteWithAI(rawTitle, articleBody, sourceLang, category) {
 
 Your target audience: ${cfg.audience}
 
-READ THIS ARTICLE CAREFULLY:
+READ THIS ARTICLE CAREFULLY AND MEMORISE EVERY FACT:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HEADLINE (${langNote}): ${rawTitle}
 ${hasBody ? `FULL ARTICLE BODY:\n${bodySnippet}` : '(No article body available — work from headline only)'}
-${researchContext ? `\nADDITIONAL RESEARCHED CONTEXT (from Google Search — use these facts to enrich your content):\n${researchContext}` : ''}
+${researchContext ? `\nADDITIONAL CONTEXT (from Google Search):\n${researchContext}` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Your job: Write viral social media content that will get MAXIMUM shares, comments and reach on Facebook.
-CRITICAL: Every output field MUST be based on ACTUAL specific details in this article${researchContext ? ' and the additional researched context' : ''}.
-- Use the REAL names of people, places, films, songs, organisations mentioned
-- Use the REAL numbers (box office, awards, dates, figures) from the article
-- Use the REAL event/action described — do NOT invent or guess details
-${researchContext ? '- Weave in the additional researched context naturally to make the content more informative and accurate' : ''}
+🚨 ACCURACY IS YOUR #1 PRIORITY — READ THIS FIRST 🚨
+You are a TRANSLATOR and FORMATTER, not a creative writer. Your job is to:
+1. ACCURATELY translate/rewrite the above article into Nepali
+2. Format it nicely for Facebook
+
+ABSOLUTE RULES — violating any of these makes the output WRONG:
+• NEVER change WHO won, who lost, who died, who was arrested, who scored, the result, the outcome
+• NEVER invert a fact (e.g. if the article says "Nepal lost the toss" you MUST write "नेपालले टस हार्‍यो" — NEVER write "जित्यो")
+• NEVER add facts not present in the article
+• NEVER remove key facts from the article
+• NEVER change names, places, scores, dates, numbers — copy them EXACTLY
+• If you are unsure of a fact, write what the article says — do NOT guess or "improve" it
+• The article is the SINGLE SOURCE OF TRUTH — your output must be a faithful Nepali rendering of it
 
 ━━━ OUTPUT FORMAT (strict JSON, no markdown) ━━━
 
 {
-  "hook": "<ONE punchy viral opening line>",
-  "title": "<Clickbait headline — 1 to 3 lines MAX>",
-  "description": "<Facebook-ready post with emojis, proper paragraphs>",
+  "hook": "<ONE opening line in Nepali — accurate, engaging>",
+  "title": "<Nepali headline — 1 to 2 lines, based 100% on the article>",
+  "description": "<Full Nepali news post — accurate, proper grammar, Facebook-ready>",
   "hashtags": ["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#tag9","#tag10","#ShashiNewsGen"]
 }
 
-━━━ STRICT NO-REPETITION RULE (read first) ━━━
-EACH of the four fields (hook, title, description, hashtags) must carry DIFFERENT information.
-• hook ≠ title — do NOT restate the same sentence in both
-• title ≠ first sentence of description — the description must ADD new info, not repeat the headline
-• description paragraphs must NOT repeat the same fact in different words
-• If a fact is stated in the hook or title, do NOT repeat it verbatim in the description
-Think of it as: hook = tease → title = what happened → description = full story with details → hashtags = SEO
-
 ━━━ RULES FOR EACH FIELD ━━━
 
-HOOK (max 15 words — teaser only):
+HOOK (max 15 words — opening line in Nepali):
 • Start with ONE emoji matching the mood — choose from: ${cfg.hookEmojis}
 • ${cfg.hookTip}
-• The hook is a TEASER — it hints at the news without stating it fully. Make the reader curious.
-• NEVER copy or paraphrase the title. NEVER write generic phrases like "एउटा ठूलो खबर" or "महत्त्वपूर्ण समाचार"
-• Example: hook says WHO is involved + emotional trigger; title reveals WHAT happened
+• The hook creates curiosity — it hints at the news but does NOT restate the title
+• NEVER use generic phrases like "एउटा ठूलो खबर" or "महत्त्वपूर्ण समाचार"
+• MUST be 100% factually accurate — do NOT add drama that changes the meaning
 
-TITLE (1 to 2 LINES MAX — the headline):
-• MAX 10 words per line — SHORT, PUNCHY, DIRECT.
-• Write like a breaking news headline on a Nepali TV ticker — sharp and hard-hitting
-• Use power words ONLY where they fit naturally: "ब्रेकिङ", "खुलासा", "चौंकाउने", "सत्य", "भाइरल" etc.
-• MUST contain the SPECIFIC subject (real name, place, or event) from this article
-• Line 1: WHO + WHAT happened (max 10 words)
-• Line 2 (optional): The key consequence or number (max 10 words) — only if it adds NEW info
+TITLE (1 to 2 LINES MAX — the Nepali headline):
+• MAX 10 words per line — SHORT, PUNCHY, DIRECT
+• Based STRICTLY on the article — reflect the ACTUAL outcome/event
+• MUST copy real names, places, results from the article exactly
 • Use \\n to separate lines. Do NOT write 3 lines.
-• Do NOT repeat the hook wording. The title reveals the news; the hook teases it.
 • ${cfg.titleTip}
 
-DESCRIPTION (Facebook news post — the full story):
-• NEVER repeat the hook sentence or the title headline verbatim — the description is the FULL STORY
-• Each paragraph must cover a DIFFERENT aspect of the news — no paragraph repeats what another says
-• Write like a knowledgeable Nepali person explaining the news to friends on Facebook — natural, fluent
+DESCRIPTION (Facebook news post in proper Nepali — the full accurate story):
+• This is an ACCURATE TRANSLATION/REWRITE of the article — not a creative piece
+• Every sentence must reflect what is stated in the article
+• NEVER repeat the hook or title — the description EXPANDS with more detail
 • Blank line between each paragraph
 • Use emojis inline (🔴, 📌, ⚡, 👉, ✅, ❗, 🔥, 💥) — 1-2 per paragraph
-• Paragraph 1 🔴: घटना/समाचारको सारांश — के भयो, को थियो (2-3 वाक्य, but DO NOT copy the title)
-• Paragraph 2 📌: पृष्ठभूमि — किन भयो, कसरी भयो (2-3 वाक्य with NEW information not in para 1)
-• Paragraph 3 ⚡: मुख्य तथ्य — संख्या, उद्धरण, मिति, स्थान (2-3 वाक्य, specific details)
-• Paragraph 4 👥: प्रतिक्रिया — सार्वजनिक, अधिकारी वा विज्ञको भनाइ (2 वाक्य, NEW info)
-• Paragraph 5 🔮: प्रभाव र भविष्य — अब के हुन्छ (2 वाक्य, forward-looking, not repetition)
+• Paragraph 1 🔴: के भयो, को थियो — घटनाको सारांश (article को मुख्य तथ्य)
+• Paragraph 2 📌: पृष्ठभूमि र कारण (किन र कसरी — article मा भएको विवरण)
+• Paragraph 3 ⚡: मुख्य तथ्य — संख्या, स्थान, मिति, उद्धरण (सटीक article को डेटा)
+• Paragraph 4 👥: प्रतिक्रिया वा परिणाम (article मा उल्लेख भएको)
+• Paragraph 5 🔮: प्रभाव र अगाडि के हुन्छ (article मा भएको वा logical conclusion)
 • End with: 👉 यो खबर share गर्नुस् र आफ्नो विचार comment मा लेख्नुस्! 💬
 • ${cfg.descTip}
 • 200-300 words total
@@ -3343,14 +3338,15 @@ NATURAL SENTENCE PATTERNS (copy these patterns):
 • "[Time]मा [event] घट्यो।" — time + event
 
 QUALITY CHECK before outputting (mentally verify each):
-✓ Does the hook TEASE without giving away the full story?
-✓ Does the title STATE what happened (different wording from hook)?
-✓ Does paragraph 1 of description expand on the title with NEW details (not a copy)?
+✓ FACT CHECK: Does the title match the article exactly? (e.g., if Nepal lost, does it say हार्‍यो? If they won, does it say जित्यो?)
+✓ Are ALL names, places, scores, dates, outcomes copied EXACTLY from the article?
+✓ Have you added ANY fact not in the article? If yes, REMOVE it.
+✓ Does the hook create curiosity WITHOUT changing or exaggerating the facts?
 ✓ Does each description paragraph cover a DIFFERENT aspect?
-✓ Are there any sentences that say the same thing twice? If yes, DELETE one.
+✓ Are there duplicate sentences? If yes, DELETE one.
 ✓ Every verb form is correct Nepali (गएको छ, NOT गयो छ)?
 ✓ Zero Hindi words in the text?
-✓ All sentences complete and make grammatical sense in standard Nepali?
+✓ All sentences are complete and grammatically correct standard Nepali?
 
 HASHTAGS (exactly 11 — the last MUST be #ShashiNewsGen — for viral Facebook SEO):
 • Tags 1-3: STORY-SPECIFIC in Devanagari — real name/film/place/event keyword from THIS article
@@ -3360,11 +3356,11 @@ HASHTAGS (exactly 11 — the last MUST be #ShashiNewsGen — for viral Facebook 
 • Tag 11: MUST be exactly #ShashiNewsGen
 • No spaces within any hashtag — Facebook-compatible
 
-VIRAL WRITING TIPS FOR FACEBOOK:
-• Use specific numbers whenever possible (crores, awards, dates, figures)
-• Include emotional language — make reader feel they MUST comment and share
-• Use "tapai" language occasionally to make it personal ("tapailai tha cha?")
-• Descriptions should feel like they were written by a real person, not a robot
+WRITING TIPS FOR FACEBOOK (secondary — only after accuracy is guaranteed):
+• Use the specific numbers from the article (scores, dates, figures) — they make posts more credible and shareable
+• Emotional language is fine — but it must describe what ACTUALLY happened, not a changed version
+• "tapailai tha cha?" style is good — but only when it does not distort the facts
+• Descriptions should feel like they were written by a real person who read and understood the article
 • Emojis should be copy-paste-ready standard Unicode (no custom/special chars)
 
 LANGUAGE: ${cfg.langInstruction}
@@ -3372,33 +3368,32 @@ OUTPUT: Raw JSON only — no \`\`\`json, no explanation, nothing else.`;
 
   /* For Groq (LLaMA3), use a shorter, more direct prompt to avoid token issues */
   const usingGroqModel = !(_geminiKey || _browserGeminiKey) && !!_browserGroqKey;
-  const finalPrompt = usingGroqModel ? `You are a Nepali news journalist. Write viral social media content in pure standard Nepali (नेपाली Devanagari script) for this news article.
+  const finalPrompt = usingGroqModel ? `You are a Nepali news translator and journalist. Accurately translate and rewrite this article into proper Nepali for Facebook.
 
 HEADLINE: ${rawTitle}
 ${bodySnippet ? `ARTICLE BODY: ${bodySnippet.slice(0, 1000)}` : ''}
 
-NEPALI GRAMMAR — MANDATORY RULES:
-1. CORRECT verb forms: "गएको छ" NOT "गयो छ"; "भएको छ" NOT "भयो छ"; "गरेको छ" NOT "गरेयो"; "भनेका छन्" NOT "भनेछन्"
+🚨 ACCURACY FIRST — MOST IMPORTANT RULE:
+- NEVER change who won/lost, who died, who was arrested, the result, the outcome
+- NEVER invert facts (if article says "Nepal lost the toss" write "नेपालले टस हार्‍यो" — NEVER "जित्यो")
+- NEVER add facts not in the article
+- Copy names, scores, dates, numbers EXACTLY from the article
+- The article is the SINGLE SOURCE OF TRUTH
+
+NEPALI GRAMMAR — MANDATORY:
+1. Correct verb forms: "गएको छ" NOT "गयो छ"; "भएको छ" NOT "भयो छ"; "गरेको छ" NOT "गरेयो"; "भनेका छन्" NOT "भनेछन्"
 2. Simple past: गयो, भयो, आयो, गर्‍यो, भने, गरे
 3. Respectful past: गर्नुभयो, आउनुभयो, भन्नुभयो
-4. BANNED Hindi words: हो गया, के लिए, के साथ, नहीं, बहुत, अच्छा, लेकिन, और, भी, या — use Nepali instead: को लागि, सँग, छैन, धेरै, राम्रो, तर, र, पनि, वा
-5. Natural Nepali connectors: त्यसैले, किनभने, तर, यसका साथै, अर्कोतिर, भने, जसले गर्दा, उनीहरूका अनुसार
-6. NO Hindi sentence patterns — write pure standard Nepali as spoken in Kathmandu
+4. BANNED Hindi words — use Nepali: के लिए→को लागि, नहीं→छैन, बहुत→धेरै, लेकिन→तर, और→र, भी→पनि, या→वा
+5. Natural Nepali connectors: त्यसैले, किनभने, तर, यसका साथै, भने, जसले गर्दा
 
-NO-REPETITION RULE:
-- hook = tease (hints at news, triggers curiosity, does NOT state the full story)
-- title = headline (states WHAT happened, different wording from hook)
-- description = full story (NEVER copy hook or title — add NEW details in each paragraph)
-- Each paragraph covers a DIFFERENT aspect: para1=what happened, para2=background, para3=key facts/numbers, para4=reactions, para5=impact/future
+FORMAT RULES:
+- hook = teaser (1 sentence, max 15 words, one emoji, creates curiosity without changing facts)
+- title = accurate Nepali headline (1-2 lines, max 10 words/line, real names/places/results)
+- description = accurate full story (5 paragraphs, blank lines between, 200-280 words, correct Nepali grammar, zero Hindi words). End: 👉 यो खबर share गर्नुस् र आफ्नो विचार comment मा लेख्नुस्! 💬
 
-RULES:
-- Hook: max 15 words, teaser only, one emoji
-- Title: max 2 lines, max 10 words per line, crisp headline with real names/places/numbers
-- Description: 5 paragraphs with blank lines, 200-280 words, pure correct Nepali grammar, zero Hindi words. End with: 👉 यो खबर share गर्नुस् र आफ्नो विचार comment मा लेख्नुस्! 💬
-- All text MUST be in Nepali Devanagari script with correct Nepali grammar
-
-Return ONLY this JSON (no markdown, no explanation):
-{"hook":"<tease, 1 Nepali sentence, max 15 words>","title":"<crisp 1-2 line Nepali headline, real names/places/numbers, max 10 words per line>","description":"<full story — 5 paragraphs with blank lines, correct Nepali verb forms, zero Hindi words, each paragraph covers different aspect>","hashtags":["#नेपाल","#BreakingNews","#Nepal","#viral","#trending","#नेपाल_समाचार","#NepaliNews","#ShashiNewsGen"]}` : prompt;
+Return ONLY this JSON (no markdown):
+{"hook":"<accurate tease, 1 Nepali sentence, max 15 words>","title":"<accurate 1-2 line Nepali headline, real names/results/numbers from article>","description":"<accurate full story — 5 paragraphs, blank lines, correct Nepali verb forms, zero Hindi words>","hashtags":["#नेपाल","#BreakingNews","#Nepal","#viral","#trending","#नेपाल_समाचार","#NepaliNews","#ShashiNewsGen"]}` : prompt;
 
   let result;
   let _aiFailReason = null;
