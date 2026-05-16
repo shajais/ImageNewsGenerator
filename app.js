@@ -9042,8 +9042,8 @@ function memeCanvasMouseDown(e) {
     if (line) lines.push(line);
     return lines.length * fontSize * 1.28 + _pad * 2;
   }
-  const topTxt   = (document.getElementById('memeTopText')   ?.value || '').toUpperCase().trim();
-  const botTxt   = (document.getElementById('memeBottomText')?.value || '').toUpperCase().trim();
+  const topTxt   = (/[\u0900-\u097F]/.test(document.getElementById('memeTopText')?.value||'') ? (document.getElementById('memeTopText')?.value||'') : (document.getElementById('memeTopText')?.value||'').toUpperCase()).trim();
+  const botTxt   = (/[\u0900-\u097F]/.test(document.getElementById('memeBottomText')?.value||'') ? (document.getElementById('memeBottomText')?.value||'') : (document.getElementById('memeBottomText')?.value||'').toUpperCase()).trim();
   const BANNER_H = _dynRibbonH(topTxt);
   const STRIP_H  = _dynRibbonH(botTxt) + 72; // bot ribbon + watermark
 
@@ -9222,10 +9222,12 @@ async function renderMemeCanvas() {
   /* ── Read all inputs once ── */
   const fontSize  = parseInt(document.getElementById('memeFontSize')?.value || 42);
   const fontFam   = _memeFontFamily || 'Impact';
-  const topText   = (document.getElementById('memeTopText')    ?.value || '').toUpperCase().trim();
-  const mid1Text  = (document.getElementById('memeMiddleText1')?.value || '').toUpperCase().trim();
-  const mid2Text  = (document.getElementById('memeMiddleText2')?.value || '').toUpperCase().trim();
-  const botText   = (document.getElementById('memeBottomText') ?.value || '').toUpperCase().trim();
+  // Do NOT toUpperCase — it destroys Nepali Devanagari script
+  const _toMemeCase = t => /[\u0900-\u097F]/.test(t) ? t : t.toUpperCase();
+  const topText   = _toMemeCase((document.getElementById('memeTopText')    ?.value || '').trim());
+  const mid1Text  = _toMemeCase((document.getElementById('memeMiddleText1')?.value || '').trim());
+  const mid2Text  = _toMemeCase((document.getElementById('memeMiddleText2')?.value || '').trim());
+  const botText   = _toMemeCase((document.getElementById('memeBottomText') ?.value || '').trim());
   const useStroke = document.getElementById('memeStroke')?.checked ?? true;
   const textColor = _memeTextColor || '#ffffff';
 
