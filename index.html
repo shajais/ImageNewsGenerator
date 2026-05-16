@@ -844,208 +844,199 @@
       <div class="meme-left-col">
 
         <!-- ── From News Article ── -->
-        <div class="meme-section">
-          <div class="meme-section-title">📰 From News Article / Link (optional)</div>
+        <div class="meme-section" style="padding:10px 12px">
           <div style="display:flex;gap:6px">
             <input id="memeArticleUrl" class="meme-input" style="flex:1"
-              placeholder="News URL paste गर्नुस् (e.g. onlinekhabar.com/…) or headline text">
-            <button class="btn btn-blue" style="font-size:.78rem;padding:7px 12px;white-space:nowrap" onclick="memeFromArticle()">📥 Load</button>
+              placeholder="📰 Paste news URL or headline…">
+            <button class="btn btn-blue" style="font-size:.78rem;padding:7px 12px;white-space:nowrap" onclick="memeFromArticle()">Load</button>
           </div>
-          <div id="memeArticleStatus" style="font-size:.75rem;color:var(--muted);min-height:16px;margin-top:4px"></div>
+          <div id="memeArticleStatus" style="font-size:.72rem;color:var(--muted);min-height:14px;margin-top:3px"></div>
         </div>
 
         <!-- ── Step 1: Topic / Prompt ── -->
         <div class="meme-section">
-          <div class="meme-section-title">✍️ Step 1 — Topic or custom prompt</div>
+          <div class="meme-section-title">✍️ Topic / Prompt</div>
           <textarea id="memeTopicInput" class="meme-textarea" rows="2"
-            placeholder="e.g. केपी ओली र ट्राफिक जाम 😂 | Deuba को बाचा | Nepal बिजुली कटौती"></textarea>
-          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-            <button class="btn btn-primary" style="font-size:.8rem;padding:8px 16px" onclick="memeGenerateAI()">🤖 AI Meme Generate</button>
-            <button class="btn btn-ghost" style="font-size:.8rem;padding:8px 14px" onclick="memeGenerateTemplate()">⚡ Quick Template</button>
+            placeholder="e.g. केपी ओली र ट्राफिक जाम 😂 | Deuba को बाचा"></textarea>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn btn-primary" style="flex:1;font-size:.8rem;padding:8px" onclick="memeGenerateAI()">🤖 AI Generate</button>
+            <button class="btn btn-ghost" style="font-size:.8rem;padding:8px 14px" onclick="memeGenerateTemplate()">⚡ Template</button>
           </div>
         </div>
 
-        <!-- ── Step 2: Image Source ── -->
-        <div class="meme-section">
-          <div class="meme-section-title">🖼️ Step 2 — Background Panels (up to 4)</div>
-          <div style="font-size:.75rem;color:var(--muted);margin-bottom:6px">
-            Mix <strong>search images + uploads + solid colors</strong> — each becomes a panel. <strong style="color:#f59e0b">Click ➕ Add</strong> to stack panels (max 4).
+        <!-- ── Step 2: Image Source — collapsible ── -->
+        <div class="meme-section meme-accordion">
+          <div class="meme-accordion-header" onclick="toggleMemeAccordion(this)">
+            <span class="meme-section-title" style="margin:0">🖼️ Background Panels</span>
+            <span class="meme-accordion-arrow">▾</span>
           </div>
-          <!-- Panel orientation toggle -->
-          <div style="margin-bottom:8px">
-            <button id="memeOrientationBtn" class="btn btn-ghost" style="font-size:.78rem;padding:6px 14px;width:100%" onclick="toggleMemeOrientation()">⇄ Horizontal (click for ⇅ Vertical)</button>
-          </div>
-
-          <!-- Slot list -->
-          <div id="memeSlotList" style="margin-bottom:8px;font-size:.75rem;color:var(--muted)">No panels yet</div>
-          <button class="btn btn-ghost" style="font-size:.73rem;padding:4px 10px;margin-bottom:8px" onclick="_memeSlots=[];_memeImgObj=null;_renderSlotList();renderMemeCanvas();memeSetStatus('🗑️ All panels cleared')">🗑️ Clear All Panels</button>
-
-          <div class="meme-img-source-tabs">
-            <button class="meme-src-tab active" data-src="search" onclick="switchMemeImgSrc('search')">🔍 Search</button>
-            <button class="meme-src-tab" data-src="upload" onclick="switchMemeImgSrc('upload')">📤 Upload</button>
-            <button class="meme-src-tab" data-src="blank" onclick="switchMemeImgSrc('blank')">🎨 Color</button>
-          </div>
-
-          <!-- Search -->
-          <div id="memeSrcSearch" class="meme-src-panel">
-            <div style="display:flex;gap:6px">
-              <input id="memeImgQuery" class="meme-input" placeholder="Search: KP Oli, Himalaya, Traffic jam…" style="flex:1" onkeydown="if(event.key==='Enter')searchMemeImages()">
-              <button class="btn btn-blue" style="font-size:.78rem;padding:7px 12px" onclick="searchMemeImages()">🔍</button>
+          <div class="meme-accordion-body">
+            <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center">
+              <button id="memeOrientationBtn" class="btn btn-ghost" style="flex:1;font-size:.75rem;padding:5px 10px" onclick="toggleMemeOrientation()">⇄ Horizontal</button>
+              <button class="btn btn-ghost" style="font-size:.75rem;padding:5px 10px" onclick="_memeSlots=[];_memeImgObj=null;_renderSlotList();renderMemeCanvas();memeSetStatus('🗑️ Cleared')" title="Clear all panels">🗑️ Clear</button>
             </div>
-            <div id="memeImgResults" class="meme-img-grid"></div>
-          </div>
+            <div id="memeSlotList" style="margin-bottom:6px;font-size:.73rem;color:var(--muted)">No panels yet</div>
 
-          <!-- Upload (multiple) -->
-          <div id="memeSrcUpload" class="meme-src-panel" style="display:none">
-            <button class="meme-upload-label" onclick="document.getElementById('memeUploadInput').click()">
-              📤 Click to upload (select multiple for multi-panel)
-            </button>
-            <input type="file" id="memeUploadInput" accept="image/*" multiple onchange="memeLoadUpload(this)" style="display:none">
-          </div>
-
-          <!-- Solid color — multiple swatches, each adds a panel -->
-          <div id="memeSrcBlank" class="meme-src-panel" style="display:none">
-            <div style="font-size:.75rem;color:var(--muted);margin-bottom:6px">Pick a color and click <strong>➕ Add Panel</strong> — repeat for multi-color panels:</div>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-              <input type="color" id="memeBgColor" value="#1a1a2e" style="width:44px;height:36px;border:none;border-radius:6px;cursor:pointer;background:none">
-              <button class="btn btn-primary" style="font-size:.78rem;padding:7px 14px" onclick="memeApplyBgColor()">➕ Add Panel</button>
+            <div class="meme-img-source-tabs">
+              <button class="meme-src-tab active" data-src="search" onclick="switchMemeImgSrc('search')">🔍 Search</button>
+              <button class="meme-src-tab" data-src="upload" onclick="switchMemeImgSrc('upload')">📤 Upload</button>
+              <button class="meme-src-tab" data-src="blank" onclick="switchMemeImgSrc('blank')">🎨 Color</button>
             </div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
-              <button class="btn btn-ghost" style="font-size:.72rem;padding:4px 8px" onclick="memeAddSlot('color','#1a1a2e')">■ Dark Blue</button>
-              <button class="btn btn-ghost" style="font-size:.72rem;padding:4px 8px" onclick="memeAddSlot('color','#dc2626')">■ Red</button>
-              <button class="btn btn-ghost" style="font-size:.72rem;padding:4px 8px" onclick="memeAddSlot('color','#166534')">■ Green</button>
-              <button class="btn btn-ghost" style="font-size:.72rem;padding:4px 8px" onclick="memeAddSlot('color','#92400e')">■ Brown</button>
-              <button class="btn btn-ghost" style="font-size:.72rem;padding:4px 8px" onclick="memeAddSlot('color','#000000')">■ Black</button>
-              <button class="btn btn-ghost" style="font-size:.72rem;padding:4px 8px" onclick="memeAddSlot('color','#ffffff')">■ White</button>
+
+            <!-- Search -->
+            <div id="memeSrcSearch" class="meme-src-panel">
+              <div style="display:flex;gap:6px">
+                <input id="memeImgQuery" class="meme-input" placeholder="Search image…" style="flex:1" onkeydown="if(event.key==='Enter')searchMemeImages()">
+                <button class="btn btn-blue" style="font-size:.78rem;padding:7px 12px" onclick="searchMemeImages()">🔍</button>
+              </div>
+              <div id="memeImgResults" class="meme-img-grid"></div>
+            </div>
+
+            <!-- Upload -->
+            <div id="memeSrcUpload" class="meme-src-panel" style="display:none">
+              <button class="meme-upload-label" onclick="document.getElementById('memeUploadInput').click()">
+                📤 Click to upload (multiple = multi-panel)
+              </button>
+              <input type="file" id="memeUploadInput" accept="image/*" multiple onchange="memeLoadUpload(this)" style="display:none">
+            </div>
+
+            <!-- Solid color -->
+            <div id="memeSrcBlank" class="meme-src-panel" style="display:none">
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+                <input type="color" id="memeBgColor" value="#1a1a2e" style="width:40px;height:34px;border:none;border-radius:6px;cursor:pointer;background:none">
+                <button class="btn btn-primary" style="font-size:.78rem;padding:6px 12px" onclick="memeApplyBgColor()">➕ Add Panel</button>
+              </div>
+              <div style="display:flex;gap:5px;flex-wrap:wrap">
+                <button class="btn btn-ghost" style="font-size:.72rem;padding:3px 8px" onclick="memeAddSlot('color','#1a1a2e')">■ Dark</button>
+                <button class="btn btn-ghost" style="font-size:.72rem;padding:3px 8px" onclick="memeAddSlot('color','#dc2626')">■ Red</button>
+                <button class="btn btn-ghost" style="font-size:.72rem;padding:3px 8px" onclick="memeAddSlot('color','#166534')">■ Green</button>
+                <button class="btn btn-ghost" style="font-size:.72rem;padding:3px 8px" onclick="memeAddSlot('color','#92400e')">■ Brown</button>
+                <button class="btn btn-ghost" style="font-size:.72rem;padding:3px 8px" onclick="memeAddSlot('color','#000000')">■ Black</button>
+                <button class="btn btn-ghost" style="font-size:.72rem;padding:3px 8px" onclick="memeAddSlot('color','#ffffff')">■ White</button>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- ── Step 3: Overlay / Sticker Images ── -->
-        <div class="meme-section">
-          <div class="meme-section-title">⭕ Step 3 — Circle Overlays (max 2, draggable)</div>
-          <div style="font-size:.76rem;color:var(--muted);margin-bottom:8px">
-            Add up to <strong>2 circular overlays</strong> (face stickers, logos). Auto-placed at corners — drag to reposition, resize with slider.
+        <!-- ── Step 3: Circle Overlays — collapsible ── -->
+        <div class="meme-section meme-accordion">
+          <div class="meme-accordion-header" onclick="toggleMemeAccordion(this)">
+            <span class="meme-section-title" style="margin:0">⭕ Circle Overlays</span>
+            <span class="meme-accordion-arrow">▾</span>
           </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-            <label class="btn btn-ghost" style="font-size:.78rem;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:4px" onclick="document.getElementById('memeOverlayUploadInput').click()">
-              ⭕ Upload Circle Overlay
-            </label>
-            <input type="file" id="memeOverlayUploadInput" accept="image/*" style="display:none" onchange="memeAddOverlayImage(this)">
-            <button class="btn btn-ghost" style="font-size:.78rem;padding:6px 12px" onclick="memeResetOverlayLayout()">↺ Reset</button>
-            <button class="btn btn-ghost" style="font-size:.78rem;padding:6px 12px" onclick="memeRemoveSelectedOverlay()">🗑️ Remove</button>
-          </div>
-
-          <!-- Overlay list (thumbnails) -->
-          <div id="memeOverlayList" style="font-size:.75rem;color:var(--muted)">No overlays added yet</div>
-
-          <!-- Selected overlay controls -->
-          <div id="memeOverlayControls" style="display:none;background:var(--card);border:1px solid #f59e0b55;border-radius:8px;padding:8px;margin-top:6px">
-            <div id="memeOverlaySelLabel" style="font-size:.78rem;color:#f59e0b;font-weight:700;margin-bottom:6px">Photo selected</div>
-            <label class="meme-label">Resize width</label>
-            <input type="range" id="memeOverlaySize" min="40" max="700" value="150" style="width:100%" oninput="memeResizeSelectedOverlay(this.value)">
-            <div style="display:flex;gap:10px;margin-top:6px;align-items:center">
-              <label style="font-size:.78rem;color:var(--muted);display:flex;align-items:center;gap:4px">
-                <input type="checkbox" id="memeOverlayCircle" onchange="memeToggleOverlayCircle(this.checked)" style="accent-color:#7c3aed"> ⭕ Circular
+          <div class="meme-accordion-body">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+              <label class="btn btn-ghost" style="font-size:.78rem;padding:6px 12px;cursor:pointer" onclick="document.getElementById('memeOverlayUploadInput').click()">
+                ⭕ Upload
               </label>
-              <button class="btn btn-ghost" style="font-size:.72rem;padding:4px 10px" onclick="memeAddOverlayCircle()">Toggle Circle</button>
+              <input type="file" id="memeOverlayUploadInput" accept="image/*" style="display:none" onchange="memeAddOverlayImage(this)">
+              <button class="btn btn-ghost" style="font-size:.78rem;padding:6px 12px" onclick="memeResetOverlayLayout()">↺ Reset</button>
+              <button class="btn btn-ghost" style="font-size:.78rem;padding:6px 12px" onclick="memeRemoveSelectedOverlay()">🗑️ Remove</button>
+            </div>
+            <div id="memeOverlayList" style="font-size:.73rem;color:var(--muted)">No overlays yet</div>
+            <div id="memeOverlayControls" style="display:none;background:var(--card);border:1px solid #f59e0b55;border-radius:8px;padding:8px;margin-top:6px">
+              <div id="memeOverlaySelLabel" style="font-size:.75rem;color:#f59e0b;font-weight:700;margin-bottom:6px">Photo selected</div>
+              <label class="meme-label">Resize</label>
+              <input type="range" id="memeOverlaySize" min="40" max="700" value="150" style="width:100%" oninput="memeResizeSelectedOverlay(this.value)">
+              <div style="display:flex;gap:10px;margin-top:6px;align-items:center">
+                <label style="font-size:.78rem;color:var(--muted);display:flex;align-items:center;gap:4px">
+                  <input type="checkbox" id="memeOverlayCircle" onchange="memeToggleOverlayCircle(this.checked)" style="accent-color:#7c3aed"> ⭕ Circular
+                </label>
+                <button class="btn btn-ghost" style="font-size:.72rem;padding:4px 10px" onclick="memeAddOverlayCircle()">Toggle Circle</button>
+              </div>
             </div>
           </div>
         </div>
 
         <!-- ── Step 4: Text Editing ── -->
         <div class="meme-section">
-          <div class="meme-section-title">✏️ Step 4 — Meme Text (drag each label on preview)</div>
-          <div style="font-size:.76rem;color:var(--muted);margin-bottom:6px">
-            <strong style="color:#f59e0b">Click any text on the preview canvas to select it</strong> — then drag to reposition. Use the size slider to resize it individually.
+          <div class="meme-section-title">✏️ Meme Text <span style="font-size:.7rem;color:var(--muted);font-weight:400">(click text on preview to select &amp; drag)</span></div>
+          <div id="memeTextSelLabel" style="font-size:.73rem;color:#f59e0b;min-height:14px;margin-bottom:4px"></div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <input id="memeTopText" class="meme-input" placeholder="Top text…" oninput="renderMemeCanvas()">
+            <input id="memeMiddleText1" class="meme-input" placeholder="Middle text 1 (optional)…" oninput="renderMemeCanvas()">
+            <input id="memeMiddleText2" class="meme-input" placeholder="Middle text 2 (optional)…" oninput="renderMemeCanvas()">
+            <input id="memeBottomText" class="meme-input" placeholder="Bottom text…" oninput="renderMemeCanvas()">
           </div>
-          <div id="memeTextSelLabel" style="font-size:.75rem;color:#f59e0b;min-height:16px;margin-bottom:4px"></div>
-          <div style="display:flex;flex-direction:column;gap:8px">
+
+          <!-- Per-text size (shown when text selected) -->
+          <div id="memeTextSizeBox" style="background:var(--card);border:1px solid #f59e0b55;border-radius:8px;padding:8px;display:none;margin-top:6px">
+            <div style="font-size:.73rem;color:#f59e0b;font-weight:700;margin-bottom:4px" id="memeTextSizeLabel">Selected text size</div>
+            <input type="range" id="memeTextFontSize" min="12" max="120" value="42" style="width:100%" oninput="memeResizeSelectedText(this.value)">
+            <span id="memeTextFontSizeVal" style="font-size:.72rem;color:var(--muted)">42px</span>
+          </div>
+
+          <!-- Style row -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
             <div>
-              <label class="meme-label">Top Text</label>
-              <input id="memeTopText" class="meme-input" placeholder="TOP TEXT यहाँ…" oninput="renderMemeCanvas()">
+              <label class="meme-label">Global size</label>
+              <input type="range" id="memeFontSize" min="18" max="80" value="27" style="width:100%" oninput="renderMemeCanvas();document.getElementById('memeFontSizeVal').textContent=this.value+'px'">
+              <span id="memeFontSizeVal" style="font-size:.72rem;color:var(--muted)">27px</span>
             </div>
             <div>
-              <label class="meme-label">Middle Text 1 <span style="font-size:.72rem;color:var(--muted)">(optional)</span></label>
-              <input id="memeMiddleText1" class="meme-input" placeholder="Middle line 1 (optional)…" oninput="renderMemeCanvas()">
-            </div>
-            <div>
-              <label class="meme-label">Middle Text 2 <span style="font-size:.72rem;color:var(--muted)">(optional)</span></label>
-              <input id="memeMiddleText2" class="meme-input" placeholder="Middle line 2 (optional)…" oninput="renderMemeCanvas()">
-            </div>
-            <div>
-              <label class="meme-label">Bottom Text</label>
-              <input id="memeBottomText" class="meme-input" placeholder="BOTTOM TEXT यहाँ…" oninput="renderMemeCanvas()">
-            </div>
-            <!-- Selected-text per-item size control -->
-            <div id="memeTextSizeBox" style="background:var(--card);border:1px solid #f59e0b55;border-radius:8px;padding:8px;display:none">
-              <div style="font-size:.75rem;color:#f59e0b;font-weight:700;margin-bottom:4px" id="memeTextSizeLabel">Selected text size</div>
-              <input type="range" id="memeTextFontSize" min="12" max="120" value="42" style="width:100%" oninput="memeResizeSelectedText(this.value)">
-              <span id="memeTextFontSizeVal" style="font-size:.72rem;color:var(--muted)">42px</span>
-            </div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class="btn btn-ghost" style="font-size:.75rem;padding:4px 10px" onclick="memeResetTextPositions()">↺ Reset Text Positions</button>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <div>
-                <label class="meme-label">Global font size</label>
-                <input type="range" id="memeFontSize" min="18" max="80" value="27" style="width:100%" oninput="renderMemeCanvas();document.getElementById('memeFontSizeVal').textContent=this.value+'px'">
-                <span id="memeFontSizeVal" style="font-size:.75rem;color:var(--muted)">27px</span>
-              </div>
-              <div>
-                <label class="meme-label">Text color</label>
-                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
-                  <button class="meme-color-swatch active" data-color="#ffffff" onclick="setMemeTextColor('#ffffff',this)" style="background:#ffffff"></button>
-                  <button class="meme-color-swatch" data-color="#000000" onclick="setMemeTextColor('#000000',this)" style="background:#000000;border-color:#555"></button>
-                  <button class="meme-color-swatch" data-color="#ffff00" onclick="setMemeTextColor('#ffff00',this)" style="background:#ffff00"></button>
-                  <button class="meme-color-swatch" data-color="#ff4444" onclick="setMemeTextColor('#ff4444',this)" style="background:#ff4444"></button>
-                  <button class="meme-color-swatch" data-color="#00ff88" onclick="setMemeTextColor('#00ff88',this)" style="background:#00ff88"></button>
-                  <input type="color" id="memeCustomColor" value="#ffffff" title="Custom color" style="width:28px;height:28px;border-radius:50%;border:2px solid var(--border);cursor:pointer;background:none" onchange="setMemeTextColor(this.value,null)">
-                </div>
+              <label class="meme-label">Color</label>
+              <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px">
+                <button class="meme-color-swatch active" data-color="#ffffff" onclick="setMemeTextColor('#ffffff',this)" style="background:#ffffff"></button>
+                <button class="meme-color-swatch" data-color="#000000" onclick="setMemeTextColor('#000000',this)" style="background:#000000;border-color:#555"></button>
+                <button class="meme-color-swatch" data-color="#ffff00" onclick="setMemeTextColor('#ffff00',this)" style="background:#ffff00"></button>
+                <button class="meme-color-swatch" data-color="#ff4444" onclick="setMemeTextColor('#ff4444',this)" style="background:#ff4444"></button>
+                <button class="meme-color-swatch" data-color="#00ff88" onclick="setMemeTextColor('#00ff88',this)" style="background:#00ff88"></button>
+                <input type="color" id="memeCustomColor" value="#ffffff" title="Custom color" style="width:26px;height:26px;border-radius:50%;border:2px solid var(--border);cursor:pointer;background:none" onchange="setMemeTextColor(this.value,null)">
               </div>
             </div>
-            <div>
-              <label class="meme-label">Font style</label>
-              <div style="display:flex;gap:6px;flex-wrap:wrap">
-                <button class="meme-font-btn active" data-font="Impact" onclick="setMemeFont('Impact',this)">Impact</button>
-                <button class="meme-font-btn" data-font="Arial Black" onclick="setMemeFont('Arial Black',this)">Arial Black</button>
-                <button class="meme-font-btn" data-font="Bangers" onclick="setMemeFont('Bangers',this)" style="font-family:'Bangers',cursive">Bangers</button>
-                <button class="meme-font-btn" data-font="Bebas Neue" onclick="setMemeFont('Bebas Neue',this)" style="font-family:'Bebas Neue',cursive">Bebas</button>
-                <button class="meme-font-btn" data-font="Permanent Marker" onclick="setMemeFont('Permanent Marker',this)" style="font-family:'Permanent Marker',cursive">Marker</button>
-                <button class="meme-font-btn" data-font="Comic Sans MS" onclick="setMemeFont('Comic Sans MS',this)">Comic</button>
-                <button class="meme-font-btn" data-font="Courier New" onclick="setMemeFont('Courier New',this)">Monospace</button>
-              </div>
+          </div>
+
+          <!-- Font + options row -->
+          <div style="margin-top:8px">
+            <label class="meme-label">Font</label>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">
+              <button class="meme-font-btn active" data-font="Impact" onclick="setMemeFont('Impact',this)">Impact</button>
+              <button class="meme-font-btn" data-font="Arial Black" onclick="setMemeFont('Arial Black',this)">Arial Black</button>
+              <button class="meme-font-btn" data-font="Bangers" onclick="setMemeFont('Bangers',this)" style="font-family:'Bangers',cursive">Bangers</button>
+              <button class="meme-font-btn" data-font="Bebas Neue" onclick="setMemeFont('Bebas Neue',this)" style="font-family:'Bebas Neue',cursive">Bebas</button>
+              <button class="meme-font-btn" data-font="Permanent Marker" onclick="setMemeFont('Permanent Marker',this)" style="font-family:'Permanent Marker',cursive">Marker</button>
+              <button class="meme-font-btn" data-font="Comic Sans MS" onclick="setMemeFont('Comic Sans MS',this)">Comic</button>
+              <button class="meme-font-btn" data-font="Courier New" onclick="setMemeFont('Courier New',this)">Mono</button>
             </div>
-            <div style="display:flex;gap:6px;align-items:center">
-              <label class="meme-label" style="margin:0">Text stroke:</label>
-              <input type="checkbox" id="memeStroke" checked onchange="renderMemeCanvas()" style="accent-color:#f59e0b;width:16px;height:16px">
-              <span style="font-size:.78rem;color:var(--muted)">Black outline (classic meme look)</span>
-            </div>
-            <div style="display:flex;gap:6px;align-items:center">
-              <label class="meme-label" style="margin:0">Watermark:</label>
-              <input type="checkbox" id="memeWatermark" checked disabled style="accent-color:#f59e0b;width:16px;height:16px;opacity:.6">
-              <span style="font-size:.78rem;color:var(--muted)">Author strip (always on — brand requirement)</span>
-            </div>
+          </div>
+          <div style="display:flex;gap:16px;margin-top:8px;align-items:center">
+            <label style="font-size:.78rem;color:var(--muted);display:flex;align-items:center;gap:4px">
+              <input type="checkbox" id="memeStroke" checked onchange="renderMemeCanvas()" style="accent-color:#f59e0b"> Outline
+            </label>
+            <label style="font-size:.78rem;color:var(--muted);display:flex;align-items:center;gap:4px">
+              <input type="checkbox" id="memeWatermark" checked disabled style="accent-color:#f59e0b;opacity:.6"> Watermark
+            </label>
+            <button class="btn btn-ghost" style="font-size:.72rem;padding:3px 8px;margin-left:auto" onclick="memeResetTextPositions()">↺ Reset</button>
           </div>
         </div>
 
-        <!-- ── Step 5: Caption / Hashtags ── -->
-        <div class="meme-section">
-          <div class="meme-section-title">📝 Step 5 — Post Caption &amp; Hashtags</div>
-          <textarea id="memeCaptionText" class="meme-textarea" rows="3"
-            placeholder="मिमको caption यहाँ… #NepalMeme #ShashiNewsGen"></textarea>
-          <button class="btn btn-ghost" style="font-size:.75rem;padding:5px 12px;margin-top:6px" onclick="memeGenerateCaption()">✨ AI Generate Caption</button>
+        <!-- ── Step 5: Caption — collapsible ── -->
+        <div class="meme-section meme-accordion">
+          <div class="meme-accordion-header" onclick="toggleMemeAccordion(this)">
+            <span class="meme-section-title" style="margin:0">📝 Caption &amp; Hashtags</span>
+            <span class="meme-accordion-arrow">▾</span>
+          </div>
+          <div class="meme-accordion-body">
+            <textarea id="memeCaptionText" class="meme-textarea" rows="3"
+              placeholder="मिमको caption यहाँ… #NepalMeme #ShashiNewsGen"></textarea>
+            <button class="btn btn-ghost" style="font-size:.75rem;padding:5px 12px;margin-top:6px" onclick="memeGenerateCaption()">✨ AI Caption</button>
+          </div>
         </div>
 
-        <!-- ── Trending Topics ── -->
-        <div class="meme-section">
-          <div class="meme-section-title">🔥 Trending Topics (click any to auto-fill)</div>
-          <div style="display:flex;gap:6px;margin-bottom:8px">
-            <input id="memeTrendingSearch" class="meme-input" style="flex:1;font-size:.8rem" placeholder="🔍 Search topic or type your own…" oninput="filterMemeTrendingTopics(this.value)" onkeydown="if(event.key==='Enter')memeUseSearchTopic()">
-            <button class="btn btn-blue" style="font-size:.78rem;padding:7px 10px;white-space:nowrap" onclick="memeUseSearchTopic()">→ Use</button>
+        <!-- ── Trending Topics — collapsible ── -->
+        <div class="meme-section meme-accordion">
+          <div class="meme-accordion-header" onclick="toggleMemeAccordion(this)">
+            <span class="meme-section-title" style="margin:0">🔥 Trending Topics</span>
+            <span class="meme-accordion-arrow">▾</span>
           </div>
-          <div id="memeTrendingGrid" class="meme-trending-grid">
-            <span style="color:var(--muted);font-size:.8rem;padding:6px">⏳ Loading live topics…</span>
+          <div class="meme-accordion-body">
+            <div style="display:flex;gap:6px;margin-bottom:8px">
+              <input id="memeTrendingSearch" class="meme-input" style="flex:1;font-size:.8rem" placeholder="🔍 Search or type topic…" oninput="filterMemeTrendingTopics(this.value)" onkeydown="if(event.key==='Enter')memeUseSearchTopic()">
+              <button class="btn btn-blue" style="font-size:.78rem;padding:7px 10px" onclick="memeUseSearchTopic()">→ Use</button>
+            </div>
+            <div id="memeTrendingGrid" class="meme-trending-grid">
+              <span style="color:var(--muted);font-size:.8rem;padding:6px">⏳ Loading…</span>
+            </div>
           </div>
         </div>
 

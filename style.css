@@ -2122,7 +2122,7 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
 }
 
 .meme-section {
-  padding: 16px 18px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border);
 }
 .meme-section:last-child { border-bottom: none; }
@@ -2133,6 +2133,36 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
   letter-spacing: .6px;
   text-transform: uppercase;
   margin-bottom: 10px;
+}
+
+/* Accordion sections */
+.meme-accordion .meme-accordion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+}
+.meme-accordion .meme-accordion-header:hover .meme-section-title { color: #fbbf24; }
+.meme-accordion .meme-accordion-arrow {
+  font-size: .85rem;
+  color: var(--muted);
+  transition: transform .2s;
+  flex-shrink: 0;
+}
+.meme-accordion.collapsed .meme-accordion-arrow { transform: rotate(-90deg); }
+.meme-accordion .meme-accordion-body {
+  overflow: hidden;
+  max-height: 2000px;
+  transition: max-height .25s ease, opacity .2s;
+  opacity: 1;
+  margin-top: 10px;
+}
+.meme-accordion.collapsed .meme-accordion-body {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
 }
 
 /* Trending grid */

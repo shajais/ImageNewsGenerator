@@ -8413,6 +8413,12 @@ function openNewsStudio() {
 }
 
 /* ── Open / close ── */
+/** Toggle accordion open/closed in meme left panel */
+function toggleMemeAccordion(headerEl) {
+  const section = headerEl.closest('.meme-accordion');
+  if (section) section.classList.toggle('collapsed');
+}
+
 function openMemeStudio() {
   /* Hide the main News Explorer container, show only Meme Studio */
   const mainContainer = document.querySelector('.container');
