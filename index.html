@@ -763,6 +763,7 @@
 <script src="app.js?v=20260428e"></script>
 <script src="quotes-db.js?v=20260430p"></script>
 <script src="health-db.js?v=20260430p"></script>
+<script src="facts-db.js?v=20260516"></script>
 <script src="content-studio.js?v=20260430p"></script>
 
 <!-- ══════════════════════════════════════════════════════════════
@@ -2060,24 +2061,36 @@
           <div class="cs-section-title">🌌 Unknown Facts / Science Generator</div>
           <div class="cs-field"><label>Category</label>
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
-              <button class="cs-radio-btn active" data-val="space" onclick="csRadio(this,'csFactsCategory')">🚀 Space</button>
-              <button class="cs-radio-btn" data-val="human-body" onclick="csRadio(this,'csFactsCategory')">🫀 Human Body</button>
-              <button class="cs-radio-btn" data-val="universe" onclick="csRadio(this,'csFactsCategory')">🌌 Universe</button>
-              <button class="cs-radio-btn" data-val="time" onclick="csRadio(this,'csFactsCategory')">⏳ Time</button>
-              <button class="cs-radio-btn" data-val="nature" onclick="csRadio(this,'csFactsCategory')">🌿 Nature</button>
-              <button class="cs-radio-btn" data-val="technology" onclick="csRadio(this,'csFactsCategory')">💻 Technology</button>
-              <button class="cs-radio-btn" data-val="nepal" onclick="csRadio(this,'csFactsCategory')">🇳🇵 Nepal Facts</button>
-              <button class="cs-radio-btn" data-val="random" onclick="csRadio(this,'csFactsCategory')">🎲 Surprise Me!</button>
+              <button class="cs-radio-btn active" data-val="random"     onclick="csRadio(this,'csFactsCategory')">🎲 Surprise Me!</button>
+              <button class="cs-radio-btn" data-val="space"             onclick="csRadio(this,'csFactsCategory')">🚀 Space</button>
+              <button class="cs-radio-btn" data-val="universe"          onclick="csRadio(this,'csFactsCategory')">🌌 Universe</button>
+              <button class="cs-radio-btn" data-val="science"           onclick="csRadio(this,'csFactsCategory')">⚗️ Science</button>
+              <button class="cs-radio-btn" data-val="human-body"        onclick="csRadio(this,'csFactsCategory')">🫀 Human Body</button>
+              <button class="cs-radio-btn" data-val="health"            onclick="csRadio(this,'csFactsCategory')">💊 Health/Biology</button>
+              <button class="cs-radio-btn" data-val="technology"        onclick="csRadio(this,'csFactsCategory')">💻 Technology</button>
+              <button class="cs-radio-btn" data-val="nature"            onclick="csRadio(this,'csFactsCategory')">🌿 Nature</button>
+              <button class="cs-radio-btn" data-val="ayurveda"          onclick="csRadio(this,'csFactsCategory')">🌿 Ayurveda</button>
+              <button class="cs-radio-btn" data-val="religion"          onclick="csRadio(this,'csFactsCategory')">�️ Spiritual</button>
+              <button class="cs-radio-btn" data-val="finance"           onclick="csRadio(this,'csFactsCategory')">💰 Finance</button>
+              <button class="cs-radio-btn" data-val="history"           onclick="csRadio(this,'csFactsCategory')">�️ History</button>
+              <button class="cs-radio-btn" data-val="psychology"        onclick="csRadio(this,'csFactsCategory')">🧠 Psychology</button>
+              <button class="cs-radio-btn" data-val="animals"           onclick="csRadio(this,'csFactsCategory')">🐾 Animals</button>
+              <button class="cs-radio-btn" data-val="time"              onclick="csRadio(this,'csFactsCategory')">⏳ Time</button>
+              <button class="cs-radio-btn" data-val="nepal"             onclick="csRadio(this,'csFactsCategory')">🇳🇵 Nepal Facts</button>
             </div>
-            <input type="hidden" id="csFactsCategory" value="space">
+            <input type="hidden" id="csFactsCategory" value="random">
           </div>
-          <div class="cs-field"><label>Specific Topic <span class="cs-optional">(optional)</span></label><input id="csFactsTopic" class="cs-input" placeholder="e.g. black holes, DNA, quantum physics, Everest…"></div>
+          <div class="cs-field"><label>Specific Topic <span class="cs-optional">(optional — for AI Generate only)</span></label><input id="csFactsTopic" class="cs-input" placeholder="e.g. black holes, DNA, quantum physics, हल्दी, Bitcoin, Everest…"></div>
           <div class="cs-field"><label>Background</label>
             <div class="cs-bg-swatches" id="csFactsBgSwatches">
-              <button class="cs-bg-swatch active" data-bg="space-dark" onclick="csSelectBg(this,'csFactsBgSwatches')" style="background:radial-gradient(ellipse at 20% 20%,#1a1060,#000)"></button>
-              <button class="cs-bg-swatch" data-bg="gradient-dark" onclick="csSelectBg(this,'csFactsBgSwatches')" style="background:linear-gradient(135deg,#0f172a,#1e293b)"></button>
-              <button class="cs-bg-swatch" data-bg="gradient-purple" onclick="csSelectBg(this,'csFactsBgSwatches')" style="background:linear-gradient(135deg,#2e1065,#7c3aed)"></button>
-              <button class="cs-bg-swatch" data-bg="gradient-teal" onclick="csSelectBg(this,'csFactsBgSwatches')" style="background:linear-gradient(135deg,#042f2e,#0891b2)"></button>
+              <button class="cs-bg-swatch active" data-bg="space-dark"       onclick="csSelectBg(this,'csFactsBgSwatches')" style="background:radial-gradient(ellipse at 20% 20%,#1a1060,#000)" title="Space Dark"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-dark"           onclick="csSelectBg(this,'csFactsBgSwatches')" style="background:linear-gradient(135deg,#0f172a,#1e293b)" title="Slate Dark"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-purple"         onclick="csSelectBg(this,'csFactsBgSwatches')" style="background:linear-gradient(135deg,#2e1065,#7c3aed)" title="Purple"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-teal"           onclick="csSelectBg(this,'csFactsBgSwatches')" style="background:linear-gradient(135deg,#042f2e,#0891b2)" title="Teal"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-green"          onclick="csSelectBg(this,'csFactsBgSwatches')" style="background:linear-gradient(135deg,#052e16,#166534)" title="Forest Green"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-maroon"         onclick="csSelectBg(this,'csFactsBgSwatches')" style="background:linear-gradient(135deg,#450a0a,#991b1b)" title="Deep Red"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-navy"           onclick="csSelectBg(this,'csFactsBgSwatches')" style="background:linear-gradient(135deg,#0c1445,#1e3a8a)" title="Navy Blue"></button>
+              <button class="cs-bg-swatch" data-bg="gradient-midnight"       onclick="csSelectBg(this,'csFactsBgSwatches')" style="background:linear-gradient(135deg,#0a0a0a,#1c1c2e)" title="Midnight"></button>
             </div>
           </div>
           <div class="cs-generate-row">

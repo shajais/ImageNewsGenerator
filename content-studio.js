@@ -394,6 +394,9 @@ function _csDrawBackground(ctx, W, H, bgKey) {
     'gradient-emerald':  ['#052e16', '#16a34a'],
     'gradient-indigo':   ['#1e1b4b', '#4338ca'],
     'gradient-saffron':  ['#7c2d12', '#f59e0b'],
+    'gradient-maroon':   ['#450a0a', '#991b1b'],
+    'gradient-navy':     ['#0c1445', '#1e3a8a'],
+    'gradient-midnight': ['#0a0a0a', '#1c1c2e'],
     'nepal-flag':        ['#003893', '#dc143c'],
     'white-clean':       ['#f8fafc', '#e2e8f0'],
     'space-dark':        ['#000008', '#0d0a2e'],
@@ -818,7 +821,18 @@ function csQuick(tab) {
         });
       }
     },
-    facts:     { caption: '🌌 Did You Know?\nThe universe has more stars than grains of sand on Earth!\n#Facts #Science', render: _csRenderFacts },
+    facts: {
+      caption: '🌌 Did You Know?\n#Facts #Science #UnknownFacts',
+      render: () => {
+        const cat = document.getElementById('csFactsCategory')?.value || 'random';
+        const item = (cat === 'random') ? factsDbRandomAny() : (factsDbRandom(cat) || factsDbRandomAny());
+        if (item) {
+          _csShowCaption((item.title || '🌌 Did You Know?') + '\n\n' + (item.fact || '') + '\n\n' + (item.wow ? '💡 ' + item.wow : '') + '\n\n' + (item.source ? '📚 Source: ' + item.source : '') + '\n\n#Facts #UnknownFacts #DidYouKnow #Nepal #Knowledge');
+          return _csRenderFacts(item);
+        }
+        _csRenderFacts(null);
+      }
+    },
     atomic:    { caption: '☢️ Improve 1% Every Day!\nIn 365 days you will be 37x better! 🚀\n#AtomicHabits #Nepal', render: _csRenderAtomic },
     quiz:      { caption: '🧠 Brain Teaser - Write your answer in comments!\n#Quiz #Nepal #Brain', render: _csRenderQuiz },
     success:   { caption: '🏆 Inspirational Success Story!\nNever give up - Keep moving forward!\n#Success #Nepal #Inspiration', render: _csRenderSuccess },
@@ -943,17 +957,31 @@ JSON मात्र फर्काउनुस् (कुनै markdown न�
       break;
     }
     case 'facts': {
-      const category = document.getElementById('csFactsCategory')?.value || 'space';
+      const category = document.getElementById('csFactsCategory')?.value || 'random';
       const specific = document.getElementById('csFactsTopic')?.value?.trim() || '';
-      prompt = `Generate an amazing, mind-blowing fact about ${specific || category} in Nepali (Devanagari script).
-The fact should be scientifically accurate, surprising, and engaging.
-Write:
-1. Attention-grabbing Nepali title (max 8 words, with emoji)
-2. The fact in Nepali (2-3 sentences, detailed)
-3. Why it's mind-blowing (1-2 Nepali sentences)
-4. Source/context in Nepali
-5. 5 hashtags
-Format as JSON: { "title": "...", "fact": "...", "wow": "...", "source": "...", "hashtags": "..." }`;
+      const categoryLabels = {
+        space:'space & astronomy', 'human-body':'human body & anatomy', universe:'universe & cosmology',
+        science:'science & physics/chemistry', technology:'technology & AI/computers', nature:'nature & environment',
+        ayurveda:'Ayurveda & herbal medicine', religion:'spirituality & religion', finance:'finance & economics',
+        history:'world history', psychology:'psychology & behaviour', animals:'animals & wildlife',
+        health:'health & biology', time:'time & physics of time', nepal:'Nepal facts & culture',
+        random:''
+      };
+      const domainHint = specific
+        ? `specifically about: "${specific}"`
+        : (category === 'random'
+          ? `from ANY one of these domains (pick randomly): space, human body, universe, science, technology, nature, Ayurveda, spirituality, finance, world history, psychology, animals, health/biology, time — choose the most SURPRISING and UNKNOWN one`
+          : `from the domain: ${categoryLabels[category] || category}`);
+
+      const randomSeed = Math.floor(Math.random() * 10000); // force variety
+      prompt = `Generate one mind-blowing, little-known (unknown) fact in Nepali (Devanagari script) ${domainHint}. (seed:${randomSeed})
+The fact MUST be:
+- Scientifically/historically accurate and verified
+- Genuinely surprising — not commonly known
+- Engaging and shareable on social media
+
+Return ONLY this JSON (no markdown, no extra text):
+{ "title": "<emoji> <Nepali attention-grabbing title, max 8 words>", "fact": "<fact in Nepali, 2-3 sentences, detailed and specific>", "wow": "<why it is mind-blowing, 1-2 Nepali sentences>", "source": "<source / reference in English or Nepali>", "hashtags": "#Facts #DidYouKnow #UnknownFacts #Nepal #Knowledge" }`;
       aiData = { category };
       renderFn = _csRenderFacts;
       break;
@@ -4076,50 +4104,86 @@ function _csRenderFacts(data) {
   const bg = _csActiveBg('csFactsBgSwatches');
   _csDrawBackground(ctx, W, H, bg);
 
-  // Star field decoration
+  // Category-aware accent colour
+  const cat = data?.category || document.getElementById('csFactsCategory')?.value || 'space';
+  const accentMap = {
+    space:'#a5f3fc', universe:'#c4b5fd', science:'#6ee7b7', 'human-body':'#fca5a5',
+    health:'#86efac', technology:'#7dd3fc', nature:'#bbf7d0', ayurveda:'#d9f99d',
+    religion:'#fde68a', finance:'#fcd34d', history:'#f9a8d4', psychology:'#e9d5ff',
+    animals:'#fed7aa', time:'#bfdbfe', nepal:'#fef08a', random:'#a5f3fc'
+  };
+  const accent = accentMap[cat] || '#a5f3fc';
+
+  // Decorative dots / sparkles (subtle)
   ctx.save();
-  ctx.fillStyle = '#ffffff';
-  for (let i = 0; i < 60; i++) {
-    const sx = Math.random() * W, sy = Math.random() * H * 0.5;
-    const sr = Math.random() * 1.5 + 0.3;
-    ctx.globalAlpha = Math.random() * 0.6 + 0.2;
+  ctx.fillStyle = accent;
+  for (let i = 0; i < 40; i++) {
+    const sx = Math.random() * W, sy = Math.random() * H * 0.45;
+    const sr = Math.random() * 1.8 + 0.3;
+    ctx.globalAlpha = Math.random() * 0.35 + 0.08;
     ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI*2); ctx.fill();
   }
   ctx.restore();
 
-  // Header
-  ctx.fillStyle = '#a5f3fc';
-  ctx.font = `900 ${Math.round(W * 0.06)}px sans-serif`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  const title = data?.title || '🌌 Did You Know?';
-  _csWrapText(ctx, title, W/2, H * 0.05, W * 0.85, Math.round(W * 0.075));
+  // "DID YOU KNOW?" badge
+  const badgeY = H * 0.04;
+  const badgeH = Math.round(H * 0.065);
+  ctx.fillStyle = accent;
+  ctx.globalAlpha = 0.18;
+  _csRoundRect(ctx, W * 0.12, badgeY, W * 0.76, badgeH, badgeH/2);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = accent;
+  ctx.font = `900 ${Math.round(W * 0.038)}px sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('💡 के तपाईंलाई थाहा छ?', W/2, badgeY + badgeH/2);
 
-  // Divider
-  ctx.fillStyle = 'rgba(165,243,252,0.5)';
-  ctx.fillRect(W * 0.1, H * 0.18, W * 0.8, 2);
-
-  // Fact
+  // Title
   ctx.fillStyle = '#ffffff';
-  ctx.font = `${Math.round(W * 0.042)}px serif`;
-  const fact = data?.fact || ' ';
-  const fLines = _csWrapText(ctx, fact, W/2, H * 0.22, W * 0.85, Math.round(W * 0.052));
+  ctx.font = `900 ${Math.round(W * 0.058)}px sans-serif`;
+  ctx.textBaseline = 'top';
+  const title = data?.title || '🌌 Did You Know?';
+  const tLines = _csWrapText(ctx, title, W/2, H * 0.13, W * 0.88, Math.round(W * 0.07));
 
-  // Wow factor
-  if (data?.wow) {
+  // Accent divider
+  const divY = H * 0.13 + tLines * Math.round(W * 0.07) + 8;
+  ctx.fillStyle = accent;
+  ctx.globalAlpha = 0.7;
+  ctx.fillRect(W * 0.08, divY, W * 0.84, 2);
+  ctx.globalAlpha = 1;
+
+  // Fact text
+  ctx.fillStyle = '#f1f5f9';
+  ctx.font = `${Math.round(W * 0.041)}px serif`;
+  const fact = data?.fact || ' ';
+  const fLines = _csWrapText(ctx, fact, W/2, divY + 14, W * 0.88, Math.round(W * 0.051));
+
+  // Wow factor box
+  const wowY = divY + 14 + fLines * Math.round(W * 0.051) + 12;
+  if (data?.wow && wowY < H * 0.82) {
+    ctx.fillStyle = accent;
+    ctx.globalAlpha = 0.12;
+    _csRoundRect(ctx, W * 0.06, wowY, W * 0.88, H * 0.12, 10);
+    ctx.globalAlpha = 1;
+    // left accent bar
+    ctx.fillStyle = accent;
+    ctx.fillRect(W * 0.06, wowY, 4, H * 0.12);
     ctx.fillStyle = '#fde68a';
     ctx.font = `italic ${Math.round(W * 0.034)}px serif`;
- _csWrapText(ctx, ' ' + data.wow, W/2, H * 0.22 + fLines * W * 0.052 + 20, W * 0.82, Math.round(W * 0.042));
+    ctx.textBaseline = 'top';
+    _csWrapText(ctx, '✨ ' + data.wow, W/2, wowY + 10, W * 0.80, Math.round(W * 0.042));
   }
 
-  // Source chip
+  // Source chip at bottom
   if (data?.source) {
-    ctx.fillStyle = 'rgba(165,243,252,0.15)';
-    const srcY = H * 0.82;
-    _csRoundRect(ctx, W * 0.1, srcY, W * 0.8, H * 0.06, 8);
-    ctx.fillStyle = 'rgba(165,243,252,0.7)';
-    ctx.font = `${Math.round(W * 0.028)}px sans-serif`;
+    const srcY = H * 0.855;
+    ctx.fillStyle = accent;
+    ctx.globalAlpha = 0.15;
+    _csRoundRect(ctx, W * 0.08, srcY, W * 0.84, H * 0.058, 8);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = accent;
+    ctx.font = `${Math.round(W * 0.026)}px sans-serif`;
     ctx.textBaseline = 'middle';
- ctx.fillText('🚀 ' + data.source, W/2, srcY + H * 0.03);
+    ctx.fillText('� ' + data.source, W/2, srcY + H * 0.029);
   }
 
   _csWatermark(ctx, W, H);
