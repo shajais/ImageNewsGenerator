@@ -250,14 +250,12 @@ function record(type,suite,name,detail){
 
 // ── Tab switching ──
 window.taTab=function(tab){
-  ['log','report','ai'].forEach(t=>{
-    $('taLog').style.display=t==='log'&&tab==='log'?'block':'none';
-    if($('taReportPane')) $('taReportPane').style.display=t==='report'&&tab==='report'?'block':'none';
-    if($('taAIPane'))     $('taAIPane').style.display=t==='ai'&&tab==='ai'?'block':'none';
-    $('tabLog').classList.toggle('active',tab==='log');
-    $('tabReport').classList.toggle('active',tab==='report');
-    $('tabAI').classList.toggle('active',tab==='ai');
-  });
+  $('taLog').style.display=tab==='log'?'block':'none';
+  if($('taReportPane')) $('taReportPane').style.display=tab==='report'?'block':'none';
+  if($('taAIPane'))     $('taAIPane').style.display=tab==='ai'?'block':'none';
+  $('tabLog').classList.toggle('active',tab==='log');
+  $('tabReport').classList.toggle('active',tab==='report');
+  $('tabAI').classList.toggle('active',tab==='ai');
 };
 
 // ── Suite picker ──
