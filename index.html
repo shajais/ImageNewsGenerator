@@ -2556,7 +2556,36 @@
 .vs-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:#0d0d1f;border-bottom:1px solid rgba(139,92,246,.3);position:sticky;top:0;z-index:10}
 .vs-header h2{font-size:1.2rem;font-weight:900;background:linear-gradient(90deg,#a855f7,#6366f1,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin:0}
 .vs-layout{display:grid;grid-template-columns:260px 1fr 260px;gap:0;height:calc(100vh - 56px);overflow:hidden}
-@media(max-width:900px){.vs-layout{grid-template-columns:1fr;height:auto;overflow:visible}}
+/* ── Mobile responsive ── */
+@media(max-width:960px){
+  .vs-layout{grid-template-columns:220px 1fr 220px}
+}
+@media(max-width:768px){
+  .vs-layout{display:flex;flex-direction:column;height:auto;overflow-y:auto;overflow-x:hidden}
+  .vs-panel{width:100%;border-right:none!important;border-left:none!important;border-top:1px solid rgba(139,92,246,.18);max-height:0;overflow:hidden;transition:max-height .35s ease,padding .2s}
+  .vs-panel.vs-mobile-open{max-height:700px}
+  .vs-center{width:100%;box-sizing:border-box;padding:10px;overflow:visible;align-items:center}
+  #vsPreviewWrap{width:100%!important;max-width:340px}
+  #vsPreviewCanvas{width:100%!important;height:auto!important}
+  .vs-controls{flex-wrap:wrap;gap:6px;justify-content:center}
+  .vs-ctrl-btn.export{width:100%;text-align:center}
+  #vsScrubber{width:100%;min-width:0;order:10;flex-basis:100%}
+  .vs-timeline-wrap{overflow-x:auto}
+  #vsTimeline{min-width:200px}
+  .vs-template-grid{grid-template-columns:repeat(3,1fr)}
+  .vs-preset-row{grid-template-columns:repeat(4,1fr)}
+  .vs-mobile-panel-tabs{display:flex!important}
+}
+@media(max-width:480px){
+  .vs-template-grid{grid-template-columns:repeat(2,1fr)}
+  .vs-preset-row{grid-template-columns:repeat(4,1fr)}
+  .vs-header h2{font-size:1rem}
+  #vsStats{display:none}
+  .vs-controls{gap:4px}
+}
+.vs-mobile-panel-tabs{display:none;gap:0;background:#0d0d1f;border-top:1px solid rgba(139,92,246,.18);flex-shrink:0}
+.vs-mobile-tab{flex:1;padding:9px 4px;text-align:center;font-size:.7rem;font-weight:700;color:#64748b;cursor:pointer;border:none;background:none;border-top:2px solid transparent;transition:.15s}
+.vs-mobile-tab.active,.vs-mobile-tab:hover{color:#c4b5fd;border-top-color:#7c3aed;background:rgba(139,92,246,.08)}
 .vs-panel{background:#0d0d1f;border-right:1px solid rgba(139,92,246,.18);overflow-y:auto;padding:12px}
 .vs-panel:last-child{border-right:none;border-left:1px solid rgba(139,92,246,.18)}
 .vs-center{display:flex;flex-direction:column;align-items:center;background:#07070f;padding:14px;gap:10px;overflow:hidden}
@@ -2646,11 +2675,18 @@
     </div>
   </div>
 
+  <!-- Mobile panel tabs (visible only on mobile) -->
+  <div class="vs-mobile-panel-tabs" id="vsMobileTabs">
+    <button class="vs-mobile-tab active" onclick="vsMobileTab('left')">🎨 Templates</button>
+    <button class="vs-mobile-tab" onclick="vsMobileTab('center')">🎬 Preview</button>
+    <button class="vs-mobile-tab" onclick="vsMobileTab('right')">🎛️ Controls</button>
+  </div>
+
   <!-- 3-col layout -->
   <div class="vs-layout">
 
     <!-- ── LEFT PANEL: Templates + Presets ── -->
-    <div class="vs-panel">
+    <div class="vs-panel vs-panel-left vs-mobile-open" id="vsPanelLeft">
 
       <!-- Viral Templates -->
       <div class="vs-section">⚡ Viral Templates</div>
@@ -2665,6 +2701,19 @@
         <div class="vs-template-card" data-tpl="neon-night"   onclick="vsApplyTemplate('neon-night')"><span>🌃</span>Neon Night</div>
         <div class="vs-template-card" data-tpl="vintage-film" onclick="vsApplyTemplate('vintage-film')"><span>🎞️</span>Vintage Film</div>
         <div class="vs-template-card" data-tpl="vlog"         onclick="vsApplyTemplate('vlog')"><span>📹</span>Daily Vlog</div>
+      </div>
+
+      <!-- Motion Effect Templates -->
+      <div class="vs-section">✨ Motion Effects</div>
+      <div class="vs-template-grid">
+        <div class="vs-template-card" data-tpl="fade-in-out"  onclick="vsApplyTemplate('fade-in-out')"><span>🌑</span>Fade In/Out</div>
+        <div class="vs-template-card" data-tpl="zoom-in-out"  onclick="vsApplyTemplate('zoom-in-out')"><span>🔍</span>Zoom In/Out</div>
+        <div class="vs-template-card" data-tpl="slow-motion"  onclick="vsApplyTemplate('slow-motion')"><span>🐌</span>Slow Motion</div>
+        <div class="vs-template-card" data-tpl="fast-motion"  onclick="vsApplyTemplate('fast-motion')"><span>⚡</span>Fast Motion</div>
+        <div class="vs-template-card" data-tpl="pan-slide"    onclick="vsApplyTemplate('pan-slide')"><span>↔️</span>Pan Slide</div>
+        <div class="vs-template-card" data-tpl="glitch-pop"   onclick="vsApplyTemplate('glitch-pop')"><span>⚡</span>Glitch Pop</div>
+        <div class="vs-template-card" data-tpl="whip-snap"    onclick="vsApplyTemplate('whip-snap')"><span>💨</span>Whip Snap</div>
+        <div class="vs-template-card" data-tpl="blur-reveal"  onclick="vsApplyTemplate('blur-reveal')"><span>🌀</span>Blur Reveal</div>
       </div>
 
       <!-- Color Presets / Filters -->
@@ -2700,11 +2749,15 @@
     </div><!-- end left panel -->
 
     <!-- ── CENTER: Preview + Timeline ── -->
-    <div class="vs-center">
+    <div class="vs-center vs-panel-center" id="vsPanelCenter">
 
-      <!-- Preview canvas -->
-      <div id="vsPreviewWrap">
+      <!-- Preview canvas — click to upload if empty -->
+      <div id="vsPreviewWrap" style="cursor:pointer" title="Click to add photos/videos" onclick="vsCanvasClick()">
         <canvas id="vsPreviewCanvas"></canvas>
+        <div id="vsCanvasUploadHint" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;opacity:.0;transition:opacity .2s">
+          <span style="font-size:2.5rem">📸</span>
+          <span style="font-size:.85rem;color:#c4b5fd;font-weight:700;margin-top:6px">Click to add photos/videos</span>
+        </div>
       </div>
 
       <!-- Transport controls -->
@@ -2741,7 +2794,7 @@
     </div><!-- end center -->
 
     <!-- ── RIGHT PANEL: Clip Controls + Audio ── -->
-    <div class="vs-panel">
+    <div class="vs-panel vs-panel-right" id="vsPanelRight">
 
       <!-- Clip Controls -->
       <div class="vs-section">🎛️ Clip Controls</div>
@@ -2828,9 +2881,36 @@
 
       <!-- Export info -->
       <div class="vs-section" style="margin-top:10px">⬇️ Export</div>
-      <button class="vs-btn primary" onclick="vsExport()">🎬 Export Video (WebM)</button>
-      <div style="font-size:.66rem;color:#64748b;margin-top:4px">
-        Exports at full resolution. Open in VLC or use <a href="https://cloudconvert.com/webm-to-mp4" target="_blank" style="color:#7c3aed">CloudConvert</a> to convert to MP4.
+
+      <label class="vs-label">Export Quality</label>
+      <select class="vs-select" id="vsExportQuality">
+        <option value="8000000">🏆 HD 1080p (High Quality — ~8Mbps)</option>
+        <option value="16000000">🚀 Full HD Max (Ultra — ~16Mbps)</option>
+        <option value="4000000">📱 720p (Medium — ~4Mbps)</option>
+        <option value="2000000">💾 Low (Small File — ~2Mbps)</option>
+      </select>
+
+      <label class="vs-label">Export Format</label>
+      <select class="vs-select" id="vsExportFormat">
+        <option value="webm">WebM (vp9 — best quality)</option>
+        <option value="mp4">MP4 (H.264 — widest compat.)</option>
+      </select>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:7px 10px;background:rgba(139,92,246,.07);border-radius:8px;border:1px solid rgba(139,92,246,.15)">
+        <input type="checkbox" id="vsWatermarkRemove" style="accent-color:#7c3aed;width:15px;height:15px" checked>
+        <label for="vsWatermarkRemove" style="font-size:.75rem;color:#c4b5fd;cursor:pointer;font-weight:600">🚫 Remove watermarks from videos</label>
+      </div>
+      <div style="font-size:.63rem;color:#64748b;margin-bottom:8px">Crops/blurs detected watermark areas during export</div>
+
+      <button class="vs-btn primary" onclick="vsExport()">🎬 Export HD Video</button>
+      <div id="vsExportProgress" style="display:none;margin-top:8px">
+        <div style="font-size:.72rem;color:#a78bfa;margin-bottom:4px" id="vsExportLabel">⏳ Rendering…</div>
+        <div style="background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden;height:5px">
+          <div id="vsExportBar" style="height:100%;background:linear-gradient(90deg,#7c3aed,#ec4899);width:0%;transition:width .3s"></div>
+        </div>
+      </div>
+      <div style="font-size:.66rem;color:#64748b;margin-top:6px">
+        Exports at full canvas resolution. <a href="https://cloudconvert.com/webm-to-mp4" target="_blank" style="color:#7c3aed">Convert WebM→MP4</a> if needed.
       </div>
 
       <div style="background:rgba(139,92,246,.07);border:1px solid rgba(139,92,246,.15);border-radius:8px;padding:10px;margin-top:10px;font-size:.68rem;color:#94a3b8;line-height:1.6">
@@ -2849,7 +2929,7 @@
   </div><!-- end vs-layout -->
 </div><!-- end videoStudioModal -->
 
-<script src="video-studio.js?v=20260516"></script>
+<script src="video-studio.js?v=20260517"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════
      🤖 AI SHORT-FORM VIDEO GENERATOR MODAL

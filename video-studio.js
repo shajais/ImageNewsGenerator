@@ -62,7 +62,31 @@ const VS_TRACKS = [
   { name:'🌊 Peaceful Ambient',        bpm:70,  mood:'peaceful',   url:'https://cdn.pixabay.com/audio/2022/08/04/audio_2dde668d05.mp3' },
 ];
 
-/* ── init / open ─────────────────────────────────────── */
+/* ── Canvas click to upload ─────────────────────────── */
+function vsCanvasClick() {
+  // Only trigger file picker if clicking on an empty canvas (no clip active) OR always allow
+  document.getElementById('vsFileInput').click();
+}
+
+/* ── Mobile panel tabs ──────────────────────────────── */
+function vsMobileTab(panel) {
+  const isMobile = window.innerWidth <= 768;
+  if (!isMobile) return;
+  document.querySelectorAll('.vs-mobile-tab').forEach((t, i) => {
+    const panels = ['left','center','right'];
+    t.classList.toggle('active', panels[i] === panel);
+  });
+  const left   = document.getElementById('vsPanelLeft');
+  const center = document.getElementById('vsPanelCenter');
+  const right  = document.getElementById('vsPanelRight');
+  // On mobile, center is always a div.vs-center not vs-panel, so handle separately
+  if (left)   { left.classList.toggle('vs-mobile-open',   panel === 'left');   }
+  if (right)  { right.classList.toggle('vs-mobile-open',  panel === 'right');  }
+  // Center always visible on mobile via flex order, just scroll to it
+  if (panel === 'center' && center) center.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+
 function openVideoStudio() {
   // hide other modals / container
   const hide = ['contentStudioModal','memeStudioModal','puzzleStudioModal','newsStudioModal'];
@@ -98,6 +122,8 @@ function vsInit() {
   vsUpdateStats();
   // keyboard shortcuts
   document.addEventListener('keydown', vsKeyHandler, { once: false });
+  // Show canvas upload hint when empty
+  _vsUpdateCanvasHint();
 }
 
 function vsKeyHandler(e) {
@@ -134,7 +160,7 @@ function vsAddClip(file) {
   const url  = URL.createObjectURL(file);
   const clip = {
     type, src: url, file, name: file.name,
-    duration : type === 'img' ? 3 : null,  // images default 3s, videos auto
+    duration : type === 'img' ? 3 : null,
     speed    : 1,
     filter   : 'inherit',
     kenBurns : 'zoom-in',
@@ -145,6 +171,7 @@ function vsAddClip(file) {
     trimEnd  : null,
     _imgEl   : null,
     _vidEl   : null,
+    hasAudio : false,
   };
   if (type === 'img') {
     const img = new Image();
@@ -152,16 +179,26 @@ function vsAddClip(file) {
     img.src = url;
   } else {
     const vid = document.createElement('video');
-    vid.src = url; vid.muted = true; vid.preload = 'metadata';
+    vid.src = url;
+    vid.muted = true;  // muted ONLY for canvas drawing — audio handled separately via Web Audio
+    vid.preload = 'auto';
+    vid.crossOrigin = 'anonymous';
     vid.onloadedmetadata = () => {
       clip.duration = vid.duration / clip.speed;
       clip.trimEnd  = vid.duration;
       clip._vidEl   = vid;
+      // Check if video has audio
+      clip.hasAudio = (vid.mozHasAudio !== undefined ? vid.mozHasAudio :
+                       vid.webkitAudioDecodedByteCount !== undefined ? vid.webkitAudioDecodedByteCount > 0 : true);
       vsRebuildTimeline(); vsUpdateStats();
+      if (VS.clips.length === 1) vsRenderClip(0, 0);
     };
+    // Preload fully to avoid pausing/stuttering during playback
+    vid.load();
   }
   VS.clips.push(clip);
   vsRebuildTimeline();
+  vsToast('✅ Added: ' + file.name.substring(0, 30));
 }
 
 /* ── timeline ───────────────────────────────────────── */
@@ -199,6 +236,21 @@ function vsRebuildTimeline() {
   tl.appendChild(add);
 
   vsUpdateStats();
+  _vsUpdateCanvasHint();
+}
+
+function _vsUpdateCanvasHint() {
+  // When no clips, canvas itself shows an upload prompt — show hint overlay too
+  const hint = document.getElementById('vsCanvasUploadHint');
+  const wrap = document.getElementById('vsPreviewWrap');
+  if (!hint || !wrap) return;
+  if (!VS.clips.length) {
+    hint.style.opacity = '1';
+    wrap.title = 'Click to add photos/videos';
+  } else {
+    hint.style.opacity = '0';
+    wrap.title = 'Click to add more photos/videos';
+  }
 }
 
 function _vsShortName(n) { return (n||'clip').replace(/\.[^.]+$/, '').substring(0,12); }
@@ -313,12 +365,24 @@ function vsRenderPlaceholder() {
   for (let x = 0; x < cv.width; x += 80) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,cv.height); ctx.stroke(); }
   for (let y = 0; y < cv.height; y += 80) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(cv.width,y); ctx.stroke(); }
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = 'rgba(139,92,246,0.6)';
-  ctx.font = `bold ${Math.round(cv.width * 0.06)}px sans-serif`;
-  ctx.fillText('🎬 Add Photos / Videos', cv.width/2, cv.height/2 - 30);
-  ctx.font = `${Math.round(cv.width * 0.032)}px sans-serif`;
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.fillText('Drag & drop or click ＋ Add below', cv.width/2, cv.height/2 + 30);
+  // Clickable area indicator
+  ctx.fillStyle = 'rgba(139,92,246,0.15)';
+  const bw = cv.width * 0.65, bh = cv.height * 0.22;
+  const bx = (cv.width - bw)/2, by = cv.height/2 - bh/2 - 10;
+  _vsRoundRect(ctx, bx, by, bw, bh, 18);
+  ctx.strokeStyle = 'rgba(139,92,246,0.5)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); _vsRoundRectPath(ctx, bx, by, bw, bh, 18); ctx.stroke();
+
+  ctx.fillStyle = 'rgba(200,180,255,0.9)';
+  ctx.font = `bold ${Math.round(cv.width * 0.065)}px sans-serif`;
+  ctx.fillText('📸 Click Here', cv.width/2, cv.height/2 - 22);
+  ctx.font = `${Math.round(cv.width * 0.033)}px sans-serif`;
+  ctx.fillStyle = 'rgba(196,181,253,0.8)';
+  ctx.fillText('to add Photos & Videos', cv.width/2, cv.height/2 + 26);
+  ctx.font = `${Math.round(cv.width * 0.026)}px sans-serif`;
+  ctx.fillStyle = 'rgba(148,163,184,0.6)';
+  ctx.fillText('or drag & drop in the left panel', cv.width/2, cv.height/2 + 58);
 }
 
 function vsRenderClip(idx, progress) {
@@ -337,7 +401,8 @@ function vsRenderClip(idx, progress) {
 
   if (c._imgEl) {
     const img = c._imgEl;
-    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const iw = img.naturalWidth || 1, ih = img.naturalHeight || 1;
+    // cover: fill canvas maintaining aspect ratio (no distortion)
     const scale = Math.max(cv.width/iw, cv.height/ih);
     const dw = iw * scale, dh = ih * scale;
     const dx = (cv.width - dw) / 2, dy = (cv.height - dh) / 2;
@@ -347,12 +412,16 @@ function vsRenderClip(idx, progress) {
   } else if (c._vidEl) {
     const vid = c._vidEl;
     const vw = vid.videoWidth || cv.width, vh = vid.videoHeight || cv.height;
+    // cover: fill canvas maintaining aspect ratio (no distortion)
     const scale = Math.max(cv.width/vw, cv.height/vh);
     const dw = vw * scale, dh = vh * scale;
     const dx = (cv.width - dw)/2, dy = (cv.height - dh)/2;
     ctx.filter = p.filter;
     ctx.drawImage(vid, dx, dy, dw, dh);
     ctx.filter = 'none';
+    // Watermark removal: blur bottom-right and top-left corners
+    const wmRemove = document.getElementById('vsWatermarkRemove')?.checked;
+    if (wmRemove) _vsBlurWatermarkZones(ctx, cv);
   }
   ctx.restore();
 
@@ -481,11 +550,39 @@ function _vsWrapText(ctx, text, maxW, lineH) {
 
 function _vsRoundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
+  _vsRoundRectPath(ctx, x, y, w, h, r);
+  ctx.fill();
+}
+
+function _vsRoundRectPath(ctx, x, y, w, h, r) {
   ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
   ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
   ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
   ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
-  ctx.closePath(); ctx.fill();
+  ctx.closePath();
+}
+
+/* ── Watermark removal: blur common watermark zones ── */
+function _vsBlurWatermarkZones(ctx, cv) {
+  // Common watermark positions: bottom-right, top-right, top-left, bottom-left corners
+  const zones = [
+    { x: cv.width * 0.62, y: cv.height * 0.88, w: cv.width * 0.38, h: cv.height * 0.12 },  // bottom-right
+    { x: cv.width * 0.62, y: 0,                 w: cv.width * 0.38, h: cv.height * 0.07 },  // top-right
+    { x: 0,               y: 0,                 w: cv.width * 0.30, h: cv.height * 0.07 },  // top-left
+    { x: 0,               y: cv.height * 0.92,  w: cv.width * 0.35, h: cv.height * 0.08 },  // bottom-left
+  ];
+  zones.forEach(z => {
+    // Smear blur by pixel-sampling (canvas doesn't have native blur on drawImage)
+    ctx.save();
+    ctx.filter = 'blur(14px) brightness(0.95)';
+    const snap = ctx.getImageData(z.x, z.y, Math.max(1,z.w), Math.max(1,z.h));
+    ctx.putImageData(snap, z.x, z.y);
+    ctx.filter = 'none';
+    // Overlay a soft semi-transparent fill matching background to soften
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(z.x, z.y, z.w, z.h);
+    ctx.restore();
+  });
 }
 
 /* ── playback ───────────────────────────────────────── */
@@ -496,23 +593,51 @@ function vsPlay() {
   VS._clipIdx   = _vsClipAtTime(VS.currentTime);
   VS._clipStart = _vsClipStartTime(VS._clipIdx);
 
-  // video elements — play
-  VS.clips.forEach(c => { if (c._vidEl) { c._vidEl.playbackRate = c.speed; } });
+  // Ensure AudioContext is running
+  if (!VS.audioCtx) VS.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (VS.audioCtx.state === 'suspended') VS.audioCtx.resume();
+
+  // Connect video audio sources through Web Audio (preserves original video audio)
+  VS.clips.forEach((c, idx) => {
+    if (c._vidEl) {
+      c._vidEl.playbackRate = c.speed || 1;
+      // Wire video audio through gainNode if not already done
+      if (!c._audioSrcNode) {
+        try {
+          const srcNode = VS.audioCtx.createMediaElementSource(c._vidEl);
+          c._audioSrcNode = srcNode;
+          // If background music is loaded, blend at lower volume; else full video audio
+          const vol = VS.audioTrack?.buffer ? 0.85 : 1.0;
+          const vidGain = VS.audioCtx.createGain();
+          vidGain.gain.value = vol;
+          srcNode.connect(vidGain).connect(VS.audioCtx.destination);
+          c._vidGainNode = vidGain;
+        } catch(e) { /* already connected */ }
+      }
+    }
+  });
+
+  // Start current video clip
+  const c = VS.clips[VS._clipIdx];
+  if (c?._vidEl) {
+    c._vidEl.muted = false;
+    c._vidEl.playbackRate = c.speed || 1;
+    c._vidEl.play().catch(()=>{});
+  }
 
   document.getElementById('vsPlayBtn').textContent = '⏸️ Pause';
   _vsRAF();
 
-  // audio
+  // Background music track
   if (VS.audioTrack?.buffer) {
-    if (!VS.audioCtx) VS.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (VS._audioSrc) try { VS._audioSrc.stop(); } catch(_){}
     const src = VS.audioCtx.createBufferSource();
     src.buffer = VS.audioTrack.buffer;
     src.loop   = true;
     VS.gainNode = VS.audioCtx.createGain();
-    VS.gainNode.gain.value = parseFloat(document.getElementById('vsVolumeSlider')?.value || 0.7);
+    VS.gainNode.gain.value = parseFloat(document.getElementById('vsVolumeSlider')?.value || 0.5);
     src.connect(VS.gainNode).connect(VS.audioCtx.destination);
-    src.start(0, VS.audioOffset);
+    src.start(0, VS.audioOffset % VS.audioTrack.buffer.duration);
     VS._audioSrc = src;
   }
 }
@@ -521,7 +646,7 @@ function vsStop() {
   VS.playing = false;
   if (VS._raf) { cancelAnimationFrame(VS._raf); VS._raf = null; }
   if (VS._audioSrc) try { VS._audioSrc.stop(); } catch(_){}
-  VS.clips.forEach(c => { if (c._vidEl) c._vidEl.pause(); });
+  VS.clips.forEach(c => { if (c._vidEl) { c._vidEl.pause(); } });
   document.getElementById('vsPlayBtn').textContent = '▶️ Play';
 }
 
@@ -533,19 +658,33 @@ function _vsRAF() {
   VS.currentTime = (now - VS._playStart) / 1000;
 
   if (VS.currentTime >= VS.totalDuration) {
-    VS.currentTime = 0; VS._playStart = now;
-    VS.clips.forEach(c => { if (c._vidEl) { c._vidEl.currentTime = c.trimStart || 0; } });
-    VS._clipIdx = 0; VS._clipStart = 0;
+    VS.currentTime = 0;
+    VS._playStart  = now;
+    VS._clipIdx    = 0;
+    VS._clipStart  = 0;
+    VS.clips.forEach(c => {
+      if (c._vidEl) {
+        c._vidEl.pause();
+        c._vidEl.currentTime = c.trimStart || 0;
+      }
+    });
   }
 
-  // find clip
+  // find current clip
   const ci = _vsClipAtTime(VS.currentTime);
-  if (ci !== VS._clipIdx) {
+  const clipChanged = ci !== VS._clipIdx;
+
+  if (clipChanged) {
+    // Pause old clip
+    const old = VS.clips[VS._clipIdx];
+    if (old?._vidEl) old._vidEl.pause();
+
     VS._clipIdx   = ci;
     VS._clipStart = _vsClipStartTime(ci);
     const c = VS.clips[ci];
     if (c?._vidEl) {
       c._vidEl.currentTime = (c.trimStart || 0);
+      c._vidEl.playbackRate = c.speed || 1;
       c._vidEl.play().catch(()=>{});
     }
   }
@@ -555,10 +694,14 @@ function _vsRAF() {
   const clipDur   = c?.duration || 3;
   const progress  = Math.min(1, clipLocal / clipDur);
 
-  if (c?._vidEl) {
-    const vid = c._vidEl;
-    const target = (c.trimStart || 0) + clipLocal * c.speed;
-    if (Math.abs(vid.currentTime - target) > 0.2) vid.currentTime = target;
+  if (c?._vidEl && !clipChanged) {
+    // Only correct video time if drift > 0.3s to avoid constant seeking (which causes stuttering)
+    const vid    = c._vidEl;
+    const target = (c.trimStart || 0) + clipLocal * (c.speed || 1);
+    if (Math.abs(vid.currentTime - target) > 0.3) {
+      vid.currentTime = target;
+    }
+    if (vid.paused && VS.playing) vid.play().catch(()=>{});
   }
 
   VS.activeClip = ci;
@@ -709,16 +852,26 @@ function vsSetVolume(val) {
 
 /* ── one-click template apply ───────────────────────── */
 const VS_TEMPLATES = {
-  'viral-travel': { preset:'cinematic', kenBurns:'zoom-in', transition:'fade', defaultText:'✈️ Travel Vibes', speed:1 },
-  'motivational': { preset:'motivational', kenBurns:'zoom-out', transition:'flash', defaultText:'💪 Keep Going!', speed:1 },
-  'aesthetic':    { preset:'aesthetic', kenBurns:'drift', transition:'fade', defaultText:'🌸 Aesthetic Life', speed:0.8 },
-  'vlog':         { preset:'vlog', kenBurns:'pan-left', transition:'slide-left', defaultText:'📹 My Day Vlog', speed:1 },
-  'slo-mo':       { preset:'cinematic', kenBurns:'zoom-in', transition:'fade', defaultText:'💫 Slow Motion', speed:0.25 },
-  'timelapse':    { preset:'vlog', kenBurns:'zoom-out', transition:'none', defaultText:'⏩ Timelapse', speed:4 },
-  'news-reel':    { preset:'news', kenBurns:'tilt-up', transition:'zoom-in', defaultText:'📰 Breaking News', speed:1 },
-  'birthday':     { preset:'aesthetic', kenBurns:'zoom-in', transition:'flash', defaultText:'🎂 Happy Birthday!', speed:1 },
-  'neon-night':   { preset:'neon', kenBurns:'drift', transition:'glitch', defaultText:'🌃 Night Vibes', speed:1 },
-  'vintage-film': { preset:'vintage', kenBurns:'pan-right', transition:'fade', defaultText:'🎞️ Film Roll', speed:1 },
+  // ── Viral content templates ──
+  'viral-travel': { preset:'cinematic',    kenBurns:'zoom-in',   transition:'fade',       defaultText:'✈️ Travel Vibes',     speed:1 },
+  'motivational': { preset:'motivational', kenBurns:'zoom-out',  transition:'flash',      defaultText:'💪 Keep Going!',       speed:1 },
+  'aesthetic':    { preset:'aesthetic',    kenBurns:'drift',     transition:'fade',       defaultText:'🌸 Aesthetic Life',    speed:0.8 },
+  'vlog':         { preset:'vlog',         kenBurns:'pan-left',  transition:'slide-left', defaultText:'📹 My Day Vlog',       speed:1 },
+  'slo-mo':       { preset:'cinematic',    kenBurns:'zoom-in',   transition:'fade',       defaultText:'💫 Slow Motion',       speed:0.25 },
+  'timelapse':    { preset:'vlog',         kenBurns:'zoom-out',  transition:'none',       defaultText:'⏩ Timelapse',          speed:4 },
+  'news-reel':    { preset:'news',         kenBurns:'tilt-up',   transition:'zoom-in',    defaultText:'📰 Breaking News',     speed:1 },
+  'birthday':     { preset:'aesthetic',    kenBurns:'zoom-in',   transition:'flash',      defaultText:'🎂 Happy Birthday!',   speed:1 },
+  'neon-night':   { preset:'neon',         kenBurns:'drift',     transition:'glitch',     defaultText:'🌃 Night Vibes',       speed:1 },
+  'vintage-film': { preset:'vintage',      kenBurns:'pan-right', transition:'fade',       defaultText:'🎞️ Film Roll',         speed:1 },
+  // ── Motion effect templates ──
+  'fade-in-out':  { preset:'cinematic',    kenBurns:'none',      transition:'fade',       defaultText:'',                     speed:1,    _note:'Smooth fade between every clip' },
+  'zoom-in-out':  { preset:'cinematic',    kenBurns:'zoom-in',   transition:'zoom-out',   defaultText:'',                     speed:1,    _note:'Zoom in on entry, zoom out on exit' },
+  'slow-motion':  { preset:'cinematic',    kenBurns:'zoom-in',   transition:'fade',       defaultText:'🐌 Slow Motion',        speed:0.5,  _note:'0.5x slow-mo cinematic' },
+  'fast-motion':  { preset:'vlog',         kenBurns:'zoom-out',  transition:'flash',      defaultText:'⚡ Fast Cut',           speed:2,    _note:'2x fast motion' },
+  'pan-slide':    { preset:'cinematic',    kenBurns:'pan-left',  transition:'slide-left', defaultText:'',                     speed:1,    _note:'Horizontal pan + slide transition' },
+  'glitch-pop':   { preset:'neon',         kenBurns:'drift',     transition:'glitch',     defaultText:'⚡ Glitch Pop',         speed:1,    _note:'Glitch + neon style' },
+  'whip-snap':    { preset:'vlog',         kenBurns:'pan-right', transition:'whip-pan',   defaultText:'💨 Snap!',              speed:1.25, _note:'Whip pan transition snap' },
+  'blur-reveal':  { preset:'aesthetic',    kenBurns:'zoom-in',   transition:'blur',       defaultText:'🌀 Blur Reveal',        speed:0.9,  _note:'Blur in/out reveal effect' },
 };
 
 function vsApplyTemplate(key) {
@@ -742,47 +895,107 @@ function vsApplyTemplate(key) {
 /* ── export / record ────────────────────────────────── */
 function vsExport() {
   if (!VS.clips.length) return vsToast('📁 Add clips before exporting');
-  vsToast('🎬 Rendering video… please wait');
+
+  const qualityBps  = parseInt(document.getElementById('vsExportQuality')?.value || '8000000');
+  const formatPref  = document.getElementById('vsExportFormat')?.value || 'webm';
+
+  vsToast('🎬 Rendering HD video… do not close this tab');
   VS._exporting = true;
   vsStop();
   VS.currentTime = 0;
 
-  const stream = VS.canvas.captureStream(30);
-  const opts = ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(t => MediaRecorder.isTypeSupported(t)) || 'video/webm';
+  // Show progress bar
+  const progWrap  = document.getElementById('vsExportProgress');
+  const progLabel = document.getElementById('vsExportLabel');
+  const progBar   = document.getElementById('vsExportBar');
+  if (progWrap) progWrap.style.display = 'block';
+  if (progLabel) progLabel.textContent = '⏳ Rendering…';
+  if (progBar) progBar.style.width = '0%';
 
-  // add audio track if available
-  let finalStream = stream;
-  if (VS.audioTrack?.buffer && VS.audioCtx) {
-    const dest = VS.audioCtx.createMediaStreamDestination();
-    if (VS.gainNode) VS.gainNode.connect(dest);
-    const audioTracks = dest.stream.getAudioTracks();
-    audioTracks.forEach(t => stream.addTrack(t));
+  // Choose codec
+  const mimeTypes = formatPref === 'mp4'
+    ? ['video/mp4;codecs=h264,aac','video/mp4']
+    : ['video/webm;codecs=vp9,opus','video/webm;codecs=vp9','video/webm;codecs=vp8,opus','video/webm'];
+  const mimeType = mimeTypes.find(t => { try { return MediaRecorder.isTypeSupported(t); } catch(_){ return false; } }) || 'video/webm';
+
+  const stream = VS.canvas.captureStream(30);
+
+  // ── Audio mix: video audio + background music ──
+  if (!VS.audioCtx) VS.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (VS.audioCtx.state === 'suspended') VS.audioCtx.resume();
+
+  const dest = VS.audioCtx.createMediaStreamDestination();
+
+  // Connect all video audio clips to export destination
+  VS.clips.forEach(c => {
+    if (c._vidEl && c._audioSrcNode) {
+      const exportGain = VS.audioCtx.createGain();
+      exportGain.gain.value = VS.audioTrack?.buffer ? 0.8 : 1.0;
+      c._audioSrcNode.connect(exportGain).connect(dest);
+    }
+  });
+
+  // Background music
+  let exportMusicSrc = null;
+  if (VS.audioTrack?.buffer) {
+    exportMusicSrc = VS.audioCtx.createBufferSource();
+    exportMusicSrc.buffer = VS.audioTrack.buffer;
+    exportMusicSrc.loop   = true;
+    const musicGain = VS.audioCtx.createGain();
+    musicGain.gain.value = parseFloat(document.getElementById('vsVolumeSlider')?.value || 0.5);
+    exportMusicSrc.connect(musicGain).connect(dest);
+    exportMusicSrc.start(0);
   }
 
+  // Add audio tracks to video stream
+  dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+
   VS.recordedChunks = [];
-  VS.mediaRecorder   = new MediaRecorder(finalStream, { mimeType: opts, videoBitsPerSecond: 8_000_000 });
+  VS.mediaRecorder   = new MediaRecorder(stream, {
+    mimeType,
+    videoBitsPerSecond: qualityBps,
+    audioBitsPerSecond: 192000,
+  });
   VS.mediaRecorder.ondataavailable = e => { if (e.data.size > 0) VS.recordedChunks.push(e.data); };
-  VS.mediaRecorder.onstop = vsDownloadExport;
+  VS.mediaRecorder.onstop = () => {
+    if (exportMusicSrc) try { exportMusicSrc.stop(); } catch(_){}
+    if (progBar) progBar.style.width = '100%';
+    if (progLabel) progLabel.textContent = '✅ Done! Downloading…';
+    setTimeout(() => { if (progWrap) progWrap.style.display = 'none'; }, 3000);
+    vsDownloadExport(mimeType);
+  };
   VS.mediaRecorder.start(100);
 
-  // play through once at real-time then stop
+  // Play through at real-time for export
   vsPlay();
-  const exportDur = (VS.totalDuration / (VS.clips[0]?.speed || 1)) * 1000 + 500;
+
+  const exportDur = VS.totalDuration * 1000 + 800;
+  let elapsed = 0;
+  const tick = 500;
+  const progressInterval = setInterval(() => {
+    elapsed += tick;
+    const pct = Math.min(95, (elapsed / exportDur) * 100);
+    if (progBar) progBar.style.width = pct + '%';
+    if (progLabel) progLabel.textContent = `⏳ Rendering… ${Math.round(pct)}%`;
+  }, tick);
+
   setTimeout(() => {
+    clearInterval(progressInterval);
     vsStop();
     VS.mediaRecorder.stop();
     VS._exporting = false;
-  }, Math.min(exportDur, 60000)); // cap 60s
+  }, Math.min(exportDur, 120000)); // cap 2 min
 }
 
-function vsDownloadExport() {
-  const blob = new Blob(VS.recordedChunks, { type: 'video/webm' });
+function vsDownloadExport(mimeType) {
+  const ext  = (mimeType || 'video/webm').includes('mp4') ? 'mp4' : 'webm';
+  const blob = new Blob(VS.recordedChunks, { type: mimeType || 'video/webm' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
-  a.href = url; a.download = 'shashi-video-' + Date.now() + '.webm';
+  a.href = url; a.download = 'shashi-hd-video-' + Date.now() + '.' + ext;
   document.body.appendChild(a); a.click();
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
-  vsToast('✅ Video downloaded! Open in VLC or convert to MP4.');
+  vsToast('✅ HD Video downloaded!');
 }
 
 /* ── split clip (future advanced) ──────────────────── */
@@ -840,6 +1053,18 @@ function vsInitDrop() {
     zone.classList.remove('vs-drop-active');
     vsHandleFiles(e.dataTransfer.files);
   });
+  // Also support drag on the canvas itself
+  const canvas = document.getElementById('vsPreviewWrap');
+  if (canvas) {
+    canvas.addEventListener('dragover', e => { e.preventDefault(); canvas.style.outline = '3px dashed #7c3aed'; });
+    canvas.addEventListener('dragleave', () => { canvas.style.outline = ''; });
+    canvas.addEventListener('drop', e => {
+      e.preventDefault(); canvas.style.outline = '';
+      vsHandleFiles(e.dataTransfer.files);
+    });
+  }
+  // Responsive: default open left panel on desktop, center on mobile
+  if (window.innerWidth <= 768) vsMobileTab('center');
 }
 
 /* call on DOMContentLoaded */
