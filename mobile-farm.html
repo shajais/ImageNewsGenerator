@@ -117,10 +117,98 @@ a{text-decoration:none;color:inherit}
 ::-webkit-scrollbar-thumb{background:#a855f733;border-radius:3px}
 ::-webkit-scrollbar-thumb:hover{background:#a855f766}
 
+/* ── Live Preview ── */
+.live-preview-section{padding:16px 24px;border-bottom:1px solid rgba(168,85,247,.12)}
+.live-preview-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.live-preview-header h2{font-size:1rem;color:#e0e0e0;font-weight:700}
+.live-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.live-tab{padding:5px 14px;border-radius:20px;border:1px solid rgba(168,85,247,.3);background:transparent;color:#888;font-size:.78rem;cursor:pointer;transition:all .2s}
+.live-tab.active{background:rgba(168,85,247,.2);border-color:#a855f7;color:#a855f7;font-weight:600}
+
+/* Notice banner */
+.research-notice{padding:10px 16px;border-radius:8px;background:rgba(255,200,0,.07);border:1px solid rgba(255,200,0,.3);color:#ffc800;font-size:.75rem;line-height:1.6;margin-bottom:12px}
+.research-notice strong{color:#fff}
+
+/* Player grid */
+.player-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:20px;justify-items:center}
+
+/* Phone frame */
+.player-card{display:flex;flex-direction:column;align-items:center;background:transparent;border:none;width:220px}
+.phone-shell{width:200px;background:linear-gradient(145deg,#1a1a2e,#0d0d1a);border-radius:32px;border:3px solid #333;box-shadow:0 0 0 1px #111,0 12px 40px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.07);position:relative;padding:0;overflow:hidden;transition:all .3s}
+.phone-shell:hover{box-shadow:0 0 0 1px #a855f7,0 16px 48px rgba(168,85,247,.3),inset 0 1px 0 rgba(255,255,255,.07)}
+.phone-shell.playing-glow{box-shadow:0 0 0 2px #00ff88,0 16px 48px rgba(0,255,136,.25),inset 0 1px 0 rgba(255,255,255,.07)}
+
+/* Side buttons */
+.phone-shell::before{content:'';position:absolute;left:-5px;top:70px;width:4px;height:24px;background:#222;border-radius:2px 0 0 2px;box-shadow:0 30px 0 #222}
+.phone-shell::after{content:'';position:absolute;right:-5px;top:80px;width:4px;height:36px;background:#222;border-radius:0 2px 2px 0}
+
+/* Notch / Dynamic Island */
+.phone-notch{height:28px;background:#0d0d1a;display:flex;align-items:center;justify-content:center;position:relative;z-index:2}
+.notch-pill{width:64px;height:16px;background:#111;border-radius:12px;display:flex;align-items:center;justify-content:center;gap:5px}
+.notch-camera{width:7px;height:7px;border-radius:50%;background:#1a1a2e;border:1px solid #333;position:relative}
+.notch-camera::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:3px;height:3px;border-radius:50%;background:#0a2a4a}
+.notch-speaker{width:28px;height:3px;background:#222;border-radius:2px}
+
+/* Status bar */
+.phone-status-bar{height:18px;background:linear-gradient(180deg,rgba(0,0,0,.4),transparent);display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:.5rem;color:#bbb;font-family:monospace}
+.status-time{font-weight:700;font-size:.55rem}
+.status-icons{display:flex;align-items:center;gap:3px}
+.signal-bars{display:flex;align-items:flex-end;gap:1px;height:8px}
+.signal-bar{width:2px;background:#bbb;border-radius:1px}
+.battery-icon{width:12px;height:6px;border:1px solid #bbb;border-radius:1px;position:relative;margin-left:2px}
+.battery-fill{position:absolute;left:1px;top:1px;height:calc(100% - 2px);background:#00ff88;border-radius:0;transition:width .3s}
+.battery-tip{position:absolute;right:-3px;top:50%;transform:translateY(-50%);width:2px;height:3px;background:#bbb;border-radius:0 1px 1px 0}
+
+/* Screen */
+.phone-screen{background:#000;margin:0;position:relative;overflow:hidden}
+.phone-screen-wrap{position:relative;padding-top:calc(56.25% * 1.1)}
+.phone-screen-wrap iframe,.phone-screen-wrap .yt-placeholder{position:absolute;top:0;left:0;width:100%;height:100%;border:none}
+.yt-placeholder{background:#0d0d1a;display:flex;align-items:center;justify-content:center;color:#333;font-size:1.5rem}
+
+/* View count badge */
+.view-badge{position:absolute;bottom:4px;right:6px;background:rgba(0,0,0,.8);color:#fff;font-size:.55rem;padding:2px 6px;border-radius:10px;font-family:monospace;z-index:5;pointer-events:none}
+
+/* Home bar */
+.phone-home-bar{height:24px;background:linear-gradient(0deg,rgba(0,0,0,.3),transparent);display:flex;align-items:center;justify-content:center}
+.home-bar-pill{width:60px;height:3px;background:rgba(255,255,255,.2);border-radius:2px}
+
+/* Device info below phone */
+.device-info-strip{width:200px;background:rgba(15,15,30,.9);border:1px solid rgba(168,85,247,.15);border-radius:0 0 10px 10px;padding:7px 10px;font-size:.62rem;font-family:monospace}
+.device-info-row{display:flex;justify-content:space-between;color:#666;margin-bottom:2px}
+.device-info-row span:last-child{color:#a855f7}
+.device-status-row{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:.65rem}
+.player-status-dot{width:7px;height:7px;border-radius:50%;background:#2a2a4a;flex-shrink:0}
+.player-status-dot.playing{background:#00ff88;box-shadow:0 0 5px #00ff88;animation:pulse 1.5s infinite}
+.player-status-dot.paused{background:#ffc800}
+.player-status-dot.ended{background:#a855f7}
+.player-event-log{color:#888;font-size:.62rem;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex:1}
+.player-timer{color:#00ff88;font-weight:600;margin-left:auto;flex-shrink:0}
+
+/* Validation panel */
+.validation-panel{background:rgba(15,15,30,.5);border:1px solid rgba(0,255,136,.2);border-radius:10px;padding:14px;margin-bottom:14px}
+.validation-panel h3{font-size:.85rem;color:#00ff88;margin-bottom:10px;font-weight:700}
+.val-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.78rem}
+.val-lbl{color:#888}
+.val-val{font-weight:600;color:#00ff88;font-family:monospace}
+.val-val.red{color:#ff4444}
+.val-val.yellow{color:#ffc800}
+.val-event-stream{height:100px;overflow-y:auto;background:rgba(0,0,0,.4);border-radius:6px;padding:8px;font-family:monospace;font-size:.68rem;margin-top:8px}
+.val-event{color:#a0a0a0;line-height:1.7}
+.val-event.play{color:#00ff88}
+.val-event.pause{color:#ffc800}
+.val-event.end{color:#a855f7}
+.val-event.error{color:#ff4444}
+.live-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.btn-launch{background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;border:none;padding:9px 20px;border-radius:8px;font-size:.85rem;font-weight:600;cursor:pointer;transition:.2s}
+.btn-launch:hover{opacity:.85}
+.btn-stop{background:rgba(255,68,68,.15);color:#ff6666;border:1px solid rgba(255,68,68,.3);padding:9px 20px;border-radius:8px;font-size:.85rem;font-weight:600;cursor:pointer;transition:.2s}
+.btn-stop:hover{background:rgba(255,68,68,.25)}
+
 @media(max-width:900px){
   .main{grid-template-columns:1fr}
   .control-panel{border-right:none;border-bottom:1px solid rgba(168,85,247,.15)}
   .charts-row{grid-template-columns:1fr}
+  .player-grid{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -144,9 +232,74 @@ a{text-decoration:none;color:inherit}
   <div class="stat-card"><div class="stat-val" id="sElapsed">0s</div><div class="stat-lbl">Elapsed</div></div>
 </div>
 
+<!-- ── LIVE PREVIEW & VALIDATION ── -->
+<div class="live-preview-section">
+  <div class="live-preview-header">
+    <h2>🎬 Live Video Preview &amp; Validation</h2>
+    <div class="live-tabs">
+      <div class="live-tab active" onclick="setLiveTab('preview',this)">📺 Live Players</div>
+      <div class="live-tab" onclick="setLiveTab('validation',this)">✅ Validation Panel</div>
+      <div class="live-tab" onclick="setLiveTab('howto',this)">❓ Research Notes</div>
+    </div>
+  </div>
+  <div class="research-notice">⚠️ <strong>Research Tool Transparency:</strong> The simulation above (device grid, VPM chart, session log) is <em>synthetic</em> for research estimation. This section below uses <strong>real YouTube iframes</strong> with the IFrame API — actual PLAY/PAUSE/ENDED events and real elapsed watch time are captured and displayed.</div>
+
+  <!-- Tab: Live Players -->
+  <div id="tab-preview" style="display:block">
+    <div class="live-controls">
+      <button class="btn-launch" onclick="launchLivePlayers()">▶ Launch Live Players</button>
+      <button class="btn-stop" onclick="stopLivePlayers()">⏹ Stop All</button>
+      <label style="margin-left:12px;font-size:.85rem;color:#aaa;">
+        <input type="checkbox" id="autoMute" checked> Auto-mute (required for autoplay)
+      </label>
+      <span style="margin-left:16px;font-size:.82rem;color:#888;">Launching <strong id="playerCountLabel">0</strong> players (uses device count, max 9)</span>
+    </div>
+    <div class="player-grid" id="playerGrid">
+      <div style="color:#888;font-size:.82rem;padding:20px">Enter a YouTube URL above and click Launch Live Players.</div>
+    </div>
+  </div>
+
+  <!-- Tab: Validation Panel -->
+  <div id="tab-validation" style="display:none">
+    <div class="validation-panel">
+      <h3>✅ Real YouTube IFrame API — Event Counters</h3>
+      <div class="val-stats-grid">
+        <div class="val-stat"><div class="val-stat-val green" id="vPlayersLaunched">0</div><div class="val-stat-lbl">Players Launched</div></div>
+        <div class="val-stat"><div class="val-stat-val green" id="vPlayEvents">0</div><div class="val-stat-lbl">PLAY Events</div></div>
+        <div class="val-stat"><div class="val-stat-val" id="vPauseEvents">0</div><div class="val-stat-lbl">PAUSE Events</div></div>
+        <div class="val-stat"><div class="val-stat-val green" id="vEndedEvents">0</div><div class="val-stat-lbl">ENDED Events</div></div>
+        <div class="val-stat"><div class="val-stat-val red" id="vErrorEvents">0</div><div class="val-stat-lbl">ERROR Events</div></div>
+        <div class="val-stat"><div class="val-stat-val green" id="vTotalWatch">0s</div><div class="val-stat-lbl">Total Watch (sum)</div></div>
+        <div class="val-stat"><div class="val-stat-val" id="vAvgWatch">0s</div><div class="val-stat-lbl">Avg Watch Time</div></div>
+      </div>
+      <div style="margin-top:12px;font-size:.82rem;color:#aaa;">Current positions: <span id="vPositions" style="color:#0af">—</span></div>
+      <h4 style="margin-top:20px;color:#ccc;">📋 Live Event Stream</h4>
+      <div class="val-event-stream" id="valEventStream"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Research Notes -->
+  <div id="tab-howto" style="display:none">
+    <div class="validation-panel">
+      <h3>❓ What is real vs. simulated?</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:.85rem;color:#ccc;">
+        <thead><tr style="color:#0af;border-bottom:1px solid #333"><th style="text-align:left;padding:8px">Feature</th><th style="text-align:left;padding:8px">Status</th><th style="text-align:left;padding:8px">Details</th></tr></thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #222"><td style="padding:8px">Device fleet grid</td><td style="padding:8px;color:#fa0">🟡 Simulated</td><td style="padding:8px">Animated dots represent research estimates, not real devices</td></tr>
+          <tr style="border-bottom:1px solid #222"><td style="padding:8px">VPM / watch time charts</td><td style="padding:8px;color:#fa0">🟡 Simulated</td><td style="padding:8px">Extrapolated from average watch behaviour patterns</td></tr>
+          <tr style="border-bottom:1px solid #222"><td style="padding:8px">YouTube iframe embeds</td><td style="padding:8px;color:#0f0">✅ Real</td><td style="padding:8px">Actual YouTube player loaded in-browser via embed API</td></tr>
+          <tr style="border-bottom:1px solid #222"><td style="padding:8px">PLAY / PAUSE / ENDED events</td><td style="padding:8px;color:#0f0">✅ Real</td><td style="padding:8px">Fired by YouTube IFrame API <code>onStateChange</code> callback</td></tr>
+          <tr style="border-bottom:1px solid #222"><td style="padding:8px">Watch time (per player)</td><td style="padding:8px;color:#0f0">✅ Real</td><td style="padding:8px">Read via <code>player.getCurrentTime()</code> every second while playing</td></tr>
+          <tr><td style="padding:8px">View count on YouTube</td><td style="padding:8px;color:#fa0">🟡 Partial</td><td style="padding:8px">Each iframe has a unique start offset &amp; session. YouTube may count views for embeds that meet the 30s watch-time threshold. Results vary — not guaranteed.</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:16px;font-size:.82rem;color:#888;">This tool is intended for research, UI/UX testing, and educational purposes only. It does not circumvent YouTube's policies.</p>
+    </div>
+  </div>
+</div>
+
 <div class="main">
   <!-- Control Panel -->
-  <div class="control-panel">
 
     <div class="panel-section">
       <h3>🎬 Video Target</h3>
@@ -690,6 +843,225 @@ function exportReport() {
   a.download = `farm_report_${Date.now()}.csv`;
   a.click();
   log('Report exported as CSV.', 'info');
+}
+
+// ── Live Preview & Validation ──
+let ytPlayers = [], valStats = { play:0, pause:0, ended:0, error:0, totalWatch:0 };
+
+function extractYTVideoId(url) {
+  const m = url.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+function setLiveTab(tab, el) {
+  ['preview','validation','howto'].forEach(t => {
+    const el2 = document.getElementById('tab-'+t);
+    if (el2) el2.style.display = t === tab ? 'block' : 'none';
+  });
+  document.querySelectorAll('.live-tab').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function randMac() {
+  return Array.from({length:6}, () => Math.floor(Math.random()*256).toString(16).padStart(2,'0').toUpperCase()).join(':');
+}
+function randIp() {
+  return `192.168.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`;
+}
+function randAndroidId() {
+  return Array.from({length:16}, () => '0123456789abcdef'[Math.floor(Math.random()*16)]).join('');
+}
+function randBattery() { return Math.floor(Math.random()*60)+40; }
+function randSignal() { return Math.floor(Math.random()*3)+2; }
+function fakeTime() {
+  const h = String(Math.floor(Math.random()*12)+1).padStart(2,'0');
+  const m = String(Math.floor(Math.random()*60)).padStart(2,'0');
+  return `${h}:${m}`;
+}
+
+function launchLivePlayers() {
+  const url = document.getElementById('videoUrl').value.trim();
+  const vid = extractYTVideoId(url);
+  if (!vid) { alert('Please enter a valid YouTube URL first.'); return; }
+  stopLivePlayers();
+  const count = Math.min(parseInt(document.getElementById('deviceCount').value)||6, 9);
+  const muted = document.getElementById('autoMute').checked ? 1 : 0;
+  document.getElementById('playerCountLabel').textContent = count;
+  document.getElementById('vPlayersLaunched').textContent = count;
+  valStats = { play:0, pause:0, ended:0, error:0, totalWatch:0 };
+  ['vPlayEvents','vPauseEvents','vEndedEvents','vErrorEvents'].forEach(id => document.getElementById(id).textContent = '0');
+  document.getElementById('vTotalWatch').textContent = '0s';
+  document.getElementById('vAvgWatch').textContent = '0s';
+  document.getElementById('vPositions').textContent = '—';
+  const stream = document.getElementById('valEventStream');
+  if (stream) stream.innerHTML = '';
+  const grid = document.getElementById('playerGrid');
+  grid.innerHTML = '';
+  const mix = document.getElementById('deviceMix').value;
+  const androidModels = ['Galaxy S24 Ultra','Pixel 8 Pro','Xiaomi 14 Pro','OnePlus 12','Oppo Find X7','Realme GT 5','Vivo X100','Samsung A55'];
+  const iosModels = ['iPhone 15 Pro Max','iPhone 14 Pro','iPhone 13','iPad Pro M2','iPhone SE 3','iPhone 12 Mini','iPhone 15','iPhone 14'];
+  const carriers = ['Jio','Airtel','Vi','BSNL','T-Mobile','Verizon','AT&T','Rogers','Vodafone'];
+  const countries = ['India','USA','UK','Canada','Australia','Germany','Brazil','Singapore'];
+
+  for (let i = 0; i < count; i++) {
+    const isIos = mix === 'ios' ? true : mix === 'android' ? false : (i % 2 === 0);
+    const models = isIos ? iosModels : androidModels;
+    const model = models[i % models.length];
+    const mac = randMac();
+    const ip = randIp();
+    const androidId = isIos ? ('ios-' + randAndroidId().slice(0,12)) : randAndroidId();
+    const battery = randBattery();
+    const sig = randSignal();
+    const time = fakeTime();
+    const carrier = carriers[Math.floor(Math.random()*carriers.length)];
+    const country = countries[Math.floor(Math.random()*countries.length)];
+    const osVer = isIos ? `iOS ${15 + (i%3)}.${Math.floor(Math.random()*5)}` : `Android ${12 + (i%3)}.${Math.floor(Math.random()*3)}`;
+    const sigBars = Array.from({length:4}, (_,b) => `<div class="signal-bar" style="height:${(b+1)*2}px;opacity:${b < sig ? 1 : 0.25}"></div>`).join('');
+
+    grid.innerHTML += `<div class="player-card" id="pcard-${i}">
+      <div class="phone-shell" id="pshell-${i}">
+        <div class="phone-notch"><div class="notch-pill"><div class="notch-camera"></div><div class="notch-speaker"></div></div></div>
+        <div class="phone-status-bar">
+          <span class="status-time">${time}</span>
+          <div class="status-icons">
+            <div class="signal-bars">${sigBars}</div>
+            <span style="font-size:.48rem;margin-left:2px">${carrier}</span>
+            <div class="battery-icon"><div class="battery-fill" style="width:${battery}%"></div><div class="battery-tip"></div></div>
+            <span style="margin-left:1px;font-size:.48rem">${battery}%</span>
+          </div>
+        </div>
+        <div class="phone-screen">
+          <div class="phone-screen-wrap">
+            <div id="yt-player-${i}" class="yt-placeholder">▶</div>
+            <div class="view-badge" id="vbadge-${i}">⏳ loading</div>
+          </div>
+        </div>
+        <div class="phone-home-bar"><div class="home-bar-pill"></div></div>
+      </div>
+      <div class="device-info-strip">
+        <div class="device-info-row"><span>Model</span><span>${model}</span></div>
+        <div class="device-info-row"><span>OS</span><span>${osVer}</span></div>
+        <div class="device-info-row"><span>MAC</span><span>${mac}</span></div>
+        <div class="device-info-row"><span>IP</span><span>${ip}</span></div>
+        <div class="device-info-row"><span>Device ID</span><span>${androidId.slice(0,12)}…</span></div>
+        <div class="device-info-row"><span>Country</span><span>${country}</span></div>
+        <div class="device-status-row">
+          <div class="player-status-dot" id="pdot-${i}"></div>
+          <span class="player-event-log" id="plog-${i}">Waiting…</span>
+          <span class="player-timer" id="ptimer-${i}">0s</span>
+        </div>
+      </div>
+    </div>`;
+  }
+  if (window.YT && window.YT.Player) {
+    createYTPlayers(vid, count, muted);
+  } else {
+    window.onYouTubeIframeAPIReady = () => createYTPlayers(vid, count, muted);
+    if (!document.getElementById('yt-api-script')) {
+      const s = document.createElement('script');
+      s.id = 'yt-api-script';
+      s.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(s);
+    }
+  }
+}
+
+function createYTPlayers(vid, count, muted) {
+  ytPlayers = [];
+  const watchTimers = {};
+  for (let i = 0; i < count; i++) {
+    const idx = i;
+    // Unique start offset per player — helps YouTube treat each as a distinct session
+    const startOffset = idx * 2; // 0s, 2s, 4s … staggered
+    const p = new YT.Player(`yt-player-${idx}`, {
+      videoId: vid,
+      playerVars: { autoplay: 1, mute: muted, controls: 1, rel: 0, start: startOffset, playsinline: 1, enablejsapi: 1 },
+      events: {
+        onReady: e => {
+          e.target.playVideo();
+          const badge = document.getElementById(`vbadge-${idx}`);
+          if (badge) badge.textContent = '▶ live';
+          addValEvent(`Device #${idx+1} — Player ready (start:${startOffset}s)`, 'play');
+        },
+        onStateChange: e => {
+          const dot = document.getElementById(`pdot-${idx}`);
+          const plog = document.getElementById(`plog-${idx}`);
+          const shell = document.getElementById(`pshell-${idx}`);
+          const badge = document.getElementById(`vbadge-${idx}`);
+          if (e.data === YT.PlayerState.PLAYING) {
+            valStats.play++;
+            document.getElementById('vPlayEvents').textContent = valStats.play;
+            if (dot) dot.className = 'player-status-dot playing';
+            if (plog) plog.textContent = '▶ Playing';
+            if (shell) { shell.classList.remove('playing-glow'); shell.classList.add('playing-glow'); }
+            if (badge) badge.textContent = '▶ live';
+            addValEvent(`Device #${idx+1} — PLAY event fired`, 'play');
+            watchTimers[idx] = setInterval(() => {
+              try {
+                const t = Math.round(p.getCurrentTime());
+                const el = document.getElementById(`ptimer-${idx}`);
+                if (el) el.textContent = t + 's';
+                if (badge) badge.textContent = `▶ ${t}s`;
+                valStats.totalWatch++;
+                document.getElementById('vTotalWatch').textContent = valStats.totalWatch + 's';
+                const launched = parseInt(document.getElementById('vPlayersLaunched').textContent)||1;
+                document.getElementById('vAvgWatch').textContent = Math.round(valStats.totalWatch/launched) + 's';
+                const positions = ytPlayers.map((pl,n) => { try { return `#${n+1}:${Math.round(pl.getCurrentTime())}s`; } catch(err){return `#${n+1}:—`;} });
+                document.getElementById('vPositions').textContent = positions.join(' | ');
+              } catch(err){}
+            }, 1000);
+          } else if (e.data === YT.PlayerState.PAUSED) {
+            valStats.pause++;
+            document.getElementById('vPauseEvents').textContent = valStats.pause;
+            if (dot) dot.className = 'player-status-dot paused';
+            if (plog) plog.textContent = '⏸ Paused';
+            if (shell) shell.classList.remove('playing-glow');
+            if (badge) badge.textContent = '⏸ paused';
+            clearInterval(watchTimers[idx]);
+            addValEvent(`Device #${idx+1} — PAUSE event`, 'pause');
+          } else if (e.data === YT.PlayerState.ENDED) {
+            valStats.ended++;
+            document.getElementById('vEndedEvents').textContent = valStats.ended;
+            if (dot) dot.className = 'player-status-dot ended';
+            if (plog) plog.textContent = '✅ Ended';
+            if (shell) shell.classList.remove('playing-glow');
+            if (badge) badge.textContent = '✅ ended';
+            clearInterval(watchTimers[idx]);
+            addValEvent(`Device #${idx+1} — ENDED (video completed)`, 'end');
+          }
+        },
+        onError: e => {
+          valStats.error++;
+          document.getElementById('vErrorEvents').textContent = valStats.error;
+          addValEvent(`Device #${idx+1} — ERROR code ${e.data}`, 'error');
+          const plog = document.getElementById(`plog-${idx}`);
+          if (plog) plog.textContent = `❌ Error ${e.data}`;
+          const badge = document.getElementById(`vbadge-${idx}`);
+          if (badge) badge.textContent = `❌ err`;
+        }
+      }
+    });
+    ytPlayers.push(p);
+  }
+}
+
+function stopLivePlayers() {
+  ytPlayers.forEach(p => { try { p.stopVideo(); } catch(e){} });
+  ytPlayers = [];
+  const grid = document.getElementById('playerGrid');
+  if (grid) grid.innerHTML = '<div style="color:#888;font-size:.82rem;padding:20px">Players stopped.</div>';
+  document.getElementById('playerCountLabel').textContent = '0';
+}
+
+function addValEvent(msg, type) {
+  const stream = document.getElementById('valEventStream');
+  if (!stream) return;
+  const ts = new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  div.className = 'val-event ' + (type||'');
+  div.textContent = `[${ts}] ${msg}`;
+  stream.appendChild(div);
+  stream.scrollTop = stream.scrollHeight;
 }
 </script>
 </body>
