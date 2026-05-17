@@ -175,25 +175,34 @@ function vsAddClip(file) {
   };
   if (type === 'img') {
     const img = new Image();
-    img.onload = () => { clip._imgEl = img; vsRebuildTimeline(); vsUpdateStats(); if (VS.clips.length === 1) vsRenderClip(0, 0); };
+    img.onload = () => {
+      clip._imgEl = img;
+      vsRebuildTimeline(); vsUpdateStats();
+      // Always show first clip on canvas immediately
+      const isFirst = VS.clips.indexOf(clip) === 0;
+      if (isFirst || VS.activeClip === VS.clips.indexOf(clip)) vsRenderClip(VS.clips.indexOf(clip), 0);
+    };
     img.src = url;
   } else {
     const vid = document.createElement('video');
-    vid.src = url;
-    vid.muted = true;  // muted ONLY for canvas drawing — audio handled separately via Web Audio
-    vid.preload = 'auto';
-    vid.crossOrigin = 'anonymous';
+    vid.src      = url;
+    vid.muted    = true;   // keep muted for canvas drawImage (audio via Web Audio)
+    vid.preload  = 'auto';
+    vid.playsInline = true;
     vid.onloadedmetadata = () => {
       clip.duration = vid.duration / clip.speed;
       clip.trimEnd  = vid.duration;
       clip._vidEl   = vid;
-      // Check if video has audio
-      clip.hasAudio = (vid.mozHasAudio !== undefined ? vid.mozHasAudio :
-                       vid.webkitAudioDecodedByteCount !== undefined ? vid.webkitAudioDecodedByteCount > 0 : true);
       vsRebuildTimeline(); vsUpdateStats();
-      if (VS.clips.length === 1) vsRenderClip(0, 0);
+      // Seek to first frame so canvas shows something immediately
+      vid.currentTime = 0.05;
     };
-    // Preload fully to avoid pausing/stuttering during playback
+    vid.onseeked = () => {
+      // Draw the first frame on canvas as soon as it's ready
+      const idx = VS.clips.indexOf(clip);
+      if (idx >= 0 && !VS.playing) vsRenderClip(idx, 0);
+      if (idx >= 0) _vsGenThumb(clip, idx);
+    };
     vid.load();
   }
   VS.clips.push(clip);
@@ -211,10 +220,15 @@ function vsRebuildTimeline() {
 
   VS.clips.forEach((clip, i) => {
     const dur = clip.duration || 3;
-    const pct = VS.totalDuration > 0 ? Math.max(6, (dur / VS.totalDuration) * 100) : 12;
+    // Use px widths proportional to duration so timeline can scroll horizontally
+    // Each second = 40px, minimum 80px per clip
+    const PX_PER_SEC = 40;
+    const minPx = 80;
+    const widthPx = Math.max(minPx, dur * PX_PER_SEC);
     const div = document.createElement('div');
     div.className = 'vs-tl-clip' + (i === VS.activeClip ? ' vs-tl-active' : '');
-    div.style.width = pct + '%';
+    div.style.flex = 'none';
+    div.style.width = widthPx + 'px';
     div.dataset.idx = i;
     div.innerHTML = `
       <div class="vs-tl-thumb" id="vsThumb${i}">
@@ -259,21 +273,21 @@ function _vsGenThumb(clip, i) {
   if (VS._lastThumb[i]) return;
   if (clip._imgEl) {
     const tc = document.createElement('canvas'); tc.width=60; tc.height=60;
-    const tx = tc.getContext('2d');
-    tx.drawImage(clip._imgEl, 0, 0, 60, 60);
+    tc.getContext('2d').drawImage(clip._imgEl, 0, 0, 60, 60);
     const el = document.getElementById('vsThumb' + i);
     if (el) { el.innerHTML=''; const img=document.createElement('img'); img.src=tc.toDataURL(); img.style.cssText='width:100%;height:100%;object-fit:cover;border-radius:4px'; el.appendChild(img); }
     VS._lastThumb[i] = true;
-  } else if (clip._vidEl) {
-    clip._vidEl.currentTime = 0.1;
-    clip._vidEl.onseeked = () => {
+  } else if (clip._vidEl && clip._vidEl.readyState >= 2) {
+    // Video already has frame data — draw directly
+    try {
       const tc = document.createElement('canvas'); tc.width=60; tc.height=60;
       tc.getContext('2d').drawImage(clip._vidEl, 0, 0, 60, 60);
       const el = document.getElementById('vsThumb' + i);
       if (el) { el.innerHTML=''; const img=document.createElement('img'); img.src=tc.toDataURL(); img.style.cssText='width:100%;height:100%;object-fit:cover;border-radius:4px'; el.appendChild(img); }
       VS._lastThumb[i] = true;
-    };
+    } catch(e) {}
   }
+  // If video not ready yet, it will be drawn via onseeked in vsAddClip
 }
 
 function vsDeleteClip(i) {
@@ -498,7 +512,7 @@ function _vsDrawTransitionOut(ctx, cv, type, p) {
 function _vsDrawText(ctx, cv, text, pos, preset, progress) {
   if (!text) return;
   const W = cv.width, H = cv.height;
-  const fsz = Math.round(W * 0.055);
+  const fsz = Math.round(W * 0.038);
   ctx.save();
 
   // slide-up animation
@@ -530,7 +544,7 @@ function _vsDrawText(ctx, cv, text, pos, preset, progress) {
 function _vsDrawTextLayer(ctx, cv, tl, preset, progress) {
   const W = cv.width, H = cv.height;
   ctx.save();
-  ctx.font = `bold ${tl.size || Math.round(W*0.06)}px sans-serif`;
+  ctx.font = `bold ${tl.size || Math.round(W*0.04)}px sans-serif`;
   ctx.fillStyle = tl.color || preset.textColor || '#fff';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(tl.text, (tl.x||0.5)*W, (tl.y||0.5)*H);
@@ -588,57 +602,47 @@ function _vsBlurWatermarkZones(ctx, cv) {
 /* ── playback ───────────────────────────────────────── */
 function vsPlay() {
   if (!VS.clips.length) return vsToast('📁 Add at least one clip first');
-  VS.playing = true;
+
+  // Ensure all video clips have their element ready
+  const notReady = VS.clips.filter(c => c.type === 'vid' && !c._vidEl);
+  if (notReady.length) return vsToast('⏳ Video still loading, please wait…');
+
+  VS.playing    = true;
   VS._playStart = performance.now() - VS.currentTime * 1000;
   VS._clipIdx   = _vsClipAtTime(VS.currentTime);
   VS._clipStart = _vsClipStartTime(VS._clipIdx);
 
-  // Ensure AudioContext is running
-  if (!VS.audioCtx) VS.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (VS.audioCtx.state === 'suspended') VS.audioCtx.resume();
-
-  // Connect video audio sources through Web Audio (preserves original video audio)
-  VS.clips.forEach((c, idx) => {
-    if (c._vidEl) {
-      c._vidEl.playbackRate = c.speed || 1;
-      // Wire video audio through gainNode if not already done
-      if (!c._audioSrcNode) {
-        try {
-          const srcNode = VS.audioCtx.createMediaElementSource(c._vidEl);
-          c._audioSrcNode = srcNode;
-          // If background music is loaded, blend at lower volume; else full video audio
-          const vol = VS.audioTrack?.buffer ? 0.85 : 1.0;
-          const vidGain = VS.audioCtx.createGain();
-          vidGain.gain.value = vol;
-          srcNode.connect(vidGain).connect(VS.audioCtx.destination);
-          c._vidGainNode = vidGain;
-        } catch(e) { /* already connected */ }
-      }
-    }
-  });
-
-  // Start current video clip
-  const c = VS.clips[VS._clipIdx];
-  if (c?._vidEl) {
-    c._vidEl.muted = false;
-    c._vidEl.playbackRate = c.speed || 1;
-    c._vidEl.play().catch(()=>{});
+  // Start current clip video
+  const curClip = VS.clips[VS._clipIdx];
+  if (curClip?._vidEl) {
+    curClip._vidEl.muted = false;
+    curClip._vidEl.playbackRate = curClip.speed || 1;
+    curClip._vidEl.currentTime  = (curClip.trimStart || 0) + (VS.currentTime - VS._clipStart) * (curClip.speed || 1);
+    curClip._vidEl.play().catch(() => {
+      // Autoplay blocked — try muted
+      curClip._vidEl.muted = true;
+      curClip._vidEl.play().catch(() => {});
+    });
   }
 
   document.getElementById('vsPlayBtn').textContent = '⏸️ Pause';
   _vsRAF();
 
-  // Background music track
+  // Background music track (optional)
   if (VS.audioTrack?.buffer) {
-    if (VS._audioSrc) try { VS._audioSrc.stop(); } catch(_){}
-    const src = VS.audioCtx.createBufferSource();
-    src.buffer = VS.audioTrack.buffer;
-    src.loop   = true;
-    VS.gainNode = VS.audioCtx.createGain();
-    VS.gainNode.gain.value = parseFloat(document.getElementById('vsVolumeSlider')?.value || 0.5);
-    src.connect(VS.gainNode).connect(VS.audioCtx.destination);
-    src.start(0, VS.audioOffset % VS.audioTrack.buffer.duration);
-    VS._audioSrc = src;
+    try {
+      if (!VS.audioCtx) VS.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (VS.audioCtx.state === 'suspended') VS.audioCtx.resume();
+      if (VS._audioSrc) try { VS._audioSrc.stop(); } catch(_) {}
+      const src = VS.audioCtx.createBufferSource();
+      src.buffer = VS.audioTrack.buffer;
+      src.loop   = true;
+      VS.gainNode = VS.audioCtx.createGain();
+      VS.gainNode.gain.value = parseFloat(document.getElementById('vsVolumeSlider')?.value || 0.5);
+      src.connect(VS.gainNode).connect(VS.audioCtx.destination);
+      src.start(0, VS.audioOffset % VS.audioTrack.buffer.duration);
+      VS._audioSrc = src;
+    } catch(e) { console.warn('Audio start error:', e); }
   }
 }
 
@@ -677,15 +681,16 @@ function _vsRAF() {
   if (clipChanged) {
     // Pause old clip
     const old = VS.clips[VS._clipIdx];
-    if (old?._vidEl) old._vidEl.pause();
+    if (old?._vidEl) { old._vidEl.pause(); old._vidEl.muted = true; }
 
     VS._clipIdx   = ci;
     VS._clipStart = _vsClipStartTime(ci);
     const c = VS.clips[ci];
     if (c?._vidEl) {
+      c._vidEl.muted = false;
       c._vidEl.currentTime = (c.trimStart || 0);
       c._vidEl.playbackRate = c.speed || 1;
-      c._vidEl.play().catch(()=>{});
+      c._vidEl.play().catch(() => { c._vidEl.muted = true; c._vidEl.play().catch(()=>{}); });
     }
   }
 
