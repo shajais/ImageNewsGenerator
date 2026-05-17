@@ -892,110 +892,259 @@ function vsApplyTemplate(key) {
   vsToast('✅ Template "' + key + '" applied to all clips!');
 }
 
+/* ── update export button label on codec change ─────── */
+function vsUpdateExportBtn(codec) {
+  const btn = document.getElementById('vsExportBtn');
+  if (!btn) return;
+  const labels = {
+    h264: '🎬 Export MP4 (H.264)',
+    h265: '🚀 Export MP4 (H.265/HEVC)',
+    webm: '⚡ Export WebM (VP9)',
+  };
+  btn.textContent = labels[codec] || '🎬 Export Video';
+}
+
+/* ── FFmpeg.wasm instance (lazy-loaded) ─────────────── */
+let _vsFFmpeg = null;
+let _vsFFmpegLoading = false;
+
+async function _vsLoadFFmpeg() {
+  if (_vsFFmpeg) return _vsFFmpeg;
+  if (_vsFFmpegLoading) {
+    // Wait for it
+    while (_vsFFmpegLoading) await new Promise(r => setTimeout(r, 100));
+    return _vsFFmpeg;
+  }
+  _vsFFmpegLoading = true;
+  const { FFmpeg } = window.FFmpegWASM || window.FFmpegLib || {};
+  if (!FFmpeg) {
+    // Try global from CDN
+    const ff = window.FFmpeg?.FFmpeg || window.FFmpegWASM?.FFmpeg;
+    if (!ff) throw new Error('FFmpeg.wasm not loaded. Check internet connection.');
+    _vsFFmpeg = new ff();
+  } else {
+    _vsFFmpeg = new FFmpeg();
+  }
+  _vsFFmpeg.on('log', ({ message }) => { console.log('[FFmpeg]', message); });
+  _vsFFmpeg.on('progress', ({ progress }) => {
+    const bar = document.getElementById('vsExportBar');
+    const lbl = document.getElementById('vsExportStage');
+    // progress 0–1 maps to 50–95% (first 50% is recording phase)
+    if (bar) bar.style.width = (50 + progress * 45) + '%';
+    if (lbl) lbl.textContent = `🎞️ Transcoding… ${Math.round(progress * 100)}%`;
+  });
+  await _vsFFmpeg.load({
+    coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
+  });
+  _vsFFmpegLoading = false;
+  return _vsFFmpeg;
+}
+
 /* ── export / record ────────────────────────────────── */
 function vsExport() {
   if (!VS.clips.length) return vsToast('📁 Add clips before exporting');
+  const codec     = document.getElementById('vsExportFormat')?.value || 'h264';
+  const crf       = document.getElementById('vsExportQuality')?.value || '23';
+  const resPref   = document.getElementById('vsExportRes')?.value || 'source';
+  _vsExportAsync(codec, crf, resPref);
+}
 
-  const qualityBps  = parseInt(document.getElementById('vsExportQuality')?.value || '8000000');
-  const formatPref  = document.getElementById('vsExportFormat')?.value || 'webm';
+async function _vsExportAsync(codec, crf, resPref) {
+  const progWrap  = document.getElementById('vsExportProgress');
+  const progLabel = document.getElementById('vsExportLabel');
+  const progBar   = document.getElementById('vsExportBar');
+  const progStage = document.getElementById('vsExportStage');
+  const exportBtn = document.getElementById('vsExportBtn');
 
-  vsToast('🎬 Rendering HD video… do not close this tab');
+  if (progWrap) progWrap.style.display = 'block';
+  if (progLabel) progLabel.textContent = '⏳ Recording canvas…';
+  if (progBar)   progBar.style.width = '0%';
+  if (progStage) progStage.textContent = 'Stage 1/2: Rendering video frames';
+  if (exportBtn) exportBtn.disabled = true;
+
   VS._exporting = true;
   vsStop();
   VS.currentTime = 0;
 
-  // Show progress bar
-  const progWrap  = document.getElementById('vsExportProgress');
-  const progLabel = document.getElementById('vsExportLabel');
-  const progBar   = document.getElementById('vsExportBar');
-  if (progWrap) progWrap.style.display = 'block';
-  if (progLabel) progLabel.textContent = '⏳ Rendering…';
-  if (progBar) progBar.style.width = '0%';
+  // ── Stage 1: Record canvas to WebM ───────────────────
+  const fps = 30;
+  const stream = VS.canvas.captureStream(fps);
 
-  // Choose codec
-  const mimeTypes = formatPref === 'mp4'
-    ? ['video/mp4;codecs=h264,aac','video/mp4']
-    : ['video/webm;codecs=vp9,opus','video/webm;codecs=vp9','video/webm;codecs=vp8,opus','video/webm'];
-  const mimeType = mimeTypes.find(t => { try { return MediaRecorder.isTypeSupported(t); } catch(_){ return false; } }) || 'video/webm';
-
-  const stream = VS.canvas.captureStream(30);
-
-  // ── Audio mix: video audio + background music ──
+  // Audio mix setup
   if (!VS.audioCtx) VS.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (VS.audioCtx.state === 'suspended') VS.audioCtx.resume();
+  if (VS.audioCtx.state === 'suspended') await VS.audioCtx.resume();
 
   const dest = VS.audioCtx.createMediaStreamDestination();
-
-  // Connect all video audio clips to export destination
   VS.clips.forEach(c => {
     if (c._vidEl && c._audioSrcNode) {
-      const exportGain = VS.audioCtx.createGain();
-      exportGain.gain.value = VS.audioTrack?.buffer ? 0.8 : 1.0;
-      c._audioSrcNode.connect(exportGain).connect(dest);
+      try {
+        const g = VS.audioCtx.createGain();
+        g.gain.value = VS.audioTrack?.buffer ? 0.8 : 1.0;
+        c._audioSrcNode.connect(g).connect(dest);
+      } catch(_) {}
     }
   });
-
-  // Background music
   let exportMusicSrc = null;
   if (VS.audioTrack?.buffer) {
     exportMusicSrc = VS.audioCtx.createBufferSource();
     exportMusicSrc.buffer = VS.audioTrack.buffer;
     exportMusicSrc.loop   = true;
-    const musicGain = VS.audioCtx.createGain();
-    musicGain.gain.value = parseFloat(document.getElementById('vsVolumeSlider')?.value || 0.5);
-    exportMusicSrc.connect(musicGain).connect(dest);
+    const mg = VS.audioCtx.createGain();
+    mg.gain.value = parseFloat(document.getElementById('vsVolumeSlider')?.value || 0.5);
+    exportMusicSrc.connect(mg).connect(dest);
     exportMusicSrc.start(0);
   }
-
-  // Add audio tracks to video stream
   dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
 
+  // Prefer VP9 for best quality WebM intermediate
+  const recMime = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp9','video/webm;codecs=vp8,opus','video/webm']
+    .find(t => { try { return MediaRecorder.isTypeSupported(t); } catch(_){ return false; } }) || 'video/webm';
+
   VS.recordedChunks = [];
-  VS.mediaRecorder   = new MediaRecorder(stream, {
-    mimeType,
-    videoBitsPerSecond: qualityBps,
-    audioBitsPerSecond: 192000,
+  VS.mediaRecorder = new MediaRecorder(stream, {
+    mimeType: recMime,
+    videoBitsPerSecond: 20_000_000,  // 20Mbps for high-quality intermediate
+    audioBitsPerSecond: 256_000,
   });
   VS.mediaRecorder.ondataavailable = e => { if (e.data.size > 0) VS.recordedChunks.push(e.data); };
-  VS.mediaRecorder.onstop = () => {
-    if (exportMusicSrc) try { exportMusicSrc.stop(); } catch(_){}
-    if (progBar) progBar.style.width = '100%';
-    if (progLabel) progLabel.textContent = '✅ Done! Downloading…';
-    setTimeout(() => { if (progWrap) progWrap.style.display = 'none'; }, 3000);
-    vsDownloadExport(mimeType);
-  };
-  VS.mediaRecorder.start(100);
 
-  // Play through at real-time for export
+  const recordingDone = new Promise(resolve => { VS.mediaRecorder.onstop = resolve; });
+  VS.mediaRecorder.start(100);
   vsPlay();
 
   const exportDur = VS.totalDuration * 1000 + 800;
   let elapsed = 0;
-  const tick = 500;
-  const progressInterval = setInterval(() => {
+  const tick = 300;
+  const recInterval = setInterval(() => {
     elapsed += tick;
-    const pct = Math.min(95, (elapsed / exportDur) * 100);
+    const pct = Math.min(48, (elapsed / exportDur) * 48);
     if (progBar) progBar.style.width = pct + '%';
-    if (progLabel) progLabel.textContent = `⏳ Rendering… ${Math.round(pct)}%`;
+    if (progLabel) progLabel.textContent = `⏳ Recording… ${Math.round((elapsed / exportDur) * 100)}%`;
   }, tick);
 
-  setTimeout(() => {
-    clearInterval(progressInterval);
-    vsStop();
-    VS.mediaRecorder.stop();
+  await new Promise(resolve => setTimeout(resolve, Math.min(exportDur, 120_000)));
+  clearInterval(recInterval);
+  vsStop();
+  VS.mediaRecorder.stop();
+  if (exportMusicSrc) try { exportMusicSrc.stop(); } catch(_) {}
+  await recordingDone;
+
+  if (progBar)   progBar.style.width = '50%';
+  if (progLabel) progLabel.textContent = '🔄 Transcoding to MP4…';
+
+  // ── Stage 2: WebM → MP4 via FFmpeg.wasm (if H.264 or H.265) ──
+  if (codec === 'webm') {
+    // No transcode needed — just download as WebM
     VS._exporting = false;
-  }, Math.min(exportDur, 120000)); // cap 2 min
+    if (exportBtn) exportBtn.disabled = false;
+    if (progBar) progBar.style.width = '100%';
+    if (progLabel) progLabel.textContent = '✅ Done!';
+    setTimeout(() => { if (progWrap) progWrap.style.display = 'none'; }, 3000);
+    _vsDirectDownload('video/webm', 'webm');
+    return;
+  }
+
+  // Transcode with FFmpeg.wasm
+  try {
+    if (progStage) progStage.textContent = 'Stage 2/2: Transcoding with FFmpeg.wasm…';
+    const ffmpeg = await _vsLoadFFmpeg();
+    const { fetchFile } = window.FFmpegUtil || {};
+
+    // Write WebM blob to FFmpeg virtual FS
+    const webmBlob = new Blob(VS.recordedChunks, { type: 'video/webm' });
+    const webmBuf  = await webmBlob.arrayBuffer();
+    await ffmpeg.writeFile('input.webm', new Uint8Array(webmBuf));
+
+    // Determine scale filter
+    let scaleFilter = '';
+    if (resPref === '1080') {
+      scaleFilter = VS.aspectRatio === '16:9' ? 'scale=1920:1080' : 'scale=1080:1920';
+    } else if (resPref === '720') {
+      scaleFilter = VS.aspectRatio === '16:9' ? 'scale=1280:720' : 'scale=720:1280';
+    } else if (resPref === '480') {
+      scaleFilter = VS.aspectRatio === '16:9' ? 'scale=854:480' : 'scale=480:854';
+    }
+
+    // Build FFmpeg command
+    let ffArgs;
+    if (codec === 'h265') {
+      // H.265 / HEVC
+      ffArgs = [
+        '-i', 'input.webm',
+        '-c:v', 'libx265',
+        '-crf', String(crf),
+        '-preset', 'medium',
+        '-tag:v', 'hvc1',   // Apple compat
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-movflags', '+faststart',
+      ];
+      if (scaleFilter) ffArgs.splice(2, 0, '-vf', scaleFilter);
+      ffArgs.push('output.mp4');
+    } else {
+      // H.264 / AVC (default)
+      ffArgs = [
+        '-i', 'input.webm',
+        '-c:v', 'libx264',
+        '-crf', String(crf),
+        '-preset', 'medium',
+        '-profile:v', 'high',
+        '-level', '4.2',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-movflags', '+faststart',
+      ];
+      if (scaleFilter) ffArgs.splice(2, 0, '-vf', scaleFilter);
+      ffArgs.push('output.mp4');
+    }
+
+    await ffmpeg.exec(ffArgs);
+
+    const mp4Data = await ffmpeg.readFile('output.mp4');
+    const mp4Blob = new Blob([mp4Data.buffer], { type: 'video/mp4' });
+    const mp4Url  = URL.createObjectURL(mp4Blob);
+    const codecLabel = codec === 'h265' ? 'HEVC-H265' : 'H264';
+    const a = document.createElement('a');
+    a.href = mp4Url;
+    a.download = `shashi-${codecLabel}-CRF${crf}-${Date.now()}.mp4`;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(mp4Url); }, 3000);
+
+    if (progBar) progBar.style.width = '100%';
+    if (progLabel) progLabel.textContent = `✅ MP4 (${codec === 'h265' ? 'H.265/HEVC' : 'H.264'}) downloaded!`;
+    vsToast(`✅ MP4 (${codec === 'h265' ? 'H.265 HEVC' : 'H.264'}) exported at CRF ${crf}!`);
+
+    // Cleanup
+    await ffmpeg.deleteFile('input.webm');
+    await ffmpeg.deleteFile('output.mp4');
+
+  } catch (err) {
+    console.error('FFmpeg transcode error:', err);
+    // Fallback: download raw WebM
+    if (progLabel) progLabel.textContent = '⚠️ Transcode failed — downloading WebM instead';
+    vsToast('⚠️ FFmpeg transcode failed — saving as WebM. ' + err.message);
+    _vsDirectDownload('video/webm', 'webm');
+  }
+
+  VS._exporting = false;
+  if (exportBtn) exportBtn.disabled = false;
+  setTimeout(() => { if (progWrap) progWrap.style.display = 'none'; }, 4000);
+}
+
+function _vsDirectDownload(mimeType, ext) {
+  const blob = new Blob(VS.recordedChunks, { type: mimeType });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = 'shashi-video-' + Date.now() + '.' + ext;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
 }
 
 function vsDownloadExport(mimeType) {
-  const ext  = (mimeType || 'video/webm').includes('mp4') ? 'mp4' : 'webm';
-  const blob = new Blob(VS.recordedChunks, { type: mimeType || 'video/webm' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = 'shashi-hd-video-' + Date.now() + '.' + ext;
-  document.body.appendChild(a); a.click();
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
-  vsToast('✅ HD Video downloaded!');
+  _vsDirectDownload(mimeType || 'video/webm', (mimeType||'').includes('mp4') ? 'mp4' : 'webm');
+  vsToast('✅ Video downloaded!');
 }
 
 /* ── split clip (future advanced) ──────────────────── */

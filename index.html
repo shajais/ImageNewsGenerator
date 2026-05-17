@@ -2882,35 +2882,45 @@
       <!-- Export info -->
       <div class="vs-section" style="margin-top:10px">⬇️ Export</div>
 
-      <label class="vs-label">Export Quality</label>
-      <select class="vs-select" id="vsExportQuality">
-        <option value="8000000">🏆 HD 1080p (High Quality — ~8Mbps)</option>
-        <option value="16000000">🚀 Full HD Max (Ultra — ~16Mbps)</option>
-        <option value="4000000">📱 720p (Medium — ~4Mbps)</option>
-        <option value="2000000">💾 Low (Small File — ~2Mbps)</option>
+      <label class="vs-label">Export Codec</label>
+      <select class="vs-select" id="vsExportFormat" onchange="vsUpdateExportBtn(this.value)">
+        <option value="h264">🏆 H.264 / AVC — MP4 (Universal, best compat.)</option>
+        <option value="h265">🚀 H.265 / HEVC — MP4 (Smaller size, high quality)</option>
+        <option value="webm">⚡ WebM VP9 (Fastest — no transcoding)</option>
       </select>
 
-      <label class="vs-label">Export Format</label>
-      <select class="vs-select" id="vsExportFormat">
-        <option value="webm">WebM (vp9 — best quality)</option>
-        <option value="mp4">MP4 (H.264 — widest compat.)</option>
+      <label class="vs-label">Quality (CRF — lower = better)</label>
+      <select class="vs-select" id="vsExportQuality">
+        <option value="18">🏆 CRF 18 — Visually Lossless</option>
+        <option value="23" selected>🎯 CRF 23 — High Quality (recommended)</option>
+        <option value="28">📱 CRF 28 — Balanced / Mobile</option>
+        <option value="35">💾 CRF 35 — Small File Size</option>
+      </select>
+
+      <label class="vs-label">Resolution</label>
+      <select class="vs-select" id="vsExportRes">
+        <option value="source">📐 Source Resolution (full canvas)</option>
+        <option value="1080">🖥️ 1080p (1920×1080 or 1080×1920)</option>
+        <option value="720">📱 720p</option>
+        <option value="480">💾 480p (smallest file)</option>
       </select>
 
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:7px 10px;background:rgba(139,92,246,.07);border-radius:8px;border:1px solid rgba(139,92,246,.15)">
         <input type="checkbox" id="vsWatermarkRemove" style="accent-color:#7c3aed;width:15px;height:15px" checked>
         <label for="vsWatermarkRemove" style="font-size:.75rem;color:#c4b5fd;cursor:pointer;font-weight:600">🚫 Remove watermarks from videos</label>
       </div>
-      <div style="font-size:.63rem;color:#64748b;margin-bottom:8px">Crops/blurs detected watermark areas during export</div>
 
-      <button class="vs-btn primary" onclick="vsExport()">🎬 Export HD Video</button>
+      <button class="vs-btn primary" onclick="vsExport()" id="vsExportBtn">🎬 Export MP4 (H.264)</button>
       <div id="vsExportProgress" style="display:none;margin-top:8px">
         <div style="font-size:.72rem;color:#a78bfa;margin-bottom:4px" id="vsExportLabel">⏳ Rendering…</div>
-        <div style="background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden;height:5px">
+        <div style="background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden;height:6px">
           <div id="vsExportBar" style="height:100%;background:linear-gradient(90deg,#7c3aed,#ec4899);width:0%;transition:width .3s"></div>
         </div>
+        <div id="vsExportStage" style="font-size:.65rem;color:#64748b;margin-top:3px"></div>
       </div>
-      <div style="font-size:.66rem;color:#64748b;margin-top:6px">
-        Exports at full canvas resolution. <a href="https://cloudconvert.com/webm-to-mp4" target="_blank" style="color:#7c3aed">Convert WebM→MP4</a> if needed.
+      <div style="font-size:.66rem;color:#64748b;margin-top:6px;line-height:1.5">
+        H.264/H.265 uses <b style="color:#a78bfa">FFmpeg.wasm</b> for in-browser transcoding.<br>
+        First export loads ~32MB WASM (cached after).
       </div>
 
       <div style="background:rgba(139,92,246,.07);border:1px solid rgba(139,92,246,.15);border-radius:8px;padding:10px;margin-top:10px;font-size:.68rem;color:#94a3b8;line-height:1.6">
@@ -2929,7 +2939,9 @@
   </div><!-- end vs-layout -->
 </div><!-- end videoStudioModal -->
 
-<script src="video-studio.js?v=20260517"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+<script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+<script src="video-studio.js?v=20260517b"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════
      🤖 AI SHORT-FORM VIDEO GENERATOR MODAL
