@@ -49,34 +49,67 @@ a{text-decoration:none;color:inherit}
 .disclaimer{margin:12px 24px;padding:8px 14px;border-radius:8px;background:rgba(255,200,0,.08);border:1px solid rgba(255,200,0,.25);color:#ffc800;font-size:.75rem}
 
 /* ── Top Picks Hero ── */
-.picks-hero{margin:16px 24px;padding:20px 24px;background:linear-gradient(135deg,rgba(0,212,255,.08),rgba(0,255,136,.05));border:2px solid rgba(0,212,255,.35);border-radius:16px;text-align:center}
-.picks-hero h2{font-size:1.3rem;background:linear-gradient(135deg,#00d4ff,#00ff88);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
-.picks-hero p{color:#a0a0a0;font-size:.85rem;margin-bottom:16px}
-.picks-big-btn{padding:12px 32px;border-radius:12px;border:none;cursor:pointer;background:linear-gradient(135deg,#00d4ff,#00ff88);color:#0f0f1e;font-weight:800;font-size:1rem;transition:all .2s;box-shadow:0 4px 20px rgba(0,212,255,.3)}
-.picks-big-btn:hover{transform:scale(1.04);box-shadow:0 6px 28px rgba(0,212,255,.45)}
-.picks-big-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
-.picks-loading{margin-top:14px;color:#00d4ff;font-style:italic;font-size:.9rem}
+.picks-hero{margin:16px 24px 0;padding:18px 24px;background:linear-gradient(135deg,rgba(0,212,255,.07),rgba(0,255,136,.04));border:2px solid rgba(0,212,255,.3);border-radius:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.picks-hero-left h2{font-size:1.2rem;background:linear-gradient(135deg,#00d4ff,#00ff88);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
+.picks-hero-left p{color:#a0a0a0;font-size:.8rem}
+.picks-refresh-btn{padding:10px 22px;border-radius:10px;border:none;cursor:pointer;background:linear-gradient(135deg,#00d4ff,#00ff88);color:#0f0f1e;font-weight:800;font-size:.9rem;transition:all .2s;box-shadow:0 4px 16px rgba(0,212,255,.3);white-space:nowrap}
+.picks-refresh-btn:hover{transform:scale(1.04);box-shadow:0 6px 24px rgba(0,212,255,.45)}
+.picks-refresh-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
 
-/* ── Picks cards grid ── */
-.picks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin:16px 24px}
-.pick-card{background:rgba(26,26,46,.7);border:1.5px solid rgba(0,212,255,.25);border-radius:14px;overflow:hidden;transition:all .25s;position:relative}
-.pick-card:hover{border-color:#00d4ff;box-shadow:0 0 24px rgba(0,212,255,.15);transform:translateY(-3px)}
-.pick-rank{position:absolute;top:10px;right:12px;font-size:.75rem;color:#888;font-weight:700}
-.pick-header{padding:14px 16px 10px;border-bottom:1px solid rgba(0,212,255,.12)}
-.pick-symbol{font-size:1.15rem;font-weight:800;color:#00d4ff}
-.pick-name{font-size:.75rem;color:#a0a0a0;margin-top:2px}
-.pick-badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:.72rem;font-weight:700;margin-top:6px;background:rgba(0,255,136,.18);color:#00ff88;border:1px solid #00ff88}
-.pick-badge.sell{background:rgba(255,50,50,.18);color:#ff3232;border-color:#ff3232}
-.pick-badge.hold{background:rgba(255,200,0,.18);color:#ffc800;border-color:#ffc800}
-.pick-body{padding:12px 16px;display:flex;flex-direction:column;gap:6px}
-.pick-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)}
-.pick-lbl{font-size:.75rem;color:#888}
-.pick-val{font-size:.8rem;font-weight:600;color:#e0e0e0}
-.pick-val.green{color:#00ff88}
-.pick-val.red{color:#ff3232}
-.pick-val.cyan{color:#00d4ff}
-.pick-return{margin-top:6px;padding:6px 10px;border-radius:8px;background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.2);font-size:.78rem;color:#00ff88;text-align:center;font-weight:600}
-.pick-reason{margin-top:6px;font-size:.73rem;color:#a0a0a0;line-height:1.5;padding:6px 8px;background:rgba(255,255,255,.03);border-radius:6px}
+/* ── Style Filter ── */
+.style-filter-bar{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;padding:16px 24px 0}
+.style-filter-btn{padding:8px 20px;border-radius:8px;border:1px solid rgba(0,212,255,.3);background:transparent;color:#a0a0a0;cursor:pointer;font-size:.85rem;transition:all .2s}
+.style-filter-btn:hover{border-color:#00ff88;color:#00ff88}
+.style-filter-btn.active{border-color:#00ff88;background:rgba(0,255,136,.15);color:#00ff88;font-weight:700}
+
+/* ── Setup legend ── */
+.setup-legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:16px 24px 0;padding:16px;background:rgba(26,26,46,.5);border:1px solid rgba(0,212,255,.15);border-radius:12px}
+.legend-item{display:flex;align-items:flex-start;gap:10px;padding:10px;border-radius:8px}
+.legend-item.breakout{border-left:3px solid #00ff88}
+.legend-item.breakdown{border-left:3px solid #ff3232}
+.legend-item.reversal{border-left:3px solid #ffc800}
+.legend-item.trend-reversal{border-left:3px solid #ff69b4}
+.legend-icon{font-size:1.4rem;flex-shrink:0}
+.legend-content h4{font-size:.8rem;font-weight:700;color:#e0e0e0;margin-bottom:3px}
+.legend-content p{font-size:.72rem;color:#888;line-height:1.4}
+
+/* ── Momentum section ── */
+.high-momentum-section{margin:16px 24px 0;padding:20px;background:rgba(26,26,46,.4);border:1px solid rgba(0,212,255,.2);border-radius:14px}
+.momentum-section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.momentum-section-header h3{margin:0;font-size:1rem;color:#00d4ff}
+.momentum-section-sub{color:#a0a0a0;font-size:.8rem;margin-bottom:16px}
+.momentum-cards-container{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
+.momentum-loading{text-align:center;color:#a0a0a0;padding:40px;font-style:italic}
+
+/* ── Momentum card (matches StockTrading exactly) ── */
+.momentum-card{background:linear-gradient(135deg,rgba(0,212,255,.1),rgba(0,255,136,.05));border:2px solid #00d4ff;border-radius:10px;padding:1.5rem;cursor:default;transition:all .3s;box-shadow:0 4px 15px rgba(0,212,255,.15)}
+.momentum-card:hover{transform:translateY(-8px);background:linear-gradient(135deg,rgba(0,212,255,.15),rgba(0,255,136,.1));box-shadow:0 8px 25px rgba(0,212,255,.25);border-color:#00ff88}
+.momentum-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;border-bottom:1px solid rgba(0,212,255,.2);padding-bottom:.75rem}
+.momentum-card-symbol{font-size:1.4rem;font-weight:700;background:linear-gradient(135deg,#00d4ff,#00ff88);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.momentum-card-name{font-size:.75rem;color:#a0a0a0;margin-top:2px}
+.momentum-card-right{text-align:right}
+.momentum-card-price{font-size:1.1rem;font-weight:600;color:#00ff88}
+.momentum-card-change{font-size:.85rem;font-weight:600;padding:.25rem .75rem;border-radius:20px;background:rgba(0,255,136,.2);color:#00ff88;display:inline-block;margin-top:4px}
+.momentum-card-change.negative{background:rgba(255,68,68,.2);color:#ff8888}
+.momentum-card-body{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem;font-size:.9rem}
+.momentum-card-stat{display:flex;flex-direction:column}
+.momentum-card-stat-label{color:#a0a0a0;font-size:.78rem;font-weight:500;margin-bottom:.25rem;text-transform:uppercase;letter-spacing:.5px}
+.momentum-card-stat-value{color:#00d4ff;font-weight:600;font-size:.95rem}
+.momentum-card-stat-value.green{color:#00ff88}
+.momentum-card-stat-value.red{color:#ff4444}
+.momentum-badge{display:inline-block;padding:.25rem .75rem;border-radius:20px;font-size:.75rem;font-weight:700;text-transform:uppercase;margin-bottom:.75rem}
+.momentum-badge.breakout{background:rgba(0,255,136,.2);color:#00ff88;border:1px solid #00ff88}
+.momentum-badge.breakdown{background:rgba(255,50,50,.2);color:#ff4444;border:1px solid #ff4444}
+.momentum-badge.reversal{background:rgba(255,200,0,.2);color:#ffc800;border:1px solid #ffc800}
+.momentum-badge.trend-reversal{background:rgba(255,105,180,.2);color:#ff69b4;border:1px solid #ff69b4}
+.momentum-badge.buy{background:rgba(0,255,136,.2);color:#00ff88;border:1px solid #00ff88}
+.momentum-badge.sell{background:rgba(255,50,50,.2);color:#ff4444;border:1px solid #ff4444}
+.momentum-card-reason{font-size:.75rem;color:#a0a0a0;line-height:1.5;padding:.6rem .5rem;background:rgba(255,255,255,.03);border-radius:6px;margin-top:.5rem}
+.momentum-card-footer{display:flex;gap:.75rem;margin-top:1rem;padding-top:1rem;border-top:1px solid rgba(0,212,255,.2)}
+.momentum-card-btn{flex:1;padding:.65rem 1rem;border:1px solid #00d4ff;background:rgba(0,212,255,.1);color:#00d4ff;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600;transition:all .2s}
+.momentum-card-btn:hover{background:#00d4ff;color:#0f0f1e}
+.rank-badge{font-size:.72rem;color:#888;font-weight:700;text-align:right}
+
 .picks-error{margin:12px 24px;padding:12px 16px;border-radius:8px;background:rgba(255,50,50,.08);border:1px solid rgba(255,50,50,.3);color:#ff6060;font-size:.85rem;display:none}
 
 /* ── Tool cards grid ── */
@@ -180,15 +213,46 @@ a{text-decoration:none;color:inherit}
 <!-- ── Disclaimer ── -->
 <div class="disclaimer">⚠️ For educational purposes only. Not financial advice. Always do your own research before investing.</div>
 
-<!-- ── TOP 10 PICKS HERO ── -->
+<!-- ── TOP PICKS HEADER ── -->
 <div class="picks-hero">
-  <h2>🏆 AI Top 10 Best Picks</h2>
-  <p id="picksDesc">Just select your market, risk & horizon above — then hit the button. The AI will identify the 10 best opportunities and give you complete Entry, Exit & Stop-Loss for each.</p>
-  <button class="picks-big-btn" id="picksBtn" onclick="runTopPicks()">🚀 Find Top 10 Picks for <span id="picksMktLabel">NSE</span></button>
-  <div class="picks-loading" id="picksLoading" style="display:none">⏳ Scanning market with Gemini AI… this may take 10–20 seconds…</div>
+  <div class="picks-hero-left">
+    <h2 id="picksTitle">🏆 Top 10 High-Potential Picks — NSE 🇮🇳</h2>
+    <p id="picksSubtitle">AI-powered momentum scan · Swing · Moderate risk · Auto-updated on market change</p>
+  </div>
+  <button class="picks-refresh-btn" id="picksRefreshBtn" onclick="runTopPicks()">🔄 Refresh Picks</button>
 </div>
+
+<!-- ── Trading Style Filter ── -->
+<div class="style-filter-bar">
+  <button class="style-filter-btn active" id="styleBtn-swing" onclick="switchStyle('swing')">🌊 Swing Trading</button>
+  <button class="style-filter-btn" id="styleBtn-intraday" onclick="switchStyle('intraday')">⚡ Intraday</button>
+  <button class="style-filter-btn" id="styleBtn-positional" onclick="switchStyle('positional')">📅 Positional</button>
+  <button class="style-filter-btn" id="styleBtn-longterm" onclick="switchStyle('longterm')">🏔 Long-term</button>
+</div>
+
+<!-- ── Setup Legend ── -->
+<div class="setup-legend">
+  <div class="legend-item breakout"><div class="legend-icon">🚀</div><div class="legend-content"><h4>BREAKOUT</h4><p>Breaking above resistance with volume. High reward potential.</p></div></div>
+  <div class="legend-item breakdown"><div class="legend-icon">📉</div><div class="legend-content"><h4>BREAKDOWN</h4><p>Breaking below support. Potential for larger downside move.</p></div></div>
+  <div class="legend-item reversal"><div class="legend-icon">🔄</div><div class="legend-content"><h4>REVERSAL</h4><p>Bouncing from support. Good for mean-reversion trades.</p></div></div>
+  <div class="legend-item trend-reversal"><div class="legend-icon">⚠️</div><div class="legend-content"><h4>TREND REVERSAL</h4><p>Major direction change. High risk/reward opportunity.</p></div></div>
+</div>
+
+<!-- ── Picks Error ── -->
 <div class="picks-error" id="picksError"></div>
-<div class="picks-grid" id="picksGrid"></div>
+
+<!-- ── Momentum Cards Section ── -->
+<div class="high-momentum-section" id="picksSection">
+  <div class="momentum-section-header">
+    <h3 id="picksSectionTitle">🌊 Swing Trading Picks (7–15 Days)</h3>
+  </div>
+  <p class="momentum-section-sub" id="picksSectionSub">High momentum stocks optimized for swing trading with 7–15 day holding periods</p>
+  <div class="momentum-cards-container" id="picksGrid">
+    <div class="momentum-loading">⏳ Enter your Gemini API key above, then picks will load automatically…</div>
+  </div>
+</div>
+
+<!-- ── Tool Cards ── -->
 
 <!-- ── Tool Cards ── -->
 <div class="tools-grid" id="toolsGrid">
@@ -331,6 +395,7 @@ window.onload = () => {
   if (k) document.getElementById('apiKey').value = k;
   document.getElementById('apiKey').addEventListener('change', e => {
     localStorage.setItem('ghp_gemini_key', e.target.value.trim());
+    runTopPicks();
   });
 
   // Restore market tab
@@ -342,7 +407,8 @@ window.onload = () => {
   restorePill('riskPills', currentRisk);
   restorePill('horizonPills', currentHorizon);
   renderSectors();
-  document.getElementById('picksMktLabel').textContent = currentMarket;
+  document.getElementById('picksMktLabel') && (document.getElementById('picksMktLabel').textContent = currentMarket);
+  runTopPicks();
 };
 
 function restorePill(groupId, val) {
@@ -359,7 +425,8 @@ function setMarket(el) {
   localStorage.setItem('sm_market', currentMarket);
   currentSector = '';
   renderSectors();
-  document.getElementById('picksMktLabel').textContent = el.dataset.mkt;
+  document.getElementById('picksMktLabel') && (document.getElementById('picksMktLabel').textContent = currentMarket);
+  runTopPicks();
 }
 
 function renderSectors() {
@@ -808,6 +875,131 @@ function renderPickCards(picks, currency) {
   }).join('');
   // Scroll to grid
   grid.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// ── Trading style ──
+let currentStyle = 'swing';
+const STYLE_META = {
+  swing:      { label:'🌊 Swing Trading Picks (7–15 Days)',      sub:'High momentum stocks optimized for swing trading with 7–15 day holding periods',   horizon:'7-15 days' },
+  intraday:   { label:'⚡ Intraday Trading Picks (15min–2hr)',   sub:'High momentum stocks for quick intraday scalping (15 minutes to 2 hours)',          horizon:'Same day' },
+  positional: { label:'📅 Positional Picks (1–3 Months)',        sub:'Strong fundamental + technical setups for 1–3 month holding period',               horizon:'1-3 months' },
+  longterm:   { label:'🏔 Long-term Investment Picks (1+ Year)', sub:'Quality stocks with strong business moat for long-term wealth creation (1+ year)', horizon:'1+ year' }
+};
+
+function switchStyle(style) {
+  currentStyle = style;
+  document.querySelectorAll('.style-filter-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('styleBtn-' + style);
+  if (btn) btn.classList.add('active');
+  runTopPicks();
+}
+
+async function runTopPicks() {
+  const btn    = document.getElementById('picksRefreshBtn');
+  const grid   = document.getElementById('picksGrid');
+  const errEl  = document.getElementById('picksError');
+  const meta   = STYLE_META[currentStyle] || STYLE_META.swing;
+  const mkt    = MARKETS[currentMarket];
+  const isCrypto = currentMarket === 'CRYPTO';
+  const isForex  = currentMarket === 'FOREX';
+  const assetWord = isCrypto ? 'cryptocurrencies' : isForex ? 'currency pairs' : 'stocks';
+
+  // Update labels
+  const mktEmoji = {NSE:'🇮🇳',BSE:'🇮🇳',NEPSE:'🇳🇵',NYSE:'🇺🇸',NASDAQ:'🇺🇸',CRYPTO:'₿',FOREX:'💱'}[currentMarket]||'';
+  document.getElementById('picksTitle').textContent = `🏆 Top 10 High-Potential Picks — ${currentMarket} ${mktEmoji}`;
+  document.getElementById('picksSubtitle').textContent = `AI-powered momentum scan · ${currentStyle} · ${currentRisk} risk · ${mkt.label}`;
+  document.getElementById('picksSectionTitle').textContent = meta.label;
+  document.getElementById('picksSectionSub').textContent = meta.sub;
+
+  if (!getApiKey()) {
+    grid.innerHTML = '<div class="momentum-loading">🔑 Please enter your Gemini API key above to load picks.</div>';
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  grid.innerHTML = `<div class="momentum-loading">⏳ AI is scanning ${mkt.label} for top ${assetWord}… please wait 10–20 seconds…</div>`;
+  errEl.style.display = 'none';
+
+  const prompt = `You are a world-class ${mkt.label} market analyst. Identify the TOP 10 best ${assetWord} in ${mkt.label} with HIGHEST POSSIBLE RETURNS for a ${currentRisk} risk trader with ${meta.horizon} horizon (${currentStyle} style).
+
+Use your complete training knowledge. Do NOT refuse or say you lack real-time data. Provide your best expert assessment based on known fundamentals, technicals, and market dynamics.
+
+Return EXACTLY a JSON array of 10 objects. Output ONLY the JSON array — no markdown, no explanation, no code fences:
+
+[{"rank":1,"symbol":"SYMBOL","name":"Full Name","sector":"Sector","setupType":"BREAKOUT","signal":"BUY","currentPrice":"2450","entry":"2420-2460","target1":"2650","target2":"2850","stoploss":"2280","upside":"16%","rsi":"58","volume":"Above avg","confidence":"88%","reason":"2-sentence catalyst and technical setup explanation."}]
+
+Rules:
+- setupType: BREAKOUT, BREAKDOWN, REVERSAL, or TREND REVERSAL
+- signal: BUY, SELL, or HOLD
+- All prices in ${mkt.currency || '$'}
+- Diversify across sectors: ${mkt.sectors?.slice(0,5).join(', ')}
+- Rank 1 = highest conviction
+- upside = % gain from entry to target2
+${currentSector ? '- Focus on ' + currentSector + ' sector.' : ''}`;
+
+  try {
+    const raw = await callGemini(prompt);
+    let jsonStr = (raw.match(/\[[\s\S]*?\]/) || raw.match(/\[[\s\S]*/))?.[0] || '';
+    if (!jsonStr) throw new Error('Could not parse AI response. Please try again.');
+    if (!jsonStr.trim().endsWith(']')) jsonStr = jsonStr + ']';
+    const picks = JSON.parse(jsonStr);
+    if (!Array.isArray(picks) || picks.length === 0) throw new Error('No picks returned. Please try again.');
+    renderMomentumCards(picks, mkt.currency || '$');
+  } catch(e) {
+    errEl.textContent = '❌ ' + (e.message || 'Failed. Check API key and try again.');
+    errEl.style.display = 'block';
+    grid.innerHTML = '';
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function renderMomentumCards(picks, currency) {
+  const grid = document.getElementById('picksGrid');
+  const setupColors = {'BREAKOUT':'breakout','BREAKDOWN':'breakdown','REVERSAL':'reversal','TREND REVERSAL':'trend-reversal'};
+  grid.innerHTML = picks.map(p => {
+    const setup = (p.setupType||'BREAKOUT').toUpperCase();
+    const setupClass = setupColors[setup] || 'breakout';
+    const signal = (p.signal||'BUY').toUpperCase();
+    const sigClass = signal==='BUY'?'buy':signal==='SELL'?'sell':'hold';
+    const sigIcon = signal==='BUY'?'🟢':signal==='SELL'?'🔴':'🟡';
+    return `<div class="momentum-card">
+  <div class="momentum-card-header">
+    <div>
+      <div class="rank-badge">#${p.rank}</div>
+      <div class="momentum-card-symbol">${p.symbol}</div>
+      <div class="momentum-card-name">${p.name} · ${p.sector||''}</div>
+    </div>
+    <div class="momentum-card-right">
+      <div class="momentum-card-price">${currency}${p.currentPrice||'—'}</div>
+      <div class="momentum-card-change">📈 ${p.upside||'—'}</div>
+    </div>
+  </div>
+  <span class="momentum-badge ${setupClass}">${setup}</span>
+  <span class="momentum-badge ${sigClass}" style="margin-left:6px">${sigIcon} ${signal}</span>
+  <div class="momentum-card-body">
+    <div class="momentum-card-stat"><span class="momentum-card-stat-label">📥 Entry</span><span class="momentum-card-stat-value">${currency}${p.entry}</span></div>
+    <div class="momentum-card-stat"><span class="momentum-card-stat-label">🛡 Stop-Loss</span><span class="momentum-card-stat-value red">${currency}${p.stoploss}</span></div>
+    <div class="momentum-card-stat"><span class="momentum-card-stat-label">🎯 Target 1</span><span class="momentum-card-stat-value green">${currency}${p.target1}</span></div>
+    <div class="momentum-card-stat"><span class="momentum-card-stat-label">🎯 Target 2</span><span class="momentum-card-stat-value green">${currency}${p.target2}</span></div>
+    <div class="momentum-card-stat"><span class="momentum-card-stat-label">📊 RSI</span><span class="momentum-card-stat-value">${p.rsi||'—'}</span></div>
+    <div class="momentum-card-stat"><span class="momentum-card-stat-label">🎰 Confidence</span><span class="momentum-card-stat-value">${p.confidence||'—'}</span></div>
+  </div>
+  <div class="momentum-card-reason">💡 ${p.reason||''}</div>
+  <div class="momentum-card-footer">
+    <button class="momentum-card-btn" onclick="prefillAndAnalyze('${p.symbol}','${(p.currentPrice||'').replace(/'/g,'')}')">🔬 Deep Analysis</button>
+    <button class="momentum-card-btn" onclick="navigator.clipboard?.writeText('${p.symbol} | Entry: ${currency}${p.entry} | T1: ${currency}${p.target1} | T2: ${currency}${p.target2} | SL: ${currency}${p.stoploss}').then(()=>alert('Copied!'))">📋 Copy</button>
+  </div>
+</div>`;
+  }).join('');
+  document.getElementById('picksSection').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function prefillAndAnalyze(sym, price) {
+  document.getElementById('stk_sym').value = sym;
+  if (price) document.getElementById('stk_price').value = price.replace(/[^\d.]/g,'');
+  document.querySelector('.tools-grid').scrollIntoView({behavior:'smooth'});
+  setTimeout(()=>smRun('stk'), 400);
 }
 
 // ── Run dispatcher ──
