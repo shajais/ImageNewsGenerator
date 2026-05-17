@@ -48,6 +48,37 @@ a{text-decoration:none;color:inherit}
 /* Disclaimer */
 .disclaimer{margin:12px 24px;padding:8px 14px;border-radius:8px;background:rgba(255,200,0,.08);border:1px solid rgba(255,200,0,.25);color:#ffc800;font-size:.75rem}
 
+/* ── Top Picks Hero ── */
+.picks-hero{margin:16px 24px;padding:20px 24px;background:linear-gradient(135deg,rgba(0,212,255,.08),rgba(0,255,136,.05));border:2px solid rgba(0,212,255,.35);border-radius:16px;text-align:center}
+.picks-hero h2{font-size:1.3rem;background:linear-gradient(135deg,#00d4ff,#00ff88);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
+.picks-hero p{color:#a0a0a0;font-size:.85rem;margin-bottom:16px}
+.picks-big-btn{padding:12px 32px;border-radius:12px;border:none;cursor:pointer;background:linear-gradient(135deg,#00d4ff,#00ff88);color:#0f0f1e;font-weight:800;font-size:1rem;transition:all .2s;box-shadow:0 4px 20px rgba(0,212,255,.3)}
+.picks-big-btn:hover{transform:scale(1.04);box-shadow:0 6px 28px rgba(0,212,255,.45)}
+.picks-big-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.picks-loading{margin-top:14px;color:#00d4ff;font-style:italic;font-size:.9rem}
+
+/* ── Picks cards grid ── */
+.picks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin:16px 24px}
+.pick-card{background:rgba(26,26,46,.7);border:1.5px solid rgba(0,212,255,.25);border-radius:14px;overflow:hidden;transition:all .25s;position:relative}
+.pick-card:hover{border-color:#00d4ff;box-shadow:0 0 24px rgba(0,212,255,.15);transform:translateY(-3px)}
+.pick-rank{position:absolute;top:10px;right:12px;font-size:.75rem;color:#888;font-weight:700}
+.pick-header{padding:14px 16px 10px;border-bottom:1px solid rgba(0,212,255,.12)}
+.pick-symbol{font-size:1.15rem;font-weight:800;color:#00d4ff}
+.pick-name{font-size:.75rem;color:#a0a0a0;margin-top:2px}
+.pick-badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:.72rem;font-weight:700;margin-top:6px;background:rgba(0,255,136,.18);color:#00ff88;border:1px solid #00ff88}
+.pick-badge.sell{background:rgba(255,50,50,.18);color:#ff3232;border-color:#ff3232}
+.pick-badge.hold{background:rgba(255,200,0,.18);color:#ffc800;border-color:#ffc800}
+.pick-body{padding:12px 16px;display:flex;flex-direction:column;gap:6px}
+.pick-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.pick-lbl{font-size:.75rem;color:#888}
+.pick-val{font-size:.8rem;font-weight:600;color:#e0e0e0}
+.pick-val.green{color:#00ff88}
+.pick-val.red{color:#ff3232}
+.pick-val.cyan{color:#00d4ff}
+.pick-return{margin-top:6px;padding:6px 10px;border-radius:8px;background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.2);font-size:.78rem;color:#00ff88;text-align:center;font-weight:600}
+.pick-reason{margin-top:6px;font-size:.73rem;color:#a0a0a0;line-height:1.5;padding:6px 8px;background:rgba(255,255,255,.03);border-radius:6px}
+.picks-error{margin:12px 24px;padding:12px 16px;border-radius:8px;background:rgba(255,50,50,.08);border:1px solid rgba(255,50,50,.3);color:#ff6060;font-size:.85rem;display:none}
+
 /* ── Tool cards grid ── */
 .tools-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:20px;padding:20px 24px}
 .tool-card{background:rgba(26,26,46,.5);border:1px solid rgba(0,212,255,.2);border-radius:14px;overflow:hidden;transition:all .25s}
@@ -149,6 +180,16 @@ a{text-decoration:none;color:inherit}
 <!-- ── Disclaimer ── -->
 <div class="disclaimer">⚠️ For educational purposes only. Not financial advice. Always do your own research before investing.</div>
 
+<!-- ── TOP 10 PICKS HERO ── -->
+<div class="picks-hero">
+  <h2>🏆 AI Top 10 Best Picks</h2>
+  <p id="picksDesc">Just select your market, risk & horizon above — then hit the button. The AI will identify the 10 best opportunities and give you complete Entry, Exit & Stop-Loss for each.</p>
+  <button class="picks-big-btn" id="picksBtn" onclick="runTopPicks()">🚀 Find Top 10 Picks for <span id="picksMktLabel">NSE</span></button>
+  <div class="picks-loading" id="picksLoading" style="display:none">⏳ Scanning market with Gemini AI… this may take 10–20 seconds…</div>
+</div>
+<div class="picks-error" id="picksError"></div>
+<div class="picks-grid" id="picksGrid"></div>
+
 <!-- ── Tool Cards ── -->
 <div class="tools-grid" id="toolsGrid">
 
@@ -160,8 +201,15 @@ a{text-decoration:none;color:inherit}
     </div>
     <div class="card-body">
       <input class="tool-input" id="stk_sym" placeholder="Stock symbol or name (e.g. RELIANCE, TCS, AAPL)"/>
-      <button class="run-btn" onclick="smRun('stk')">🔬 Analyze Stock</button>
+      <input class="tool-input" id="stk_price" placeholder="Current price (optional, e.g. 2850)" style="margin-top:6px"/>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+        <button class="run-btn" onclick="smRun('stk')">🔬 Full Analysis</button>
+        <button class="run-btn" style="background:linear-gradient(135deg,#00d4ff,#0080ff)" onclick="smRun('tech')">📊 Technical Only</button>
+        <button class="run-btn" style="background:linear-gradient(135deg,#00ff88,#00b060)" onclick="smRun('fund')">📈 Fundamental Only</button>
+      </div>
       <div class="result-box" id="stk_res"></div>
+      <div class="result-box" id="tech_res"></div>
+      <div class="result-box" id="fund_res"></div>
     </div>
   </div>
 
@@ -294,6 +342,7 @@ window.onload = () => {
   restorePill('riskPills', currentRisk);
   restorePill('horizonPills', currentHorizon);
   renderSectors();
+  document.getElementById('picksMktLabel').textContent = currentMarket;
 };
 
 function restorePill(groupId, val) {
@@ -310,6 +359,7 @@ function setMarket(el) {
   localStorage.setItem('sm_market', currentMarket);
   currentSector = '';
   renderSectors();
+  document.getElementById('picksMktLabel').textContent = el.dataset.mkt;
 }
 
 function renderSectors() {
@@ -371,18 +421,160 @@ function showResult(id, text, isError) {
 const PROMPTS = {
   stk: () => {
     const sym = document.getElementById('stk_sym').value.trim();
+    const price = document.getElementById('stk_price').value.trim();
     if (!sym) throw new Error('Please enter a stock symbol.');
-    return `You are an expert ${getMarket()} stock analyst. Provide a comprehensive analysis of ${sym} for a ${getRisk()} risk ${getHorizon()} trader.
+    return `You are a senior ${getMarket()} equity analyst with deep expertise in both technical and fundamental analysis. Analyze ${sym}${price ? ` (current price: ${getCurrency()}${price})` : ''} for a ${getRisk()} risk ${getHorizon()} trader. Use your training data to provide the most recent known information. Do NOT say you cannot provide analysis — give your best assessment with available knowledge.
 
-Structure your analysis as:
-1. 📊 TECHNICAL ANALYSIS — Current trend, key support/resistance levels, RSI/MACD/Volume signals, chart patterns
-2. 📈 FUNDAMENTAL OVERVIEW — Key financials (P/E, EPS, revenue growth, debt), sector comparison  
-3. 🎯 TRADE RECOMMENDATION — BUY / SELL / HOLD with confidence %
-4. 📐 TRADE PLAN — Entry zone, Target 1, Target 2, Stop-Loss (in ${getCurrency()})
-5. ⚠️ KEY RISKS — 3 main risks to monitor
-6. 🗓️ TIMEFRAME — Expected move timeline for ${getHorizon()} horizon
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 SECTION 1: TECHNICAL ANALYSIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Trend: (Primary trend — Uptrend/Downtrend/Sideways, with timeframe)
+• Moving Averages: (50 DMA vs 200 DMA position, Golden/Death cross status)
+• RSI (14): (value estimate and interpretation — overbought/oversold/neutral)
+• MACD: (Signal — bullish crossover / bearish crossover / divergence)
+• Volume: (Recent volume trend vs average — accumulation or distribution)
+• Support Levels: (2 key support zones in ${getCurrency()})
+• Resistance Levels: (2 key resistance zones in ${getCurrency()})
+• Chart Pattern: (Any visible pattern — flag, cup, wedge, breakout, consolidation)
+• Momentum: (Bullish / Bearish / Neutral with reasoning)
 
-Use ${getCurrency()} for all price references. Current context: ${getMarket()} market, ${getSector()} sector focus.`;
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📈 SECTION 2: FUNDAMENTAL ANALYSIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• P/E Ratio: (vs industry average — expensive/fair/cheap)
+• EPS: (Earnings Per Share — growth trend YoY)
+• Revenue Growth: (YoY % — accelerating/decelerating)
+• Net Profit Margin: (% and trend)
+• Debt-to-Equity: (ratio and risk level)
+• ROE / ROCE: (Return metrics vs sector)
+• Promoter Holding: (% and any recent changes — for Indian stocks)
+• FII/DII Activity: (recent buying/selling trend)
+• Dividend Yield: (if applicable)
+• Valuation Verdict: (Overvalued / Fairly Valued / Undervalued)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 SECTION 3: TRADE RECOMMENDATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Signal: BUY / SELL / HOLD / ACCUMULATE / AVOID
+• Confidence: X% (Technical: X% | Fundamental: X%)
+• Entry Zone: ${getCurrency()}___  to  ${getCurrency()}___
+• Target 1: ${getCurrency()}___  (+__%)
+• Target 2: ${getCurrency()}___  (+__%)
+• Stop-Loss: ${getCurrency()}___  (-__%)
+• Horizon: ${getHorizon()} | Risk: ${getRisk()}
+
+⚠️ KEY RISKS: List 3 specific risks for this stock right now.
+Market context: ${getMarket()}, ${getSector()} sector.`;
+  },
+
+  tech: () => {
+    const sym = document.getElementById('stk_sym').value.trim();
+    const price = document.getElementById('stk_price').value.trim();
+    if (!sym) throw new Error('Please enter a stock symbol.');
+    return `You are a professional technical analyst specializing in ${getMarket()} stocks. Perform a deep technical analysis of ${sym}${price ? ` (current price: ${getCurrency()}${price})` : ''}. Use your training knowledge — do NOT refuse or say you lack real-time data. Give your best analysis.
+
+DEEP TECHNICAL ANALYSIS — ${sym} on ${getMarket()}
+═══════════════════════════════════
+
+1. TREND STRUCTURE
+   • Primary Trend (Weekly): Uptrend / Downtrend / Sideways
+   • Secondary Trend (Daily): 
+   • Price vs 20/50/200 DMA: (above/below each)
+   • EMA Ribbon Status: (bullish stack / bearish stack / mixed)
+
+2. MOMENTUM INDICATORS
+   • RSI (14-day): value ~___ → (Overbought >70 / Oversold <30 / Neutral)
+   • RSI Divergence: (any bullish/bearish divergence)
+   • MACD (12,26,9): Signal line cross status, histogram trend
+   • Stochastic: (K/D values, overbought/oversold)
+   • ADX: (trend strength — strong >25, weak <20)
+
+3. VOLUME ANALYSIS
+   • Volume trend: (rising/falling vs 20-day avg)
+   • OBV (On Balance Volume): (confirming or diverging from price)
+   • Volume on up days vs down days
+   • Any unusual volume spikes (accumulation/distribution signal)
+
+4. SUPPORT & RESISTANCE MAP
+   • Strong Support 1: ${getCurrency()}___  (reason)
+   • Strong Support 2: ${getCurrency()}___  (reason)
+   • Key Resistance 1: ${getCurrency()}___  (reason)
+   • Key Resistance 2: ${getCurrency()}___  (reason)
+   • Pivot Point (approx): ${getCurrency()}___
+
+5. CHART PATTERNS
+   • Current Pattern: (name and stage — forming/breakout/failed)
+   • Pattern Target: ${getCurrency()}___
+   • Breakout Level to watch: ${getCurrency()}___
+   • Breakdown Risk Level: ${getCurrency()}___
+
+6. CANDLESTICK SIGNALS
+   • Recent significant candle patterns (Doji, Engulfing, Hammer etc.)
+
+7. TECHNICAL VERDICT
+   • Overall Technical Score: ___/10
+   • Signal: STRONG BUY / BUY / NEUTRAL / SELL / STRONG SELL
+   • For ${getHorizon()} ${getRisk()} trader:
+     Entry: ${getCurrency()}___  | Target: ${getCurrency()}___  | SL: ${getCurrency()}___`;
+  },
+
+  fund: () => {
+    const sym = document.getElementById('stk_sym').value.trim();
+    if (!sym) throw new Error('Please enter a stock symbol.');
+    return `You are a CFA-level fundamental analyst specializing in ${getMarket()} equities. Provide a thorough fundamental analysis of ${sym}. Use your training knowledge — give actual known numbers and estimates. Do NOT say you cannot provide this.
+
+FUNDAMENTAL ANALYSIS REPORT — ${sym}
+═══════════════════════════════════
+
+1. BUSINESS OVERVIEW
+   • Sector & Industry: 
+   • Core Business Model:
+   • Key Revenue Segments:
+   • Market Position: (market share, moat, competitive edge)
+
+2. FINANCIAL HEALTH (most recent known data)
+   • Revenue: ${getCurrency()}___  (YoY growth: __%)
+   • Net Profit: ${getCurrency()}___  (margin: __%)
+   • EBITDA Margin: ___%
+   • Free Cash Flow: Positive / Negative / trend
+   • Cash & Equivalents: ${getCurrency()}___
+   • Total Debt: ${getCurrency()}___
+   • Debt/Equity Ratio: ___
+
+3. VALUATION METRICS
+   • P/E Ratio: ___  (Industry avg: ___)  → Expensive / Fair / Cheap
+   • PEG Ratio: ___  (growth-adjusted valuation)
+   • P/B Ratio: ___  (vs book value)
+   • EV/EBITDA: ___
+   • Dividend Yield: ___%  (Payout ratio: __%)
+   • Intrinsic Value estimate (DCF/peer-based): ${getCurrency()}___
+
+4. GROWTH ANALYSIS
+   • Revenue CAGR (3-year): ___%
+   • EPS Growth (YoY): ___%
+   • Guidance / Management outlook:
+   • Upcoming catalysts (product launches, expansion, capex):
+   • Headwinds to growth:
+
+5. MANAGEMENT & GOVERNANCE
+   • Promoter Holding: ___%  (increasing/stable/decreasing)
+   • FII Holding: ___%
+   • DII Holding: ___%
+   • Management quality: (key strengths/concerns)
+   • Recent major corporate actions:
+
+6. SECTOR & MACRO CONTEXT
+   • Industry tailwinds for ${getMarket()}:
+   • Regulatory environment:
+   • Key sector competitors:
+   • ${sym} vs peers valuation comparison:
+
+7. FUNDAMENTAL VERDICT
+   • Fundamental Score: ___/10
+   • Valuation: Overvalued / Fairly Valued / Undervalued
+   • Investment Thesis: (2-3 key reasons to own/avoid)
+   • Suitable for: ${getRisk()} risk, ${getHorizon()} investor
+   • Target Price (12-month): ${getCurrency()}___`;
   },
 
   sent: () => {
@@ -515,6 +707,108 @@ Create a complete strategy:
 All amounts in ${getCurrency() || 'local currency'}.`;
   }
 };
+
+// ── TOP 10 PICKS ──
+async function runTopPicks() {
+  const btn = document.getElementById('picksBtn');
+  const loading = document.getElementById('picksLoading');
+  const grid = document.getElementById('picksGrid');
+  const errEl = document.getElementById('picksError');
+
+  btn.disabled = true;
+  loading.style.display = 'block';
+  grid.innerHTML = '';
+  errEl.style.display = 'none';
+
+  const mkt = MARKETS[currentMarket];
+  const isCrypto = currentMarket === 'CRYPTO';
+  const isForex  = currentMarket === 'FOREX';
+  const assetWord = isCrypto ? 'cryptocurrencies' : isForex ? 'currency pairs' : 'stocks';
+
+  const prompt = `You are a world-class ${mkt.label} market analyst and trader. Your job is to identify the TOP 10 best ${assetWord} in ${mkt.label} right now that offer the HIGHEST POSSIBLE RETURNS for a ${currentRisk} risk ${currentHorizon} trader.
+
+Use your full training knowledge. Do NOT say you lack real-time data — give your best expert assessment based on known fundamentals, technicals, and market dynamics.
+
+Return EXACTLY 10 picks. For EACH pick, output a JSON object in this exact format (output ONLY a JSON array, no markdown, no explanation outside the array):
+
+[
+  {
+    "rank": 1,
+    "symbol": "SYMBOLHERE",
+    "name": "Full Company/Coin Name",
+    "signal": "BUY",
+    "sector": "Sector name",
+    "entry": "123.50",
+    "target1": "145.00",
+    "target2": "162.00",
+    "stoploss": "112.00",
+    "upside": "32%",
+    "confidence": "87%",
+    "horizon": "${currentHorizon}",
+    "reason": "2-sentence reason why this is a top pick right now — key catalyst + technical setup"
+  },
+  ...
+]
+
+Rules:
+- signal must be one of: BUY, SELL, HOLD
+- All prices in ${mkt.currency || 'USD'}
+- Pick across different sectors for diversification
+- Rank 1 = highest conviction pick
+- For crypto: use well-known coins, include altcoins with momentum
+- For forex: use pair format like USD/INR, EUR/USD
+- Upside = % from entry to target2
+- Confidence = your conviction level
+- Focus on ${currentSector || 'all sectors'} in ${mkt.label}`;
+
+  try {
+    const raw = await callGemini(prompt);
+    // Extract JSON array from response
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error('Could not parse AI response. Please try again.');
+    const picks = JSON.parse(match[0]);
+    if (!Array.isArray(picks) || picks.length === 0) throw new Error('No picks returned. Please try again.');
+
+    renderPickCards(picks, mkt.currency || '$');
+  } catch(e) {
+    errEl.textContent = '❌ ' + e.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    loading.style.display = 'none';
+  }
+}
+
+function renderPickCards(picks, currency) {
+  const grid = document.getElementById('picksGrid');
+  grid.innerHTML = picks.map(p => {
+    const isBuy  = p.signal?.toUpperCase() === 'BUY';
+    const isSell = p.signal?.toUpperCase() === 'SELL';
+    const badgeClass = isBuy ? '' : isSell ? 'sell' : 'hold';
+    const signalIcon = isBuy ? '🟢' : isSell ? '🔴' : '🟡';
+    return `
+    <div class="pick-card">
+      <div class="pick-rank">#${p.rank}</div>
+      <div class="pick-header">
+        <div class="pick-symbol">${p.symbol || '—'}</div>
+        <div class="pick-name">${p.name || ''} &nbsp;·&nbsp; ${p.sector || ''}</div>
+        <span class="pick-badge ${badgeClass}">${signalIcon} ${p.signal || 'BUY'}</span>
+      </div>
+      <div class="pick-body">
+        <div class="pick-row"><span class="pick-lbl">📥 Entry Zone</span><span class="pick-val cyan">${currency}${p.entry}</span></div>
+        <div class="pick-row"><span class="pick-lbl">🎯 Target 1</span><span class="pick-val green">${currency}${p.target1}</span></div>
+        <div class="pick-row"><span class="pick-lbl">🎯 Target 2</span><span class="pick-val green">${currency}${p.target2}</span></div>
+        <div class="pick-row"><span class="pick-lbl">🛡 Stop-Loss</span><span class="pick-val red">${currency}${p.stoploss}</span></div>
+        <div class="pick-row"><span class="pick-lbl">⏱ Horizon</span><span class="pick-val">${p.horizon || '—'}</span></div>
+        <div class="pick-row"><span class="pick-lbl">🎰 Confidence</span><span class="pick-val cyan">${p.confidence || '—'}</span></div>
+        <div class="pick-return">📈 Potential Upside: ${p.upside || '—'}</div>
+        <div class="pick-reason">💡 ${p.reason || ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+  // Scroll to grid
+  grid.scrollIntoView({behavior:'smooth', block:'start'});
+}
 
 // ── Run dispatcher ──
 async function smRun(tool) {
