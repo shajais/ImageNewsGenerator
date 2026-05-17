@@ -159,6 +159,7 @@ a{color:#a78bfa;text-decoration:none}
       <div class="ta-stat w">⚠️ <span id="taW">0</span></div>
       <div class="ta-stat s">⏭ <span id="taS">0</span></div>
       <div class="ta-stat ai">🧠 <span id="taAI">0 AI</span></div>
+      <div class="ta-stat" style="color:#38bdf8">🗂 <span id="taPages">0 pages</span></div>
       <span style="font-size:.68rem;color:#334155;margin-left:auto" id="taTime"></span>
     </div>
 
@@ -187,13 +188,897 @@ a{color:#a78bfa;text-decoration:none}
 
 <script>
 /* ═══════════════════════════════════════════════════════════════
-   UNIVERSAL TEST AGENT
-   Tests any web app: GUI, API, Performance, Security,
-   Accessibility, SEO, Links, Mobile, Forms, JS Errors
-   AI-powered analysis via Gemini 2.0 Flash
+   UNIVERSAL TEST AGENT v3 — Full-Site Multi-Page Crawler
+   Crawls every page, runs 100+ checks, generates full report
+   AI-powered deep analysis via Gemini 2.0 Flash
    ═══════════════════════════════════════════════════════════════ */
 (function(){
 'use strict';
+
+// ── State ──
+let _running=false, _stop=false;
+let P=0,F=0,W=0,SK=0,AI_COUNT=0,TOT=0;
+let _results=[], _startTime=0;
+let _pageResults={};   // keyed by URL
+let _pagesVisited=0;
+let _htmlText='', _headText='';
+
+// ── Helpers ──
+const $=id=>document.getElementById(id);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+function ts(){
+  const d=new Date();
+  return d.getHours().toString().padStart(2,'0')+':'+
+         d.getMinutes().toString().padStart(2,'0')+':'+
+         d.getSeconds().toString().padStart(2,'0');
+}
+
+function dot(s){
+  const d=$('taDot'); d.className='ta-dot '+(s||'');
+  $('taStatusLabel').textContent=(s==='run'?'Running…':s==='pass'?'All passed!':s==='fail'?'Issues found':'Idle');
+  $('taStatusLabel').style.color=(s==='run'?'#f59e0b':s==='pass'?'#22c55e':s==='fail'?'#ef4444':'#64748b');
+}
+
+function counts(){
+  $('taP').textContent=P; $('taF').textContent=F; $('taW').textContent=W; $('taS').textContent=SK;
+  $('taAI').textContent=AI_COUNT+' AI';
+  $('taPages').textContent=_pagesVisited+' pages';
+  const done=P+F+W+SK;
+  $('taProgFill').style.width=(TOT?Math.min(100,Math.round((done/TOT)*100)):0)+'%';
+}
+
+function log(type,icon,msg){
+  const el=$('taLog'), d=document.createElement('div');
+  d.className='tle '+type;
+  d.innerHTML=`<span class="ic">${icon}</span><span class="ts">${ts()}</span><span>${msg}</span>`;
+  el.appendChild(d); el.scrollTop=el.scrollHeight;
+}
+function sec(title){
+  const el=$('taLog'), d=document.createElement('div');
+  d.className='tle sec'; d.innerHTML=`<span class="ic">──</span><span>${title}</span>`;
+  el.appendChild(d); el.scrollTop=el.scrollHeight;
+}
+
+function record(type,suite,name,detail,pageUrl){
+  _results.push({type,suite,name,detail,pageUrl:pageUrl||'global',time:ts()});
+  // also push into per-page
+  if(pageUrl){
+    if(!_pageResults[pageUrl]) _pageResults[pageUrl]={pass:0,fail:0,warn:0,skip:0,items:[]};
+    _pageResults[pageUrl][type]=(_pageResults[pageUrl][type]||0)+1;
+    _pageResults[pageUrl].items.push({type,suite,name,detail});
+  }
+  TOT++;
+  if(type==='pass') P++;
+  else if(type==='fail') F++;
+  else if(type==='warn') W++;
+  else SK++;
+  counts();
+  const icons={pass:'✅',fail:'❌',warn:'⚠️',skip:'⏭',ai:'🧠'};
+  log(type,icons[type]||'ℹ',`[${suite}] ${name}${detail?' — '+detail:''}`);
+}
+
+// ── Tab switching ──
+window.taTab=function(tab){
+  $('taLog').style.display=tab==='log'?'block':'none';
+  if($('taReportPane')) $('taReportPane').style.display=tab==='report'?'block':'none';
+  if($('taAIPane'))     $('taAIPane').style.display=tab==='ai'?'block':'none';
+  $('tabLog').classList.toggle('active',tab==='log');
+  $('tabReport').classList.toggle('active',tab==='report');
+  $('tabAI').classList.toggle('active',tab==='ai');
+};
+
+// ── Suite picker ──
+document.querySelectorAll('.suite-item').forEach(el=>{
+  el.addEventListener('click',()=>el.classList.toggle('on'));
+});
+
+// ── Gemini key ──
+$('taGeminiKey').addEventListener('input',function(){
+  const ok=this.value.trim().length>10;
+  $('taGeminiStatus').textContent=ok?'🟢 Gemini key set — AI analysis enabled':'🔴 No key — rule-based tests only';
+  $('taGeminiStatus').className='gemini-badge'+(ok?'':' off');
+});
+
+// ── Load saved key/URL ──
+if(localStorage.getItem('ghp_gemini_key')){
+  $('taGeminiKey').value=localStorage.getItem('ghp_gemini_key');
+  $('taGeminiStatus').textContent='🟢 Key loaded from storage';
+  $('taGeminiStatus').className='gemini-badge';
+}
+if(localStorage.getItem('ta_last_url')) $('taUrl').value=localStorage.getItem('ta_last_url');
+
+// ════════════════════════════════════════════════════
+//  FETCH + PARSE HELPERS
+// ════════════════════════════════════════════════════
+async function fetchPage(url, customHeaders){
+  const headers={'Accept':'text/html,application/xhtml+xml,*/*','Cache-Control':'no-cache',...(customHeaders||{})};
+  const t0=performance.now();
+  try{
+    const res=await fetch(url,{headers,redirect:'follow'});
+    const loadTime=performance.now()-t0;
+    const html=await res.text();
+    return{ok:res.ok, status:res.status, html, loadTime, headers:res.headers, url:res.url, error:null};
+  }catch(e){
+    try{
+      const t1=performance.now();
+      await fetch(url,{mode:'no-cors',headers:{},redirect:'follow'});
+      return{ok:true,status:'opaque',html:'',loadTime:performance.now()-t1,headers:null,url,error:null};
+    }catch(e2){
+      return{ok:false,status:0,html:'',loadTime:0,headers:null,url,error:e2.message};
+    }
+  }
+}
+
+function parseHTML(html){
+  const p=new DOMParser();
+  try{ return p.parseFromString(html,'text/html'); }catch(e){ return null; }
+}
+
+// ════════════════════════════════════════════════════
+//  CRAWL: discover all pages from the seed URL
+// ════════════════════════════════════════════════════
+async function discoverPages(seedUrl, html, customHeaders){
+  const origin=new URL(seedUrl).origin;
+  const hostname=new URL(seedUrl).hostname;
+  const found=new Set([seedUrl]);
+
+  // 1. Parse links from seed HTML
+  if(html){
+    const doc=parseHTML(html);
+    if(doc){
+      doc.querySelectorAll('a[href]').forEach(a=>{
+        try{
+          const abs=new URL(a.getAttribute('href'),seedUrl).href.split('#')[0].split('?')[0];
+          if(abs.startsWith(origin) && abs.endsWith('.html') || abs===origin+'/' || abs===origin){
+            found.add(abs);
+          }
+        }catch(e){}
+      });
+    }
+  }
+
+  // 2. Also probe known sibling pages if the seed is the root
+  const knownPages=['index.html','stock-market.html','season-market.html',
+                    'viral-growth.html','test-agent.html','dev-agent.html'];
+  knownPages.forEach(p=>{
+    try{ found.add(new URL(p,seedUrl).href); }catch(e){}
+  });
+
+  // 3. Add common well-known paths
+  ['/robots.txt','/sitemap.xml','/manifest.json','/.well-known/security.txt'].forEach(p=>{
+    try{ found.add(new URL(p,seedUrl).href); }catch(e){}
+  });
+
+  return [...found];
+}
+
+// ════════════════════════════════════════════════════
+//  PER-PAGE TEST SUITES
+// ════════════════════════════════════════════════════
+
+async function testGUI(doc, url, fetchResult){
+  if(!doc){record('warn','GUI','Cannot parse DOM — CORS-blocked',url,url); return;}
+
+  const title=doc.querySelector('title')?.textContent?.trim();
+  record(title&&title.length>0?'pass':'fail','GUI','Page has <title>',title||'MISSING',url);
+  record(title&&title.length<=70?'pass':'warn','GUI',`<title> length: ${title?.length||0} chars (≤70 ideal)`,null,url);
+
+  const h1s=doc.querySelectorAll('h1');
+  record(h1s.length===1?'pass':h1s.length===0?'fail':'warn','GUI',`H1 count = ${h1s.length} (exactly 1 required)`,null,url);
+
+  const imgs=doc.querySelectorAll('img');
+  const noAlt=[...imgs].filter(i=>!i.getAttribute('alt'));
+  record(noAlt.length===0?'pass':'warn','GUI',`Images missing alt: ${noAlt.length}/${imgs.length}`,
+    noAlt.slice(0,3).map(i=>i.src||'?').join(', ')||null,url);
+
+  const vp=doc.querySelector('meta[name="viewport"]');
+  record(vp?'pass':'fail','GUI','Viewport meta tag present',vp?.content||'MISSING',url);
+  record(vp?.content?.includes('width=device-width')?'pass':'fail','GUI','viewport width=device-width',null,url);
+
+  const bodyText=doc.body?.textContent?.trim()||'';
+  record(bodyText.length>100?'pass':'fail','GUI','Body has meaningful content',`${bodyText.length} chars`,url);
+
+  const cssLinks=doc.querySelectorAll('link[rel="stylesheet"]');
+  record('pass','GUI',`Stylesheet links: ${cssLinks.length}`,null,url);
+
+  const scripts=doc.querySelectorAll('script[src]');
+  record('pass','GUI',`External scripts: ${scripts.length}`,null,url);
+
+  const fav=doc.querySelector('link[rel="icon"],link[rel="shortcut icon"]');
+  record(fav?'pass':'warn','GUI','Favicon link present',null,url);
+
+  const navs=doc.querySelectorAll('nav,header,[role="navigation"]');
+  record(navs.length>0?'pass':'warn','GUI',`Navigation elements: ${navs.length}`,null,url);
+
+  const footer=doc.querySelector('footer');
+  record(footer?'pass':'warn','GUI','Footer element present',null,url);
+
+  const btns=doc.querySelectorAll('button,input[type="button"],input[type="submit"]');
+  record('pass','GUI',`Interactive buttons: ${btns.length}`,null,url);
+
+  // Check for console.error in inline scripts (rough)
+  const inlineScripts=[...doc.querySelectorAll('script:not([src])')].map(s=>s.textContent).join(' ');
+  const errorCalls=(inlineScripts.match(/console\.error\s*\(/g)||[]).length;
+  record('pass','GUI',`console.error() in inline scripts: ${errorCalls} (informational)`,null,url);
+
+  // Duplicate IDs
+  const ids=[...doc.querySelectorAll('[id]')].map(e=>e.id);
+  const dupIds=ids.filter((id,i)=>ids.indexOf(id)!==i);
+  record(dupIds.length===0?'pass':'fail','GUI',`Duplicate IDs: ${dupIds.length}`,dupIds.slice(0,5).join(', ')||null,url);
+
+  // Broken <img src="">
+  const emptySrc=[...doc.querySelectorAll('img[src=""]')];
+  record(emptySrc.length===0?'pass':'warn','GUI',`Images with empty src: ${emptySrc.length}`,null,url);
+}
+
+async function testSEO(doc, url){
+  if(!doc){record('skip','SEO','Skipped (DOM unavailable)',null,url); return;}
+
+  const desc=doc.querySelector('meta[name="description"]');
+  record(desc?'pass':'fail','SEO','Meta description present',desc?.content?.substring(0,80)||'MISSING',url);
+
+  const descLen=desc?.content?.length||0;
+  record(descLen>=50&&descLen<=160?'pass':'warn','SEO',`Meta description length: ${descLen} (50–160 ideal)`,null,url);
+
+  const canonical=doc.querySelector('link[rel="canonical"]');
+  record(canonical?'pass':'warn','SEO','Canonical link present',canonical?.href||'MISSING',url);
+
+  const ogTitle=doc.querySelector('meta[property="og:title"]');
+  record(ogTitle?'pass':'warn','SEO','og:title present',ogTitle?.content||null,url);
+
+  const ogDesc=doc.querySelector('meta[property="og:description"]');
+  record(ogDesc?'pass':'warn','SEO','og:description present',null,url);
+
+  const ogImg=doc.querySelector('meta[property="og:image"]');
+  record(ogImg?'pass':'warn','SEO','og:image present',null,url);
+
+  const twitterCard=doc.querySelector('meta[name="twitter:card"]');
+  record(twitterCard?'pass':'warn','SEO','Twitter Card meta present',null,url);
+
+  const robots=doc.querySelector('meta[name="robots"]');
+  record(robots?'pass':'warn','SEO','Robots meta present',robots?.content||'–',url);
+
+  const schema=doc.querySelector('script[type="application/ld+json"]');
+  record(schema?'pass':'warn','SEO','Structured data (JSON-LD) present',null,url);
+
+  const h2s=doc.querySelectorAll('h2').length;
+  const h3s=doc.querySelectorAll('h3').length;
+  record('pass','SEO',`Heading structure: ${doc.querySelectorAll('h1').length}×H1 ${h2s}×H2 ${h3s}×H3`,null,url);
+
+  try{
+    const u=new URL(url);
+    record(!u.pathname.match(/[A-Z]/)&&!u.pathname.match(/__/)?'pass':'warn',
+      'SEO','URL uses lowercase, no double-underscores',u.pathname,url);
+  }catch(e){}
+
+  // Keywords meta
+  const kw=doc.querySelector('meta[name="keywords"]');
+  record(kw?'pass':'warn','SEO','Keywords meta present',kw?.content?.substring(0,60)||null,url);
+}
+
+async function testAccessibility(doc, url){
+  if(!doc){record('skip','Accessibility','Skipped',null,url); return;}
+
+  const lang=doc.documentElement.getAttribute('lang');
+  record(lang?'pass':'fail','Accessibility','<html lang="..."> present',lang||'MISSING',url);
+
+  const imgs=doc.querySelectorAll('img:not([alt])');
+  record(imgs.length===0?'pass':'fail','Accessibility',`Images missing alt attr: ${imgs.length}`,null,url);
+
+  const inputs=doc.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"])');
+  let unlabelled=0;
+  inputs.forEach(inp=>{
+    const id=inp.id;
+    const label=id&&doc.querySelector(`label[for="${id}"]`);
+    const ariaLabel=inp.getAttribute('aria-label')||inp.getAttribute('aria-labelledby');
+    if(!label&&!ariaLabel) unlabelled++;
+  });
+  record(unlabelled===0?'pass':'warn','Accessibility',`Inputs missing label/aria-label: ${unlabelled}/${inputs.length}`,null,url);
+
+  const btns=doc.querySelectorAll('button');
+  const emptyBtns=[...btns].filter(b=>!(b.textContent.trim()||b.getAttribute('aria-label')||b.title));
+  record(emptyBtns.length===0?'pass':'warn','Accessibility',`Buttons without accessible text: ${emptyBtns.length}`,null,url);
+
+  const skip=doc.querySelector('[href="#main"],[href="#content"],[class*="skip"]');
+  record(skip?'pass':'warn','Accessibility','Skip-to-main link found',null,url);
+
+  const roles=doc.querySelectorAll('[role]').length;
+  record('pass','Accessibility',`ARIA role attributes: ${roles}`,null,url);
+
+  const tabNeg=doc.querySelectorAll('[tabindex="-1"]').length;
+  record(tabNeg<30?'pass':'warn','Accessibility',`tabindex="-1" count: ${tabNeg}`,null,url);
+
+  // Focus visible — check for :focus suppression in inline styles
+  const noOutline=[...doc.querySelectorAll('[style*="outline:none"],[style*="outline: none"]')].length;
+  record(noOutline===0?'pass':'warn','Accessibility',`Elements suppressing focus outline: ${noOutline}`,null,url);
+
+  // aria-hidden on interactive
+  const ariaHiddenBtns=[...doc.querySelectorAll('button[aria-hidden="true"],a[aria-hidden="true"]')].length;
+  record(ariaHiddenBtns===0?'pass':'fail','Accessibility',`Interactive elements with aria-hidden: ${ariaHiddenBtns}`,null,url);
+}
+
+async function testSecurity(html, url, fetchResult){
+  try{
+    const u=new URL(url);
+    record(u.protocol==='https:'?'pass':'fail','Security','Site uses HTTPS',u.protocol,url);
+  }catch(e){}
+
+  if(fetchResult.headers){
+    const csp=fetchResult.headers.get('content-security-policy');
+    record(csp?'pass':'warn','Security','Content-Security-Policy header',csp?.substring(0,60)||'MISSING',url);
+
+    const xframe=fetchResult.headers.get('x-frame-options');
+    record(xframe?'pass':'warn','Security','X-Frame-Options header',xframe||'MISSING',url);
+
+    const xcto=fetchResult.headers.get('x-content-type-options');
+    record(xcto?'pass':'warn','Security','X-Content-Type-Options header',xcto||'MISSING',url);
+
+    const sts=fetchResult.headers.get('strict-transport-security');
+    record(sts?'pass':'warn','Security','HSTS header',sts||'MISSING',url);
+
+    const rp=fetchResult.headers.get('referrer-policy');
+    record(rp?'pass':'warn','Security','Referrer-Policy header',rp||'MISSING',url);
+
+    const pp=fetchResult.headers.get('permissions-policy');
+    record(pp?'pass':'warn','Security','Permissions-Policy header',pp||'MISSING',url);
+  } else {
+    record('warn','Security','Cannot inspect headers (CORS opaque)',null,url);
+  }
+
+  if(html){
+    const inlineJS=html.match(/on(click|load|error|submit|change|focus|blur)=/gi)||[];
+    record(inlineJS.length<50?'pass':'warn','Security',`Inline event handlers: ${inlineJS.length}`,null,url);
+
+    const evalUse=html.match(/\beval\s*\(/g)||[];
+    record(evalUse.length===0?'pass':'fail','Security',`eval() usage: ${evalUse.length}`,evalUse.length?'FOUND':'none',url);
+
+    const docWrite=html.match(/document\.write\s*\(/g)||[];
+    record(docWrite.length===0?'pass':'warn','Security',`document.write(): ${docWrite.length}`,null,url);
+
+    const apiKeyPattern=html.match(/AIzaSy[A-Za-z0-9_-]{30,}/g)||[];
+    record(apiKeyPattern.length===0?'pass':'fail','Security',
+      `Exposed Google API keys: ${apiKeyPattern.length}`,apiKeyPattern.length?'⚠️ KEY IN SOURCE':'none',url);
+
+    // Mixed content
+    const httpLinks=(html.match(/src=["']http:\/\//gi)||[]).length;
+    record(httpLinks===0?'pass':'fail','Security',`HTTP (insecure) resource loads: ${httpLinks}`,null,url);
+
+    // innerHTML usage (XSS risk)
+    const innerHTMLUse=(html.match(/\.innerHTML\s*=/g)||[]).length;
+    record(innerHTMLUse<10?'pass':'warn','Security',`innerHTML assignments: ${innerHTMLUse} (review for XSS)`,null,url);
+  }
+}
+
+async function testPerformance(html, fetchResult, url){
+  const lt=Math.round(fetchResult.loadTime);
+  record(lt<800?'pass':lt<2000?'warn':'fail','Performance',`Load time: ${lt}ms`,
+    lt<800?'Excellent':lt<2000?'Acceptable':'Slow',url);
+
+  const sizeKB=Math.round((html?.length||0)/1024);
+  record(sizeKB<500?'pass':sizeKB<1000?'warn':'fail','Performance',
+    `HTML size: ${sizeKB} KB`,null,url);
+
+  const doc=parseHTML(html||'');
+  if(doc){
+    const headScripts=[...doc.querySelectorAll('head script[src]')].filter(s=>!s.defer&&!s.async);
+    record(headScripts.length===0?'pass':'warn','Performance',
+      `Render-blocking scripts in <head>: ${headScripts.length}`,
+      headScripts.map(s=>s.src.split('/').pop()).join(', ')||null,url);
+
+    const noLazy=[...doc.querySelectorAll('img')].filter(i=>i.getAttribute('loading')!=='lazy').length;
+    record(noLazy<=3?'pass':'warn','Performance',`Images without lazy loading: ${noLazy}`,null,url);
+
+    const inlineStyles=doc.querySelectorAll('[style]').length;
+    record(inlineStyles<150?'pass':'warn','Performance',`Inline style attributes: ${inlineStyles}`,null,url);
+
+    const css=doc.querySelectorAll('link[rel="stylesheet"]').length;
+    record(css<=5?'pass':'warn','Performance',`Stylesheet files: ${css}`,null,url);
+
+    const js=doc.querySelectorAll('script[src]').length;
+    record(js<=10?'pass':'warn','Performance',`External scripts: ${js}`,null,url);
+
+    const gf=[...doc.querySelectorAll('link[href*="fonts.googleapis.com"]')].length;
+    record(gf<=2?'pass':'warn','Performance',`Google Fonts requests: ${gf}`,null,url);
+
+    // preconnect hints
+    const preconnects=doc.querySelectorAll('link[rel="preconnect"]').length;
+    record(preconnects>0?'pass':'warn','Performance',`<link rel="preconnect"> hints: ${preconnects}`,null,url);
+
+    // Large inline scripts
+    const bigScripts=[...doc.querySelectorAll('script:not([src])')].filter(s=>s.textContent.length>50000);
+    record(bigScripts.length===0?'pass':'warn','Performance',`Very large inline scripts (>50KB): ${bigScripts.length}`,null,url);
+  }
+}
+
+async function testLinks(html, baseUrl){
+  if(!html){record('skip','Links','Skipped (HTML unavailable)',null,baseUrl); return;}
+  const doc=parseHTML(html);
+  if(!doc) return;
+
+  const anchors=doc.querySelectorAll('a[href]');
+  const hrefs=[...anchors].map(a=>a.getAttribute('href')).filter(Boolean);
+  const extLinks=hrefs.filter(h=>h.startsWith('http')&&!h.includes(new URL(baseUrl).hostname));
+  const intLinks=hrefs.filter(h=>!h.startsWith('http')&&!h.startsWith('mailto:')&&!h.startsWith('#'));
+  record('pass','Links',`Total links: ${hrefs.length} (${intLinks.length} internal, ${extLinks.length} external)`,null,baseUrl);
+
+  const unsafeExt=[...doc.querySelectorAll('a[target="_blank"]')].filter(a=>
+    !(a.rel||'').includes('noopener')&&!(a.rel||'').includes('noreferrer'));
+  record(unsafeExt.length===0?'pass':'warn','Links',
+    `target="_blank" missing rel="noopener": ${unsafeExt.length}`,null,baseUrl);
+
+  const jsVoid=hrefs.filter(h=>h.startsWith('javascript:'));
+  record(jsVoid.length===0?'pass':'warn','Links',`javascript: href links: ${jsVoid.length}`,null,baseUrl);
+
+  // Check reachability of up to 5 internal links
+  const sample=intLinks.slice(0,5);
+  for(const href of sample){
+    if(_stop) break;
+    try{
+      const fullUrl=new URL(href,baseUrl).href;
+      const t0=performance.now();
+      const r=await fetch(fullUrl,{method:'HEAD',mode:'cors',redirect:'follow'}).catch(()=>
+        fetch(fullUrl,{method:'GET',mode:'no-cors',redirect:'follow'}));
+      const ms=Math.round(performance.now()-t0);
+      record(r.status<400||r.type==='opaque'?'pass':'fail','Links',
+        `${href} → ${r.status||'opaque'} (${ms}ms)`,null,baseUrl);
+    }catch(e){
+      record('warn','Links',`${href} → unreachable`,e.message,baseUrl);
+    }
+  }
+}
+
+async function testMobile(doc, url){
+  if(!doc){record('skip','Mobile','Skipped',null,url); return;}
+
+  const vp=doc.querySelector('meta[name="viewport"]');
+  record(vp&&vp.content.includes('width=device-width')?'pass':'fail',
+    'Mobile','viewport width=device-width',vp?.content||'MISSING',url);
+  record(vp&&vp.content.includes('initial-scale=1')?'pass':'warn',
+    'Mobile','initial-scale=1 in viewport',null,url);
+
+  const touchH=(doc.documentElement.innerHTML.match(/ontouchstart|ontouchend|addEventListener\(['"]touch/g)||[]).length;
+  record(touchH>0?'pass':'warn','Mobile',`Touch event handlers: ${touchH}`,null,url);
+
+  const hasMQ=[...doc.querySelectorAll('style')].some(s=>s.textContent.includes('@media'));
+  record(hasMQ?'pass':'warn','Mobile','CSS media queries found',null,url);
+
+  const smallBtns=[...doc.querySelectorAll('button,a')].filter(b=>{
+    const s=b.getAttribute('style')||'';
+    const m=s.match(/padding:\s*([\d.]+)px/);
+    return m&&parseFloat(m[1])<6;
+  });
+  record(smallBtns.length===0?'pass':'warn','Mobile',`Tiny tap targets (padding<6px): ${smallBtns.length}`,null,url);
+
+  const fullW=doc.querySelectorAll('[style*="width:100vw"],[style*="width: 100vw"]').length;
+  record(fullW===0?'pass':'warn','Mobile',`100vw elements (horizontal scroll risk): ${fullW}`,null,url);
+
+  // Apple mobile meta
+  const appleMeta=doc.querySelector('meta[name="apple-mobile-web-app-capable"]');
+  record(appleMeta?'pass':'warn','Mobile','Apple mobile web app meta present',null,url);
+}
+
+async function testForms(doc, url){
+  if(!doc){record('skip','Forms','Skipped',null,url); return;}
+
+  const forms=doc.querySelectorAll('form');
+  record('pass','Forms',`Forms found: ${forms.length}`,null,url);
+
+  forms.forEach((form,i)=>{
+    const action=form.action||form.getAttribute('action')||'(none)';
+    const method=(form.method||'GET').toUpperCase();
+    record('pass','Forms',`Form[${i}] ${method} → ${action}`,null,url);
+
+    if(method==='POST'){
+      const csrf=form.querySelector('[name*="csrf"],[name*="token"],[name*="_token"]');
+      record(csrf?'pass':'warn','Forms',`Form[${i}] CSRF token: ${csrf?'found':'MISSING'}`,null,url);
+    }
+  });
+
+  const pwds=doc.querySelectorAll('input[type="password"]');
+  pwds.forEach((p,i)=>{
+    const ac=p.getAttribute('autocomplete');
+    record(ac==='new-password'||ac==='current-password'?'pass':'warn',
+      'Forms',`Password[${i}] autocomplete="${ac||'not set'}"`,null,url);
+  });
+
+  const required=doc.querySelectorAll('[required]').length;
+  record('pass','Forms',`Required fields: ${required}`,null,url);
+
+  const placeholderOnly=[...doc.querySelectorAll('input[placeholder]:not([id])')].length;
+  record(placeholderOnly===0?'pass':'warn','Forms',`Placeholder-only inputs (no id): ${placeholderOnly}`,null,url);
+}
+
+async function testConsole(html, url){
+  if(!html){record('skip','JS Quality','Skipped',null,url); return;}
+
+  const todos=(html.match(/\/\/\s*TODO|\/\*\s*TODO/gi)||[]).length;
+  record('pass','JS Quality',`TODO comments: ${todos}`,null,url);
+
+  const consoleLogs=(html.match(/console\.log\s*\(/g)||[]).length;
+  record(consoleLogs<20?'pass':'warn','JS Quality',`console.log() calls: ${consoleLogs}`,null,url);
+
+  const debugger_=(html.match(/\bdebugger\b/g)||[]).length;
+  record(debugger_===0?'pass':'fail','JS Quality',`debugger; statements: ${debugger_}`,debugger_?'REMOVE BEFORE PROD':null,url);
+
+  const alerts=(html.match(/\balert\s*\(/g)||[]).length;
+  record(alerts===0?'pass':'warn','JS Quality',`alert() calls: ${alerts}`,null,url);
+
+  const tryCatch=(html.match(/try\s*\{/g)||[]).length;
+  record('pass','JS Quality',`try-catch blocks: ${tryCatch}`,null,url);
+
+  const windowError=(html.match(/window\.onerror|window\.addEventListener\(['"]error/g)||[]).length;
+  record(windowError>0?'pass':'warn','JS Quality','Global error handler present',null,url);
+
+  // deprecated
+  ['document.write(','escape(','unescape('].forEach(api=>{
+    const n=(html.match(new RegExp(api.replace('(','\\('),'g'))||[]).length;
+    if(n>0) record('warn','JS Quality',`Deprecated: ${api} × ${n}`,null,url);
+  });
+
+  const avgLineLen=html.split('\n').reduce((s,l)=>s+l.length,0)/(html.split('\n').length||1);
+  record(avgLineLen>200?'pass':'warn','JS Quality',`Avg line length: ${Math.round(avgLineLen)} (>200 = bundled)`,null,url);
+}
+
+// ════════════════════════════════════════════════════
+//  GLOBAL/SITE-LEVEL TESTS (run once for the site)
+// ════════════════════════════════════════════════════
+async function testGlobalAPI(baseUrl, customHeaders){
+  sec('🔌 API Endpoints & Well-Known');
+  const paths=[
+    ['/robots.txt','Robots.txt'],
+    ['/sitemap.xml','Sitemap.xml'],
+    ['/manifest.json','Web App Manifest'],
+    ['/.well-known/security.txt','Security.txt'],
+    ['/favicon.ico','Favicon.ico'],
+    ['/api','API root'],
+    ['/api/health','API health'],
+    ['/api/status','API status'],
+    ['/api/v1','API v1']
+  ];
+  for(const [path,label] of paths){
+    if(_stop) break;
+    try{
+      const fullUrl=new URL(path,baseUrl).href;
+      const t0=performance.now();
+      const r=await fetch(fullUrl,{method:'GET',headers:customHeaders,redirect:'follow'})
+        .catch(()=>fetch(fullUrl,{method:'GET',mode:'no-cors',redirect:'follow'}));
+      const ms=Math.round(performance.now()-t0);
+      const status=r.status||'opaque';
+      const type=status===200?'pass':status===404?'warn':status>=500?'fail':'warn';
+      record(type,'API Endpoints',`${label} → HTTP ${status} (${ms}ms)`,path,baseUrl);
+    }catch(e){
+      record('warn','API Endpoints',`${label} → error`,e.message,baseUrl);
+    }
+  }
+}
+
+async function testCORS(baseUrl){
+  sec('🌐 CORS & Cross-Origin');
+  try{
+    const r=await fetch(baseUrl,{method:'OPTIONS',headers:{'Origin':'https://test.example.com'}}).catch(()=>null);
+    if(r&&r.headers){
+      const acao=r.headers.get('access-control-allow-origin');
+      record(acao?'pass':'warn','CORS',`Access-Control-Allow-Origin: ${acao||'not set'}`,null,baseUrl);
+    } else {
+      record('warn','CORS','Could not check CORS (no OPTIONS support or blocked)',null,baseUrl);
+    }
+  }catch(e){
+    record('warn','CORS','CORS OPTIONS request failed',e.message,baseUrl);
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  AI ANALYSIS
+// ════════════════════════════════════════════════════
+async function aiAnalyse(baseUrl, key){
+  if(!key||key.length<10) return;
+  AI_COUNT++; counts();
+  log('ai','🧠','Sending full test results to Gemini for deep analysis…');
+
+  const failList=_results.filter(r=>r.type==='fail')
+    .map(r=>`[${r.suite}] ${r.name}${r.pageUrl&&r.pageUrl!=='global'?' ('+r.pageUrl+')':''}`)
+    .join('\n');
+  const warnList=_results.filter(r=>r.type==='warn')
+    .map(r=>`[${r.suite}] ${r.name}`)
+    .join('\n');
+
+  const pagesSummary=Object.entries(_pageResults).map(([pg,s])=>
+    `${pg}: ✅${s.pass} ❌${s.fail} ⚠️${s.warn}`
+  ).join('\n');
+
+  const prompt=`You are a senior full-stack QA engineer. A test agent crawled the entire website "${baseUrl}" and tested ${_pagesVisited} pages with ${TOT} total test assertions.
+
+OVERALL: ✅${P} passed  ❌${F} failed  ⚠️${W} warnings
+
+PAGES TESTED:
+${pagesSummary}
+
+ALL FAILURES:
+${failList||'None'}
+
+TOP WARNINGS:
+${warnList.split('\n').slice(0,30).join('\n')||'None'}
+
+Additional instructions: ${$('taInstructions').value||'None'}
+
+Please provide a COMPREHENSIVE analysis:
+
+## 🎯 Overall Quality Score: X/10
+Brief justification
+
+## 🚨 Critical Issues (must fix)
+List every FAIL with: why it matters + exact code fix
+
+## ⚠️ High Priority Warnings
+Top 10 warnings with fixes
+
+## 📈 SEO Scorecard
+Grade each page's SEO
+
+## ⚡ Performance Recommendations
+Specific optimisations for this site
+
+## 🔒 Security Audit Summary
+Security posture + recommended headers
+
+## ♿ Accessibility Report
+WCAG compliance gaps + fixes
+
+## 🚀 Quick Wins (implement today)
+Top 5 easiest improvements for biggest impact
+
+## 📋 Full Page-by-Page Summary
+Brief per-page quality note
+
+Be precise, developer-friendly, with code snippets where applicable.`;
+
+  try{
+    const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
+    });
+    const data=await resp.json();
+    const text=data?.candidates?.[0]?.content?.parts?.[0]?.text||'No response from AI';
+    const aiContent=$('taAIContent');
+    aiContent.innerHTML='';
+    // Render markdown-ish with basic formatting
+    const bubble=document.createElement('div');
+    bubble.className='ai-bubble';
+    bubble.innerHTML=text
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/^## (.+)$/gm,'<br><strong style="color:#a78bfa;font-size:.85rem">$1</strong><br>')
+      .replace(/^### (.+)$/gm,'<strong style="color:#c4b5fd">$1</strong><br>')
+      .replace(/`([^`]+)`/g,'<code style="background:rgba(124,58,237,.2);padding:1px 5px;border-radius:4px;font-size:.85em">$1</code>')
+      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+      .replace(/\n/g,'<br>');
+    aiContent.appendChild(bubble);
+    log('ai','🧠','AI analysis complete — see 🧠 AI Analysis tab');
+  }catch(e){
+    log('fail','🧠','Gemini API error: '+e.message);
+    $('taAIContent').textContent='AI analysis failed: '+e.message;
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  BUILD FULL REPORT
+// ════════════════════════════════════════════════════
+function buildReport(baseUrl){
+  // Summary cards
+  let html=`
+  <div style="font-size:.9rem;font-weight:900;color:#c4b5fd;margin-bottom:12px">
+    📊 Full Site Report — <span style="color:#94a3b8">${baseUrl}</span>
+    <span style="font-size:.7rem;font-weight:400;color:#475569;margin-left:8px">${new Date().toLocaleString()}</span>
+  </div>
+  <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+    <div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:12px 18px;text-align:center;min-width:80px">
+      <div style="font-size:1.8rem;font-weight:900;color:#22c55e">${P}</div><div style="font-size:.72rem;color:#86efac">Passed</div>
+    </div>
+    <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px 18px;text-align:center;min-width:80px">
+      <div style="font-size:1.8rem;font-weight:900;color:#ef4444">${F}</div><div style="font-size:.72rem;color:#fca5a5">Failed</div>
+    </div>
+    <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:12px 18px;text-align:center;min-width:80px">
+      <div style="font-size:1.8rem;font-weight:900;color:#f59e0b">${W}</div><div style="font-size:.72rem;color:#fcd34d">Warnings</div>
+    </div>
+    <div style="background:rgba(100,116,139,.1);border:1px solid rgba(100,116,139,.3);border-radius:10px;padding:12px 18px;text-align:center;min-width:80px">
+      <div style="font-size:1.8rem;font-weight:900;color:#94a3b8">${SK}</div><div style="font-size:.72rem;color:#64748b">Skipped</div>
+    </div>
+    <div style="background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.3);border-radius:10px;padding:12px 18px;text-align:center;min-width:80px">
+      <div style="font-size:1.8rem;font-weight:900;color:#a78bfa">${Math.round((P/(P+F||1))*100)}%</div><div style="font-size:.72rem;color:#c4b5fd">Score</div>
+    </div>
+    <div style="background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.3);border-radius:10px;padding:12px 18px;text-align:center;min-width:80px">
+      <div style="font-size:1.8rem;font-weight:900;color:#38bdf8">${_pagesVisited}</div><div style="font-size:.72rem;color:#7dd3fc">Pages</div>
+    </div>
+    <div style="background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.3);border-radius:10px;padding:12px 18px;text-align:center;min-width:80px">
+      <div style="font-size:1.8rem;font-weight:900;color:#34d399">${TOT}</div><div style="font-size:.72rem;color:#6ee7b7">Assertions</div>
+    </div>
+  </div>`;
+
+  // Per-page breakdown
+  if(Object.keys(_pageResults).length>0){
+    html+=`<div style="font-size:.78rem;font-weight:900;color:#7c3aed;margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em">📄 Page-by-Page Results</div>`;
+    Object.entries(_pageResults).forEach(([pg,s])=>{
+      const pageLabel=pg.replace(new URL(baseUrl).origin,'').replace(/^\//,'/')||'/';
+      const badge=s.fail>0?'rb-fail':s.warn>0?'rb-warn':'rb-pass';
+      const label=s.fail>0?`${s.fail} failed`:s.warn>0?`${s.warn} warnings`:'All passed';
+      html+=`<div class="report-card">
+        <div class="report-title" style="font-size:.8rem">
+          <span style="color:#38bdf8">📄</span> ${pageLabel}
+          <span class="report-badge ${badge}">${label}</span>
+          <span style="float:right;font-size:.65rem;color:#334155">✅${s.pass||0} ❌${s.fail||0} ⚠️${s.warn||0}</span>
+        </div>
+        <ul class="report-list">`;
+      // show failures first then warnings
+      const ordered=[...s.items].sort((a,b)=>{
+        const o={fail:0,warn:1,skip:2,pass:3,ai:4};
+        return (o[a.type]||5)-(o[b.type]||5);
+      });
+      ordered.forEach(it=>{
+        const ic={pass:'✅',fail:'❌',warn:'⚠️',skip:'⏭',ai:'🧠'}[it.type]||'•';
+        html+=`<li><span>${ic}</span><span>[${it.suite}] ${it.name}${it.detail?` <span style="color:#475569;font-size:.67rem">— ${it.detail}</span>`:''}</span></li>`;
+      });
+      html+=`</ul></div>`;
+    });
+  }
+
+  // Suite summary
+  const suites={};
+  _results.forEach(r=>{
+    if(!suites[r.suite]) suites[r.suite]={pass:0,fail:0,warn:0,skip:0,items:[]};
+    suites[r.suite][r.type]=(suites[r.suite][r.type]||0)+1;
+    suites[r.suite].items.push(r);
+  });
+
+  html+=`<div style="font-size:.78rem;font-weight:900;color:#7c3aed;margin:16px 0 8px;text-transform:uppercase;letter-spacing:.08em">🧪 Suite Summary</div>`;
+  Object.entries(suites).forEach(([name,s])=>{
+    const badge=s.fail>0?'rb-fail':s.warn>0?'rb-warn':'rb-pass';
+    const label=s.fail>0?`${s.fail} failed`:s.warn>0?`${s.warn} warnings`:'All passed';
+    html+=`<div class="report-card"><div class="report-title">${name}<span class="report-badge ${badge}">${label}</span></div><ul class="report-list">`;
+    s.items.filter(it=>it.type==='fail'||it.type==='warn').slice(0,20).forEach(it=>{
+      const ic={pass:'✅',fail:'❌',warn:'⚠️',skip:'⏭'}[it.type]||'•';
+      html+=`<li><span>${ic}</span><span>${it.name}${it.detail?` <span style="color:#475569;font-size:.68rem">— ${it.detail}</span>`:''}${it.pageUrl&&it.pageUrl!=='global'?` <span style="color:#334155;font-size:.65rem">[${it.pageUrl.split('/').pop()||'/'}]</span>`:''}</span></li>`;
+    });
+    html+=`</ul></div>`;
+  });
+
+  $('taReportContent').innerHTML=html;
+}
+
+// ════════════════════════════════════════════════════
+//  MAIN RUN
+// ════════════════════════════════════════════════════
+window.taRun=async function(){
+  const seedUrl=($('taUrl').value||'').trim();
+  if(!seedUrl){alert('Please enter a URL to test'); return;}
+  if(!seedUrl.startsWith('http')){alert('URL must start with http:// or https://'); return;}
+
+  localStorage.setItem('ta_last_url', seedUrl);
+  if($('taGeminiKey').value.trim().length>10)
+    localStorage.setItem('ghp_gemini_key', $('taGeminiKey').value.trim());
+
+  _running=true; _stop=false;
+  P=0;F=0;W=0;SK=0;AI_COUNT=0;TOT=0;_results=[];_pageResults={};_pagesVisited=0;_startTime=Date.now();
+  $('taLog').innerHTML='';
+  $('taReportContent').innerHTML='<div style="color:#475569;font-size:.8rem">Running tests…</div>';
+  $('taAIContent').innerHTML='<div style="color:#475569;font-size:.8rem">AI analysis will appear here after tests complete.</div>';
+  $('taRunBtn').disabled=true; $('taStopBtn').style.display='block';
+  dot('run');
+
+  const activeSuites=new Set([...document.querySelectorAll('.suite-item.on')].map(e=>e.dataset.suite));
+  let customHeaders={};
+  try{customHeaders=JSON.parse($('taHeaders').value||'{}');}catch(e){}
+
+  log('info','🌐',`Testing site: <b>${seedUrl}</b>`);
+  log('info','📋',`Active suites: ${[...activeSuites].join(', ')}`);
+  log('info','🔍','Fetching seed page and discovering all pages…');
+
+  // ── Fetch seed ──
+  const seedResult=await fetchPage(seedUrl, customHeaders);
+  _htmlText=seedResult.html||'';
+
+  if(!seedResult.ok && seedResult.status===0){
+    log('fail','❌','Site unreachable: '+seedResult.error);
+    record('fail','Network','Seed URL unreachable',seedResult.error,'global');
+    dot('fail');
+    $('taRunBtn').disabled=false; $('taStopBtn').style.display='none';
+    buildReport(seedUrl);
+    _running=false;
+    return;
+  }
+
+  // ── Discover pages ──
+  const allPages=await discoverPages(seedUrl, seedResult.html, customHeaders);
+  // Filter to only HTML pages (exclude well-known & txt/xml for per-page tests)
+  const htmlPages=allPages.filter(p=>!p.match(/\.(txt|xml|json)$/));
+  const specialPaths=allPages.filter(p=>p.match(/\.(txt|xml|json)$/));
+
+  log('info','🗂',`Discovered ${htmlPages.length} HTML pages + ${specialPaths.length} resources to probe`);
+
+  // ── Global/site-level tests ──
+  sec('🌐 Network & Site-Level');
+  record(seedResult.ok||seedResult.status==='opaque'?'pass':'fail','Network',
+    `Seed page responds: HTTP ${seedResult.status}`,`${Math.round(seedResult.loadTime)}ms`,'global');
+
+  if(activeSuites.has('api')) await testGlobalAPI(seedUrl, customHeaders);
+  await testCORS(seedUrl);
+
+  // ── Per-page tests ──
+  const pageMap={};
+  pageMap[seedUrl]={result:seedResult, html:seedResult.html};
+
+  // Fetch all other HTML pages
+  for(const pageUrl of htmlPages){
+    if(_stop) break;
+    if(pageUrl===seedUrl) continue;
+    try{
+      log('info','📄',`Fetching: ${pageUrl.replace(new URL(seedUrl).origin,'')}`);
+      const r=await fetchPage(pageUrl, customHeaders);
+      pageMap[pageUrl]={result:r, html:r.html||''};
+      await sleep(150); // gentle throttle
+    }catch(e){
+      pageMap[pageUrl]={result:{ok:false,status:0,html:'',loadTime:0,headers:null,url:pageUrl},html:''};
+    }
+  }
+
+  // Run all suites on each page
+  for(const [pageUrl,{result,html}] of Object.entries(pageMap)){
+    if(_stop) break;
+    if(!result.ok && result.status===0){
+      record('warn','Network',`Page unreachable: ${pageUrl.split('/').pop()||'/'}`,null,pageUrl);
+      continue;
+    }
+
+    _pagesVisited++;
+    counts();
+    const pageLabel=pageUrl.replace(new URL(seedUrl).origin,'')||'/';
+    sec(`📄 Page: ${pageLabel}`);
+    record(result.ok||result.status==='opaque'?'pass':'fail','Network',
+      `Page HTTP ${result.status}`,`${Math.round(result.loadTime)}ms`,pageUrl);
+
+    const doc=html?parseHTML(html):null;
+
+    if(!_stop&&activeSuites.has('gui'))           await testGUI(doc, pageUrl, result);
+    if(!_stop&&activeSuites.has('seo'))           await testSEO(doc, pageUrl);
+    if(!_stop&&activeSuites.has('accessibility')) await testAccessibility(doc, pageUrl);
+    if(!_stop&&activeSuites.has('security'))      await testSecurity(html, pageUrl, result);
+    if(!_stop&&activeSuites.has('perf'))          await testPerformance(html, result, pageUrl);
+    if(!_stop&&activeSuites.has('links'))         await testLinks(html, pageUrl);
+    if(!_stop&&activeSuites.has('mobile'))        await testMobile(doc, pageUrl);
+    if(!_stop&&activeSuites.has('forms'))         await testForms(doc, pageUrl);
+    if(!_stop&&activeSuites.has('console'))       await testConsole(html, pageUrl);
+  }
+
+  const elapsed=((Date.now()-_startTime)/1000).toFixed(1);
+  $('taTime').textContent=elapsed+'s';
+
+  log(_stop?'warn':F>0?'fail':'pass', _stop?'⏹':F>0?'❌':'✅',
+    `<b>${_stop?'Stopped':'Completed'} in ${elapsed}s — ${_pagesVisited} pages · ${TOT} assertions · ${P} passed · ${F} failed · ${W} warnings</b>`);
+
+  dot(F>0?'fail':'pass');
+
+  // ── Build report first ──
+  buildReport(seedUrl);
+  taTab('report');
+
+  // ── AI analysis ──
+  const key=($('taGeminiKey').value||localStorage.getItem('ghp_gemini_key')||'').trim();
+  if(key&&!_stop) await aiAnalyse(seedUrl, key);
+
+  $('taRunBtn').disabled=false; $('taStopBtn').style.display='none';
+  _running=false;
+};
+
+window.taStop=function(){
+  _stop=true;
+  log('warn','⏹','Stop requested…');
+};
+
+// Default URL
+if(!$('taUrl').value) $('taUrl').value='https://shajais.github.io/ShashiNewsGen/';
+
+})();
+</script>
 
 // ── State ──
 let _running=false, _stop=false;
