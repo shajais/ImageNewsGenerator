@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>🤖 AutoQA — Universal Full-Functional Test Agent</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#06060f;color:#e2e8f0;font-family:'Segoe UI',sans-serif;min-height:100vh;display:flex;flex-direction:column}
+a{color:#a78bfa;text-decoration:none}
+.ta-header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:#0d0d1f;border-bottom:1px solid rgba(124,58,237,.3);flex-shrink:0;flex-wrap:wrap;gap:8px}
+.ta-title{font-size:1.2rem;font-weight:900;background:linear-gradient(90deg,#a855f7,#22d3ee,#34d399);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.ta-subtitle{font-size:.63rem;color:#64748b;margin-top:2px}
+.ta-back{padding:6px 14px;border-radius:8px;border:1px solid rgba(124,58,237,.35);background:rgba(124,58,237,.1);color:#c4b5fd;cursor:pointer;font-size:.78rem;font-weight:700;text-decoration:none}
+.ta-back:hover{background:rgba(124,58,237,.25)}
+.ta-body{display:grid;grid-template-columns:300px 1fr;flex:1;min-height:0;overflow:hidden}
+@media(max-width:768px){.ta-body{grid-template-columns:1fr;overflow:auto}}
+.ta-left{background:#0d0d1f;border-right:1px solid rgba(124,58,237,.18);padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+.ta-section{font-size:.62rem;font-weight:900;color:#7c3aed;letter-spacing:.1em;text-transform:uppercase;padding:5px 0 3px;border-bottom:1px solid rgba(124,58,237,.2);margin-bottom:3px}
+.ta-input{width:100%;padding:8px 11px;border-radius:8px;border:1px solid rgba(124,58,237,.3);background:#0f0f23;color:#e2e8f0;font-size:.83rem;outline:none;transition:.2s}
+.ta-input:focus{border-color:#7c3aed;background:rgba(124,58,237,.05)}
+.ta-label{font-size:.7rem;color:#94a3b8;font-weight:600;margin-bottom:3px;display:block}
+.ta-textarea{width:100%;padding:8px 11px;border-radius:8px;border:1px solid rgba(124,58,237,.3);background:#0f0f23;color:#e2e8f0;font-size:.76rem;resize:vertical;min-height:60px;outline:none;font-family:monospace}
+.ta-textarea:focus{border-color:#7c3aed}
+.suite-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.suite-item{padding:7px 5px;border-radius:8px;border:1px solid rgba(124,58,237,.2);background:rgba(124,58,237,.06);cursor:pointer;text-align:center;font-size:.68rem;color:#94a3b8;transition:.15s;user-select:none}
+.suite-item:hover{background:rgba(124,58,237,.18);color:#c4b5fd}
+.suite-item.on{background:rgba(124,58,237,.22);border-color:#7c3aed;color:#fff}
+.suite-item span{display:block;font-size:1rem;margin-bottom:2px}
+.ta-btn{width:100%;padding:10px;border-radius:9px;border:none;cursor:pointer;font-weight:700;font-size:.85rem;transition:.2s;display:flex;align-items:center;justify-content:center;gap:7px}
+.ta-btn.run{background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff}
+.ta-btn.run:hover{filter:brightness(1.12);transform:translateY(-1px)}
+.ta-btn.stop{background:rgba(239,68,68,.2);border:1px solid rgba(239,68,68,.4);color:#fca5a5}
+.ta-btn.dl{background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.35);color:#6ee7b7;margin-top:5px}
+.ta-btn.dl:hover{background:rgba(52,211,153,.3)}
+.ta-btn:disabled{opacity:.45;cursor:not-allowed;transform:none!important}
+.gemini-badge{display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:8px;border:1px solid rgba(34,197,94,.3);background:rgba(34,197,94,.07);font-size:.72rem;color:#86efac}
+.gemini-badge.off{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.07);color:#fca5a5}
+.ta-right{display:flex;flex-direction:column;overflow:hidden;background:#07070f}
+.ta-topbar{display:flex;align-items:center;gap:10px;padding:10px 16px;background:#0a0a18;border-bottom:1px solid rgba(124,58,237,.15);flex-shrink:0;flex-wrap:wrap}
+.ta-stat{display:flex;align-items:center;gap:4px;font-size:.72rem;font-weight:700}
+.ta-stat.p{color:#22c55e}.ta-stat.f{color:#ef4444}.ta-stat.w{color:#f59e0b}.ta-stat.s{color:#64748b}.ta-stat.pg{color:#38bdf8}
+.ta-progressbar{height:4px;background:#0f0f1f;border-radius:3px;flex:1;min-width:60px;overflow:hidden}
+.ta-progressbar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#7c3aed,#22d3ee);transition:width .3s;width:0%}
+.ta-dot{width:8px;height:8px;border-radius:50%;background:#64748b;flex-shrink:0}
+.ta-dot.run{background:#f59e0b;animation:tapulse 1.2s infinite}
+.ta-dot.pass{background:#22c55e}.ta-dot.fail{background:#ef4444}
+@keyframes tapulse{0%,100%{opacity:1}50%{opacity:.3}}
+.ta-tabs{display:flex;border-bottom:1px solid rgba(124,58,237,.15);background:#0a0a18;flex-shrink:0;overflow-x:auto}
+.ta-tab{padding:8px 16px;font-size:.72rem;font-weight:700;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;transition:.15s;white-space:nowrap}
+.ta-tab.active,.ta-tab:hover{color:#c4b5fd;border-bottom-color:#7c3aed;background:rgba(124,58,237,.06)}
+.ta-log-wrap{flex:1;overflow-y:auto;padding:8px 14px;font-size:.69rem;line-height:1.75;font-family:'Consolas','Fira Code',monospace}
+.tle{display:flex;gap:6px;align-items:flex-start;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.02);word-break:break-word}
+.tle.pass{color:#86efac}.tle.fail{color:#fca5a5}.tle.warn{color:#fcd34d}.tle.info{color:#94a3b8}.tle.ai{color:#c084fc}
+.tle.sec{color:#7c3aed;font-weight:900;font-size:.63rem;text-transform:uppercase;letter-spacing:.08em;padding:6px 0 2px}
+.tle.page{color:#38bdf8;font-weight:700;font-size:.67rem;padding:8px 0 2px;border-top:1px solid rgba(56,189,248,.15)}
+.tle .ic{flex-shrink:0;width:16px;text-align:center}
+.tle .ts{color:#334155;min-width:48px}
+.ai-bubble{background:rgba(192,132,252,.07);border:1px solid rgba(192,132,252,.2);border-radius:10px;padding:12px 14px;margin:6px 0;color:#ddd6fe;font-size:.76rem;line-height:1.7}
+.ai-bubble h3{color:#a78bfa;font-size:.82rem;margin:10px 0 4px}
+.ai-bubble code{background:rgba(124,58,237,.2);padding:1px 5px;border-radius:4px;font-size:.85em;font-family:monospace}
+.ta-report{padding:16px;overflow-y:auto;flex:1}
+.report-card{background:#0d0d1f;border:1px solid rgba(124,58,237,.2);border-radius:11px;padding:14px;margin-bottom:10px}
+.report-title{font-size:.82rem;font-weight:900;color:#c4b5fd;margin-bottom:7px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px}
+.report-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.66rem;font-weight:700;margin-left:6px}
+.rb-pass{background:rgba(34,197,94,.15);color:#22c55e}.rb-fail{background:rgba(239,68,68,.15);color:#ef4444}.rb-warn{background:rgba(245,158,11,.15);color:#f59e0b}
+.report-list{font-size:.7rem;line-height:1.9;color:#94a3b8;padding-left:2px}
+.report-list li{list-style:none;display:flex;gap:5px;align-items:flex-start;border-bottom:1px solid rgba(255,255,255,.02);padding:1px 0}
+.report-list li .fail-log{color:#475569;font-size:.65rem;margin-left:21px;display:block;font-family:monospace}
+</style>
+</head>
+<body>
+
+<div class="ta-header">
+  <div>
+    <div class="ta-title">🤖 AutoQA — Universal Test Agent</div>
+    <div class="ta-subtitle">Full-functional · Any website · Features · UX · Accessibility · AI-powered report</div>
+  </div>
+  <a href="index.html" class="ta-back">← Back to Studio</a>
+</div>
+
+<div class="ta-body">
+  <div class="ta-left">
+
+    <div>
+      <div class="ta-section">🌐 Target URL</div>
+      <label class="ta-label">Website URL to test</label>
+      <input class="ta-input" id="taUrl" placeholder="https://example.com" value=""/>
+      <div style="font-size:.65rem;color:#475569;margin-top:4px">Tests any website — structure, SEO, security, features, UX and more.</div>
+    </div>
+
+    <div>
+      <div class="ta-section">🧠 AI Engine</div>
+      <label class="ta-label">Gemini API Key</label>
+      <input class="ta-input" id="taGeminiKey" type="password" placeholder="AIzaSy… (aistudio.google.com/apikey)"/>
+      <div id="taGeminiStatus" class="gemini-badge off" style="margin-top:6px">🔴 No key — rule-based analysis only</div>
+    </div>
+
+    <div>
+      <div class="ta-section">📋 Test Suites</div>
+      <div class="suite-grid" id="suitePicker">
+        <div class="suite-item on" data-suite="structure"><span>🏗</span>Structure</div>
+        <div class="suite-item on" data-suite="seo"><span>📈</span>SEO</div>
+        <div class="suite-item on" data-suite="accessibility"><span>♿</span>Accessibility</div>
+        <div class="suite-item on" data-suite="security"><span>🔒</span>Security</div>
+        <div class="suite-item on" data-suite="performance"><span>⚡</span>Performance</div>
+        <div class="suite-item on" data-suite="ux"><span>🎨</span>UX/Usability</div>
+        <div class="suite-item on" data-suite="mobile"><span>📱</span>Mobile</div>
+        <div class="suite-item on" data-suite="forms"><span>📝</span>Forms</div>
+        <div class="suite-item on" data-suite="features"><span>🔧</span>Features</div>
+        <div class="suite-item on" data-suite="media"><span>🖼</span>Media/Canvas</div>
+        <div class="suite-item on" data-suite="links"><span>🔗</span>Links</div>
+        <div class="suite-item on" data-suite="api"><span>🔌</span>API/Network</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="ta-section">🎯 Feature Instructions</div>
+      <label class="ta-label">Describe key features to test (AI uses this)</label>
+      <textarea class="ta-textarea" id="taInstructions" placeholder="e.g. Test the meme generator: image upload, 4 text boxes, canvas render, download button, share button. Test AI caption feature."></textarea>
+    </div>
+
+    <div>
+      <div class="ta-section">⚙️ Options</div>
+      <label class="ta-label">Custom HTTP Headers (JSON)</label>
+      <textarea class="ta-textarea" id="taHeaders" style="min-height:45px" placeholder='{"Authorization":"Bearer token"}'></textarea>
+      <label class="ta-label" style="margin-top:6px">Max pages to crawl</label>
+      <input class="ta-input" id="taMaxPages" type="number" value="10" min="1" max="50"/>
+    </div>
+
+    <div>
+      <div class="ta-section">▶ Run</div>
+      <button class="ta-btn run" id="taRunBtn" onclick="taRun()">▶ Run Full Test Suite</button>
+      <button class="ta-btn stop" id="taStopBtn" onclick="taStop()" style="margin-top:5px;display:none">⏹ Stop</button>
+      <button class="ta-btn dl" id="taDownloadBtn" onclick="taDownloadReport()" disabled>⬇ Download Full Report</button>
+    </div>
+
+  </div>
+
+  <div class="ta-right">
+    <div class="ta-topbar">
+      <div class="ta-dot" id="taDot"></div>
+      <span id="taStatusLabel" style="font-size:.72rem;color:#64748b;font-weight:700">Idle</span>
+      <div class="ta-progressbar"><div class="ta-progressbar-fill" id="taProgFill"></div></div>
+      <div class="ta-stat p">✅ <span id="taP">0</span></div>
+      <div class="ta-stat f">❌ <span id="taF">0</span></div>
+      <div class="ta-stat w">⚠️ <span id="taW">0</span></div>
+      <div class="ta-stat s">⏭ <span id="taS">0</span></div>
+      <div class="ta-stat pg">📄 <span id="taPages">0</span></div>
+      <span style="font-size:.65rem;color:#334155;margin-left:auto" id="taTime"></span>
+    </div>
+
+    <div class="ta-tabs">
+      <div class="ta-tab active" onclick="taTab('log')" id="tabLog">📋 Live Log</div>
+      <div class="ta-tab" onclick="taTab('report')" id="tabReport">📊 Report</div>
+      <div class="ta-tab" onclick="taTab('features')" id="tabFeatures">🔧 Features</div>
+      <div class="ta-tab" onclick="taTab('ux')" id="tabUX">🎨 UX Audit</div>
+      <div class="ta-tab" onclick="taTab('ai')" id="tabAI">🧠 AI Analysis</div>
+    </div>
+
+    <div class="ta-log-wrap" id="taLog" style="display:block"></div>
+    <div class="ta-report" id="taReportPane" style="display:none"><div id="taReportContent" style="color:#475569;font-size:.8rem">Run tests to generate report.</div></div>
+    <div class="ta-report" id="taFeaturesPane" style="display:none"><div id="taFeaturesContent" style="color:#475569;font-size:.8rem">Feature detection results will appear here.</div></div>
+    <div class="ta-report" id="taUXPane" style="display:none"><div id="taUXContent" style="color:#475569;font-size:.8rem">UX audit will appear here.</div></div>
+    <div class="ta-report" id="taAIPane" style="display:none"><div id="taAIContent" style="color:#475569;font-size:.8rem">AI analysis will appear here after tests complete.</div></div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   AutoQA v4 — Universal Full-Functional Web Test Agent
+   12 suites · Feature detection · UX audit · Downloadable report
+   ═══════════════════════════════════════════════════════════ */
+(function(){
+'use strict';
+
+var _running=false,_stop=false;
+var P=0,F=0,W=0,SK=0,TOT=0,_pagesVisited=0;
+var _results=[],_pageResults={},_featureMap={},_rawLog=[];
+var _startTime=0,_siteOrigin='',_baseUrl='';
+
+function $(id){return document.getElementById(id);}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
+
+function ts(){
+  var d=new Date();
+  return [d.getHours(),d.getMinutes(),d.getSeconds()].map(function(n){return String(n).padStart(2,'0');}).join(':');
+}
+
+function dot(s){
+  $('taDot').className='ta-dot '+(s||'');
+  var lbl={run:'Running\u2026',pass:'All passed!',fail:'Issues found','':"Idle"};
+  $('taStatusLabel').textContent=lbl[s||'']||s;
+  $('taStatusLabel').style.color={run:'#f59e0b',pass:'#22c55e',fail:'#ef4444','':'#64748b'}[s||'']||'#64748b';
+}
+
+function counts(){
+  $('taP').textContent=P;$('taF').textContent=F;$('taW').textContent=W;$('taS').textContent=SK;
+  $('taPages').textContent=_pagesVisited;
+  $('taProgFill').style.width=(TOT?Math.min(100,Math.round(((P+F+W+SK)/TOT)*100)):0)+'%';
+}
+
+function log(type,icon,msg,detail){
+  var entry={type:type,icon:icon,msg:msg,detail:detail,ts:ts()};
+  _rawLog.push(entry);
+  var el=$('taLog'),d=document.createElement('div');
+  d.className='tle '+type;
+  d.innerHTML='<span class="ic">'+icon+'</span><span class="ts">'+entry.ts+'</span><span>'+msg+(detail?'<span style="color:#475569;font-size:.9em"> \u2014 '+detail+'</span>':'')+'</span>';
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
+}
+
+function sec(title){
+  _rawLog.push({type:'sec',msg:title,ts:ts()});
+  var el=$('taLog'),d=document.createElement('div');
+  d.className='tle sec';
+  d.innerHTML='<span class="ic">\u2500\u2500</span><span>'+title+'</span>';
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
+}
+
+function pageHeader(url){
+  _rawLog.push({type:'page',msg:url,ts:ts()});
+  var el=$('taLog'),d=document.createElement('div');
+  d.className='tle page';
+  d.innerHTML='<span class="ic">\uD83D\uDCC4</span><span>PAGE: '+(url.replace(_siteOrigin,'')||'/')+'</span>';
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
+}
+
+function record(type,suite,name,detail,pageUrl,failLog){
+  var entry={type:type,suite:suite,name:name,detail:detail||null,pageUrl:pageUrl||'global',failLog:failLog||null,ts:ts()};
+  _results.push(entry);
+  if(pageUrl&&pageUrl!=='global'){
+    if(!_pageResults[pageUrl])_pageResults[pageUrl]={pass:0,fail:0,warn:0,skip:0,items:[]};
+    _pageResults[pageUrl][type]=(_pageResults[pageUrl][type]||0)+1;
+    _pageResults[pageUrl].items.push(entry);
+  }
+  TOT++;
+  if(type==='pass')P++;else if(type==='fail')F++;else if(type==='warn')W++;else SK++;
+  counts();
+  var icons={pass:'\u2705',fail:'\u274C',warn:'\u26A0\uFE0F',skip:'\u23ED'};
+  log(type,icons[type]||'\u2139','['+suite+'] '+name,detail||undefined);
+  if(failLog)_rawLog.push({type:'faillog',msg:failLog,ts:ts()});
+}
+
+// Tab switching
+window.taTab=function(tab){
+  $('taLog').style.display=tab==='log'?'block':'none';
+  $('taReportPane').style.display=tab==='report'?'block':'none';
+  $('taFeaturesPane').style.display=tab==='features'?'block':'none';
+  $('taUXPane').style.display=tab==='ux'?'block':'none';
+  $('taAIPane').style.display=tab==='ai'?'block':'none';
+  var map={log:'Log',report:'Report',features:'Features',ux:'UX',ai:'AI'};
+  ['log','report','features','ux','ai'].forEach(function(t){
+    $('tab'+map[t]).classList.toggle('active',tab===t);
+  });
+};
+
+// Suite toggle
+document.querySelectorAll('.suite-item').forEach(function(el){
+  el.addEventListener('click',function(){el.classList.toggle('on');});
+});
+
+// Gemini key
+$('taGeminiKey').addEventListener('input',function(){
+  var ok=this.value.trim().length>10;
+  $('taGeminiStatus').textContent=ok?'\uD83D\uDFE2 Gemini enabled':'\uD83D\uDD34 No key';
+  $('taGeminiStatus').className='gemini-badge'+(ok?'':' off');
+});
+
+// Restore saved values
+(function(){
+  var k=localStorage.getItem('ghp_gemini_key');
+  if(k){$('taGeminiKey').value=k;$('taGeminiStatus').textContent='\uD83D\uDFE2 Key loaded';$('taGeminiStatus').className='gemini-badge';}
+  var u=localStorage.getItem('ta_last_url');
+  if(u)$('taUrl').value=u;
+})();
+
+// Fetch helper
+function fetchPage(url,customHeaders){
+  var hdrs=Object.assign({'Accept':'text/html,*/*','Cache-Control':'no-cache'},customHeaders||{});
+  var t0=performance.now();
+  return fetch(url,{headers:hdrs,redirect:'follow'})
+    .then(function(res){
+      var lt=performance.now()-t0;
+      return res.text().then(function(html){
+        return{ok:res.ok,status:res.status,html:html,loadTime:lt,headers:res.headers,finalUrl:res.url,cors:true};
+      });
+    })
+    .catch(function(){
+      var t1=performance.now();
+      return fetch(url,{mode:'no-cors',redirect:'follow'})
+        .then(function(){return{ok:true,status:'opaque',html:'',loadTime:performance.now()-t1,headers:null,finalUrl:url,cors:false};})
+        .catch(function(e2){return{ok:false,status:0,html:'',loadTime:0,headers:null,finalUrl:url,cors:false,error:e2.message};});
+    });
+}
+
+function parseHTML(html){
+  try{return new DOMParser().parseFromString(html,'text/html');}catch(e){return null;}
+}
+
+function discoverPages(seedUrl,html,maxPages){
+  var origin=new URL(seedUrl).origin;
+  var found=new Set([seedUrl]);
+  if(html){
+    var doc=parseHTML(html);
+    if(doc){
+      doc.querySelectorAll('a[href]').forEach(function(a){
+        try{
+          var abs=new URL(a.getAttribute('href'),seedUrl).href.split('#')[0].split('?')[0];
+          if(abs.startsWith(origin)&&(abs.endsWith('.html')||abs.endsWith('/')||abs===origin))found.add(abs);
+        }catch(e){}
+      });
+    }
+  }
+  return Array.from(found).slice(0,maxPages);
+}
+
+// ── Suite 1: Structure ──
+function runStructure(doc,url){
+  if(!doc){record('skip','Structure','Skipped \u2014 no DOM',null,url);return;}
+  sec('\uD83C\uDFD7 HTML Structure');
+  var title=doc.querySelector('title')?doc.querySelector('title').textContent.trim():'';
+  record(title?'pass':'fail','Structure','<title> tag present',title||'MISSING',url,!title?'Add <title> to <head>':null);
+  if(title)record(title.length<=70?'pass':'warn','Structure','Title length: '+title.length+' chars (\u226470 ideal)',null,url,title.length>70?'Trim title to 70 chars':null);
+  var h1s=doc.querySelectorAll('h1');
+  record(h1s.length===1?'pass':h1s.length===0?'fail':'warn','Structure','H1 count: '+h1s.length+' (exactly 1 required)',null,url,h1s.length===0?'Add one H1 heading':h1s.length>1?h1s.length+' H1s found \u2014 keep only 1':null);
+  record(doc.querySelector('meta[name="viewport"]')?'pass':'fail','Structure','Viewport meta tag',null,url,'Add <meta name="viewport" content="width=device-width,initial-scale=1">');
+  var charset=doc.querySelector('meta[charset]');
+  record(charset?'pass':'warn','Structure','Charset meta',charset?charset.getAttribute('charset'):'MISSING',url);
+  var lang=doc.documentElement.getAttribute('lang');
+  record(lang?'pass':'fail','Structure','<html lang> attribute',lang||'MISSING',url,'Add lang="en" to <html>');
+  var ids=Array.from(doc.querySelectorAll('[id]')).map(function(e){return e.id;});
+  var dups=ids.filter(function(id,i){return ids.indexOf(id)!==i;});
+  record(dups.length===0?'pass':'fail','Structure','Duplicate IDs: '+dups.length,dups.slice(0,5).join(', ')||null,url,dups.length?'Fix duplicate IDs: '+dups.join(', '):null);
+  var emptyLinks=doc.querySelectorAll('a[href=""],a:not([href])').length;
+  record(emptyLinks===0?'pass':'warn','Structure','Empty/missing href links: '+emptyLinks,null,url);
+}
+
+// ── Suite 2: SEO ──
+function runSEO(doc,url){
+  if(!doc){record('skip','SEO','Skipped',null,url);return;}
+  sec('\uD83D\uDCC8 SEO');
+  var desc=doc.querySelector('meta[name="description"]');
+  record(desc?'pass':'fail','SEO','Meta description',desc?desc.content.substring(0,80):'MISSING',url,!desc?'Add <meta name="description" content="...">':null);
+  if(desc){var l=desc.content.length;record(l>=50&&l<=160?'pass':'warn','SEO','Description length: '+l+' chars (50-160 ideal)',null,url,l<50?'Too short':l>160?'Too long \u2014 trim':null);}
+  var canonical=doc.querySelector('link[rel="canonical"]');
+  record(canonical?'pass':'warn','SEO','Canonical URL',canonical?canonical.href:'MISSING',url);
+  ['og:title','og:description','og:image','og:url'].forEach(function(prop){
+    var m=doc.querySelector('meta[property="'+prop+'"]');
+    record(m?'pass':'warn','SEO','Open Graph '+prop,m?m.content.substring(0,60):'missing',url);
+  });
+  record(doc.querySelector('meta[name="twitter:card"]')?'pass':'warn','SEO','Twitter Card meta',null,url);
+  record(doc.querySelector('script[type="application/ld+json"]')?'pass':'warn','SEO','JSON-LD structured data',null,url);
+  record(doc.querySelector('link[rel="icon"],link[rel="shortcut icon"]')?'pass':'warn','SEO','Favicon',null,url);
+  var noAlt=doc.querySelectorAll('img:not([alt])').length;
+  record(noAlt===0?'pass':'fail','SEO','Images missing alt: '+noAlt,null,url,noAlt?'Add alt="" to '+noAlt+' images':null);
+}
+
+// ── Suite 3: Accessibility ──
+function runAccessibility(doc,url){
+  if(!doc){record('skip','Accessibility','Skipped',null,url);return;}
+  sec('\u267F Accessibility (WCAG 2.1)');
+  var noAlt=doc.querySelectorAll('img:not([alt])').length;
+  record(noAlt===0?'pass':'fail','Accessibility','Images missing alt: '+noAlt,null,url,noAlt?'WCAG 1.1.1: Add alt to '+noAlt+' images':null);
+  var inputs=doc.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"])');
+  var unlabelled=0;
+  inputs.forEach(function(inp){
+    var hasLabel=inp.id&&doc.querySelector('label[for="'+inp.id+'"]');
+    var hasAria=inp.getAttribute('aria-label')||inp.getAttribute('aria-labelledby')||inp.getAttribute('title');
+    if(!hasLabel&&!hasAria)unlabelled++;
+  });
+  record(unlabelled===0?'pass':'fail','Accessibility','Inputs without label: '+unlabelled+'/'+inputs.length,null,url,unlabelled?'WCAG 1.3.1: Add labels to '+unlabelled+' inputs':null);
+  var emptyBtns=Array.from(doc.querySelectorAll('button')).filter(function(b){return!(b.textContent.trim()||b.getAttribute('aria-label')||b.title);}).length;
+  record(emptyBtns===0?'pass':'fail','Accessibility','Buttons without accessible name: '+emptyBtns,null,url,emptyBtns?'WCAG 4.1.2: Add text/aria-label to '+emptyBtns+' buttons':null);
+  record(doc.querySelector('[href="#main"],[href="#content"],[class*="skip"]')?'pass':'warn','Accessibility','Skip navigation link',null,url,'Add <a href="#main">Skip to content</a>');
+  var noOutline=doc.querySelectorAll('[style*="outline:none"],[style*="outline: none"]').length;
+  record(noOutline===0?'pass':'warn','Accessibility','Focus outline suppressed: '+noOutline+' elements',null,url,noOutline?'WCAG 2.4.7: Remove outline:none from '+noOutline+' elements':null);
+  var divClick=Array.from(doc.querySelectorAll('div[onclick],span[onclick]')).filter(function(e){return!e.getAttribute('tabindex')&&!e.getAttribute('role');}).length;
+  record(divClick===0?'pass':'warn','Accessibility','Non-semantic clickable divs: '+divClick,null,url,divClick?'WCAG 2.1.1: Add role="button" tabindex="0" to '+divClick+' elements':null);
+  var badAria=doc.querySelectorAll('a[aria-hidden="true"],button[aria-hidden="true"]').length;
+  record(badAria===0?'pass':'fail','Accessibility','Focusable elements with aria-hidden: '+badAria,null,url,badAria?'Remove aria-hidden from interactive elements':null);
+}
+
+// ── Suite 4: Security ──
+function runSecurity(html,url,fetchResult){
+  sec('\uD83D\uDD12 Security');
+  try{record(new URL(url).protocol==='https:'?'pass':'fail','Security','HTTPS protocol',new URL(url).protocol,url,'Migrate to HTTPS');}catch(e){}
+  if(fetchResult.headers){
+    [['content-security-policy','CSP Header','Add Content-Security-Policy'],
+     ['x-frame-options','X-Frame-Options','Add X-Frame-Options: SAMEORIGIN'],
+     ['x-content-type-options','X-Content-Type-Options','Add X-Content-Type-Options: nosniff'],
+     ['strict-transport-security','HSTS','Add Strict-Transport-Security'],
+     ['referrer-policy','Referrer-Policy','Add Referrer-Policy: strict-origin-when-cross-origin'],
+    ].forEach(function(row){
+      var v=fetchResult.headers.get(row[0]);
+      record(v?'pass':'warn','Security',row[1]+': '+(v?'present':'MISSING'),v?v.substring(0,60):null,url,!v?row[2]:null);
+    });
+  }else{record('warn','Security','HTTP headers unavailable (CORS opaque)',null,url);}
+  if(html){
+    var evalUse=(html.match(/\beval\s*\(/g)||[]).length;
+    record(evalUse===0?'pass':'fail','Security','eval() calls: '+evalUse,null,url,evalUse?'Remove eval()':null);
+    var apiKeys=html.match(/AIzaSy[A-Za-z0-9_-]{30,}/g)||[];
+    record(apiKeys.length===0?'pass':'fail','Security','Exposed Google API keys: '+apiKeys.length,null,url,apiKeys.length?'CRITICAL: Remove API keys from HTML':null);
+    var mixed=(html.match(/src=["']http:\/\//gi)||[]).length+(html.match(/href=["']http:\/\//gi)||[]).length;
+    record(mixed===0?'pass':'warn','Security','Mixed HTTP resources: '+mixed,null,url,mixed?'Change '+mixed+' http:// URLs to https://':null);
+  }
+}
+
+// ── Suite 5: Performance ──
+function runPerformance(html,fetchResult,url){
+  sec('\u26A1 Performance');
+  var lt=Math.round(fetchResult.loadTime);
+  record(lt<500?'pass':lt<1500?'warn':'fail','Performance','Load time: '+lt+'ms',lt<500?'Excellent':lt<1500?'OK':'Slow',url,lt>=1500?'Target <500ms. Optimise server & payload.':null);
+  var kb=Math.round((html?html.length:0)/1024);
+  record(kb<200?'pass':kb<500?'warn':'fail','Performance','HTML size: '+kb+'KB',null,url,kb>=500?kb+'KB is too large':null);
+  var doc=parseHTML(html||'');
+  if(doc){
+    var blocking=Array.from(doc.querySelectorAll('head script[src]')).filter(function(s){return!s.defer&&!s.async;});
+    record(blocking.length===0?'pass':'warn','Performance','Render-blocking scripts: '+blocking.length,blocking.slice(0,3).map(function(s){return s.src.split('/').pop();}).join(', ')||null,url,blocking.length?'Add defer/async to blocking scripts':null);
+    var noLazy=doc.querySelectorAll('img:not([loading])').length;
+    record(noLazy<=2?'pass':'warn','Performance','Images without loading="lazy": '+noLazy,null,url,noLazy>2?'Add loading="lazy" to '+noLazy+' images':null);
+    var css=doc.querySelectorAll('link[rel="stylesheet"]').length;
+    record(css<=3?'pass':'warn','Performance','Stylesheet files: '+css,null,url,css>3?'Bundle to \u22643 stylesheets':null);
+    var gf=doc.querySelectorAll('link[href*="fonts.googleapis.com"]').length;
+    record(gf<=1?'pass':'warn','Performance','Google Fonts requests: '+gf,null,url,gf>1?'Combine into 1 Fonts request':null);
+    var preconnects=doc.querySelectorAll('link[rel="preconnect"]').length;
+    record(preconnects>0?'pass':'warn','Performance','Preconnect hints: '+preconnects,null,url,!preconnects?'Add <link rel="preconnect"> for CDN/API origins':null);
+  }
+}
+
+// ── Suite 6: UX ──
+function runUX(doc,html,url){
+  if(!doc){record('skip','UX','Skipped',null,url);return;}
+  sec('\uD83C\uDFA8 UX / Usability');
+  var nav=doc.querySelector('nav,header,[role="navigation"]');
+  record(nav?'pass':'warn','UX','Navigation element',null,url,'Add <nav> with clear links');
+  var footer=doc.querySelector('footer');
+  record(footer?'pass':'warn','UX','Footer present',null,url,'Add <footer>');
+  var loadingEls=doc.querySelectorAll('[class*="loading"],[class*="spinner"],[class*="loader"],[class*="skeleton"]').length;
+  record(loadingEls>0?'pass':'warn','UX','Loading state indicators: '+loadingEls,null,url,!loadingEls?'Add loading/spinner indicators for async ops':null);
+  var ctas=doc.querySelectorAll('button,a[class*="btn"],a[class*="button"],[class*="cta"]').length;
+  record(ctas>0?'pass':'warn','UX','CTA buttons/links: '+ctas,null,url,!ctas?'No call-to-action found':null);
+  var errorEls=doc.querySelectorAll('[class*="error"],[class*="alert"],[role="alert"],[aria-live]').length;
+  record('pass','UX','Error/alert elements: '+errorEls+' (informational)',null,url);
+  var tinyText=Array.from(doc.querySelectorAll('[style*="font-size"]')).filter(function(el){
+    var m=el.style.fontSize.match(/([\d.]+)(px|rem|em)/);
+    return m&&parseFloat(m[1])*(m[2]==='rem'||m[2]==='em'?16:1)<12;
+  }).length;
+  record(tinyText===0?'pass':'fail','UX','Text smaller than 12px: '+tinyText,null,url,tinyText?'Increase font size on '+tinyText+' elements (min 16px body)':null);
+}
+
+// ── Suite 7: Mobile ──
+function runMobile(doc,url){
+  if(!doc){record('skip','Mobile','Skipped',null,url);return;}
+  sec('\uD83D\uDCF1 Mobile UX');
+  var vp=doc.querySelector('meta[name="viewport"]');
+  var vpContent=vp?vp.content:'';
+  record(vpContent.includes('width=device-width')?'pass':'fail','Mobile','viewport width=device-width',vpContent||'MISSING',url,!vpContent.includes('width=device-width')?'Add width=device-width to viewport meta':null);
+  record(vpContent.includes('user-scalable=no')?'fail':'pass','Mobile','User can zoom',null,url,vpContent.includes('user-scalable=no')?'Remove user-scalable=no (WCAG 1.4.4)':null);
+  var mq=Array.from(doc.querySelectorAll('style')).some(function(s){return s.textContent.includes('@media');});
+  record(mq?'pass':'warn','Mobile','CSS @media responsive queries',null,url,'Add responsive CSS @media breakpoints');
+  var manifest=doc.querySelector('link[rel="manifest"]');
+  record(manifest?'pass':'warn','Mobile','Web App Manifest (PWA)',manifest?manifest.href:'none',url);
+  var fullVW=doc.querySelectorAll('[style*="width:100vw"],[style*="width: 100vw"]').length;
+  record(fullVW===0?'pass':'warn','Mobile','100vw elements (scroll risk): '+fullVW,null,url,fullVW?'Replace width:100vw with width:100%':null);
+}
+
+// ── Suite 8: Forms ──
+function runForms(doc,url){
+  if(!doc){record('skip','Forms','Skipped',null,url);return;}
+  sec('\uD83D\uDCDD Forms & Inputs');
+  var forms=doc.querySelectorAll('form');
+  record('pass','Forms','Forms detected: '+forms.length,null,url);
+  forms.forEach(function(form,i){
+    var method=(form.method||'GET').toUpperCase();
+    var action=form.action||'(none)';
+    record('pass','Forms','Form['+i+']: '+method+' \u2192 '+action,null,url);
+    var inputs=form.querySelectorAll('input:not([type="hidden"]),textarea,select');
+    var required=form.querySelectorAll('[required]').length;
+    record('pass','Forms','Form['+i+'] inputs: '+inputs.length+' | required: '+required,null,url);
+    if(method==='POST'){
+      var csrf=form.querySelector('[name*="csrf"],[name*="token"],[name*="_token"]');
+      record(csrf?'pass':'warn','Forms','Form['+i+'] POST CSRF token: '+(csrf?'found':'MISSING'),null,url);
+    }
+    var submit=form.querySelector('button[type="submit"],input[type="submit"],button:not([type])');
+    record(submit?'pass':'fail','Forms','Form['+i+'] submit button: '+(submit?'present':'MISSING'),null,url,!submit?'Add submit button':null);
+  });
+  var fileInputs=doc.querySelectorAll('input[type="file"]');
+  record('pass','Forms','File upload inputs: '+fileInputs.length,null,url);
+  fileInputs.forEach(function(f,i){
+    var accept=f.getAttribute('accept');
+    record('pass','Forms','FileInput['+i+'] accept: '+(accept||'any'),null,url);
+    var dropZone=f.closest('[ondrop],[class*="drop"],[class*="drag"]');
+    record(dropZone?'pass':'warn','Forms','FileInput['+i+'] drag-and-drop zone: '+(dropZone?'found':'not detected'),null,url,!dropZone?'UX: Add drag-and-drop zone':null);
+  });
+}
+
+// ── Suite 9: Features ──
+function runFeatureDetection(doc,html,url){
+  if(!doc){record('skip','Features','Skipped',null,url);return;}
+  sec('\uD83D\uDD27 Feature Detection');
+  var features={};
+
+  var canvases=doc.querySelectorAll('canvas');
+  features.canvas={count:canvases.length};
+  if(canvases.length>0){
+    record('pass','Features','Canvas elements: '+canvases.length,null,url);
+    canvases.forEach(function(c,i){
+      var w=c.width||c.getAttribute('width'),h=c.height||c.getAttribute('height');
+      record(w&&h?'pass':'warn','Features','Canvas['+i+'] dimensions: '+(w||'?')+'\xD7'+(h||'?'),null,url,!(w&&h)?'Canvas missing width/height':null);
+    });
+    var dl=doc.querySelector('a[download],[onclick*="download"],[class*="download"],[id*="download"],button[class*="download"],button[id*="download"]');
+    record(dl?'pass':'warn','Features','Canvas download button: '+(dl?'found':'NOT FOUND'),null,url,!dl?'FEATURE FAIL: Canvas exists but no download button':null);
+    var share=doc.querySelector('[class*="share"],[id*="share"],[onclick*="share"],[onclick*="Share"]');
+    record(share?'pass':'warn','Features','Share button: '+(share?'found':'not detected'),null,url);
+    var textInputs=doc.querySelectorAll('input[type="text"],textarea').length;
+    record(textInputs>0?'pass':'warn','Features','Text input fields: '+textInputs,null,url,!textInputs?'Canvas tools need text inputs':null);
+  }else{record('pass','Features','Canvas: not used on this page',null,url);}
+
+  features.fileUpload={count:doc.querySelectorAll('input[type="file"]').length};
+  record('pass','Features','File upload inputs: '+features.fileUpload.count,null,url);
+
+  var aiBtns=Array.from(doc.querySelectorAll('button,[class*="ai"],[id*="ai"],[class*="generate"],[id*="generate"],[onclick*="gemini"],[onclick*="generate"],[onclick*="Gemini"]'));
+  features.aiFeatures={count:aiBtns.length};
+  if(aiBtns.length>0){
+    record('pass','Features','AI/Generate buttons: '+aiBtns.length,aiBtns.slice(0,3).map(function(b){return b.textContent.trim().substring(0,25)||b.id;}).join(', ')||null,url);
+    var apiKeyInput=doc.querySelector('[id*="key"],[id*="gemini"],[placeholder*="API" i],[placeholder*="key" i]');
+    record(apiKeyInput?'pass':'warn','Features','API key input: '+(apiKeyInput?'found':'not detected'),null,url,!apiKeyInput?'AI feature needs API key input':null);
+  }else{record('pass','Features','AI/Generate: not detected (informational)',null,url);}
+
+  var socialShare=doc.querySelectorAll('[class*="share"],[id*="share"],[href*="facebook.com/sharer"],[href*="twitter.com/intent"],[href*="wa.me"],[onclick*="share"]').length;
+  features.socialShare={count:socialShare};
+  record(socialShare>0?'pass':'warn','Features','Social share options: '+socialShare,null,url,!socialShare?'UX: Add social sharing for viral reach':null);
+
+  var webShare=(html||'').includes('navigator.share');
+  record(webShare?'pass':'warn','Features','Web Share API: '+(webShare?'used':'not used'),null,url);
+
+  var dlEls=doc.querySelectorAll('a[download],[class*="download"],[id*="download"],button[class*="download"]');
+  features.downloads={count:dlEls.length};
+  record('pass','Features','Download elements: '+dlEls.length,null,url);
+  Array.from(dlEls).filter(function(d){return d.tagName==='A';}).forEach(function(d,i){
+    var hasHref=d.href&&d.href!=='#'&&!d.href.includes('javascript:');
+    record(hasHref?'pass':'warn','Features','Download link['+i+'] href: '+(d.getAttribute('href')||'MISSING'),null,url,!hasHref?'Download link has no valid href':null);
+  });
+
+  var navLinks=doc.querySelectorAll('nav a,header a,.nav a,[role="navigation"] a');
+  features.navigation={count:navLinks.length};
+  record(navLinks.length>0?'pass':'warn','Features','Navigation links: '+navLinks.length,null,url,!navLinks.length?'No navigation menu found':null);
+
+  var modals=doc.querySelectorAll('[role="dialog"],[class*="modal"],[id*="modal"],[class*="dialog"]').length;
+  features.modals={count:modals};
+  record('pass','Features','Modal/dialog elements: '+modals,null,url);
+
+  var tabs=doc.querySelectorAll('[role="tab"],[class*="tab"],[data-tab]').length;
+  var accordion=doc.querySelectorAll('[class*="accordion"],[class*="collapse"]').length;
+  record('pass','Features','Tabs: '+tabs+' | Accordions: '+accordion,null,url);
+
+  var colorPickers=doc.querySelectorAll('input[type="color"]').length;
+  var sliders=doc.querySelectorAll('input[type="range"]').length;
+  if(colorPickers||sliders)record('pass','Features','Color pickers: '+colorPickers+' | Range sliders: '+sliders,null,url);
+
+  var copyBtns=doc.querySelectorAll('[class*="copy"],[id*="copy"],[onclick*="clipboard"],[onclick*="copy"]').length;
+  if(copyBtns)record('pass','Features','Copy-to-clipboard buttons: '+copyBtns,null,url);
+
+  var toasts=doc.querySelectorAll('[class*="toast"],[class*="notify"],[class*="snackbar"]').length;
+  record('pass','Features','Toast/notifications: '+toasts+' (informational)',null,url);
+
+  _featureMap[url]=features;
+  return features;
+}
+
+// ── Suite 10: Media ──
+function runMedia(doc,html,url){
+  if(!doc){record('skip','Media','Skipped',null,url);return;}
+  sec('\uD83D\uDDBC Media & Canvas');
+  var imgs=doc.querySelectorAll('img');
+  Array.from(imgs).slice(0,5).forEach(function(img,i){
+    var src=img.getAttribute('src');
+    record(src&&src!==''?'pass':'fail','Media','Image['+i+'] src: '+(src?src.substring(0,50):'MISSING'),null,url,!src?'Image has no src':null);
+    record(img.getAttribute('alt')!==null?'pass':'fail','Media','Image['+i+'] alt: '+(img.getAttribute('alt')===''?'(empty, decorative)':img.getAttribute('alt')||'MISSING'),null,url);
+  });
+  if(imgs.length>5)record('pass','Media',(imgs.length-5)+' more images (first 5 checked)',null,url);
+  doc.querySelectorAll('video').forEach(function(v,i){
+    record(v.hasAttribute('controls')?'pass':'warn','Media','Video['+i+'] controls: '+v.hasAttribute('controls'),null,url,!v.hasAttribute('controls')?'Add controls to video':null);
+    record(v.querySelector('track[kind="captions"],track[kind="subtitles"]')?'pass':'warn','Media','Video['+i+'] captions: '+(v.querySelector('track')?'present':'MISSING'),null,url);
+  });
+  var lazyImgs=doc.querySelectorAll('img[loading="lazy"]').length;
+  record(imgs.length===0||lazyImgs/imgs.length>0.5?'pass':'warn','Media','Lazy loading: '+lazyImgs+'/'+imgs.length,null,url,imgs.length>3&&lazyImgs/imgs.length<=0.5?'Add loading="lazy" to more images':null);
+  var webp=Array.from(imgs).filter(function(i){return i.src&&(i.src.includes('.webp')||i.src.includes('.avif'));}).length;
+  record(webp>0||imgs.length===0?'pass':'warn','Media','Modern formats (WebP/AVIF): '+webp+'/'+imgs.length,null,url,imgs.length>0&&!webp?'Convert images to WebP/AVIF':null);
+}
+
+// ── Suite 11: Links ──
+function runLinks(doc,html,baseUrl){
+  if(!doc){record('skip','Links','Skipped',null,baseUrl);return Promise.resolve();}
+  sec('\uD83D\uDD17 Links');
+  var anchors=doc.querySelectorAll('a[href]');
+  var hrefs=Array.from(anchors).map(function(a){return a.getAttribute('href');}).filter(Boolean);
+  var hostname=new URL(baseUrl).hostname;
+  var ext=hrefs.filter(function(h){return h.startsWith('http')&&!h.includes(hostname);}).length;
+  var int=hrefs.filter(function(h){return!h.startsWith('http')&&!h.startsWith('mailto:')&&!h.startsWith('tel:')&&!h.startsWith('#')&&!h.startsWith('javascript:');});
+  var jsVoid=hrefs.filter(function(h){return h.startsWith('javascript:void');}).length;
+  record('pass','Links','Total: '+hrefs.length+' ('+int.length+' internal, '+ext+' external)',null,baseUrl);
+  record(jsVoid===0?'pass':'warn','Links','javascript:void links: '+jsVoid,null,baseUrl,jsVoid?'Replace with real hrefs or <button>':null);
+  var tels=hrefs.filter(function(h){return h.startsWith('tel:');}).length;
+  var mails=hrefs.filter(function(h){return h.startsWith('mailto:');}).length;
+  record('pass','Links','Contact links: '+tels+' phone, '+mails+' email',null,baseUrl);
+  var sample=int.slice(0,5);
+  var chain=Promise.resolve();
+  sample.forEach(function(href){
+    chain=chain.then(function(){
+      if(_stop)return;
+      try{
+        var full=new URL(href,baseUrl).href;
+        var t0=performance.now();
+        return fetch(full,{method:'HEAD',redirect:'follow'})
+          .catch(function(){return fetch(full,{mode:'no-cors'});})
+          .then(function(r){
+            var ms=Math.round(performance.now()-t0);
+            record(r.status<400||r.type==='opaque'?'pass':'fail','Links',href+' \u2192 '+(r.status||'opaque')+' ('+ms+'ms)',null,baseUrl,r.status>=400?'Broken link: '+href+' returns '+r.status:null);
+          })
+          .catch(function(e){record('warn','Links',href+' \u2014 unreachable',e.message,baseUrl);});
+      }catch(e){record('warn','Links',href+' \u2014 invalid URL',e.message,baseUrl);}
+    });
+  });
+  return chain;
+}
+
+// ── Suite 12: API / Network ──
+function runAPINetwork(baseUrl,customHeaders){
+  sec('\uD83D\uDD0C API & Network');
+  var probes=[['/robots.txt','robots.txt'],['/sitemap.xml','sitemap.xml'],['/manifest.json','manifest.json'],['/favicon.ico','favicon.ico'],['/.well-known/security.txt','security.txt']];
+  var chain=Promise.resolve();
+  probes.forEach(function(row){
+    chain=chain.then(function(){
+      if(_stop)return;
+      var full;
+      try{full=new URL(row[0],baseUrl).href;}catch(e){return;}
+      var t0=performance.now();
+      return fetch(full,{headers:customHeaders,redirect:'follow'})
+        .catch(function(){return fetch(full,{mode:'no-cors'});})
+        .then(function(r){
+          var ms=Math.round(performance.now()-t0);
+          var st=r.status||'opaque';
+          record(st===200||st==='opaque'?'pass':'warn','API',row[1]+' \u2192 HTTP '+st+' ('+ms+'ms)',null,baseUrl);
+        })
+        .catch(function(e){record('warn','API',row[1]+' \u2192 '+e.message,null,baseUrl);});
+    });
+  });
+  return chain;
+}
+
+// ── AI Analysis ──
+function runAIAnalysis(baseUrl,key){
+  if(!key||key.length<10)return Promise.resolve();
+  log('ai','\uD83E\uDDE0','Sending results to Gemini AI for deep analysis\u2026');
+  var fails=_results.filter(function(r){return r.type==='fail';}).map(function(r){return '['+r.suite+'] '+r.name+(r.failLog?' \u2192 '+r.failLog:'')+(r.pageUrl&&r.pageUrl!=='global'?' ('+r.pageUrl.replace(_siteOrigin,'')+')'':'');}).join('\n');
+  var warns=_results.filter(function(r){return r.type==='warn';}).map(function(r){return '['+r.suite+'] '+r.name;}).slice(0,40).join('\n');
+  var pagesSummary=Object.keys(_pageResults).map(function(pg){var s=_pageResults[pg];return (pg.replace(_siteOrigin,'')||'/')+': \u2705'+s.pass+' \u274C'+s.fail+' \u26A0\uFE0F'+s.warn;}).join('\n');
+  var featuresSummary=Object.keys(_featureMap).map(function(pg){var f=_featureMap[pg];return (pg.replace(_siteOrigin,'')||'/')+': canvas='+(f.canvas?f.canvas.count:0)+' fileUpload='+(f.fileUpload?f.fileUpload.count:0)+' ai='+(f.aiFeatures?f.aiFeatures.count:0)+' share='+(f.socialShare?f.socialShare.count:0)+' download='+(f.downloads?f.downloads.count:0)+' nav='+(f.navigation?f.navigation.count:0);}).join('\n');
+  var userInstructions=$('taInstructions').value||'None provided';
+  var prompt='You are a senior QA engineer, UX expert, and web accessibility specialist. Automated test ran on "'+baseUrl+'": '+_pagesVisited+' pages, '+TOT+' total assertions.\n\nRESULTS: \u2705'+P+' passed | \u274C'+F+' failed | \u26A0\uFE0F'+W+' warnings\n\nPAGES:\n'+(pagesSummary||'Single page')+'\n\nFEATURES DETECTED:\n'+(featuresSummary||'None')+'\n\nFAILURES ('+_results.filter(function(r){return r.type==='fail';}).length+'):\n'+(fails||'None \u2014 excellent!')+'\n\nWARNINGS:\n'+(warns||'None')+'\n\nUSER-DESCRIBED FEATURES:\n'+userInstructions+'\n\nWrite a COMPREHENSIVE QA report:\n\n## \uD83C\uDFAF Overall Quality Score: X/10\nBreakdown per category\n\n## \uD83D\uDEA8 Critical Failures \u2014 Fix Immediately\nEach FAIL: user impact + exact fix with code\n\n## \u26A0\uFE0F High-Priority Warnings\n\n## \uD83D\uDD27 Feature Analysis\nFor canvas/file-upload/AI/share/download features: what works, what is broken, end-to-end user journey, manual test cases\n\n## \uD83C\uDFA8 UX/Usability Assessment\nDesktop and mobile. Specific improvements.\n\n## \u267F Accessibility (WCAG 2.1)\nCompliance level. Critical violations. Quick fixes.\n\n## \uD83D\uDCC8 SEO Assessment\n\n## \uD83D\uDD12 Security Posture (Low/Medium/High/Critical)\n\n## \u26A1 Performance (Core Web Vitals + top optimisations)\n\n## \uD83D\uDE80 Top 10 Quick Wins (effort vs impact)\n\n## \uD83D\uDCCB Manual Test Cases\nSpecific tests the automated agent cannot cover.\n\nBe developer-friendly with copy-paste code fixes.';
+
+  return fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+key,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
+  })
+  .then(function(resp){return resp.json();})
+  .then(function(data){
+    var raw=(data&&data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0])?data.candidates[0].content.parts[0].text:'No AI response received.';
+    var aiContent=$('taAIContent');
+    aiContent.innerHTML='';
+    var bubble=document.createElement('div');
+    bubble.className='ai-bubble';
+    bubble.innerHTML=raw
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/^## (.+)$/gm,'<h3>$1</h3>')
+      .replace(/^### (.+)$/gm,'<strong style="color:#c4b5fd">$1</strong><br>')
+      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+      .replace(/`([^`\n]+)`/g,'<code>$1</code>')
+      .replace(/\n/g,'<br>');
+    aiContent.appendChild(bubble);
+    log('ai','\uD83E\uDDE0','AI analysis complete \u2014 see \uD83E\uDDE0 AI Analysis tab');
+  })
+  .catch(function(e){
+    log('fail','\uD83E\uDDE0','Gemini error: '+e.message);
+    $('taAIContent').innerHTML='<div style="color:#fca5a5;font-size:.8rem">AI error: '+e.message+'</div>';
+  });
+}
+
+// ── Build Reports ──
+function buildReport(baseUrl){
+  var score=Math.round((P/(P+F||1))*100);
+  var sc=score>=80?'#22c55e':score>=60?'#f59e0b':'#ef4444';
+  var origin;try{origin=new URL(baseUrl).origin;}catch(e){origin=baseUrl;}
+  var html='<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap"><div><div style="font-size:.9rem;font-weight:900;color:#c4b5fd">\uD83D\uDCCA Full Site Report</div><div style="font-size:.7rem;color:#475569">'+baseUrl+' \u2014 '+new Date().toLocaleString()+'</div></div><div style="margin-left:auto;text-align:center"><div style="font-size:2rem;font-weight:900;color:'+sc+'">'+score+'%</div><div style="font-size:.65rem;color:#64748b">Quality Score</div></div></div>';
+  var stats=[['\u2705',P,'Passed','#22c55e','#86efac'],['\u274C',F,'Failed','#ef4444','#fca5a5'],['\u26A0\uFE0F',W,'Warnings','#f59e0b','#fcd34d'],['\u23ED',SK,'Skipped','#94a3b8','#64748b'],['\uD83D\uDCC4',_pagesVisited,'Pages','#38bdf8','#7dd3fc'],['#',TOT,'Total','#a78bfa','#c4b5fd']];
+  html+='<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">';
+  stats.forEach(function(s){html+='<div style="background:'+s[3]+'18;border:1px solid '+s[3]+'44;border-radius:9px;padding:10px 14px;text-align:center;min-width:70px"><div style="font-size:1.6rem;font-weight:900;color:'+s[3]+'">'+s[1]+'</div><div style="font-size:.65rem;color:'+s[4]+'">'+s[2]+'</div></div>';});
+  html+='</div>';
+  var pageKeys=Object.keys(_pageResults);
+  if(pageKeys.length){
+    html+='<div style="font-size:.75rem;font-weight:900;color:#7c3aed;margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em">\uD83D\uDCC4 Per-Page Results</div>';
+    pageKeys.forEach(function(pg){
+      var s=_pageResults[pg];
+      var lbl=pg.replace(origin,'')||'/';
+      var badge=s.fail>0?'rb-fail':s.warn>0?'rb-warn':'rb-pass';
+      var lbl2=s.fail>0?s.fail+' failed':s.warn>0?s.warn+' warnings':'All passed';
+      html+='<div class="report-card"><div class="report-title"><span>\uD83D\uDCC4 '+lbl+'</span><span><span class="report-badge '+badge+'">'+lbl2+'</span><span style="font-size:.63rem;color:#334155;margin-left:8px">\u2705'+(s.pass||0)+' \u274C'+(s.fail||0)+' \u26A0\uFE0F'+(s.warn||0)+'</span></span></div><ul class="report-list">';
+      var sorted=s.items.slice().sort(function(a,b){return ({fail:0,warn:1,skip:2,pass:3}[a.type]||4)-({fail:0,warn:1,skip:2,pass:3}[b.type]||4);});
+      sorted.forEach(function(it){
+        var ic={pass:'\u2705',fail:'\u274C',warn:'\u26A0\uFE0F',skip:'\u23ED'}[it.type]||'\u2022';
+        html+='<li><span>'+ic+'</span><span>['+it.suite+'] '+it.name+(it.detail?'<em style="color:#475569;font-size:.9em"> \u2014 '+it.detail+'</em>':'')+(it.failLog?'<span class="fail-log">\u21B3 '+it.failLog+'</span>':'')+'</span></li>';
+      });
+      html+='</ul></div>';
+    });
+  }
+  var suites={};
+  _results.forEach(function(r){if(!suites[r.suite])suites[r.suite]={pass:0,fail:0,warn:0,skip:0,items:[]};suites[r.suite][r.type]=(suites[r.suite][r.type]||0)+1;suites[r.suite].items.push(r);});
+  html+='<div style="font-size:.75rem;font-weight:900;color:#7c3aed;margin:14px 0 8px;text-transform:uppercase;letter-spacing:.08em">\uD83E\uDDEA Suite Summary</div>';
+  Object.keys(suites).forEach(function(name){
+    var s=suites[name];
+    var badge=s.fail>0?'rb-fail':s.warn>0?'rb-warn':'rb-pass';
+    var lbl2=s.fail>0?s.fail+' failed':s.warn>0?s.warn+' warnings':'All passed';
+    html+='<div class="report-card"><div class="report-title">'+name+'<span class="report-badge '+badge+'">'+lbl2+'</span></div><ul class="report-list">';
+    s.items.filter(function(it){return it.type==='fail'||it.type==='warn';}).slice(0,12).forEach(function(it){
+      var ic=it.type==='fail'?'\u274C':'\u26A0\uFE0F';
+      html+='<li><span>'+ic+'</span><span>'+it.name+(it.detail?'<em style="color:#475569;font-size:.9em"> \u2014 '+it.detail+'</em>':'')+(it.failLog?'<span class="fail-log">\u21B3 '+it.failLog+'</span>':'')+'</span></li>';
+    });
+    html+='</ul></div>';
+  });
+  $('taReportContent').innerHTML=html;
+}
+
+function buildFeaturesReport(baseUrl){
+  var html='<div style="font-size:.85rem;font-weight:900;color:#c4b5fd;margin-bottom:14px">\uD83D\uDD27 Feature Detection Report</div>';
+  var keys=Object.keys(_featureMap);
+  if(!keys.length){$('taFeaturesContent').innerHTML=html+'<div style="color:#475569;font-size:.8rem">No pages scanned.</div>';return;}
+  var origin;try{origin=new URL(baseUrl).origin;}catch(e){origin=baseUrl;}
+  keys.forEach(function(pg){
+    var f=_featureMap[pg];
+    var lbl=pg.replace(origin,'')||'/';
+    html+='<div class="report-card"><div class="report-title">\uD83D\uDCC4 '+lbl+'</div><ul class="report-list">';
+    [[f.canvas&&f.canvas.count,'\uD83C\uDFA8 Canvas (image editor/meme generator)'],
+     [f.fileUpload&&f.fileUpload.count,'\uD83D\uDCC1 File upload'],
+     [f.aiFeatures&&f.aiFeatures.count,'\uD83E\uDDE0 AI / Generate buttons'],
+     [f.socialShare&&f.socialShare.count,'\uD83D\uDCE2 Social share'],
+     [f.downloads&&f.downloads.count,'\u2B07 Download elements'],
+     [f.navigation&&f.navigation.count,'\uD83D\uDDFA Navigation links'],
+     [f.modals&&f.modals.count,'\uD83D\uDCAC Modal dialogs'],
+    ].forEach(function(row){
+      var count=row[0]||0;
+      var ic=count>0?'\u2705':'\u2139\uFE0F';
+      html+='<li><span>'+ic+'</span><span>'+row[1]+': <strong>'+count+'</strong></span></li>';
+    });
+    html+='</ul></div>';
+  });
+  $('taFeaturesContent').innerHTML=html;
+}
+
+function buildUXReport(){
+  var uxResults=_results.filter(function(r){return r.suite==='UX'||r.suite==='Mobile'||r.suite==='Accessibility';});
+  var fails=uxResults.filter(function(r){return r.type==='fail';});
+  var warns=uxResults.filter(function(r){return r.type==='warn';});
+  var html='<div style="font-size:.85rem;font-weight:900;color:#c4b5fd;margin-bottom:14px">\uD83C\uDFA8 UX / Usability Audit</div><div class="report-card"><div style="display:flex;gap:10px"><div style="text-align:center"><div style="font-size:1.4rem;font-weight:900;color:#ef4444">'+fails.length+'</div><div style="font-size:.65rem;color:#fca5a5">UX Failures</div></div><div style="text-align:center"><div style="font-size:1.4rem;font-weight:900;color:#f59e0b">'+warns.length+'</div><div style="font-size:.65rem;color:#fcd34d">UX Warnings</div></div></div></div>';
+  if(fails.length){
+    html+='<div class="report-card"><div class="report-title">\u274C UX Failures</div><ul class="report-list">';
+    fails.forEach(function(it){html+='<li><span>\u274C</span><span>['+it.suite+'] '+it.name+(it.failLog?'<span class="fail-log">\u21B3 '+it.failLog+'</span>':'')+'</span></li>';});
+    html+='</ul></div>';
+  }
+  if(warns.length){
+    html+='<div class="report-card"><div class="report-title">\u26A0\uFE0F UX Improvements</div><ul class="report-list">';
+    warns.forEach(function(it){html+='<li><span>\u26A0\uFE0F</span><span>['+it.suite+'] '+it.name+(it.failLog?'<span class="fail-log">\u21B3 '+it.failLog+'</span>':'')+'</span></li>';});
+    html+='</ul></div>';
+  }
+  if(!fails.length&&!warns.length)html+='<div class="report-card"><div style="color:#22c55e;font-size:.85rem">\u2705 No UX issues detected. Consider manual usability testing.</div></div>';
+  $('taUXContent').innerHTML=html;
+}
+
+// ── Download Report ──
+window.taDownloadReport=function(){
+  var baseUrl=$('taUrl').value||'Unknown';
+  var score=Math.round((P/(P+F||1))*100);
+  var now=new Date().toLocaleString();
+  var logHtml='';
+  _rawLog.forEach(function(e){
+    if(e.type==='sec'){logHtml+='<div class="sec">\u2500\u2500 '+e.msg+'</div>';return;}
+    if(e.type==='page'){logHtml+='<div class="page">\uD83D\uDCC4 PAGE: '+e.msg+'</div>';return;}
+    if(e.type==='faillog'){logHtml+='<div class="faillog">\u21B3 '+e.msg+'</div>';return;}
+    var cls={pass:'pass',fail:'fail',warn:'warn',info:'info',ai:'ai'}[e.type]||'info';
+    var ic={pass:'\u2705',fail:'\u274C',warn:'\u26A0\uFE0F',skip:'\u23ED',info:'\u2139\uFE0F',ai:'\uD83E\uDDE0'}[e.type]||'\u2022';
+    logHtml+='<div class="'+cls+'">'+ic+' ['+e.ts+'] '+e.msg+(e.detail?' \u2014 '+e.detail:'')+'</div>';
+  });
+  var tableRows='';
+  _results.forEach(function(r,i){
+    var rc={pass:'tr-pass',fail:'tr-fail',warn:'tr-warn',skip:'tr-skip'}[r.type]||'';
+    var ic={pass:'\u2705',fail:'\u274C',warn:'\u26A0\uFE0F',skip:'\u23ED'}[r.type]||'\u2022';
+    tableRows+='<tr class="'+rc+'"><td>'+(i+1)+'</td><td>'+ic+' '+r.type.toUpperCase()+'</td><td>'+r.suite+'</td><td>'+r.name+'</td><td>'+(r.detail||'')+'</td><td>'+(r.pageUrl?r.pageUrl.replace(_siteOrigin,''):'global')+'</td><td>'+(r.failLog||'')+'</td><td>'+r.ts+'</td></tr>';
+  });
+  var html='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><title>AutoQA Report \u2014 '+baseUrl+'</title><style>body{font-family:"Segoe UI",sans-serif;background:#06060f;color:#e2e8f0;margin:0;padding:20px}h1{font-size:1.4rem;color:#a78bfa;margin-bottom:4px}.sub{color:#475569;font-size:.8rem;margin-bottom:20px}.stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}.stat{padding:12px 18px;border-radius:10px;text-align:center;min-width:80px}.stat .n{font-size:1.8rem;font-weight:900}.stat .l{font-size:.7rem}.s-pass{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3)}.s-pass .n{color:#22c55e}.s-pass .l{color:#86efac}.s-fail{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3)}.s-fail .n{color:#ef4444}.s-fail .l{color:#fca5a5}.s-warn{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3)}.s-warn .n{color:#f59e0b}.s-warn .l{color:#fcd34d}.s-skip{background:rgba(100,116,139,.15);border:1px solid rgba(100,116,139,.3)}.s-skip .n{color:#94a3b8}.s-skip .l{color:#64748b}.s-score{background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.3)}.s-score .n{color:#a78bfa}.s-score .l{color:#c4b5fd}h2{font-size:1rem;color:#7c3aed;border-bottom:1px solid rgba(124,58,237,.3);padding-bottom:6px;margin:20px 0 10px;text-transform:uppercase;letter-spacing:.05em}table{width:100%;border-collapse:collapse;font-size:.72rem;margin-bottom:20px}th{background:#0d0d1f;padding:8px 6px;text-align:left;color:#7c3aed;font-size:.68rem;text-transform:uppercase;border:1px solid rgba(124,58,237,.2)}td{padding:6px;border:1px solid rgba(255,255,255,.05);vertical-align:top;max-width:300px;word-break:break-word}.tr-fail td{background:rgba(239,68,68,.06)}.tr-warn td{background:rgba(245,158,11,.04)}.tr-pass td{background:rgba(34,197,94,.03)}.tr-skip td{background:rgba(100,116,139,.03)}pre.log{background:#0a0a18;border:1px solid rgba(124,58,237,.2);border-radius:8px;padding:14px;font-size:.68rem;font-family:monospace;overflow-x:auto;line-height:1.7;white-space:pre-wrap}.sec{color:#7c3aed;font-weight:900;font-size:.65rem;text-transform:uppercase;padding:5px 0 2px}.page{color:#38bdf8;font-weight:700;border-top:1px solid rgba(56,189,248,.15);padding:5px 0}.pass{color:#86efac}.fail{color:#fca5a5}.warn{color:#fcd34d}.info{color:#94a3b8}.ai{color:#c084fc}.faillog{color:#475569;margin-left:24px;font-size:.9em}@media print{body{background:#fff;color:#000}pre.log{background:#f5f5f5;color:#333}.pass{color:#166534}.fail{color:#991b1b}.warn{color:#92400e}}</style></head><body><h1>\uD83E\uDD16 AutoQA \u2014 Full Site Test Report</h1><div class="sub">URL: '+baseUrl+' | Generated: '+now+' | Pages: '+_pagesVisited+' | Assertions: '+TOT+'</div><div class="stats"><div class="stat s-pass"><div class="n">'+P+'</div><div class="l">PASSED</div></div><div class="stat s-fail"><div class="n">'+F+'</div><div class="l">FAILED</div></div><div class="stat s-warn"><div class="n">'+W+'</div><div class="l">WARNINGS</div></div><div class="stat s-skip"><div class="n">'+SK+'</div><div class="l">SKIPPED</div></div><div class="stat s-score"><div class="n">'+score+'%</div><div class="l">QUALITY</div></div></div><h2>\uD83D\uDCCB All Test Cases</h2><table><thead><tr><th>#</th><th>Result</th><th>Suite</th><th>Test</th><th>Detail</th><th>Page</th><th>Fix</th><th>Time</th></tr></thead><tbody>'+tableRows+'</tbody></table><h2>\uD83D\uDCCB Execution Log</h2><pre class="log">'+logHtml+'</pre></body></html>';
+  var blob=new Blob([html],{type:'text/html'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  try{a.download='autoqa-'+(new URL(baseUrl).hostname)+'-'+Date.now()+'.html';}catch(e){a.download='autoqa-report-'+Date.now()+'.html';}
+  a.click();URL.revokeObjectURL(a.href);
+  log('info','\u2B07','Report downloaded');
+};
+
+// ── Main Run ──
+window.taRun=function(){
+  var seedUrl=($('taUrl').value||'').trim();
+  if(!seedUrl){alert('Enter a URL to test');return;}
+  if(!seedUrl.startsWith('http')){alert('URL must start with http:// or https://');return;}
+  localStorage.setItem('ta_last_url',seedUrl);
+  var gemKey=($('taGeminiKey').value||'').trim();
+  if(gemKey.length>10)localStorage.setItem('ghp_gemini_key',gemKey);
+
+  _running=true;_stop=false;
+  P=0;F=0;W=0;SK=0;TOT=0;_pagesVisited=0;
+  _results=[];_pageResults={};_featureMap={};_rawLog=[];
+  _startTime=Date.now();
+
+  $('taLog').innerHTML='';
+  $('taReportContent').innerHTML='<div style="color:#475569;font-size:.8rem">Running\u2026</div>';
+  $('taFeaturesContent').innerHTML='<div style="color:#475569;font-size:.8rem">Running\u2026</div>';
+  $('taUXContent').innerHTML='<div style="color:#475569;font-size:.8rem">Running\u2026</div>';
+  $('taAIContent').innerHTML='<div style="color:#475569;font-size:.8rem">AI analysis pending\u2026</div>';
+  $('taRunBtn').disabled=true;$('taStopBtn').style.display='block';$('taDownloadBtn').disabled=true;
+  dot('run');taTab('log');
+
+  try{_siteOrigin=new URL(seedUrl).origin;}catch(e){_siteOrigin='';}
+  _baseUrl=seedUrl;
+
+  var activeSuites=new Set(Array.from(document.querySelectorAll('.suite-item.on')).map(function(e){return e.dataset.suite;}));
+  var customHeaders={};
+  try{customHeaders=JSON.parse($('taHeaders').value||'{}');}catch(e){}
+  var maxPages=Math.max(1,Math.min(50,parseInt($('taMaxPages').value)||10));
+
+  log('info','\uD83C\uDF10','Testing: '+seedUrl);
+  log('info','\uD83D\uDCCB','Suites: '+Array.from(activeSuites).join(', ')+' | Max pages: '+maxPages);
+
+  var pageMap={};
+
+  function runSuitesOnPage(pageUrl,result,html){
+    var doc=html?parseHTML(html):null;
+    pageHeader(pageUrl);
+    record(result.ok||result.status==='opaque'?'pass':'fail','Network','HTTP '+result.status,Math.round(result.loadTime)+'ms',pageUrl,result.status>=400?'Page returned '+result.status:null);
+    if(!_stop&&activeSuites.has('structure'))runStructure(doc,pageUrl);
+    if(!_stop&&activeSuites.has('seo'))runSEO(doc,pageUrl);
+    if(!_stop&&activeSuites.has('accessibility'))runAccessibility(doc,pageUrl);
+    if(!_stop&&activeSuites.has('security'))runSecurity(html,pageUrl,result);
+    if(!_stop&&activeSuites.has('performance'))runPerformance(html,result,pageUrl);
+    if(!_stop&&activeSuites.has('ux'))runUX(doc,html,pageUrl);
+    if(!_stop&&activeSuites.has('mobile'))runMobile(doc,pageUrl);
+    if(!_stop&&activeSuites.has('forms'))runForms(doc,pageUrl);
+    if(!_stop&&activeSuites.has('features'))runFeatureDetection(doc,html,pageUrl);
+    if(!_stop&&activeSuites.has('media'))runMedia(doc,html,pageUrl);
+    if(!_stop&&activeSuites.has('links'))return runLinks(doc,html,pageUrl);
+    return Promise.resolve();
+  }
+
+  function finish(){
+    var elapsed=((Date.now()-_startTime)/1000).toFixed(1);
+    $('taTime').textContent=elapsed+'s';
+    log(_stop?'warn':F>0?'fail':'pass',_stop?'\u23F9':F>0?'\u274C':'\u2705',
+      (_stop?'Stopped':'Completed')+': '+_pagesVisited+' pages \u00B7 '+TOT+' assertions \u00B7 \u2705'+P+' \u274C'+F+' \u26A0\uFE0F'+W+' \u00B7 '+elapsed+'s');
+    dot(F>0?'fail':'pass');
+    buildReport(seedUrl);buildFeaturesReport(seedUrl);buildUXReport();
+    taTab('report');
+    var key=(gemKey||localStorage.getItem('ghp_gemini_key')||'').trim();
+    var aiPromise=(!_stop&&key)?runAIAnalysis(seedUrl,key):Promise.resolve();
+    aiPromise.then(function(){
+      $('taRunBtn').disabled=false;$('taStopBtn').style.display='none';$('taDownloadBtn').disabled=false;
+      _running=false;
+    });
+  }
+
+  // Fetch seed then all pages sequentially
+  fetchPage(seedUrl,customHeaders).then(function(seed){
+    if(!seed.ok&&seed.status===0){
+      record('fail','Network','Seed URL unreachable',seed.error||'fetch failed','global',seed.error);
+      dot('fail');buildReport(seedUrl);
+      $('taRunBtn').disabled=false;$('taStopBtn').style.display='none';$('taDownloadBtn').disabled=false;
+      _running=false;return;
+    }
+    record(seed.ok||seed.status==='opaque'?'pass':'warn','Network','Seed responds: HTTP '+seed.status,Math.round(seed.loadTime)+'ms','global');
+    var htmlPages=discoverPages(seedUrl,seed.html,maxPages);
+    log('info','\uD83D\uDDC2','Found '+htmlPages.length+' pages to test');
+    pageMap[seedUrl]={result:seed,html:seed.html};
+    var fetchChain=Promise.resolve();
+    htmlPages.forEach(function(pg){
+      if(pg===seedUrl)return;
+      fetchChain=fetchChain.then(function(){
+        if(_stop)return;
+        log('info','\uD83D\uDCC4','Fetching: '+(pg.replace(_siteOrigin,'')));
+        return fetchPage(pg,customHeaders).then(function(r){
+          pageMap[pg]={result:r,html:r.html||''};
+          return sleep(80);
+        }).catch(function(){
+          pageMap[pg]={result:{ok:false,status:0,html:'',loadTime:0,headers:null,finalUrl:pg},html:''};
+        });
+      });
+    });
+    return fetchChain;
+  }).then(function(){
+    var apiChain=(activeSuites.has('api'))?runAPINetwork(seedUrl,customHeaders):Promise.resolve();
+    return apiChain;
+  }).then(function(){
+    var pageKeys=Object.keys(pageMap);
+    var runChain=Promise.resolve();
+    pageKeys.forEach(function(pageUrl){
+      runChain=runChain.then(function(){
+        if(_stop)return;
+        var r=pageMap[pageUrl];
+        if(!r.result.ok&&r.result.status===0){
+          record('warn','Network','Page unreachable',pageUrl.replace(_siteOrigin,''),pageUrl);
+          return;
+        }
+        _pagesVisited++;counts();
+        return runSuitesOnPage(pageUrl,r.result,r.html);
+      });
+    });
+    return runChain;
+  }).then(finish).catch(function(e){
+    log('fail','\u274C','Unexpected error: '+e.message);
+    finish();
+  });
+};
+
+window.taStop=function(){_stop=true;log('warn','\u23F9','Stop requested\u2026');};
+
+// Set default URL
+(function(){if(!$('taUrl').value)$('taUrl').value='https://shajais.github.io/ShashiNewsGen/';})();
+
+})();
+</script>
+</body>
+</html>
