@@ -79,11 +79,10 @@ function vsMobileTab(panel) {
   const left   = document.getElementById('vsPanelLeft');
   const center = document.getElementById('vsPanelCenter');
   const right  = document.getElementById('vsPanelRight');
-  // On mobile, center is always a div.vs-center not vs-panel, so handle separately
-  if (left)   { left.classList.toggle('vs-mobile-open',   panel === 'left');   }
-  if (right)  { right.classList.toggle('vs-mobile-open',  panel === 'right');  }
-  // Center always visible on mobile via flex order, just scroll to it
-  if (panel === 'center' && center) center.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (left)   left.classList.toggle('vs-mobile-open',   panel === 'left');
+  if (right)  right.classList.toggle('vs-mobile-open',  panel === 'right');
+  // Center panel uses vs-center class — toggle its visibility
+  if (center) center.classList.toggle('vs-mobile-open', panel === 'center');
 }
 
 
