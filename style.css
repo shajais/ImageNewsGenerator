@@ -2003,17 +2003,38 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
 
 /* ── Video Studio nav button ── */
 .video-studio-nav-btn {
-  background: linear-gradient(135deg,#0f172a,#1e1b4b);
-  color: #c4b5fd;
-  border: 1px solid rgba(139,92,246,.4);
+  background: linear-gradient(135deg,#7c3aed,#6366f1);
+  color: #fff;
+  font-weight: 800;
+  font-size: .82rem;
+  padding: 8px 16px;
+  border-radius: 20px;
+  box-shadow: 0 3px 12px rgba(124,58,237,.40);
+  border: none;
   transition: all .2s;
 }
 .video-studio-nav-btn:hover, .video-studio-nav-btn.active-studio-btn {
-  background: linear-gradient(135deg,#7c3aed,#6366f1);
-  color: #fff;
-  box-shadow: 0 3px 18px rgba(124,58,237,.65);
+  background: linear-gradient(135deg,#a855f7,#818cf8);
+  box-shadow: 0 3px 18px rgba(139,92,246,.70);
   transform: scale(1.04);
-  border-color: transparent;
+}
+
+/* ── AI Video Studio nav button ── */
+.aivideo-nav-btn {
+  background: linear-gradient(135deg,#059669,#0d9488);
+  color: #fff;
+  font-weight: 800;
+  font-size: .82rem;
+  padding: 8px 16px;
+  border-radius: 20px;
+  box-shadow: 0 3px 12px rgba(5,150,105,.40);
+  border: none;
+  transition: all .2s;
+}
+.aivideo-nav-btn:hover, .aivideo-nav-btn.active-studio-btn {
+  background: linear-gradient(135deg,#10b981,#14b8a6);
+  box-shadow: 0 3px 18px rgba(16,185,129,.65);
+  transform: scale(1.04);
 }
 
 /* ── Face Swap Studio — step tabs ── */
