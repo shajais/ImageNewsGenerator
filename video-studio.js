@@ -690,11 +690,7 @@ function _vsBlurWatermarkZones(ctx, cv) {
       offCtx.filter = 'none';
       ctx.drawImage(off, z.x, z.y, z.w, z.h);
     } catch(e) {
-      // Canvas tainted or security error — fall back to a dark overlay
-      ctx.save();
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillRect(z.x, z.y, z.w, z.h);
-      ctx.restore();
+      // Canvas tainted or security error — skip silently, do NOT draw dark boxes
     }
   });
 }
@@ -1188,18 +1184,25 @@ async function _vsExportAsync(codec, crf, resPref) {
     videoMixGain.gain.value = videoVolSlider ? parseFloat(videoVolSlider.value) : 1.0;
     videoMixGain.connect(dest);
 
+    // Track which video elements we've already connected to ANY AudioContext
+    // createMediaElementSource() can only be called ONCE per element ever.
+    // We reuse the existing node if already created, just reconnect it.
     VS.clips.forEach(c => {
       if (c._vidEl && c.type === 'vid') {
         try {
-          // Unmute so Web Audio can capture the element's audio
           c._vidEl.muted = false;
-          const vidSrc = exportAudioCtx.createMediaElementSource(c._vidEl);
+          let vidSrc;
+          if (c._vidEl._audioSrcNode) {
+            // Already created — reuse by connecting to new destination
+            vidSrc = c._vidEl._audioSrcNode;
+          } else {
+            vidSrc = exportAudioCtx.createMediaElementSource(c._vidEl);
+            c._vidEl._audioSrcNode = vidSrc; // cache for reuse
+          }
           vidSrc.connect(videoMixGain);
           exportVideoSrcs.push({ src: vidSrc, vidEl: c._vidEl });
         } catch(e) {
-          // createMediaElementSource throws if element is already connected to another context
-          // In that case we can't capture its audio — keep it muted to avoid double-play
-          console.warn('Could not route video audio for clip:', c.name, e.message);
+          console.warn('Could not route video audio for clip:', c.name || '', e.message);
           c._vidEl.muted = true;
         }
       }
@@ -1221,7 +1224,12 @@ async function _vsExportAsync(codec, crf, resPref) {
         if (audEl && audEl.src) {
           audEl.loop = true;
           audEl.currentTime = 0;
-          const audSrc = exportAudioCtx.createMediaElementSource(audEl);
+          // Reuse cached source node — createMediaElementSource can only be called once
+          let audSrc = audEl._audioSrcNode;
+          if (!audSrc) {
+            audSrc = exportAudioCtx.createMediaElementSource(audEl);
+            audEl._audioSrcNode = audSrc;
+          }
           const mg = exportAudioCtx.createGain();
           mg.gain.value = parseFloat(document.getElementById('vsVolumeSlider')?.value ?? 0.5);
           audSrc.connect(mg);
