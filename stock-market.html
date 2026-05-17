@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>📈 Share Market Analyzer — Shashi Creator Studio</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#06060f;color:#e2e8f0;font-family:'Segoe UI',sans-serif;min-height:100vh;display:flex;flex-direction:column}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:#0a0a18}::-webkit-scrollbar-thumb{background:#22c55e;border-radius:3px}
+
+/* Header */
+.sm-header{display:flex;align-items:center;justify-content:space-between;padding:13px 22px;background:#060f0a;border-bottom:1px solid rgba(34,197,94,.2);flex-shrink:0}
+.sm-title{font-size:1.15rem;font-weight:900;background:linear-gradient(90deg,#22c55e,#10b981,#06b6d4,#facc15);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.sm-back{padding:6px 14px;border-radius:8px;border:1px solid rgba(34,197,94,.3);background:rgba(34,197,94,.08);color:#86efac;cursor:pointer;font-size:.8rem;font-weight:700;text-decoration:none}
+.sm-back:hover{background:rgba(34,197,94,.2)}
+
+/* Layout */
+.sm-body{flex:1;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:18px}
+.sm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:16px}
+
+/* Cards */
+.sm-card{background:#060f0a;border:1px solid rgba(34,197,94,.12);border-radius:14px;overflow:hidden}
+.sm-card-head{padding:13px 16px;border-bottom:1px solid rgba(34,197,94,.1);display:flex;align-items:center;gap:10px;background:rgba(34,197,94,.03)}
+.sm-card-icon{font-size:1.3rem}
+.sm-card-title{font-size:.88rem;font-weight:800;color:#f0fdf4}
+.sm-card-sub{font-size:.67rem;color:#166534;margin-top:1px}
+.sm-card-body{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+
+/* Inputs */
+.sm-label{font-size:.7rem;color:#6ee7b7;font-weight:600;margin-bottom:3px;display:block}
+.sm-input{width:100%;padding:8px 11px;border-radius:9px;border:1px solid rgba(34,197,94,.2);background:#030a05;color:#e2e8f0;font-size:.82rem;outline:none;transition:.2s}
+.sm-input:focus{border-color:#22c55e;background:rgba(34,197,94,.04)}
+.sm-select{width:100%;padding:7px 10px;border-radius:9px;border:1px solid rgba(34,197,94,.2);background:#030a05;color:#e2e8f0;font-size:.8rem;outline:none}
+.sm-textarea{width:100%;padding:9px 12px;border-radius:9px;border:1px solid rgba(34,197,94,.2);background:#030a05;color:#e2e8f0;font-size:.78rem;resize:vertical;min-height:80px;outline:none;font-family:inherit}
+.sm-textarea:focus{border-color:#22c55e}
+
+/* Buttons */
+.sm-btn{padding:9px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:700;font-size:.82rem;transition:.2s;display:flex;align-items:center;justify-content:center;gap:6px;width:100%}
+.sm-btn.buy{background:linear-gradient(135deg,#15803d,#22c55e);color:#fff}
+.sm-btn.buy:hover{filter:brightness(1.12)}
+.sm-btn.sell{background:linear-gradient(135deg,#991b1b,#ef4444);color:#fff}
+.sm-btn.sell:hover{filter:brightness(1.12)}
+.sm-btn.neutral{background:linear-gradient(135deg,#1d4ed8,#3b82f6);color:#fff}
+.sm-btn.neutral:hover{filter:brightness(1.12)}
+.sm-btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* Result box */
+.sm-result{background:#030a05;border:1px solid rgba(34,197,94,.1);border-radius:10px;padding:12px;font-size:.78rem;line-height:1.8;color:#cbd5e1;min-height:80px;white-space:pre-wrap;word-break:break-word}
+.sm-result.empty{color:#1a3d22;font-style:italic}
+
+/* Signal badges */
+.sig{display:inline-block;padding:3px 10px;border-radius:12px;font-size:.72rem;font-weight:800;margin:2px}
+.sig.buy{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.4);color:#22c55e}
+.sig.sell{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#ef4444}
+.sig.hold{background:rgba(234,179,8,.15);border:1px solid rgba(234,179,8,.4);color:#facc15}
+.sig.caution{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.4);color:#fb923c}
+
+/* Disclaimer */
+.disclaimer{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:12px 16px;font-size:.72rem;color:#fca5a5;line-height:1.6}
+
+/* Sentiment meter */
+.sent-bar{height:12px;border-radius:6px;background:linear-gradient(90deg,#ef4444,#facc15,#22c55e);position:relative;overflow:hidden;margin:6px 0}
+.sent-needle{position:absolute;top:0;width:3px;height:100%;background:#fff;border-radius:2px;transition:left .5s;box-shadow:0 0 6px #fff}
+
+/* Spin */
+.spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.15);border-top-color:#22c55e;border-radius:50%;animation:smspin .7s linear infinite;vertical-align:middle}
+@keyframes smspin{to{transform:rotate(360deg)}}
+
+/* Market selector chips */
+.mkt-chip{display:inline-block;padding:5px 12px;border-radius:20px;border:1px solid rgba(34,197,94,.2);background:rgba(34,197,94,.05);color:#6ee7b7;font-size:.72rem;cursor:pointer;margin:3px;transition:.15s;font-weight:700}
+.mkt-chip:hover{background:rgba(34,197,94,.18)}
+.mkt-chip.on{background:rgba(34,197,94,.2);border-color:#22c55e;color:#fff}
+
+/* Watchlist table */
+.wl-table{width:100%;border-collapse:collapse;font-size:.75rem}
+.wl-table th{padding:6px 8px;background:rgba(34,197,94,.08);color:#6ee7b7;text-align:left;font-size:.67rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.wl-table td{padding:6px 8px;border-bottom:1px solid rgba(34,197,94,.06);color:#94a3b8}
+.wl-table tr:hover td{background:rgba(34,197,94,.04)}
+.up{color:#22c55e;font-weight:700}.down{color:#ef4444;font-weight:700}.flat{color:#facc15;font-weight:700}
+</style>
+</head>
+<body>
+
+<div class="sm-header">
+  <div>
+    <div class="sm-title">📈 Share Market Analyzer Agent</div>
+    <div style="font-size:.65rem;color:#166534;margin-top:2px">AI-powered · NEPSE · NSE · BSE · Crypto · Sentiment · Buy/Sell signals with Entry, Exit & Stop Loss</div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <a href="viral-growth.html" target="_blank" class="sm-back" style="background:rgba(236,72,153,.07);border-color:rgba(236,72,153,.25);color:#f9a8d4">🚀 Growth</a>
+    <a href="season-market.html" target="_blank" class="sm-back" style="background:rgba(251,146,60,.07);border-color:rgba(251,146,60,.25);color:#fdba74">🛍 Seasonal</a>
+    <a href="index.html" class="sm-back">← Studio</a>
+  </div>
+</div>
+
+<div class="sm-body">
+
+  <!-- Disclaimer -->
+  <div class="disclaimer">
+    ⚠️ <strong>DISCLAIMER:</strong> This tool provides AI-generated analysis for <strong>educational and informational purposes only</strong>. It is NOT financial advice. Market predictions are inherently uncertain. Always consult a SEBON-registered financial advisor before investing. Past patterns do not guarantee future performance. <strong>Never invest money you cannot afford to lose.</strong>
+  </div>
+
+  <!-- Config row -->
+  <div style="background:#060f0a;border:1px solid rgba(34,197,94,.12);border-radius:12px;padding:14px 16px;display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+    <div style="flex:1;min-width:200px">
+      <label class="sm-label">🧠 Gemini API Key</label>
+      <input id="smKey" type="password" class="sm-input" placeholder="AIzaSy…"/>
+    </div>
+    <div style="flex:1;min-width:140px">
+      <label class="sm-label">Primary Market</label>
+      <select class="sm-select" id="smMarket">
+        <option value="NEPSE">🇳🇵 NEPSE (Nepal)</option>
+        <option value="NSE">🇮🇳 NSE (India)</option>
+        <option value="BSE">🇮🇳 BSE (India)</option>
+        <option value="crypto">₿ Crypto</option>
+        <option value="forex">💱 Forex</option>
+        <option value="global">🌐 Global Markets</option>
+      </select>
+    </div>
+    <div style="flex:1;min-width:140px">
+      <label class="sm-label">Risk Profile</label>
+      <select class="sm-select" id="smRisk">
+        <option value="conservative">🛡 Conservative</option>
+        <option value="moderate">⚖️ Moderate</option>
+        <option value="aggressive">🔥 Aggressive</option>
+      </select>
+    </div>
+    <div style="flex:1;min-width:140px">
+      <label class="sm-label">Investment Horizon</label>
+      <select class="sm-select" id="smHorizon">
+        <option value="intraday">Intraday</option>
+        <option value="swing">Swing (3–10 days)</option>
+        <option value="positional">Positional (1–3 months)</option>
+        <option value="long-term">Long-term (6mo+)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Market selector chips -->
+  <div style="background:#060f0a;border:1px solid rgba(34,197,94,.08);border-radius:10px;padding:10px 14px">
+    <div style="font-size:.67rem;color:#166534;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">📊 Track These Sectors / Assets</div>
+    <div id="mktChips">
+      <span class="mkt-chip on" data-s="Banking & Finance">🏦 Banking</span>
+      <span class="mkt-chip on" data-s="Hydropower">⚡ Hydropower</span>
+      <span class="mkt-chip on" data-s="Insurance">🛡 Insurance</span>
+      <span class="mkt-chip" data-s="Manufacturing">🏭 Manufacturing</span>
+      <span class="mkt-chip" data-s="Hotels & Tourism">🏨 Hotels</span>
+      <span class="mkt-chip" data-s="Telecom">📡 Telecom</span>
+      <span class="mkt-chip" data-s="Bitcoin">₿ Bitcoin</span>
+      <span class="mkt-chip" data-s="Ethereum">Ξ Ethereum</span>
+      <span class="mkt-chip" data-s="Nifty50">📈 Nifty50</span>
+      <span class="mkt-chip" data-s="Sensex">📊 Sensex</span>
+      <span class="mkt-chip" data-s="Gold">🥇 Gold</span>
+      <span class="mkt-chip" data-s="Silver">🥈 Silver</span>
+      <span class="mkt-chip" data-s="IT Stocks">💻 IT Stocks</span>
+      <span class="mkt-chip" data-s="FMCG">🛒 FMCG</span>
+    </div>
+  </div>
+
+  <div class="sm-grid">
+
+    <!-- ── STOCK ANALYSIS ── -->
+    <div class="sm-card">
+      <div class="sm-card-head">
+        <div class="sm-card-icon">🔬</div>
+        <div><div class="sm-card-title">Single Stock Deep Analysis</div><div class="sm-card-sub">Full technical + fundamental + sentiment analysis with signals</div></div>
+      </div>
+      <div class="sm-card-body">
+        <label class="sm-label">Stock symbol / name</label>
+        <input class="sm-input" id="stkSymbol" placeholder="e.g. NABIL, ADBL, RELIANCE, AAPL, BTC"/>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div>
+            <label class="sm-label">Current price (if known)</label>
+            <input class="sm-input" id="stkPrice" placeholder="e.g. 1250 NPR"/>
+          </div>
+          <div>
+            <label class="sm-label">Investment amount</label>
+            <input class="sm-input" id="stkAmount" placeholder="e.g. Rs 50,000"/>
+          </div>
+        </div>
+        <label class="sm-label">Any news / info you know about this stock</label>
+        <textarea class="sm-textarea" id="stkNews" placeholder="e.g. NABIL just declared 30% dividend, new MD appointed, quarterly results expected next week…" style="min-height:60px"></textarea>
+        <button class="sm-btn buy" id="stkBtn" onclick="smRun('stk')">🔬 Deep Analyze This Stock</button>
+        <div class="sm-result empty" id="stkResult">Enter a stock name and click analyze for full buy/sell signals.</div>
+      </div>
+    </div>
+
+    <!-- ── MARKET SENTIMENT ── -->
+    <div class="sm-card">
+      <div class="sm-card-head">
+        <div class="sm-card-icon">🌡️</div>
+        <div><div class="sm-card-title">Market Sentiment Analysis</div><div class="sm-card-sub">Social media + news + economic sentiment gauge</div></div>
+      </div>
+      <div class="sm-card-body">
+        <label class="sm-label">What's happening in the market right now? (paste news/tweets/updates)</label>
+        <textarea class="sm-textarea" id="sentData" placeholder="Paste recent news headlines, tweets, social media posts about the market…
+
+Example:
+- RBI keeps rates unchanged
+- IT sector Q4 results beat expectations
+- FII selling continues for 3rd week
+- Retail investors buying the dip
+- @trader123: NEPSE looking bullish, banking stocks ready to breakout
+- Government budget allocated Rs 50B for infrastructure"></textarea>
+        <label class="sm-label" style="margin-top:2px">Focus on</label>
+        <select class="sm-select" id="sentFocus">
+          <option value="overall market">Overall market</option>
+          <option value="banking sector">Banking sector</option>
+          <option value="hydropower">Hydropower</option>
+          <option value="crypto">Cryptocurrency</option>
+          <option value="IT stocks">IT stocks</option>
+          <option value="specific stock">Specific stock (mention in data)</option>
+        </select>
+        <button class="sm-btn neutral" id="sentBtn" onclick="smRun('sent')">🌡️ Analyze Sentiment</button>
+        <div class="sm-result empty" id="sentResult">Sentiment analysis and market mood will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── PORTFOLIO ANALYZER ── -->
+    <div class="sm-card">
+      <div class="sm-card-head">
+        <div class="sm-card-icon">💼</div>
+        <div><div class="sm-card-title">Portfolio Analyzer & Optimizer</div><div class="sm-card-sub">Review your holdings, suggest rebalancing and risk management</div></div>
+      </div>
+      <div class="sm-card-body">
+        <label class="sm-label">Your current portfolio (stock/crypto + quantity + buy price)</label>
+        <textarea class="sm-textarea" id="portData" placeholder="List your holdings like:
+NABIL – 50 shares – bought at Rs 1200
+ADBL – 100 shares – bought at Rs 800
+NTC – 200 shares – bought at Rs 600
+BTC – 0.1 – bought at $45,000
+Or just describe your portfolio in any format…"></textarea>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div>
+            <label class="sm-label">Total invested amount</label>
+            <input class="sm-input" id="portTotal" placeholder="e.g. Rs 5,00,000"/>
+          </div>
+          <div>
+            <label class="sm-label">Target return</label>
+            <select class="sm-select" id="portReturn">
+              <option value="10-15%">10–15% annually</option>
+              <option value="20-30%">20–30% annually</option>
+              <option value="30-50%">30–50% annually</option>
+              <option value="maximize">Maximize (high risk)</option>
+            </select>
+          </div>
+        </div>
+        <button class="sm-btn buy" id="portBtn" onclick="smRun('port')">💼 Analyze My Portfolio</button>
+        <div class="sm-result empty" id="portResult">Portfolio health check and optimization will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── BUY/SELL SCREENER ── -->
+    <div class="sm-card">
+      <div class="sm-card-head">
+        <div class="sm-card-icon">🎯</div>
+        <div><div class="sm-card-title">Buy/Sell Signal Screener</div><div class="sm-card-sub">AI screens multiple stocks and gives ranked buy/sell list</div></div>
+      </div>
+      <div class="sm-card-body">
+        <label class="sm-label">Stocks to screen (comma separated)</label>
+        <input class="sm-input" id="scrStocks" placeholder="e.g. NABIL, ADBL, NTC, SHIVM, UPPER, NRIC"/>
+        <label class="sm-label" style="margin-top:4px">Market conditions you see right now</label>
+        <select class="sm-select" id="scrCondition">
+          <option value="bull market">🐂 Bull market — indices rising</option>
+          <option value="bear market">🐻 Bear market — indices falling</option>
+          <option value="sideways">↔️ Sideways — consolidating</option>
+          <option value="recovery">📈 Recovery — bouncing from lows</option>
+          <option value="correction">📉 Correction — 10%+ pullback</option>
+          <option value="crash">💥 Crash / Panic selling</option>
+        </select>
+        <label class="sm-label" style="margin-top:4px">Additional context (news, macro factors)</label>
+        <textarea class="sm-textarea" id="scrContext" placeholder="e.g. Election results expected next week, FII buying, interest rates stable, monsoon good this year…" style="min-height:50px"></textarea>
+        <button class="sm-btn buy" id="scrBtn" onclick="smRun('scr')">🎯 Run Signal Screener</button>
+        <div class="sm-result empty" id="scrResult">Buy/Sell signals with entry, exit and stop-loss will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── ENTRY/EXIT PLANNER ── -->
+    <div class="sm-card">
+      <div class="sm-card-head">
+        <div class="sm-card-icon">📐</div>
+        <div><div class="sm-card-title">Trade Entry / Exit / SL Planner</div><div class="sm-card-sub">Precise trade plan with risk-reward ratio and position sizing</div></div>
+      </div>
+      <div class="sm-card-body">
+        <label class="sm-label">Stock / Asset</label>
+        <input class="sm-input" id="tpStock" placeholder="e.g. NABIL Bank, Reliance, BTC"/>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <div><label class="sm-label">Current price</label><input class="sm-input" id="tpCur" placeholder="e.g. 1250"/></div>
+          <div><label class="sm-label">Capital to deploy</label><input class="sm-input" id="tpCapital" placeholder="e.g. 50000"/></div>
+          <div><label class="sm-label">Max loss % ok</label><input class="sm-input" id="tpMaxLoss" placeholder="e.g. 5%"/></div>
+        </div>
+        <label class="sm-label" style="margin-top:2px">Trade direction + chart observation</label>
+        <textarea class="sm-textarea" id="tpChart" placeholder="e.g. NABIL forming cup-and-handle at 1200 support. RSI at 45, MACD about to cross. Volume increasing. Target 1400 area. 
+Or just say: 'I think this is a good buy at current levels because...'" style="min-height:60px"></textarea>
+        <button class="sm-btn neutral" id="tpBtn" onclick="smRun('tp')">📐 Calculate Trade Plan</button>
+        <div class="sm-result empty" id="tpResult">Your precise trade plan will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── NEWS & MACRO ANALYZER ── -->
+    <div class="sm-card">
+      <div class="sm-card-head">
+        <div class="sm-card-icon">📰</div>
+        <div><div class="sm-card-title">News & Macro Impact Analyzer</div><div class="sm-card-sub">How current events will affect specific stocks/sectors</div></div>
+      </div>
+      <div class="sm-card-body">
+        <label class="sm-label">Paste news article / headline / event</label>
+        <textarea class="sm-textarea" id="newsData" placeholder="Paste any news, budget announcement, policy change, economic data, geopolitical event, company announcement…
+
+Example:
+Nepal Rastra Bank raises CRR by 1% to control inflation
+Government approves new hydropower project of 500 MW
+India-Nepal trade volume increases by 15%
+FED keeps rates unchanged for 3rd consecutive meeting"></textarea>
+        <label class="sm-label" style="margin-top:4px">Which sectors / stocks to analyze impact on</label>
+        <input class="sm-input" id="newsStocks" placeholder="e.g. banking sector, NEPSE overall, NABIL, hydropower stocks"/>
+        <button class="sm-btn neutral" id="newsBtn" onclick="smRun('news')">📰 Analyze Market Impact</button>
+        <div class="sm-result empty" id="newsResult">Market impact analysis will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── SOCIAL SENTIMENT SCANNER ── -->
+    <div class="sm-card">
+      <div class="sm-card-head">
+        <div class="sm-card-icon">📱</div>
+        <div><div class="sm-card-title">Social Media Sentiment Scanner</div><div class="sm-card-sub">Analyze Twitter/X, Reddit, Facebook posts for market mood</div></div>
+      </div>
+      <div class="sm-card-body">
+        <label class="sm-label">Paste social media posts / tweets / comments about the market</label>
+        <textarea class="sm-textarea" id="socialData" placeholder="Paste tweets, Reddit posts, Facebook comments, YouTube comments about stocks…
+
+Example tweets:
+@investorNP: NEPSE ke bhanne? Banking stocks ma loss xha
+@tradingNepal: ADBL breakout confirmed! Target 1000
+@financeNP: Budget disappointed. Market might fall further
+Reddit r/investing: Is it time to buy the dip in NEPSE banking?
+YouTube comment: NABIL dividend announcement coming, buy now
+Facebook: NEPSE crashed 50 points today, panic selling happening"></textarea>
+        <label class="sm-label" style="margin-top:4px">Stock/sector to gauge sentiment for</label>
+        <input class="sm-input" id="socialStock" placeholder="e.g. NEPSE, NABIL, crypto, banking sector"/>
+        <button class="sm-btn neutral" id="socialBtn" onclick="smRun('social')">📱 Scan Social Sentiment</button>
+        <div class="sm-result empty" id="socialResult">Social sentiment score and retail investor mood will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── INVESTMENT STRATEGY ── -->
+    <div class="sm-card">
+      <div class="sm-card-head">
+        <div class="sm-card-icon">🗺️</div>
+        <div><div class="sm-card-title">Investment Strategy Builder</div><div class="sm-card-sub">Personalized investment plan based on your profile and goals</div></div>
+      </div>
+      <div class="sm-card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div><label class="sm-label">Monthly savings to invest</label><input class="sm-input" id="stratSavings" placeholder="e.g. Rs 20,000"/></div>
+          <div><label class="sm-label">Investment goal</label><select class="sm-select" id="stratGoal"><option>Wealth creation</option><option>Retirement fund</option><option>Buy a house</option><option>Child education</option><option>Emergency fund + growth</option><option>Business capital</option></select></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div><label class="sm-label">Time horizon</label><select class="sm-select" id="stratTime"><option>1–2 years</option><option>3–5 years</option><option>5–10 years</option><option>10+ years</option></select></div>
+          <div><label class="sm-label">Current knowledge</label><select class="sm-select" id="stratKnow"><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></div>
+        </div>
+        <label class="sm-label" style="margin-top:4px">Other context (income, existing investments, obligations)</label>
+        <textarea class="sm-textarea" id="stratContext" placeholder="e.g. Salaried person, Rs 60k/month income, already have Rs 2L in FD, no debts, want to build Rs 50L in 5 years" style="min-height:50px"></textarea>
+        <button class="sm-btn buy" id="stratBtn" onclick="smRun('strat')">🗺️ Build My Investment Strategy</button>
+        <div class="sm-result empty" id="stratResult">Your personalized investment strategy will appear here.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+const GEMINI='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=';
+const $=id=>document.getElementById(id);
+
+const saved=localStorage.getItem('ghp_gemini_key')||'';
+if(saved) $('smKey').value=saved;
+$('smKey').addEventListener('input',function(){localStorage.setItem('ghp_gemini_key',this.value.trim());});
+
+document.querySelectorAll('.mkt-chip').forEach(c=>c.addEventListener('click',()=>c.classList.toggle('on')));
+
+function getKey(){return ($('smKey').value||localStorage.getItem('ghp_gemini_key')||'').trim();}
+function getMarket(){return $('smMarket').value;}
+function getRisk(){return $('smRisk').value;}
+function getHorizon(){return $('smHorizon').value;}
+function getSectors(){return [...document.querySelectorAll('.mkt-chip.on')].map(c=>c.dataset.s).join(', ');}
+
+async function callGemini(prompt){
+  const key=getKey();
+  if(!key) throw new Error('No Gemini API key set');
+  const r=await fetch(GEMINI+key,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:.3,maxOutputTokens:3072}})
+  });
+  if(!r.ok){const e=await r.text();throw new Error('Gemini '+r.status+': '+e.substring(0,150));}
+  const d=await r.json();
+  return d?.candidates?.[0]?.content?.parts?.[0]?.text||'No response';
+}
+
+function setRes(id,text){const el=$(id);el.classList.remove('empty');el.textContent=text;}
+function setLoad(btnId,resId,msg){$(btnId).disabled=true;$(btnId).innerHTML=`<span class="spin"></span> ${msg}`;$(resId).textContent='Analyzing…';$(resId).classList.remove('empty');}
+function resetBtn(id,label){$(id).disabled=false;$(id).innerHTML=label;}
+
+const TODAY=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+const DISCLAIMER='\n\n⚠️ IMPORTANT: This is AI-generated educational content only, NOT financial advice. Consult a registered financial advisor before investing.';
+
+const prompts={
+  stk:()=>{
+    const s=$('stkSymbol').value||'a stock';
+    const p=$('stkPrice').value||'unknown';
+    const amt=$('stkAmount').value||'not specified';
+    const news=$('stkNews').value||'no specific news';
+    return `You are a senior equity research analyst specializing in ${getMarket()} market. Today: ${TODAY}.
+
+Perform a COMPLETE analysis of: ${s}
+Current price: ${p}
+Investment amount: ${amt}
+Recent news/context: ${news}
+Risk profile: ${getRisk()}
+Investment horizon: ${getHorizon()}
+Tracked sectors: ${getSectors()}
+
+Provide a FULL RESEARCH REPORT:
+
+## 1. 📊 TECHNICAL ANALYSIS
+- Price action & trend (bullish/bearish/sideways)
+- Support levels (3 levels with prices)
+- Resistance levels (3 levels with prices)  
+- Moving averages outlook (20, 50, 200 day)
+- RSI, MACD, Volume signals
+- Chart patterns if any
+
+## 2. 💼 FUNDAMENTAL ANALYSIS
+- Business overview and competitive moat
+- Key financial metrics (P/E, P/B, ROE, dividend yield estimates)
+- Revenue/profit trend
+- Balance sheet strength
+- Management quality signals
+
+## 3. 🌡️ MARKET SENTIMENT
+- Current market mood for this stock
+- FII/DII/Retail positioning estimate
+- Social media sentiment
+- Analyst consensus
+
+## 4. ⚠️ RISK FACTORS
+- Top 5 risks to this investment
+- Macro risks
+- Sector-specific risks
+
+## 5. 🎯 TRADING SIGNAL
+Signal: [STRONG BUY / BUY / HOLD / SELL / STRONG SELL]
+Confidence: [X%]
+
+## 6. 📐 TRADE PLAN
+- Entry price: Rs/$ X (or zone X–Y)
+- Target 1 (short-term): Rs/$ X
+- Target 2 (medium-term): Rs/$ X  
+- Target 3 (long-term): Rs/$ X
+- Stop Loss: Rs/$ X (Y% below entry)
+- Risk-Reward Ratio: X:Y
+- Position size for ${amt}: X shares/units
+- Expected time to target: X weeks/months
+
+## 7. 📋 FINAL VERDICT
+One paragraph recommendation with reasoning.${DISCLAIMER}`;
+  },
+  sent:()=>{
+    const data=$('sentData').value||'general market';
+    const focus=$('sentFocus').value;
+    return `You are a market sentiment analyst expert. Today: ${TODAY}.
+
+Analyze this market data/news/social media for sentiment signals:
+
+DATA:
+${data}
+
+Focus: ${focus}
+Market: ${getMarket()}
+
+Provide:
+
+## 🌡️ SENTIMENT GAUGE
+Overall Sentiment: [EXTREME FEAR / FEAR / NEUTRAL / GREED / EXTREME GREED]
+Score: X/100 (0=extreme fear, 100=extreme greed)
+Direction: [Bullish / Bearish / Neutral / Mixed]
+
+## 📊 BREAKDOWN BY SOURCE
+- Institutional investors (FII/DII): [sentiment]
+- Retail investors: [sentiment]
+- Media/News tone: [sentiment]
+- Social media/Twitter: [sentiment]
+
+## 🔑 KEY SIGNALS FOUND
+List 5–8 specific bullish and bearish signals from the data
+
+## 💡 MARKET INTERPRETATION
+What does this sentiment mean for the market in next 1–7 days?
+
+## 🎯 ACTION RECOMMENDATION
+Based on sentiment:
+- What to BUY (if sentiment supports)
+- What to AVOID / SELL
+- Sectors to overweight vs underweight
+- Wait for: [specific catalyst or confirmation before acting]${DISCLAIMER}`;
+  },
+  port:()=>{
+    const data=$('portData').value||'portfolio not specified';
+    const total=$('portTotal').value||'not specified';
+    const ret=$('portReturn').value;
+    return `You are a portfolio manager. Today: ${TODAY}. Market: ${getMarket()}.
+
+Review this investment portfolio:
+
+Holdings:
+${data}
+
+Total invested: ${total}
+Target return: ${ret}
+Risk profile: ${getRisk()}
+Sectors tracked: ${getSectors()}
+
+Provide a COMPLETE PORTFOLIO REVIEW:
+
+## 📊 PORTFOLIO HEALTH SCORE: X/100
+
+## 🔍 HOLDINGS ANALYSIS
+For each holding: Grade (A/B/C/D) | Outlook | Action (Hold/Add/Reduce/Exit)
+
+## ⚖️ PORTFOLIO BALANCE
+- Sector concentration risk
+- Asset allocation analysis
+- Geographic diversification
+- Overweight/underweight sectors
+
+## ⚠️ RISK ASSESSMENT
+- Correlation risk (stocks moving together)
+- Market cap mix
+- Liquidity risk
+- Overall portfolio beta
+
+## 🚀 OPTIMIZATION RECOMMENDATIONS
+1. Exit these positions (with reason + exit price targets)
+2. Reduce these (to what %)
+3. Add more to these (why + at what levels)
+4. New additions to consider (with allocation %)
+
+## 📈 PROJECTED PERFORMANCE
+- Conservative scenario: X% return in 12 months
+- Base case: X% return
+- Bull case: X% return
+
+## 🎯 ACTION PRIORITY LIST
+Numbered list of most urgent actions to take this week${DISCLAIMER}`;
+  },
+  scr:()=>{
+    const stocks=$('scrStocks').value||'major stocks';
+    const condition=$('scrCondition').value;
+    const ctx=$('scrContext').value||'none';
+    return `You are a stock market screener and technical analyst. Today: ${TODAY}.
+
+Market: ${getMarket()} — Current condition: ${condition}
+Risk profile: ${getRisk()} | Horizon: ${getHorizon()}
+
+Screen these stocks/assets: ${stocks}
+Additional context: ${ctx}
+
+For EACH stock provide:
+
+## 📊 SIGNAL SCREENER RESULTS
+
+Create a table with:
+Stock | Signal | Confidence | Entry Zone | Target 1 | Target 2 | Stop Loss | Risk:Reward | Timeframe | Key Reason
+
+Then for each stock, provide brief reasoning (2–3 lines).
+
+## 🏆 TOP PICKS TODAY (ranked)
+1. Best buy opportunity: [stock] — reason
+2. Second pick: [stock] — reason  
+3. Third pick: [stock] — reason
+
+## ⛔ STOCKS TO AVOID NOW
+List with reason
+
+## 📈 OVERALL MARKET BIAS
+Bull/Bear/Neutral — and why
+
+## ⚡ TODAY'S WATCHLIST
+Stocks to monitor for entry in next 1–3 days${DISCLAIMER}`;
+  },
+  tp:()=>{
+    const stk=$('tpStock').value||'stock';
+    const cur=$('tpCur').value||'current price';
+    const cap=$('tpCapital').value||'your capital';
+    const ml=$('tpMaxLoss').value||'2-3%';
+    const chart=$('tpChart').value||'general analysis';
+    return `You are a professional trade planner and risk manager. Today: ${TODAY}.
+
+Create a COMPLETE TRADE PLAN:
+
+Stock/Asset: ${stk}
+Current price: ${cur}
+Capital to deploy: ${cap}
+Max acceptable loss: ${ml}
+Trade analysis/observation: ${chart}
+Risk profile: ${getRisk()}
+Market: ${getMarket()}
+Horizon: ${getHorizon()}
+
+## 📐 TRADE SETUP ANALYSIS
+- Is this a valid trade setup? (Yes/No + reason)
+- Setup type: (Breakout / Breakdown / Reversal / Trend continuation / Range trade)
+- Setup quality score: X/10
+
+## 🎯 TRADE EXECUTION PLAN
+- Trade direction: LONG / SHORT
+- Entry method: (Market / Limit / Stop-limit)
+- Entry price / zone: Rs/$ X — X
+- Ideal entry time/condition: [when exactly to enter]
+
+## 📊 PRICE TARGETS
+- Target 1 (book partial profit): Rs/$ X (X% gain) — book X% of position
+- Target 2 (ride the trend): Rs/$ X (X% gain) — book X% of position
+- Target 3 (full potential): Rs/$ X (X% gain) — remaining position
+- Trailing stop strategy after T1
+
+## 🛑 STOP LOSS PLAN
+- Initial Stop Loss: Rs/$ X (X% below entry) — HARD stop
+- Breakdown level (invalidation): Rs/$ X
+- When to cut early (before SL): [conditions]
+
+## 💰 POSITION SIZING
+- Capital: ${cap}
+- Max loss allowed: ${ml} = Rs/$ X
+- Number of shares/units to buy: X
+- Total cost: Rs/$ X
+- Margin required (if applicable): Rs/$ X
+
+## ⚖️ RISK-REWARD ANALYSIS
+- Risk per trade: Rs/$ X (X%)
+- Reward at T1: Rs/$ X (X%) — R:R = X:1
+- Reward at T2: Rs/$ X (X%) — R:R = X:1
+- Reward at T3: Rs/$ X (X%) — R:R = X:1
+- Expected value: Positive/Negative
+
+## 📋 TRADE MANAGEMENT RULES
+- What to do if price drops 2% immediately
+- What to do if price hits T1
+- When to add to position
+- Exit triggers beyond stop loss
+
+## ✅ VERDICT
+Take this trade: YES / NO / WAIT — with 2-line reason${DISCLAIMER}`;
+  },
+  news:()=>{
+    const news=$('newsData').value||'market news';
+    const stocks=$('newsStocks').value||'overall market';
+    return `You are a macro-economic analyst and market strategist. Today: ${TODAY}.
+
+Analyze the market impact of this news/event:
+
+NEWS/EVENT:
+${news}
+
+Analyze impact on: ${stocks}
+Market: ${getMarket()}
+Sectors tracked: ${getSectors()}
+
+## 📰 NEWS INTERPRETATION
+- What actually happened (cut through the noise)
+- Immediate market reaction expected
+- Delayed reaction (days/weeks later)
+
+## 📊 SECTOR-BY-SECTOR IMPACT
+For each relevant sector:
+Sector | Impact | Direction | Magnitude (High/Med/Low) | Timeline
+
+## 🎯 STOCK-LEVEL IMPACT
+For mentioned stocks/sectors:
+- Which stocks benefit most → BUY signal
+- Which stocks get hurt → SELL/AVOID signal
+- Which stocks are neutral
+
+## 💹 TRADING OPPORTUNITIES
+Specific trades to consider based on this news:
+1. [Stock] — Entry: X — Target: X — SL: X — Reason
+2. [Stock] — same format
+
+## ⚠️ RISKS TO WATCH
+What could make this analysis wrong?
+
+## 🔮 30-DAY OUTLOOK
+How will this news shape market direction over the next month?${DISCLAIMER}`;
+  },
+  social:()=>{
+    const data=$('socialData').value||'social media posts';
+    const stk=$('socialStock').value||'general market';
+    return `You are a social media sentiment analyst for financial markets. Today: ${TODAY}.
+
+Analyze these social media posts/comments for market sentiment:
+
+SOCIAL DATA:
+${data}
+
+Asset/Market focus: ${stk}
+Market: ${getMarket()}
+
+## 📱 SOCIAL SENTIMENT REPORT
+
+### Overall Sentiment Score: X/100
+Breakdown: X% Bullish | X% Bearish | X% Neutral
+
+### 🐦 BY PLATFORM (estimated)
+- Twitter/X sentiment: [Bullish/Bearish] — key themes
+- Reddit/Forums sentiment: [Bullish/Bearish]
+- Facebook/Local groups: [Bullish/Bearish]
+- YouTube comments: [Bullish/Bearish]
+
+### 👥 BY INVESTOR TYPE (inferred)
+- Smart money / Informed traders: [sentiment signal]
+- Retail investors: [sentiment signal]
+- FOMO investors: [signal — are they entering or exiting?]
+
+### 🔑 KEY OPINION THEMES
+Top 5 most common narratives in these posts (bullish and bearish)
+
+### 📊 CONTRARIAN SIGNALS
+When retail is extremely [bullish/bearish], what does the smart money usually do?
+Current contrarian signal: [Buy / Sell / Neutral]
+
+### 🎯 ACTIONABLE INSIGHT
+Based on social sentiment:
+- Short-term (1–5 days): [direction + reason]
+- Key risk: [what could go wrong]
+- What insiders/smart money likely doing: [interpretation]${DISCLAIMER}`;
+  },
+  strat:()=>{
+    const sav=$('stratSavings').value||'your savings';
+    const goal=$('stratGoal').value;
+    const time=$('stratTime').value;
+    const know=$('stratKnow').value;
+    const ctx=$('stratContext').value||'no additional context';
+    return `You are a certified financial planner specializing in Nepal and South Asian markets. Today: ${TODAY}.
+
+Build a COMPLETE INVESTMENT STRATEGY for this person:
+
+Monthly investment: ${sav}
+Financial goal: ${goal}
+Time horizon: ${time}
+Knowledge level: ${know}
+Additional context: ${ctx}
+Risk profile: ${getRisk()}
+Market focus: ${getMarket()}
+
+## 🗺️ PERSONALIZED INVESTMENT STRATEGY
+
+### 💰 PORTFOLIO ALLOCATION
+Recommended % allocation to each asset class:
+- NEPSE/Stocks: X%
+- Fixed Deposits: X%
+- Mutual Funds: X%  
+- Cryptocurrency: X%
+- Gold/Silver: X%
+- Emergency Fund: X%
+
+### 📅 MONTH-BY-MONTH ACTION PLAN (First 6 months)
+Month 1: Specific actions to take
+Month 2: Next steps
+... etc.
+
+### 🏆 SPECIFIC INVESTMENT PICKS
+Based on current market conditions:
+- Top 3–5 stocks to consider (with reasoning)
+- Best mutual funds/ETFs for this profile
+- Crypto allocation (if any) with specific coins
+- FD/savings recommendations
+
+### 📈 MILESTONE PROJECTIONS
+After 1 year: Rs/$ X (at X% return)
+After 3 years: Rs/$ X
+After ${time}: Rs/$ X (to reach ${goal})
+
+### ⚙️ SIP/DCA STRATEGY
+- How to systematically invest each month
+- When to increase SIP amount
+- Lump sum vs SIP decision framework
+
+### 🛡️ RISK MANAGEMENT
+- How to protect against market crashes
+- Insurance recommendations
+- Emergency fund guidelines
+
+### 📚 LEARNING PATH (for ${know} investor)
+3 things to learn/do this month to become a better investor
+
+### ⚡ START THIS WEEK
+The 3 most important actions to take immediately${DISCLAIMER}`;
+  }
+};
+
+const btnLabels={
+  stk:'🔬 Deep Analyze This Stock',sent:'🌡️ Analyze Sentiment',port:'💼 Analyze My Portfolio',
+  scr:'🎯 Run Signal Screener',tp:'📐 Calculate Trade Plan',news:'📰 Analyze Market Impact',
+  social:'📱 Scan Social Sentiment',strat:'🗺️ Build My Investment Strategy'
+};
+
+window.smRun=async function(type){
+  const bid=type+'Btn', rid=type+'Result';
+  const msgs={stk:'Analyzing stock…',sent:'Reading sentiment…',port:'Reviewing portfolio…',
+    scr:'Screening stocks…',tp:'Calculating trade plan…',news:'Analyzing market impact…',
+    social:'Scanning social sentiment…',strat:'Building strategy…'};
+  try{
+    setLoad(bid,rid,msgs[type]||'Analyzing…');
+    const result=await callGemini(prompts[type]());
+    setRes(rid,result);
+  }catch(e){
+    setRes(rid,'❌ Error: '+e.message+'\n\nAdd your Gemini API key in the config bar above.');
+    $(rid).style.color='#fca5a5';
+  }finally{
+    resetBtn(bid,btnLabels[type]||'Analyze');
+  }
+};
+})();
+</script>
+</body>
+</html>

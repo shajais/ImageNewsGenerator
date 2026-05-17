@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>💻 Developer Agent — Shashi Creator Studio</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#06060f;color:#e2e8f0;font-family:'Segoe UI',sans-serif;min-height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Header ── */
+.da-header{display:flex;align-items:center;justify-content:space-between;padding:13px 22px;background:#0d0d1f;border-bottom:1px solid rgba(251,146,60,.25);flex-shrink:0}
+.da-title{font-size:1.15rem;font-weight:900;background:linear-gradient(90deg,#fb923c,#facc15,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.da-back{padding:6px 14px;border-radius:8px;border:1px solid rgba(251,146,60,.3);background:rgba(251,146,60,.08);color:#fdba74;cursor:pointer;font-size:.8rem;font-weight:700;text-decoration:none}
+.da-back:hover{background:rgba(251,146,60,.2)}
+
+/* ── Layout ── */
+.da-body{display:grid;grid-template-columns:300px 1fr 1fr;flex:1;min-height:0;overflow:hidden}
+@media(max-width:900px){.da-body{grid-template-columns:1fr;overflow-y:auto}}
+
+/* ── Panels ── */
+.da-panel{display:flex;flex-direction:column;border-right:1px solid rgba(251,146,60,.12);overflow:hidden}
+.da-panel:last-child{border-right:none}
+.da-panel-head{padding:10px 16px;background:#0a0a18;border-bottom:1px solid rgba(251,146,60,.15);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.da-panel-title{font-size:.72rem;font-weight:900;color:#fb923c;letter-spacing:.08em;text-transform:uppercase}
+.da-panel-body{flex:1;overflow:hidden;display:flex;flex-direction:column}
+
+/* ── Chat (left panel) ── */
+.da-chat{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+.msg{padding:9px 12px;border-radius:10px;font-size:.78rem;line-height:1.65;max-width:96%}
+.msg.user{background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.25);color:#fed7aa;align-self:flex-end}
+.msg.ai{background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.2);color:#ddd6fe;align-self:flex-start}
+.msg.sys{background:rgba(100,116,139,.08);border:1px solid rgba(100,116,139,.15);color:#94a3b8;font-size:.72rem;align-self:center;text-align:center}
+
+.da-input-row{display:flex;gap:6px;padding:10px;background:#0a0a18;border-top:1px solid rgba(251,146,60,.12);flex-shrink:0}
+.da-chat-input{flex:1;padding:9px 12px;border-radius:9px;border:1px solid rgba(251,146,60,.25);background:#0d0d1f;color:#e2e8f0;font-size:.82rem;resize:none;outline:none;min-height:38px;max-height:100px;font-family:inherit}
+.da-chat-input:focus{border-color:#fb923c}
+.da-send-btn{padding:0 14px;border-radius:9px;border:none;background:linear-gradient(135deg,#ea580c,#d97706);color:#fff;font-weight:700;font-size:.82rem;cursor:pointer;flex-shrink:0}
+.da-send-btn:hover{filter:brightness(1.15)}
+.da-send-btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* ── Quick prompts ── */
+.da-quick{display:flex;flex-wrap:wrap;gap:5px;padding:8px 10px;background:#0a0a18;border-top:1px solid rgba(251,146,60,.08)}
+.da-q{padding:4px 10px;border-radius:20px;border:1px solid rgba(251,146,60,.2);background:rgba(251,146,60,.06);color:#fdba74;font-size:.66rem;cursor:pointer;transition:.15s;white-space:nowrap}
+.da-q:hover{background:rgba(251,146,60,.18);color:#fff}
+
+/* ── Config panel (inside left panel) ── */
+.da-config{padding:10px;display:flex;flex-direction:column;gap:8px;border-top:1px solid rgba(251,146,60,.1);background:#07070f}
+.da-lbl{font-size:.68rem;color:#94a3b8;font-weight:600;margin-bottom:3px;display:block}
+.da-sel{width:100%;padding:6px 9px;border-radius:8px;border:1px solid rgba(251,146,60,.25);background:#0d0d1f;color:#e2e8f0;font-size:.78rem;outline:none}
+.da-kinput{width:100%;padding:7px 10px;border-radius:8px;border:1px solid rgba(251,146,60,.25);background:#0d0d1f;color:#e2e8f0;font-size:.78rem;outline:none}
+.da-kinput:focus,.da-sel:focus{border-color:#fb923c}
+
+/* ── Code editor pane ── */
+.da-tab-bar{display:flex;background:#080812;border-bottom:1px solid rgba(251,146,60,.12);overflow-x:auto;flex-shrink:0}
+.da-file-tab{padding:7px 14px;font-size:.72rem;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:.15s;display:flex;align-items:center;gap:5px}
+.da-file-tab.active{color:#fdba74;border-bottom-color:#fb923c;background:rgba(251,146,60,.06)}
+.da-file-tab .fc{font-size:.6rem;cursor:pointer;color:#475569;margin-left:2px}
+.da-file-tab .fc:hover{color:#ef4444}
+.da-code-area{flex:1;overflow:hidden;position:relative}
+.da-editor{width:100%;height:100%;padding:12px 14px;background:#060610;color:#e2e8f0;font-size:.76rem;line-height:1.7;font-family:'Consolas','Fira Code','Courier New',monospace;border:none;outline:none;resize:none;tab-size:2;overflow:auto}
+.da-gen-overlay{position:absolute;inset:0;background:rgba(6,6,16,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;display:none}
+.da-gen-overlay.on{display:flex}
+.da-spin{width:32px;height:32px;border:3px solid rgba(251,146,60,.2);border-top-color:#fb923c;border-radius:50%;animation:daspin .8s linear infinite}
+@keyframes daspin{to{transform:rotate(360deg)}}
+.da-gen-label{font-size:.82rem;color:#fdba74;font-weight:700}
+.da-gen-sub{font-size:.68rem;color:#94a3b8}
+
+/* ── Preview pane ── */
+.da-preview-wrap{flex:1;position:relative;background:#000}
+.da-preview-frame{width:100%;height:100%;border:none;background:#fff}
+.da-preview-toolbar{display:flex;gap:6px;align-items:center;padding:6px 12px;background:#0a0a18;border-bottom:1px solid rgba(251,146,60,.12);flex-shrink:0}
+.da-preview-toolbar select{padding:4px 8px;border-radius:6px;border:1px solid rgba(251,146,60,.2);background:#0d0d1f;color:#e2e8f0;font-size:.72rem;outline:none}
+.da-tb-btn{padding:4px 11px;border-radius:7px;border:1px solid rgba(251,146,60,.25);background:rgba(251,146,60,.08);color:#fdba74;font-size:.72rem;cursor:pointer;font-weight:700;transition:.15s}
+.da-tb-btn:hover{background:rgba(251,146,60,.2)}
+.da-tb-btn.pri{background:linear-gradient(135deg,#ea580c,#d97706);border-color:transparent;color:#fff}
+.da-tb-btn.pri:hover{filter:brightness(1.12)}
+
+/* ── Status bar ── */
+.da-statusbar{display:flex;align-items:center;gap:12px;padding:5px 14px;background:#050510;border-top:1px solid rgba(251,146,60,.1);font-size:.66rem;color:#475569;flex-shrink:0}
+.da-sb-dot{width:7px;height:7px;border-radius:50%;background:#475569}
+.da-sb-dot.ok{background:#22c55e}
+.da-sb-dot.run{background:#fb923c;animation:daspin .8s linear infinite}
+
+/* ── Misc ── */
+pre{white-space:pre-wrap;word-break:break-word}
+.ai-thinking{display:flex;gap:4px;align-items:center;color:#94a3b8;font-size:.75rem;padding:4px 10px}
+.ai-thinking span{width:6px;height:6px;border-radius:50%;background:#fb923c;animation:bounce .9s infinite}
+.ai-thinking span:nth-child(2){animation-delay:.15s}
+.ai-thinking span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+</style>
+</head>
+<body>
+
+<div class="da-header">
+  <div>
+    <div class="da-title">💻 Developer Agent</div>
+    <div style="font-size:.65rem;color:#64748b;margin-top:2px">AI web developer · HTML · CSS · JavaScript · Full stack powered by Gemini 2.0</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <a href="test-agent.html" target="_blank" class="da-back" style="background:rgba(34,211,238,.07);border-color:rgba(34,211,238,.25);color:#67e8f9">🧪 Test Agent</a>
+    <a href="index.html" class="da-back">← Back to Studio</a>
+  </div>
+</div>
+
+<div class="da-body">
+
+  <!-- ══ LEFT: CHAT + CONFIG ══ -->
+  <div class="da-panel">
+    <div class="da-panel-head">
+      <div class="da-panel-title">🧠 Chat with Dev Agent</div>
+      <button class="da-tb-btn" onclick="daClearChat()" title="New project">🗑 New</button>
+    </div>
+    <div class="da-panel-body">
+      <div class="da-chat" id="daChat">
+        <div class="msg sys">👋 Hello! I'm your AI Developer Agent. Describe what you want to build and I'll write the code in real-time.</div>
+      </div>
+      <div class="da-quick">
+        <div class="da-q" onclick="daQuick('Build a modern landing page for a SaaS product with hero, features and pricing sections')">🚀 Landing Page</div>
+        <div class="da-q" onclick="daQuick('Build a single-page dashboard with charts, stats cards, and a data table')">📊 Dashboard</div>
+        <div class="da-q" onclick="daQuick('Build a TODO app with add, complete, filter and localStorage persistence')">✅ TODO App</div>
+        <div class="da-q" onclick="daQuick('Build a calculator app with a clean modern UI')">🧮 Calculator</div>
+        <div class="da-q" onclick="daQuick('Build a responsive portfolio website with dark theme')">🎨 Portfolio</div>
+        <div class="da-q" onclick="daQuick('Build a quiz game with 5 questions, timer and score')">🎯 Quiz Game</div>
+        <div class="da-q" onclick="daQuick('Build a markdown editor with live preview')">📝 MD Editor</div>
+        <div class="da-q" onclick="daQuick('Build a weather app UI with animated icons and 5-day forecast layout')">🌦 Weather UI</div>
+        <div class="da-q" onclick="daQuick('Build a chat UI with bubble messages, timestamps and typing indicator')">💬 Chat UI</div>
+        <div class="da-q" onclick="daQuick('Build an e-commerce product card grid with cart functionality')">🛒 E-Commerce</div>
+        <div class="da-q" onclick="daQuick('Make the UI more beautiful, modern and polished')">✨ Beautify</div>
+        <div class="da-q" onclick="daQuick('Add dark/light mode toggle to the app')">🌓 Dark Mode</div>
+        <div class="da-q" onclick="daQuick('Make the app fully responsive for mobile screens')">📱 Responsive</div>
+        <div class="da-q" onclick="daQuick('Add smooth CSS animations and transitions throughout')">🎞 Animations</div>
+      </div>
+      <div class="da-input-row">
+        <textarea class="da-chat-input" id="daChatInput" placeholder="Describe what to build or change…" rows="2"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();daSend()}"></textarea>
+        <button class="da-send-btn" id="daSendBtn" onclick="daSend()">▶</button>
+      </div>
+    </div>
+    <div class="da-config">
+      <div>
+        <label class="da-lbl">Gemini API Key</label>
+        <input class="da-kinput" id="daGeminiKey" type="password" placeholder="AIzaSy…" oninput="daSaveKey()"/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+        <div>
+          <label class="da-lbl">Tech Stack</label>
+          <select class="da-sel" id="daStack">
+            <option value="vanilla">Vanilla HTML/CSS/JS</option>
+            <option value="tailwind">Tailwind CSS</option>
+            <option value="bootstrap">Bootstrap 5</option>
+            <option value="react">React (CDN)</option>
+            <option value="vue">Vue 3 (CDN)</option>
+          </select>
+        </div>
+        <div>
+          <label class="da-lbl">Output Mode</label>
+          <select class="da-sel" id="daMode">
+            <option value="single">Single HTML file</option>
+            <option value="multi">Multi-file (HTML+CSS+JS)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ MIDDLE: CODE EDITOR ══ -->
+  <div class="da-panel">
+    <div class="da-panel-head">
+      <div class="da-panel-title">📝 Code Editor</div>
+      <div style="display:flex;gap:6px">
+        <button class="da-tb-btn" onclick="daCopyCode()" title="Copy code">📋 Copy</button>
+        <button class="da-tb-btn pri" onclick="daPreviewCode()" title="Run preview">▶ Run</button>
+      </div>
+    </div>
+    <div class="da-panel-body">
+      <div class="da-tab-bar" id="daTabBar">
+        <div class="da-file-tab active" data-file="index.html" onclick="daSwitchFile('index.html')">
+          📄 index.html
+        </div>
+      </div>
+      <div class="da-code-area">
+        <textarea class="da-editor" id="daEditor" spellcheck="false"
+          oninput="daOnEdit()" placeholder="// Your generated code will appear here…
+// Type a prompt in the chat panel to get started.
+
+<!DOCTYPE html>
+<html lang=&quot;en&quot;>
+<head>
+  <meta charset=&quot;UTF-8&quot;/>
+  <title>My App</title>
+</head>
+<body>
+  <h1>Hello World</h1>
+</body>
+</html>"></textarea>
+        <div class="da-gen-overlay" id="daOverlay">
+          <div class="da-spin"></div>
+          <div class="da-gen-label" id="daOverlayLabel">🧠 Generating code…</div>
+          <div class="da-gen-sub" id="daOverlaySub">Gemini is writing your app</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ RIGHT: PREVIEW ══ -->
+  <div class="da-panel">
+    <div class="da-panel-head">
+      <div class="da-panel-title">👁 Live Preview</div>
+      <div style="display:flex;gap:6px">
+        <button class="da-tb-btn" onclick="daOpenNewTab()">↗ New Tab</button>
+        <button class="da-tb-btn" onclick="daDownload()">⬇ Download</button>
+      </div>
+    </div>
+    <div class="da-panel-body">
+      <div class="da-preview-toolbar">
+        <select onchange="daSetViewport(this.value)" title="Device viewport">
+          <option value="100%">🖥 Desktop</option>
+          <option value="768px">📱 Tablet (768px)</option>
+          <option value="375px">📱 Mobile (375px)</option>
+          <option value="414px">📱 Mobile (414px)</option>
+          <option value="320px">📱 Small (320px)</option>
+        </select>
+        <button class="da-tb-btn" onclick="daRefreshPreview()">🔄 Refresh</button>
+        <span id="daPreviewStatus" style="font-size:.68rem;color:#475569;margin-left:auto">Ready</span>
+      </div>
+      <div class="da-preview-wrap">
+        <iframe class="da-preview-frame" id="daPreviewFrame" sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups" title="App Preview"></iframe>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="da-statusbar">
+  <div class="da-sb-dot" id="daSbDot"></div>
+  <span id="daSbLabel">Ready</span>
+  <span style="margin-left:auto" id="daSbModel">Gemini 2.0 Flash</span>
+  <span id="daSbTokens"></span>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   DEVELOPER AGENT
+   AI-powered web app generator using Gemini 2.0 Flash
+   ═══════════════════════════════════════════════════════════════ */
+(function(){
+'use strict';
+
+const GEMINI_URL='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=';
+
+// ── State ──
+let _files={'index.html':''};
+let _activeFile='index.html';
+let _history=[]; // {role,content}
+let _running=false;
+
+const $=id=>document.getElementById(id);
+
+// ── Init ──
+(function init(){
+  const key=localStorage.getItem('ghp_gemini_key')||localStorage.getItem('da_gemini_key')||'';
+  if(key) $('daGeminiKey').value=key;
+
+  // Default starter code
+  const starter=`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>My App</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f8fafc; color: #1e293b; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .card { background: white; border-radius: 16px; padding: 40px; box-shadow: 0 4px 24px rgba(0,0,0,.08); text-align: center; max-width: 400px; }
+    h1 { font-size: 2rem; margin-bottom: 12px; background: linear-gradient(135deg,#6366f1,#8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    p { color: #64748b; line-height: 1.7; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>👋 Hello!</h1>
+    <p>Type a prompt in the chat to build your app. I'll write the code and preview it here.</p>
+  </div>
+</body>
+</html>`;
+  _files['index.html']=starter;
+  $('daEditor').value=starter;
+  daPreviewCode();
+})();
+
+// ── Key saving ──
+window.daSaveKey=function(){
+  const k=$('daGeminiKey').value.trim();
+  if(k.length>10){ localStorage.setItem('ghp_gemini_key',k); localStorage.setItem('da_gemini_key',k); }
+};
+
+// ── File tabs ──
+window.daSwitchFile=function(filename){
+  // Save current
+  _files[_activeFile]=$('daEditor').value;
+  _activeFile=filename;
+  $('daEditor').value=_files[filename]||'';
+  document.querySelectorAll('.da-file-tab').forEach(t=>{
+    t.classList.toggle('active',t.dataset.file===filename);
+  });
+};
+
+function renderTabs(){
+  const bar=$('daTabBar');
+  bar.innerHTML='';
+  const icons={'index.html':'📄','style.css':'🎨','script.js':'⚡','app.js':'⚡'};
+  Object.keys(_files).forEach(name=>{
+    const tab=document.createElement('div');
+    tab.className='da-file-tab'+(name===_activeFile?' active':'');
+    tab.dataset.file=name;
+    tab.innerHTML=`${icons[name]||'📄'} ${name}`;
+    tab.onclick=()=>daSwitchFile(name);
+    bar.appendChild(tab);
+  });
+}
+
+// ── Preview ──
+window.daPreviewCode=function(){
+  _files[_activeFile]=$('daEditor').value;
+  const mode=$('daMode').value;
+  let src='';
+
+  if(mode==='single'||Object.keys(_files).length===1){
+    src=_files['index.html']||$('daEditor').value;
+  } else {
+    // Inline CSS and JS into HTML
+    let html=_files['index.html']||'';
+    const css=_files['style.css']||'';
+    const js=_files['script.js']||_files['app.js']||'';
+    if(css) html=html.replace('</head>',`<style>${css}</style></head>`);
+    if(js) html=html.replace('</body>',`<script>${js}<\/script></body>`);
+    src=html;
+  }
+
+  $('daPreviewFrame').srcdoc=src;
+  $('daPreviewStatus').textContent='Updated '+new Date().toLocaleTimeString();
+};
+
+window.daRefreshPreview=function(){ daPreviewCode(); };
+
+window.daOnEdit=function(){
+  // Debounce auto-preview
+  clearTimeout(window._daPreviewTimer);
+  window._daPreviewTimer=setTimeout(daPreviewCode,800);
+};
+
+window.daSetViewport=function(width){
+  $('daPreviewFrame').style.width=width;
+  $('daPreviewFrame').style.margin='0 auto';
+  $('daPreviewFrame').parentElement.style.overflowX='auto';
+};
+
+window.daOpenNewTab=function(){
+  _files[_activeFile]=$('daEditor').value;
+  const src=_files['index.html']||$('daEditor').value;
+  const w=window.open();
+  w.document.write(src);
+  w.document.close();
+};
+
+window.daCopyCode=function(){
+  _files[_activeFile]=$('daEditor').value;
+  const src=_files[_activeFile]||'';
+  navigator.clipboard.writeText(src).then(()=>{
+    const btn=event.target; btn.textContent='✅ Copied!';
+    setTimeout(()=>btn.textContent='📋 Copy',2000);
+  });
+};
+
+window.daDownload=function(){
+  _files[_activeFile]=$('daEditor').value;
+  // If single file, just download index.html
+  // If multi-file, create a zip-like approach with multiple downloads
+  Object.entries(_files).forEach(([name,content],i)=>{
+    if(!content.trim()) return;
+    setTimeout(()=>{
+      const a=document.createElement('a');
+      a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(content);
+      a.download=name;
+      a.click();
+    },i*300);
+  });
+};
+
+// ── Chat UI helpers ──
+function addMsg(role, html){
+  const chat=$('daChat');
+  const el=document.createElement('div');
+  el.className='msg '+role;
+  el.innerHTML=html;
+  chat.appendChild(el);
+  chat.scrollTop=chat.scrollHeight;
+  return el;
+}
+
+function addThinking(){
+  const chat=$('daChat');
+  const el=document.createElement('div');
+  el.className='ai-thinking';
+  el.id='daThinking';
+  el.innerHTML='<span></span><span></span><span></span> <span style="font-size:.72rem;color:#64748b">Agent is thinking…</span>';
+  chat.appendChild(el);
+  chat.scrollTop=chat.scrollHeight;
+  return el;
+}
+
+function removeThinking(){
+  const t=document.getElementById('daThinking');
+  if(t) t.remove();
+}
+
+window.daQuick=function(prompt){
+  $('daChatInput').value=prompt;
+  daSend();
+};
+
+window.daClearChat=function(){
+  _history=[];
+  _files={'index.html':''};
+  _activeFile='index.html';
+  $('daChat').innerHTML='<div class="msg sys">🗑 New project started. What would you like to build?</div>';
+  $('daEditor').value='';
+  $('daPreviewFrame').srcdoc='';
+  renderTabs();
+};
+
+// ── GEMINI CALL ──
+async function callGemini(prompt){
+  const key=($('daGeminiKey').value||localStorage.getItem('ghp_gemini_key')||'').trim();
+  if(!key) throw new Error('No Gemini API key. Add your key in the config below the chat.');
+
+  const stack=$('daStack').value;
+  const mode=$('daMode').value;
+
+  const stackHints={
+    vanilla:'Use plain HTML, CSS, and JavaScript only. No external libraries unless really needed.',
+    tailwind:'Use Tailwind CSS via CDN (<script src="https://cdn.tailwindcss.com"><\/script>). Use Tailwind utility classes for all styling.',
+    bootstrap:'Use Bootstrap 5 via CDN. Use Bootstrap components and grid system.',
+    react:'Use React 18 via CDN (unpkg). Use functional components with hooks. Use Babel standalone for JSX.',
+    vue:'Use Vue 3 via CDN (unpkg). Use Composition API with setup().',
+  };
+
+  const modeHint=mode==='single'
+    ? 'Output everything in a SINGLE complete index.html file (inline all CSS in <style> and JS in <script> tags).'
+    : 'Output separate files: index.html, style.css, script.js. Mark each file clearly with a comment like // FILE: style.css';
+
+  const systemPrompt=`You are an expert web developer AI agent. You write clean, modern, beautiful, production-quality web applications.
+
+TECH STACK: ${stackHints[stack]||stackHints.vanilla}
+OUTPUT FORMAT: ${modeHint}
+
+RULES:
+1. Always write COMPLETE, WORKING code — no placeholders, no "// add code here"
+2. Make UIs beautiful: use gradients, shadows, rounded corners, smooth animations
+3. Use modern CSS: flexbox/grid, CSS custom properties, transitions
+4. Make everything responsive (mobile-first)
+5. Add meaningful interactivity with JavaScript
+6. Include hover states, focus states, loading states
+7. Use semantic HTML5 elements
+8. Write clean, commented code
+
+When outputting code:
+- If single file: Output ONE complete HTML file. Start with <!DOCTYPE html>
+- If multi-file: Output each file clearly separated with: // ===FILE: filename.ext===
+
+Always provide complete files, never truncate.`;
+
+  // Build messages
+  const messages=[
+    {role:'user',parts:[{text:systemPrompt}]},
+    {role:'model',parts:[{text:'Understood! I\'m ready to build beautiful, complete web apps. What would you like me to create?'}]},
+  ];
+
+  // Add history (last 6 turns to keep context)
+  _history.slice(-6).forEach(h=>{
+    messages.push({role:h.role==='user'?'user':'model',parts:[{text:h.content}]});
+  });
+
+  // Add current
+  const fullPrompt = `${prompt}
+
+Current code context:
+\`\`\`html
+${($('daEditor').value||'').substring(0,4000)}
+\`\`\``;
+  messages.push({role:'user',parts:[{text:fullPrompt}]});
+
+  const resp=await fetch(GEMINI_URL+key,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      contents:messages,
+      generationConfig:{temperature:0.7,maxOutputTokens:8192}
+    })
+  });
+
+  if(!resp.ok){
+    const err=await resp.text();
+    throw new Error(`Gemini API error ${resp.status}: ${err.substring(0,200)}`);
+  }
+  const data=await resp.json();
+  return data?.candidates?.[0]?.content?.parts?.[0]?.text||'No response from AI';
+}
+
+// ── Parse and apply generated code ──
+function applyGeneratedCode(text, mode){
+  // Extract code blocks
+  const codeMatch=text.match(/```(?:html|css|js|javascript)?([\s\S]*?)```/g);
+
+  if(mode==='multi' && text.includes('===FILE:')){
+    // Multi-file output
+    const fileRegex=/\/\/\s*===FILE:\s*([^\n]+)===([\s\S]*?)(?=\/\/\s*===FILE:|$)/g;
+    let m, found=false;
+    while((m=fileRegex.exec(text))!==null){
+      const fname=m[1].trim();
+      let content=m[2].trim();
+      // Remove wrapping code fence if present
+      content=content.replace(/^```[^\n]*\n?/,'').replace(/\n?```$/,'').trim();
+      _files[fname]=content;
+      found=true;
+    }
+    if(found){
+      renderTabs();
+      daSwitchFile('index.html');
+      return true;
+    }
+  }
+
+  // Single file or extract first HTML block
+  let htmlContent='';
+  if(codeMatch){
+    for(const block of codeMatch){
+      const content=block.replace(/^```[^\n]*\n?/,'').replace(/\n?```$/,'').trim();
+      if(content.includes('<!DOCTYPE')||content.includes('<html')||content.includes('<body')||content.length>200){
+        htmlContent=content; break;
+      }
+    }
+  }
+
+  // If no code block, try to find raw HTML
+  if(!htmlContent && text.includes('<!DOCTYPE')){
+    const start=text.indexOf('<!DOCTYPE');
+    const end=text.lastIndexOf('</html>')+7;
+    if(start>=0 && end>start) htmlContent=text.substring(start,end);
+  }
+
+  if(!htmlContent && text.includes('<html')){
+    const start=text.indexOf('<html');
+    const end=text.lastIndexOf('</html>')+7;
+    if(start>=0 && end>start) htmlContent=text.substring(start,end);
+  }
+
+  if(htmlContent){
+    _files['index.html']=htmlContent;
+    _activeFile='index.html';
+    $('daEditor').value=htmlContent;
+    renderTabs();
+    daPreviewCode();
+    return true;
+  }
+
+  return false;
+}
+
+// ── Main send ──
+window.daSend=async function(){
+  if(_running) return;
+  const input=$('daChatInput');
+  const prompt=input.value.trim();
+  if(!prompt) return;
+
+  input.value='';
+  _running=true;
+  $('daSendBtn').disabled=true;
+  $('daSbDot').className='da-sb-dot run';
+  $('daSbLabel').textContent='Generating…';
+
+  addMsg('user',prompt);
+  _history.push({role:'user',content:prompt});
+
+  const thinking=addThinking();
+  $('daOverlay').className='da-gen-overlay on';
+  $('daOverlayLabel').textContent='🧠 Generating code…';
+  $('daOverlaySub').textContent=prompt.length>60?prompt.substring(0,60)+'…':prompt;
+
+  try{
+    const response=await callGemini(prompt);
+    removeThinking();
+    $('daOverlay').className='da-gen-overlay';
+
+    // Add AI response to chat (summarised)
+    const codeLen=(response.match(/```/g)||[]).length/2;
+    const summary=codeLen>0
+      ? `✅ Generated ${codeLen} code block${codeLen>1?'s':''} — applied to editor`
+      : response.substring(0,300)+(response.length>300?'…':'');
+    addMsg('ai',summary.replace(/\n/g,'<br>'));
+    _history.push({role:'ai',content:response});
+
+    const applied=applyGeneratedCode(response, $('daMode').value);
+    if(!applied){
+      // AI gave a text response, not code — just show it fully
+      const last=$('daChat').querySelector('.msg.ai:last-child');
+      if(last) last.innerHTML=response.replace(/\n/g,'<br>').replace(/```[^`]*```/g,m=>`<pre style="background:#0d0d1f;padding:8px;border-radius:6px;font-size:.7rem;margin:4px 0;overflow:auto">${m.replace(/```[^\n]*\n?/g,'')}</pre>`);
+    }
+
+    $('daSbDot').className='da-sb-dot ok';
+    $('daSbLabel').textContent='Ready';
+
+  }catch(e){
+    removeThinking();
+    $('daOverlay').className='da-gen-overlay';
+    addMsg('ai',`❌ <b>Error:</b> ${e.message}`);
+    $('daSbDot').className='da-sb-dot';
+    $('daSbLabel').textContent='Error: '+e.message.substring(0,50);
+  }
+
+  _running=false;
+  $('daSendBtn').disabled=false;
+  input.focus();
+};
+
+// Initial preview
+setTimeout(daPreviewCode,100);
+
+})();
+</script>
+</body>
+</html>

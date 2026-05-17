@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>🛍 Seasonal Market Agent — Shashi Creator Studio</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#06060f;color:#e2e8f0;font-family:'Segoe UI',sans-serif;min-height:100vh;display:flex;flex-direction:column}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:#0a0a18}::-webkit-scrollbar-thumb{background:#f97316;border-radius:3px}
+
+/* Header */
+.sea-header{display:flex;align-items:center;justify-content:space-between;padding:13px 22px;background:#0f0906;border-bottom:1px solid rgba(249,115,22,.2);flex-shrink:0}
+.sea-title{font-size:1.15rem;font-weight:900;background:linear-gradient(90deg,#f97316,#facc15,#22d3ee,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.sea-back{padding:6px 14px;border-radius:8px;border:1px solid rgba(249,115,22,.3);background:rgba(249,115,22,.08);color:#fdba74;cursor:pointer;font-size:.8rem;font-weight:700;text-decoration:none}
+.sea-back:hover{background:rgba(249,115,22,.2)}
+
+/* Body */
+.sea-body{flex:1;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:18px}
+.sea-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:16px}
+
+/* Cards */
+.sea-card{background:#0f0906;border:1px solid rgba(249,115,22,.12);border-radius:14px;overflow:hidden}
+.sea-card-head{padding:13px 16px;border-bottom:1px solid rgba(249,115,22,.1);display:flex;align-items:center;gap:10px;background:rgba(249,115,22,.03)}
+.sea-card-icon{font-size:1.3rem}
+.sea-card-title{font-size:.88rem;font-weight:800;color:#fff7ed}
+.sea-card-sub{font-size:.67rem;color:#92400e;margin-top:1px}
+.sea-card-body{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+
+/* Inputs */
+.sea-label{font-size:.7rem;color:#fcd34d;font-weight:600;margin-bottom:3px;display:block}
+.sea-input{width:100%;padding:8px 11px;border-radius:9px;border:1px solid rgba(249,115,22,.2);background:#07040a;color:#e2e8f0;font-size:.82rem;outline:none;transition:.2s}
+.sea-input:focus{border-color:#f97316}
+.sea-select{width:100%;padding:7px 10px;border-radius:9px;border:1px solid rgba(249,115,22,.2);background:#07040a;color:#e2e8f0;font-size:.8rem;outline:none}
+.sea-textarea{width:100%;padding:9px 12px;border-radius:9px;border:1px solid rgba(249,115,22,.2);background:#07040a;color:#e2e8f0;font-size:.78rem;resize:vertical;min-height:80px;outline:none;font-family:inherit}
+.sea-textarea:focus{border-color:#f97316}
+
+/* Buttons */
+.sea-btn{padding:9px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:700;font-size:.82rem;transition:.2s;display:flex;align-items:center;justify-content:center;gap:6px;width:100%}
+.sea-btn.pri{background:linear-gradient(135deg,#c2410c,#f97316);color:#fff}
+.sea-btn.pri:hover{filter:brightness(1.12)}
+.sea-btn.sec{background:linear-gradient(135deg,#1e40af,#3b82f6);color:#fff}
+.sea-btn.sec:hover{filter:brightness(1.12)}
+.sea-btn.green{background:linear-gradient(135deg,#15803d,#22c55e);color:#fff}
+.sea-btn.green:hover{filter:brightness(1.12)}
+.sea-btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* Result */
+.sea-result{background:#07040a;border:1px solid rgba(249,115,22,.1);border-radius:10px;padding:12px;font-size:.78rem;line-height:1.8;color:#cbd5e1;min-height:80px;white-space:pre-wrap;word-break:break-word}
+.sea-result.empty{color:#431407;font-style:italic}
+
+/* Spin */
+.spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.15);border-top-color:#f97316;border-radius:50%;animation:seaspin .7s linear infinite;vertical-align:middle}
+@keyframes seaspin{to{transform:rotate(360deg)}}
+
+/* Festival timeline */
+.fest-timeline{display:flex;flex-direction:column;gap:6px}
+.fest-item{display:flex;align-items:flex-start;gap:10px;padding:8px 12px;border-radius:9px;background:rgba(249,115,22,.05);border:1px solid rgba(249,115,22,.1);cursor:pointer;transition:.15s}
+.fest-item:hover{background:rgba(249,115,22,.12);border-color:rgba(249,115,22,.3)}
+.fest-icon{font-size:1.4rem;flex-shrink:0}
+.fest-name{font-size:.82rem;font-weight:700;color:#fff7ed}
+.fest-date{font-size:.67rem;color:#92400e}
+.fest-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.fest-tag{padding:2px 8px;border-radius:12px;font-size:.65rem;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.2);color:#fdba74;font-weight:700}
+.fest-demand{display:inline-block;padding:2px 8px;border-radius:12px;font-size:.65rem;font-weight:800;margin-left:4px}
+.fd-high{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#22c55e}
+.fd-med{background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.3);color:#facc15}
+.fd-low{background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);color:#fb923c}
+
+/* Opportunity chips */
+.opp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:7px}
+.opp{padding:9px 8px;border-radius:10px;border:1px solid rgba(249,115,22,.15);background:rgba(249,115,22,.05);text-align:center;cursor:pointer;font-size:.7rem;color:#94a3b8;transition:.15s}
+.opp:hover{border-color:#f97316;color:#fdba74;background:rgba(249,115,22,.1)}
+.opp.on{border-color:#f97316;color:#fff;background:rgba(249,115,22,.15)}
+.opp span{display:block;font-size:1.3rem;margin-bottom:3px}
+
+/* Section title */
+.sea-sec{font-size:.67rem;font-weight:900;color:#f97316;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
+</style>
+</head>
+<body>
+
+<div class="sea-header">
+  <div>
+    <div class="sea-title">🛍 Seasonal Market Intelligence Agent</div>
+    <div style="font-size:.65rem;color:#92400e;margin-top:2px">AI-powered · Festivals · Seasons · Events · Product demand · Sourcing · Selling strategy · End-to-end business plan</div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <a href="stock-market.html" target="_blank" class="sea-back" style="background:rgba(34,197,94,.07);border-color:rgba(34,197,94,.25);color:#86efac">📈 Markets</a>
+    <a href="viral-growth.html" target="_blank" class="sea-back" style="background:rgba(236,72,153,.07);border-color:rgba(236,72,153,.25);color:#f9a8d4">🚀 Growth</a>
+    <a href="index.html" class="sea-back">← Studio</a>
+  </div>
+</div>
+
+<div class="sea-body">
+
+  <!-- Config -->
+  <div style="background:#0f0906;border:1px solid rgba(249,115,22,.12);border-radius:12px;padding:14px 16px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+    <div style="flex:1;min-width:200px">
+      <label class="sea-label">🧠 Gemini API Key</label>
+      <input id="seaKey" type="password" class="sea-input" placeholder="AIzaSy…"/>
+    </div>
+    <div style="flex:1;min-width:140px">
+      <label class="sea-label">Country / Market</label>
+      <select class="sea-select" id="seaCountry">
+        <option value="Nepal">🇳🇵 Nepal</option>
+        <option value="India">🇮🇳 India</option>
+        <option value="Bangladesh">🇧🇩 Bangladesh</option>
+        <option value="Pakistan">🇵🇰 Pakistan</option>
+        <option value="Sri Lanka">🇱🇰 Sri Lanka</option>
+        <option value="Global">🌐 Global</option>
+      </select>
+    </div>
+    <div style="flex:1;min-width:140px">
+      <label class="sea-label">Your City / Region</label>
+      <input class="sea-input" id="seaCity" placeholder="e.g. Kathmandu, Pokhara"/>
+    </div>
+    <div style="flex:1;min-width:140px">
+      <label class="sea-label">Business Type</label>
+      <select class="sea-select" id="seaBiz">
+        <option value="retail shop">🏪 Retail shop</option>
+        <option value="online seller">🛒 Online seller</option>
+        <option value="wholesaler">📦 Wholesaler</option>
+        <option value="manufacturer">🏭 Manufacturer</option>
+        <option value="service provider">🎯 Service provider</option>
+        <option value="street vendor">🛵 Street vendor</option>
+        <option value="content creator selling products">📱 Creator selling products</option>
+        <option value="startup">🚀 Startup</option>
+      </select>
+    </div>
+    <div style="flex:1;min-width:140px">
+      <label class="sea-label">Capital Available</label>
+      <select class="sea-select" id="seaCapital">
+        <option value="under Rs 10,000">Under Rs 10,000</option>
+        <option value="Rs 10,000–50,000">Rs 10,000–50,000</option>
+        <option value="Rs 50,000–2,00,000">Rs 50K–2 Lakh</option>
+        <option value="Rs 2,00,000–10,00,000">Rs 2–10 Lakh</option>
+        <option value="Rs 10 Lakh+">Rs 10 Lakh+</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Upcoming festivals quick reference -->
+  <div style="background:#0f0906;border:1px solid rgba(249,115,22,.12);border-radius:12px;padding:14px 16px">
+    <div class="sea-sec">📅 Upcoming Seasonal Opportunities — Nepal & South Asia (2025–2026)</div>
+    <div class="fest-timeline" id="festTimeline">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <!-- Business category selector -->
+  <div style="background:#0f0906;border:1px solid rgba(249,115,22,.08);border-radius:12px;padding:12px 16px">
+    <div class="sea-sec">🏷 Your Product / Service Categories</div>
+    <div class="opp-grid" id="oppGrid">
+      <div class="opp on" data-c="Clothing & Fashion"><span>👗</span>Clothing</div>
+      <div class="opp on" data-c="Food & Sweets"><span>🍬</span>Food/Sweets</div>
+      <div class="opp" data-c="Electronics & Gadgets"><span>📱</span>Electronics</div>
+      <div class="opp" data-c="Decoration & Gifts"><span>🎁</span>Gifts/Decor</div>
+      <div class="opp on" data-c="Beauty & Personal Care"><span>💄</span>Beauty</div>
+      <div class="opp" data-c="Home & Kitchen"><span>🏠</span>Home/Kitchen</div>
+      <div class="opp" data-c="Toys & Games"><span>🧸</span>Toys</div>
+      <div class="opp" data-c="Religious Items"><span>🪔</span>Religious</div>
+      <div class="opp" data-c="Stationery & Office"><span>📝</span>Stationery</div>
+      <div class="opp" data-c="Agriculture & Seeds"><span>🌾</span>Agriculture</div>
+      <div class="opp" data-c="Health & Medicine"><span>💊</span>Health</div>
+      <div class="opp" data-c="Travel & Tourism"><span>✈️</span>Travel</div>
+      <div class="opp" data-c="Events & Catering"><span>🎪</span>Events</div>
+      <div class="opp" data-c="Digital Products"><span>💻</span>Digital</div>
+    </div>
+  </div>
+
+  <div class="sea-grid">
+
+    <!-- ── SEASONAL DEMAND FORECAST ── -->
+    <div class="sea-card">
+      <div class="sea-card-head">
+        <div class="sea-card-icon">📊</div>
+        <div><div class="sea-card-title">Seasonal Demand Forecast</div><div class="sea-card-sub">What will sell most in the next 30–90 days in your market</div></div>
+      </div>
+      <div class="sea-card-body">
+        <label class="sea-label">Timeframe to forecast</label>
+        <select class="sea-select" id="forecastPeriod">
+          <option value="next 30 days">Next 30 days</option>
+          <option value="next 60 days">Next 60 days</option>
+          <option value="next 90 days">Next 90 days</option>
+          <option value="next 6 months">Next 6 months</option>
+          <option value="full year">Full year overview</option>
+        </select>
+        <label class="sea-label" style="margin-top:4px">Any specific products you're considering?</label>
+        <input class="sea-input" id="forecastProduct" placeholder="e.g. clothes, sweets, diyas, or leave blank for AI to suggest"/>
+        <button class="sea-btn pri" id="forecastBtn" onclick="seaRun('forecast')">📊 Generate Demand Forecast</button>
+        <div class="sea-result empty" id="forecastResult">Demand forecast will appear here — what to stock before it's too late.</div>
+      </div>
+    </div>
+
+    <!-- ── PRODUCT OPPORTUNITY FINDER ── -->
+    <div class="sea-card">
+      <div class="sea-card-head">
+        <div class="sea-card-icon">🔍</div>
+        <div><div class="sea-card-title">Product Opportunity Finder</div><div class="sea-card-sub">Find the best products to sell this season with profit margins</div></div>
+      </div>
+      <div class="sea-card-body">
+        <label class="sea-label">Season / Festival / Event</label>
+        <input class="sea-input" id="oppEvent" placeholder="e.g. Dashain 2081, Tihar, New Year 2082, winter season"/>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div>
+            <label class="sea-label">Sales channel</label>
+            <select class="sea-select" id="oppChannel">
+              <option value="physical store">🏪 Physical store</option>
+              <option value="online (social media)">📱 Social media</option>
+              <option value="online marketplace">🛒 Online marketplace</option>
+              <option value="wholesale">📦 Wholesale</option>
+              <option value="door-to-door">🚗 Door-to-door</option>
+              <option value="export">🌍 Export</option>
+            </select>
+          </div>
+          <div>
+            <label class="sea-label">Profit margin target</label>
+            <select class="sea-select" id="oppMargin">
+              <option value="20-30%">20–30% margin</option>
+              <option value="30-50%">30–50% margin</option>
+              <option value="50-100%">50–100% margin</option>
+              <option value="100%+">100%+ margin</option>
+            </select>
+          </div>
+        </div>
+        <button class="sea-btn pri" id="oppBtn" onclick="seaRun('opp')">🔍 Find Product Opportunities</button>
+        <div class="sea-result empty" id="oppResult">Top products to sell with profit estimates will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── SOURCING GUIDE ── -->
+    <div class="sea-card">
+      <div class="sea-card-head">
+        <div class="sea-card-icon">🏭</div>
+        <div><div class="sea-card-title">Sourcing & Procurement Guide</div><div class="sea-card-sub">Where to buy products cheapest — local, import, wholesale</div></div>
+      </div>
+      <div class="sea-card-body">
+        <label class="sea-label">Product to source</label>
+        <input class="sea-input" id="srcProduct" placeholder="e.g. Dashain tika sets, LED diyas, traditional clothes, sweets"/>
+        <label class="sea-label" style="margin-top:4px">Quantity / budget</label>
+        <input class="sea-input" id="srcQty" placeholder="e.g. 500 units, budget Rs 30,000"/>
+        <label class="sea-label" style="margin-top:4px">Sourcing preference</label>
+        <select class="sea-select" id="srcPref">
+          <option value="local Nepal market">🇳🇵 Local Nepal</option>
+          <option value="India import">🇮🇳 India import</option>
+          <option value="China import">🇨🇳 China import</option>
+          <option value="mixed local+import">🌐 Best mix</option>
+          <option value="manufacture locally">🏭 Manufacture locally</option>
+        </select>
+        <button class="sea-btn sec" id="srcBtn" onclick="seaRun('src')">🏭 Get Sourcing Guide</button>
+        <div class="sea-result empty" id="srcResult">Complete sourcing guide with supplier types, markets and price estimates will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── SELLING STRATEGY ── -->
+    <div class="sea-card">
+      <div class="sea-card-head">
+        <div class="sea-card-icon">💰</div>
+        <div><div class="sea-card-title">Seasonal Selling Strategy</div><div class="sea-card-sub">Pricing, promotions, platform strategy to maximize sales</div></div>
+      </div>
+      <div class="sea-card-body">
+        <label class="sea-label">Product you're selling</label>
+        <input class="sea-input" id="sellProduct" placeholder="e.g. Handmade Tika sets for Dashain"/>
+        <label class="sea-label" style="margin-top:4px">Your buying cost per unit</label>
+        <input class="sea-input" id="sellCost" placeholder="e.g. Rs 150 per unit"/>
+        <label class="sea-label" style="margin-top:4px">Total units you have</label>
+        <input class="sea-input" id="sellUnits" placeholder="e.g. 200 units"/>
+        <label class="sea-label" style="margin-top:4px">Target selling date / event</label>
+        <input class="sea-input" id="sellDate" placeholder="e.g. Before Dashain, within 2 weeks"/>
+        <button class="sea-btn pri" id="sellBtn" onclick="seaRun('sell')">💰 Build Selling Strategy</button>
+        <div class="sea-result empty" id="sellResult">Complete sales plan with pricing, channels, and promotion strategy will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── END-TO-END BUSINESS PLAN ── -->
+    <div class="sea-card" style="border-color:rgba(249,115,22,.35)">
+      <div class="sea-card-head" style="background:rgba(249,115,22,.08)">
+        <div class="sea-card-icon">🚀</div>
+        <div><div class="sea-card-title">End-to-End Seasonal Business Plan</div><div class="sea-card-sub">Complete business plan: product → source → stock → sell → profit</div></div>
+      </div>
+      <div class="sea-card-body">
+        <label class="sea-label">Target festival / season / event</label>
+        <input class="sea-input" id="planEvent" placeholder="e.g. Dashain–Tihar season 2082"/>
+        <label class="sea-label" style="margin-top:4px">Your idea (or let AI suggest)</label>
+        <textarea class="sea-textarea" id="planIdea" placeholder="e.g. I want to sell traditional Nepali clothing and accessories during Dashain-Tihar. I have Rs 1 lakh capital and a small shop in Biratnagar.
+
+Or just say: 'Suggest me the best seasonal business for my profile'"></textarea>
+        <button class="sea-btn pri" id="planBtn" onclick="seaRun('plan')" style="background:linear-gradient(135deg,#92400e,#f97316,#facc15);font-size:.9rem;padding:11px">🚀 Generate Complete Business Plan</button>
+        <div class="sea-result empty" id="planResult">Your complete end-to-end seasonal business plan will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── INVENTORY CALCULATOR ── -->
+    <div class="sea-card">
+      <div class="sea-card-head">
+        <div class="sea-card-icon">📦</div>
+        <div><div class="sea-card-title">Inventory & Stock Calculator</div><div class="sea-card-sub">How much to stock, when to reorder, avoid overstock/understock</div></div>
+      </div>
+      <div class="sea-card-body">
+        <label class="sea-label">Products to stock (list them)</label>
+        <textarea class="sea-textarea" id="invProducts" placeholder="LED diyas – Rs 80 buy – Rs 150 sell
+Tika sets – Rs 50 buy – Rs 120 sell
+Traditional saree – Rs 800 buy – Rs 1500 sell
+...or describe your product mix" style="min-height:80px"></textarea>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div><label class="sea-label">Total capital to invest</label><input class="sea-input" id="invCapital" placeholder="Rs 50,000"/></div>
+          <div><label class="sea-label">Days before event</label><input class="sea-input" id="invDays" placeholder="e.g. 30 days"/></div>
+        </div>
+        <button class="sea-btn sec" id="invBtn" onclick="seaRun('inv')">📦 Calculate Inventory Plan</button>
+        <div class="sea-result empty" id="invResult">Stock quantities, reorder points and capital allocation will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── PRICE & PROFIT OPTIMIZER ── -->
+    <div class="sea-card">
+      <div class="sea-card-head">
+        <div class="sea-card-icon">💹</div>
+        <div><div class="sea-card-title">Pricing & Profit Optimizer</div><div class="sea-card-sub">Find the perfect price point to maximize revenue during festivals</div></div>
+      </div>
+      <div class="sea-card-body">
+        <label class="sea-label">Product details</label>
+        <input class="sea-input" id="priceProduct" placeholder="e.g. Handmade clay diyas for Tihar"/>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px">
+          <div><label class="sea-label">Cost price</label><input class="sea-input" id="priceCost" placeholder="Rs 40"/></div>
+          <div><label class="sea-label">Competitors price</label><input class="sea-input" id="priceComp" placeholder="Rs 80–100"/></div>
+          <div><label class="sea-label">Units you have</label><input class="sea-input" id="priceUnits" placeholder="500"/></div>
+        </div>
+        <label class="sea-label" style="margin-top:4px">Market / competition level</label>
+        <select class="sea-select" id="priceComp2">
+          <option value="low competition (unique product)">🟢 Low competition — unique</option>
+          <option value="medium competition">🟡 Medium competition</option>
+          <option value="high competition (commodity)">🔴 High competition — commodity</option>
+        </select>
+        <button class="sea-btn green" id="priceBtn" onclick="seaRun('price')">💹 Optimize My Pricing</button>
+        <div class="sea-result empty" id="priceResult">Optimal pricing strategy with revenue projections will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── MARKETING & PROMOTION PLAN ── -->
+    <div class="sea-card">
+      <div class="sea-card-head">
+        <div class="sea-card-icon">📢</div>
+        <div><div class="sea-card-title">Festival Marketing & Promotion Plan</div><div class="sea-card-sub">How to market your products — online, offline, social media</div></div>
+      </div>
+      <div class="sea-card-body">
+        <label class="sea-label">Product / business to promote</label>
+        <input class="sea-input" id="mktProduct" placeholder="e.g. Handicraft store for Tihar, online clothes for Dashain"/>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div>
+            <label class="sea-label">Marketing budget</label>
+            <select class="sea-select" id="mktBudget">
+              <option value="zero budget (organic only)">Rs 0 — organic only</option>
+              <option value="Rs 500–2,000">Rs 500–2,000</option>
+              <option value="Rs 2,000–10,000">Rs 2,000–10,000</option>
+              <option value="Rs 10,000–50,000">Rs 10,000–50,000</option>
+              <option value="Rs 50,000+">Rs 50,000+</option>
+            </select>
+          </div>
+          <div>
+            <label class="sea-label">Timeline to event</label>
+            <input class="sea-input" id="mktDays" placeholder="e.g. 3 weeks"/>
+          </div>
+        </div>
+        <button class="sea-btn pri" id="mktBtn" onclick="seaRun('mkt')">📢 Create Marketing Plan</button>
+        <div class="sea-result empty" id="mktResult">Day-by-day marketing plan will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── EXPORT & BULK OPPORTUNITY ── -->
+    <div class="sea-card">
+      <div class="sea-card-head">
+        <div class="sea-card-icon">🌍</div>
+        <div><div class="sea-card-title">Export & Bulk Sales Opportunities</div><div class="sea-card-sub">Nepali/local products in demand globally + how to export</div></div>
+      </div>
+      <div class="sea-card-body">
+        <label class="sea-label">Product you make / have access to</label>
+        <input class="sea-input" id="expProduct" placeholder="e.g. handmade pashmina, thangka paintings, organic honey, spices"/>
+        <label class="sea-label" style="margin-top:4px">Export knowledge / experience</label>
+        <select class="sea-select" id="expKnow">
+          <option value="complete beginner">Complete beginner</option>
+          <option value="some export experience">Some experience</option>
+          <option value="experienced exporter">Experienced</option>
+        </select>
+        <label class="sea-label" style="margin-top:4px">Target markets</label>
+        <input class="sea-input" id="expTarget" placeholder="e.g. USA, Europe, India, Japan, Middle East, or 'AI suggest best markets'"/>
+        <button class="sea-btn sec" id="expBtn" onclick="seaRun('exp')">🌍 Export Opportunity Analysis</button>
+        <div class="sea-result empty" id="expResult">Export opportunities, target countries, pricing, and steps will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── SEASONAL CALENDAR ── -->
+    <div class="sea-card">
+      <div class="sea-card-head">
+        <div class="sea-card-icon">🗓️</div>
+        <div><div class="sea-card-title">Annual Seasonal Business Calendar</div><div class="sea-card-sub">Month-by-month product and business opportunity map for entire year</div></div>
+      </div>
+      <div class="sea-card-body">
+        <label class="sea-label">Your business type / categories</label>
+        <input class="sea-input" id="calBiz" placeholder="e.g. retail gift shop, online fashion, food products"/>
+        <label class="sea-label" style="margin-top:4px">Fiscal year context</label>
+        <select class="sea-select" id="calYear">
+          <option value="Bikram Sambat 2082 (2025-2026)">BS 2082 (2025–2026)</option>
+          <option value="calendar year 2026">Calendar 2026</option>
+          <option value="next 12 months">Next 12 months</option>
+        </select>
+        <button class="sea-btn pri" id="calBtn" onclick="seaRun('cal')">🗓️ Generate Annual Business Calendar</button>
+        <div class="sea-result empty" id="calResult">Your 12-month seasonal business calendar will appear here.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+const GEMINI='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=';
+const $=id=>document.getElementById(id);
+
+// Load key
+const saved=localStorage.getItem('ghp_gemini_key')||'';
+if(saved) $('seaKey').value=saved;
+$('seaKey').addEventListener('input',function(){localStorage.setItem('ghp_gemini_key',this.value.trim());});
+
+// Upcoming festivals data (auto-populated)
+const FESTIVALS=[
+  {icon:'🎉',name:'New Year 2082/2026',date:'Jan–Apr 2026',tags:['clothes','gifts','sweets','electronics'],demand:'high'},
+  {icon:'🌹',name:"Valentine's Day",date:'Feb 14, 2026',tags:['gifts','flowers','chocolates','fashion'],demand:'med'},
+  {icon:'🌸',name:'Holi / Fagu Purnima',date:'Mar 2026',tags:['colors','fashion','sweets','fun products'],demand:'high'},
+  {icon:'🐣',name:'Nepali New Year (2083)',date:'Apr 14, 2026',tags:['clothes','gifts','sweets','electronics'],demand:'high'},
+  {icon:'🌧️',name:'Monsoon Season',date:'Jun–Sep 2026',tags:['raincoats','umbrellas','indoor games','health'],demand:'med'},
+  {icon:'🌺',name:'Teej Festival',date:'Sep 2026',tags:['red saree','jewelry','bangles','sweets','mehendi'],demand:'high'},
+  {icon:'🙏',name:'Indra Jatra',date:'Sep 2026',tags:['traditional items','sweets','cultural goods'],demand:'med'},
+  {icon:'✈️',name:'Dashain (Biggest Festival)',date:'Oct 2026',tags:['clothes','electronics','sweets','gifts','meat'],demand:'high'},
+  {icon:'🪔',name:'Tihar / Diwali',date:'Oct–Nov 2026',tags:['diyas','sweets','gifts','electronics','flowers'],demand:'high'},
+  {icon:'🎪',name:'Chhath Parva',date:'Nov 2026',tags:['puja items','fruit','sweets','religious goods'],demand:'med'},
+  {icon:'❄️',name:'Winter Season',date:'Nov–Feb',tags:['woolens','blankets','heaters','warm clothes'],demand:'high'},
+  {icon:'🎄',name:'Christmas & New Year',date:'Dec 2026–Jan 2027',tags:['gifts','decorations','cakes','fashion'],demand:'med'},
+];
+
+function renderFestivals(){
+  const tl=$('festTimeline');
+  tl.innerHTML=FESTIVALS.map(f=>`
+    <div class="fest-item" onclick="$('#festTooltip')" data-name="${f.name}">
+      <div class="fest-icon">${f.icon}</div>
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="fest-name">${f.name}</span>
+          <span class="fest-demand fd-${f.demand}">${f.demand.toUpperCase()} demand</span>
+        </div>
+        <div class="fest-date">${f.date}</div>
+        <div class="fest-tags">${f.tags.map(t=>`<span class="fest-tag">${t}</span>`).join('')}</div>
+      </div>
+    </div>
+  `).join('');
+}
+renderFestivals();
+
+// Category toggles
+document.querySelectorAll('.opp').forEach(o=>o.addEventListener('click',()=>o.classList.toggle('on')));
+
+function getKey(){return ($('seaKey').value||localStorage.getItem('ghp_gemini_key')||'').trim();}
+function getCountry(){return $('seaCountry').value;}
+function getCity(){return $('seaCity').value||getCountry();}
+function getBiz(){return $('seaBiz').value;}
+function getCapital(){return $('seaCapital').value;}
+function getCategories(){return [...document.querySelectorAll('.opp.on')].map(o=>o.dataset.c).join(', ')||'retail products';}
+
+async function callGemini(prompt){
+  const key=getKey();
+  if(!key) throw new Error('No Gemini API key — add yours above');
+  const r=await fetch(GEMINI+key,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:.7,maxOutputTokens:3072}})
+  });
+  if(!r.ok){const e=await r.text();throw new Error('Gemini '+r.status+': '+e.substring(0,150));}
+  const d=await r.json();
+  return d?.candidates?.[0]?.content?.parts?.[0]?.text||'No response';
+}
+
+function setRes(id,text){const el=$(id);el.classList.remove('empty');el.textContent=text;}
+function setLoad(bid,rid,msg){$(bid).disabled=true;$(bid).innerHTML=`<span class="spin"></span> ${msg}`;$(rid).textContent='Analyzing…';$(rid).classList.remove('empty');}
+function resetBtn(id,lbl){$(id).disabled=false;$(id).innerHTML=lbl;}
+
+const TODAY=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+
+const prompts={
+  forecast:()=>{
+    const period=$('forecastPeriod').value;
+    const prod=$('forecastProduct').value||'any relevant products';
+    return `You are a market demand analyst specializing in ${getCountry()} seasonal commerce. Today: ${TODAY}.
+
+Create a SEASONAL DEMAND FORECAST for:
+Period: ${period}
+Country/Region: ${getCountry()} — ${getCity()}
+Business type: ${getBiz()}
+Capital: ${getCapital()}
+Product categories: ${getCategories()}
+Specific products to check: ${prod}
+
+## 📊 DEMAND FORECAST REPORT
+
+### 🗓️ UPCOMING HIGH-DEMAND EVENTS (next ${period})
+List all festivals, seasons, events with dates:
+Event | Date | Demand Level (⭐ Low to ⭐⭐⭐⭐⭐ Very High) | Best Products to sell
+
+### 🔥 TOP 10 PRODUCTS TO STOCK NOW
+For each product:
+1. Product name
+   - Demand level & reason
+   - Buy price estimate (wholesale)
+   - Sell price estimate (retail)
+   - Profit margin %
+   - When demand peaks
+   - Risk level
+
+### 📈 DEMAND TIMELINE
+Month-by-month demand chart (describe in text table format)
+
+### ⚡ ACT NOW — Products to source THIS WEEK (before prices rise)
+
+### ⚠️ AVOID — Products that will flop this season`;
+  },
+  opp:()=>{
+    const event=$('oppEvent').value||'upcoming season';
+    const channel=$('oppChannel').value;
+    const margin=$('oppMargin').value;
+    return `You are a retail product expert for ${getCountry()} seasonal markets. Today: ${TODAY}.
+
+Find the BEST PRODUCT OPPORTUNITIES for:
+Event/Season: ${event}
+Sales channel: ${channel}
+Target profit margin: ${margin}
+Location: ${getCity()}, ${getCountry()}
+Business: ${getBiz()}
+Capital: ${getCapital()}
+Categories: ${getCategories()}
+
+## 🔍 TOP PRODUCT OPPORTUNITIES
+
+### 🏆 CATEGORY A — BEST BETS (High demand + Good margin)
+For each (aim for 5–8 products):
+Product | Buy price | Sell price | Margin | Demand rating | Competition | Why it works
+
+### 🥈 CATEGORY B — SOLID CHOICES (Medium risk/reward)
+Same format, 3–5 products
+
+### 💎 CATEGORY C — HIDDEN GEMS (Low competition, niche)
+Same format, 3–5 products
+
+### ❌ PRODUCTS TO AVOID (oversaturated or bad margin)
+
+### 💡 CREATIVE COMBO IDEAS
+Products to bundle together for higher value sales
+
+### 📱 ONLINE vs OFFLINE
+Which products sell better online vs in physical store for this event
+
+### 💰 PROFIT CALCULATOR EXAMPLE
+If I invest ${getCapital()} in the top product:
+- Units I can buy: X
+- Expected revenue: Rs/$ X
+- Expected profit: Rs/$ X (X%)`;
+  },
+  src:()=>{
+    const prod=$('srcProduct').value||'seasonal products';
+    const qty=$('srcQty').value||'bulk quantity';
+    const pref=$('srcPref').value;
+    return `You are a procurement and supply chain expert for ${getCountry()} market. Today: ${TODAY}.
+
+Create a COMPLETE SOURCING GUIDE for:
+Product: ${prod}
+Quantity needed: ${qty}
+Sourcing preference: ${pref}
+Location: ${getCity()}, ${getCountry()}
+Business: ${getBiz()}
+
+## 🏭 SOURCING GUIDE
+
+### 📍 WHERE TO BUY IN ${getCountry().toUpperCase()} (Local Sources)
+For each source type:
+- Type of supplier / market name
+- Specific locations/areas (city, market name)
+- Price range
+- Minimum order quantity
+- Payment terms typical
+- Quality level
+- Pros & cons
+
+### 🇮🇳 INDIA SOURCES (if applicable)
+- Key wholesale markets (Delhi, Mumbai, Kolkata, etc.)
+- Types of suppliers
+- How to order (visit / online)
+- Import duties and customs process for Nepal
+- Timeline to receive goods
+
+### 🇨🇳 CHINA SOURCES (Alibaba/1688 etc., if applicable)
+- Product search terms to use
+- Price range
+- MOQ (Minimum order quantity)
+- Import process and duties
+- Delivery timeline
+- Red flags to watch for
+
+### 💡 NEGOTIATION TIPS
+How to negotiate with suppliers for better prices
+
+### ⏰ BUYING TIMELINE
+When to buy to have stock ready before the event (work backwards from event date)
+
+### 📋 QUALITY CHECKLIST
+What to check when receiving goods
+
+### 💰 LANDED COST CALCULATOR
+Buy price + transport + customs + storage = true cost per unit`;
+  },
+  sell:()=>{
+    const prod=$('sellProduct').value||'product';
+    const cost=$('sellCost').value||'unknown cost';
+    const units=$('sellUnits').value||'your stock';
+    const date=$('sellDate').value||'soon';
+    return `You are a retail sales strategist for ${getCountry()} seasonal markets. Today: ${TODAY}.
+
+Create a COMPLETE SELLING STRATEGY for:
+Product: ${prod}
+Cost price: ${cost}
+Stock available: ${units}
+Target sell by: ${date}
+Location: ${getCity()}, ${getCountry()}
+Channel: ${getBiz()}
+Categories: ${getCategories()}
+
+## 💰 SELLING STRATEGY
+
+### 🏷️ PRICING STRATEGY
+- Recommended retail price: Rs X
+- Bundle pricing: X units for Rs Y
+- Early-bird / pre-festival price: Rs X
+- Last-minute markdown strategy
+- Price psychology tips
+
+### 📱 ONLINE SELLING CHANNELS (ranked by effectiveness)
+For each platform:
+- Platform name
+- How to list this product
+- Price to charge
+- Fee structure
+- Best practices for this product
+
+### 🏪 OFFLINE SELLING STRATEGY
+- Where to set up stall/shop
+- Peak selling hours
+- Display and packaging tips
+- Negotiation tactics
+
+### 📢 MARKETING PLAN
+Day-by-day plan (today to sell-by date):
+What to post, where, when, what to say
+
+### 🎯 SALES TARGETS
+Daily/weekly sales targets to sell all ${units} units by ${date}
+
+### 💡 UPSELL & BUNDLE IDEAS
+How to increase average order value
+
+### ⚡ URGENT ACTION — Do this TODAY to start selling
+
+### 💰 PROJECTED P&L
+Revenue: Rs X | Cost: Rs X | Profit: Rs X (X%)`;
+  },
+  plan:()=>{
+    const event=$('planEvent').value||'upcoming festival season';
+    const idea=$('planIdea').value||`seasonal business in ${getCity()}, ${getCountry()}`;
+    return `You are a master business consultant specializing in seasonal commerce in ${getCountry()}. Today: ${TODAY}.
+
+Create a COMPLETE END-TO-END SEASONAL BUSINESS PLAN:
+
+Festival/Season: ${event}
+Business idea / profile: ${idea}
+Location: ${getCity()}, ${getCountry()}
+Business type: ${getBiz()}
+Capital: ${getCapital()}
+Product categories: ${getCategories()}
+
+## 🚀 COMPLETE SEASONAL BUSINESS PLAN
+
+### 📋 EXECUTIVE SUMMARY
+Business concept, opportunity size, expected profit in 2–3 sentences
+
+### 🔍 MARKET ANALYSIS
+- Festival/season overview and market size
+- Your target customers (demographics, behavior)
+- Competition landscape
+- Your unique advantage
+
+### 🛍️ PRODUCT STRATEGY
+Top 3–5 products to focus on:
+For each: Product | Qty to buy | Buy price | Sell price | Expected sales | Profit
+
+### 🏭 SOURCING PLAN
+- Where to buy each product
+- When to buy (deadline)
+- Budget allocation per product
+
+### 📦 OPERATIONS PLAN
+- Storage requirements
+- Packaging needs
+- Logistics (delivery if online)
+- Staffing needs (if any)
+
+### 💰 FINANCIAL PLAN
+Investment breakdown:
+| Item | Amount |
+Total investment: Rs X
+Revenue projection: Rs X
+Gross profit: Rs X (X%)
+Net profit after costs: Rs X (X%)
+Break-even: X units sold / Day X
+
+### 📅 WEEK-BY-WEEK ACTION PLAN
+Week 1 (Today–Day 7): Exact tasks
+Week 2 (Day 8–14): Exact tasks
+Week 3–4: Exact tasks
+Event week: Exact tasks
+Post-event: Leftover stock strategy
+
+### 📢 MARKETING CALENDAR
+Date-by-date promotion plan with content ideas
+
+### ⚠️ RISK MANAGEMENT
+Top 3 risks and contingency plans
+
+### 📈 SCALE-UP PLAN
+If this succeeds, how to 10x it next festival season
+
+### ✅ START TODAY — First 3 actions in the next 24 hours`;
+  },
+  inv:()=>{
+    const prods=$('invProducts').value||'seasonal products';
+    const cap=$('invCapital').value||'available capital';
+    const days=$('invDays').value||'30 days';
+    return `You are an inventory management expert for seasonal retail in ${getCountry()}. Today: ${TODAY}.
+
+Create an INVENTORY PLAN:
+Products: ${prods}
+Total capital: ${cap}
+Days until event/season: ${days}
+Business: ${getBiz()}
+Location: ${getCity()}
+
+## 📦 INVENTORY PLAN
+
+### 📊 OPTIMAL STOCK QUANTITIES
+For each product:
+Product | Units to buy | Capital needed | Expected sales/day | Days to sell out | Reorder point
+
+### 💰 CAPITAL ALLOCATION
+How to split ${cap} across all products:
+% for Product A, % for Product B, etc. — with reasoning
+
+### 📈 DEMAND PROJECTION
+Expected daily sales curve (slow/peak/post-event)
+
+### 🔄 REORDER STRATEGY
+- Trigger point: reorder when stock drops below X units
+- Lead time to get stock: X days
+- Safety stock level
+
+### ⚠️ OVERSTOCK PREVENTION
+- Max units to buy (don't overstock)
+- Clearance strategy if unsold after event
+- Products to avoid over-investing in
+
+### 📉 UNDERSTOCKING RISK
+- Products that will sell out fast (stock more)
+- How to handle stockouts without losing customers
+
+### 💡 JUST-IN-TIME OPTION
+Products to keep minimal stock and reorder frequently vs stock up front`;
+  },
+  price:()=>{
+    const prod=$('priceProduct').value||'seasonal product';
+    const cost=$('priceCost').value||'unknown cost';
+    const comp=$('priceComp').value||'competitor price';
+    const units=$('priceUnits').value||'your stock';
+    const compLevel=$('priceComp2').value;
+    return `You are a pricing strategy expert for ${getCountry()} retail. Today: ${TODAY}.
+
+Optimize pricing for:
+Product: ${prod}
+My cost price: ${cost}
+Competitor price: ${comp}
+My units available: ${units}
+Competition level: ${compLevel}
+Sales channel: ${getBiz()}
+Market: ${getCity()}, ${getCountry()}
+
+## 💹 PRICING STRATEGY REPORT
+
+### 🏷️ RECOMMENDED PRICE POINTS
+- Launch price (first 3 days): Rs X
+- Regular festival price: Rs X
+- Bundle price (X units): Rs X
+- Last 2 days clearance price: Rs X
+
+### 💰 PROFIT ANALYSIS
+At each price point:
+Price | Margin | Revenue (if all sold) | Profit | Break-even units
+
+### 🧠 PRICE PSYCHOLOGY TACTICS
+- Specific pricing tricks for ${getCountry()} customers
+- Charm pricing (e.g., Rs 499 vs Rs 500)
+- Bundling strategy
+- Urgency tactics ("limited stock")
+- How to justify premium pricing
+
+### 📱 PLATFORM-SPECIFIC PRICING
+If selling on multiple channels:
+- Social media (WhatsApp/Instagram) price
+- Online marketplace price (Daraz/Hamrobazar/etc.)
+- Physical store price
+- Wholesale price (if selling bulk)
+
+### 🎯 PRICING FOR DIFFERENT SEGMENTS
+- Budget-conscious customers
+- Middle-income customers
+- Premium customers
+
+### 📈 REVENUE PROJECTION
+Scenario 1 (conservative — sell 50%): Revenue X, Profit X
+Scenario 2 (base case — sell 75%): Revenue X, Profit X
+Scenario 3 (best case — sell 100%): Revenue X, Profit X`;
+  },
+  mkt:()=>{
+    const prod=$('mktProduct').value||'seasonal products';
+    const budget=$('mktBudget').value;
+    const days=$('mktDays').value||'3 weeks';
+    return `You are a digital marketing expert for ${getCountry()} seasonal businesses. Today: ${TODAY}.
+
+Create a FESTIVAL MARKETING PLAN:
+Product/Business: ${prod}
+Marketing budget: ${budget}
+Timeline: ${days} until event
+Location: ${getCity()}, ${getCountry()}
+Business type: ${getBiz()}
+Categories: ${getCategories()}
+
+## 📢 MARKETING PLAN
+
+### 🎯 MARKETING STRATEGY OVERVIEW
+Key message, target audience, main channels
+
+### 📅 DAY-BY-DAY CONTENT CALENDAR
+For each day/phase:
+Day X: Platform | Content type | Caption/script outline | Hashtags | Expected reach
+
+Divide into:
+📌 AWARENESS PHASE (first 40% of timeline): Building visibility
+📌 CONSIDERATION PHASE (middle 30%): Showcasing products, testimonials
+📌 CONVERSION PHASE (final 30%): Urgency, offers, direct selling
+
+### 📱 PLATFORM STRATEGIES
+For each platform (Facebook/Instagram/TikTok/WhatsApp/YouTube):
+- Best content format for this product
+- Posting frequency
+- Best posting times for ${getCountry()} audience
+- Specific tactics
+
+### 💰 BUDGET BREAKDOWN (for ${budget})
+How to allocate:
+- Paid ads: Rs X (on which platform, targeting)
+- Creative production: Rs X
+- Influencer/collab: Rs X
+- Offline marketing: Rs X
+
+### 🔥 VIRAL CONTENT IDEAS
+5 content ideas that will spread naturally for this festival product
+
+### 📊 PERFORMANCE TRACKING
+What metrics to track, targets, and when to adjust
+
+### ⚡ ZERO BUDGET TACTICS
+If budget runs out — free marketing methods that still work`;
+  },
+  exp:()=>{
+    const prod=$('expProduct').value||'Nepali products';
+    const know=$('expKnow').value;
+    const target=$('expTarget').value||'AI suggest';
+    return `You are an international trade and export expert specializing in South Asian products. Today: ${TODAY}.
+
+Analyze EXPORT OPPORTUNITIES:
+Product: ${prod}
+Seller location: ${getCity()}, ${getCountry()}
+Export knowledge: ${know}
+Target markets: ${target}
+
+## 🌍 EXPORT OPPORTUNITY ANALYSIS
+
+### 📊 GLOBAL DEMAND ASSESSMENT
+- Which countries have highest demand for ${prod}
+- Market size estimates
+- Seasonal demand patterns internationally
+
+### 🏆 TOP 5 TARGET EXPORT MARKETS
+For each country:
+Country | Demand level | Typical price | Profit potential | Ease of export | Key buyers/channels
+
+### 📋 HOW TO START EXPORTING (step by step)
+Phase 1 — Research & Registration:
+Phase 2 — Product preparation:
+Phase 3 — Finding buyers:
+Phase 4 — First shipment:
+Phase 5 — Scaling:
+
+### 🏢 HOW TO FIND BUYERS
+- Online platforms (Alibaba, Amazon, Etsy, etc.)
+- Trade shows and exhibitions
+- Government export promotion boards
+- Diaspora communities
+- B2B directories
+
+### 💰 PRICING FOR EXPORT
+- Cost structure (product + packaging + logistics + customs)
+- Competitive price range for target markets
+- Minimum order value for export viability
+
+### 📦 PACKAGING & CERTIFICATION
+- International packaging requirements
+- Certifications needed (organic, fair trade, etc.)
+- Labeling requirements per country
+
+### ⚠️ CHALLENGES & HOW TO OVERCOME
+Top 5 export challenges for ${getCountry()} exporters + solutions
+
+### 🚀 QUICK START (if ${know})
+3 actions to take this month to make first export deal`;
+  },
+  cal:()=>{
+    const biz=$('calBiz').value||getBiz();
+    const year=$('calYear').value;
+    return `You are a seasonal business strategist for ${getCountry()} markets. Today: ${TODAY}.
+
+Create an ANNUAL SEASONAL BUSINESS CALENDAR:
+Business: ${biz}
+Country: ${getCountry()} — ${getCity()}
+Year: ${year}
+Categories: ${getCategories()}
+Capital: ${getCapital()}
+
+## 🗓️ ANNUAL SEASONAL BUSINESS CALENDAR
+
+For each month, provide:
+### [Month Name]
+🎪 Key Events/Festivals: [list]
+🔥 Hot Products to Sell: [list with quick reason]
+📦 What to Source in ADVANCE (previous month): [list]
+💰 Revenue Potential: ⭐ to ⭐⭐⭐⭐⭐
+📢 Marketing Focus: [strategy for this month]
+⚠️ Watch Out For: [risks, competition spikes, price fluctuations]
+
+Do this for all 12 months (Baisakh through Chaitra / Jan–Dec).
+
+End with:
+## 🏆 TOP 3 MONTHS FOR MAXIMUM REVENUE
+## 💡 YEAR-ROUND PRODUCTS (stable demand 12 months)
+## 📈 ANNUAL REVENUE PROJECTION if executed well`;
+  }
+};
+
+const btnLabels={
+  forecast:'📊 Generate Demand Forecast',opp:'🔍 Find Product Opportunities',src:'🏭 Get Sourcing Guide',
+  sell:'💰 Build Selling Strategy',plan:'🚀 Generate Complete Business Plan',inv:'📦 Calculate Inventory Plan',
+  price:'💹 Optimize My Pricing',mkt:'📢 Create Marketing Plan',exp:'🌍 Export Opportunity Analysis',
+  cal:'🗓️ Generate Annual Business Calendar'
+};
+const loadMsgs={
+  forecast:'Forecasting demand…',opp:'Finding opportunities…',src:'Building sourcing guide…',
+  sell:'Building strategy…',plan:'Building business plan…',inv:'Calculating inventory…',
+  price:'Optimizing pricing…',mkt:'Creating marketing plan…',exp:'Analyzing export opportunities…',
+  cal:'Building calendar…'
+};
+
+window.seaRun=async function(type){
+  const bid=type+'Btn', rid=type+'Result';
+  try{
+    setLoad(bid,rid,loadMsgs[type]||'Analyzing…');
+    const result=await callGemini(prompts[type]());
+    setRes(rid,result);
+  }catch(e){
+    setRes(rid,'❌ Error: '+e.message+'\n\nAdd your Gemini API key in the config bar above.');
+    $(rid).style.color='#fca5a5';
+  }finally{
+    resetBtn(bid,btnLabels[type]||'Analyze');
+  }
+};
+})();
+</script>
+</body>
+</html>
