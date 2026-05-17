@@ -732,16 +732,19 @@ function vsPlay() {
   if (VS.audioTrack?.buffer) {
     try {
       if (!VS.audioCtx) VS.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (VS.audioCtx.state === 'suspended') VS.audioCtx.resume();
-      if (VS._audioSrc) try { VS._audioSrc.stop(); } catch(_) {}
-      const src = VS.audioCtx.createBufferSource();
-      src.buffer = VS.audioTrack.buffer;
-      src.loop   = true;
-      VS.gainNode = VS.audioCtx.createGain();
-      VS.gainNode.gain.value = parseFloat(document.getElementById('vsVolumeSlider')?.value || 0.5);
-      src.connect(VS.gainNode).connect(VS.audioCtx.destination);
-      src.start(0, VS.audioOffset % VS.audioTrack.buffer.duration);
-      VS._audioSrc = src;
+      const _startAudio = () => {
+        if (VS._audioSrc) try { VS._audioSrc.stop(); } catch(_) {}
+        const src = VS.audioCtx.createBufferSource();
+        src.buffer = VS.audioTrack.buffer;
+        src.loop   = true;
+        VS.gainNode = VS.audioCtx.createGain();
+        VS.gainNode.gain.value = parseFloat(document.getElementById('vsVolumeSlider')?.value || 0.5);
+        src.connect(VS.gainNode).connect(VS.audioCtx.destination);
+        src.start(0, VS.audioOffset % VS.audioTrack.buffer.duration);
+        VS._audioSrc = src;
+      };
+      if (VS.audioCtx.state === 'suspended') VS.audioCtx.resume().then(_startAudio);
+      else _startAudio();
     } catch(e) { console.warn('Audio start error:', e); }
   }
 }
@@ -1048,9 +1051,9 @@ async function _vsLoadFFmpeg() {
 /* ── export / record ────────────────────────────────── */
 function vsExport() {
   if (!VS.clips.length) return vsToast('📁 Add clips before exporting');
-  const codec     = document.getElementById('vsExportFormat')?.value || 'h264';
-  const crf       = document.getElementById('vsExportQuality')?.value || '23';
-  const resPref   = document.getElementById('vsExportRes')?.value || 'source';
+  const codec   = document.getElementById('vsExportFormat')?.value || 'webm';
+  const crf     = document.getElementById('vsExportQuality')?.value || '23';
+  const resPref = document.getElementById('vsExportRes')?.value || 'source';
   _vsExportAsync(codec, crf, resPref);
 }
 
@@ -1064,32 +1067,31 @@ async function _vsExportAsync(codec, crf, resPref) {
   if (progWrap) progWrap.style.display = 'block';
   if (progLabel) progLabel.textContent = '⏳ Preparing export…';
   if (progBar)   progBar.style.width = '0%';
-  if (progStage) progStage.textContent = 'Stage 1/2: Rendering frames';
+  if (progStage) progStage.textContent = 'Stage 1/2: Recording canvas';
   if (exportBtn) exportBtn.disabled = true;
 
   VS._exporting = true;
   vsStop();
   VS.currentTime = 0;
 
-  // Pause all video elements and reset to start
+  // Reset all clips to start
   VS.clips.forEach(c => {
-    if (c._vidEl) { c._vidEl.pause(); c._vidEl.currentTime = c.trimStart || 0; }
+    if (c._vidEl) { c._vidEl.pause(); c._vidEl.muted = true; c._vidEl.currentTime = c.trimStart || 0; }
   });
 
-  // Draw the first frame immediately so the stream doesn't start blank
-  const ci0 = _vsClipAtTime(0);
-  if (VS.clips[ci0]) vsRenderClip(ci0, 0);
+  // Draw first frame immediately so stream doesn't start blank
+  vsRenderClip(_vsClipAtTime(0), 0);
+  await new Promise(r => setTimeout(r, 80)); // let canvas settle
 
-  // ── Stage 1: Record canvas to WebM ───────────────────
+  // ── Stage 1: Capture canvas stream ───────────────────
   const fps = 30;
   const stream = VS.canvas.captureStream(fps);
 
-  // Audio: background music only (video audio via muted elements is captured separately if possible)
+  // Audio setup: route background music into the stream
   if (!VS.audioCtx) VS.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (VS.audioCtx.state === 'suspended') await VS.audioCtx.resume();
 
   let exportMusicSrc = null;
-  let audioStream = null;
   if (VS.audioTrack?.buffer) {
     const dest = VS.audioCtx.createMediaStreamDestination();
     exportMusicSrc = VS.audioCtx.createBufferSource();
@@ -1098,187 +1100,123 @@ async function _vsExportAsync(codec, crf, resPref) {
     const mg = VS.audioCtx.createGain();
     mg.gain.value = parseFloat(document.getElementById('vsVolumeSlider')?.value || 0.5);
     exportMusicSrc.connect(mg).connect(dest);
-    audioStream = dest.stream;
     dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
   }
 
-  // Prefer VP9 for best quality WebM intermediate
-  const recMime = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp9','video/webm;codecs=vp8,opus','video/webm']
-    .find(t => { try { return MediaRecorder.isTypeSupported(t); } catch(_){ return false; } }) || 'video/webm';
+  // Choose best supported codec for WebM intermediate
+  const recMime = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8,opus',
+    'video/webm'
+  ].find(t => { try { return MediaRecorder.isTypeSupported(t); } catch(_){ return false; } }) || 'video/webm';
 
   VS.recordedChunks = [];
-  VS.mediaRecorder = new MediaRecorder(stream, {
+  VS.mediaRecorder  = new MediaRecorder(stream, {
     mimeType: recMime,
-    videoBitsPerSecond: 20_000_000,
-    audioBitsPerSecond: 256_000,
+    videoBitsPerSecond: 15_000_000,
+    audioBitsPerSecond: 192_000,
   });
-  VS.mediaRecorder.ondataavailable = e => { if (e.data.size > 0) VS.recordedChunks.push(e.data); };
-
+  VS.mediaRecorder.ondataavailable = e => { if (e.data?.size > 0) VS.recordedChunks.push(e.data); };
   const recordingDone = new Promise(resolve => { VS.mediaRecorder.onstop = resolve; });
 
-  // Start music AFTER recorder starts to sync audio
-  VS.mediaRecorder.start(100);
+  // Start recorder THEN start music and playback together
+  VS.mediaRecorder.start(250); // chunk every 250ms
   if (exportMusicSrc) exportMusicSrc.start(0);
 
-  // ── Use our own render loop (not vsPlay) to guarantee frames are drawn ──
-  const exportDur   = VS.totalDuration;
-  const msPerFrame  = 1000 / fps;
-  let   exportTime  = 0;
-  let   lastClipIdx = -1;
+  // Run real-time playback so frames render smoothly at natural speed
+  // This avoids distortion from async seek loops
+  _vsExportPlay();
 
-  if (progLabel) progLabel.textContent = '🎬 Rendering frames…';
+  const exportDurMs = VS.totalDuration * 1000 + 500; // +500ms buffer
+  const startTime   = performance.now();
 
-  await new Promise(resolve => {
-    let frameCount = 0;
-    const totalFrames = Math.ceil(exportDur * fps);
+  // Progress updater
+  const progInterval = setInterval(() => {
+    const elapsed = performance.now() - startTime;
+    const pct = Math.min(47, (elapsed / exportDurMs) * 47);
+    if (progBar)   progBar.style.width = pct + '%';
+    if (progLabel) progLabel.textContent = `🎬 Recording… ${Math.round((elapsed / exportDurMs) * 100)}%`;
+  }, 400);
 
-    const renderFrame = async () => {
-      if (exportTime >= exportDur) {
-        resolve();
-        return;
-      }
+  // Wait for total duration
+  await new Promise(r => setTimeout(r, exportDurMs));
+  clearInterval(progInterval);
 
-      // Find clip for this time
-      const ci   = _vsClipAtTime(exportTime);
-      const cs   = _vsClipStartTime(ci);
-      const clip = VS.clips[ci];
-      const prog = clip ? Math.min(1, (exportTime - cs) / (clip.duration || 3)) : 0;
-
-      // Seek video if needed
-      if (clip?._vidEl) {
-        const vid    = clip._vidEl;
-        const target = (clip.trimStart || 0) + (exportTime - cs) * (clip.speed || 1);
-        if (lastClipIdx !== ci) {
-          lastClipIdx = ci;
-          vid.currentTime = target;
-          // Wait for seek
-          await new Promise(r => {
-            if (vid.readyState >= 2) { r(); return; }
-            vid.onseeked = r;
-            setTimeout(r, 500); // timeout fallback
-          });
-        } else if (Math.abs(vid.currentTime - target) > 0.1) {
-          vid.currentTime = target;
-          await new Promise(r => { vid.onseeked = r; setTimeout(r, 200); });
-        }
-      }
-
-      vsRenderClip(ci, prog);
-
-      frameCount++;
-      exportTime += 1 / fps;
-
-      const pct = Math.min(48, (frameCount / totalFrames) * 48);
-      if (progBar)   progBar.style.width = pct + '%';
-      if (progLabel) progLabel.textContent = `🎬 Rendering… ${Math.round((frameCount / totalFrames) * 100)}% (frame ${frameCount}/${totalFrames})`;
-
-      // Yield to browser so canvas stream picks up the frame
-      setTimeout(renderFrame, msPerFrame);
-    };
-
-    renderFrame();
-  });
-
+  // Stop everything
   vsStop();
-  VS.mediaRecorder.stop();
   if (exportMusicSrc) try { exportMusicSrc.stop(); } catch(_) {}
+  VS.mediaRecorder.stop();
   await recordingDone;
 
   if (progBar)   progBar.style.width = '50%';
-  if (progLabel) progLabel.textContent = '🔄 Finalising…';
+  if (progLabel) progLabel.textContent = '🔄 Finalising video…';
 
-  // ── Stage 2: WebM → MP4 via FFmpeg.wasm (if H.264 or H.265) ──
-  if (codec === 'webm') {
-    VS._exporting = false;
-    if (exportBtn) exportBtn.disabled = false;
-    if (progBar) progBar.style.width = '100%';
-    if (progLabel) progLabel.textContent = '✅ Done!';
-    setTimeout(() => { if (progWrap) progWrap.style.display = 'none'; }, 3000);
-    _vsDirectDownload('video/webm', 'webm');
-    return;
-  }
-
-  // Transcode with FFmpeg.wasm
-  try {
-    if (progStage) progStage.textContent = 'Stage 2/2: Transcoding with FFmpeg.wasm…';
-    const ffmpeg = await _vsLoadFFmpeg();
-    const { fetchFile } = window.FFmpegUtil || {};
-
-    // Write WebM blob to FFmpeg virtual FS
+  // ── Direct WebM download (no transcode) ─────────────
+  // Note: FFmpeg.wasm H.264/H.265 transcode often fails on GitHub Pages due to
+  // SharedArrayBuffer CORS headers. WebM (VP9) gives excellent quality without transcode.
+  if (codec === 'h264' || codec === 'h265' || codec === 'webm') {
     const webmBlob = new Blob(VS.recordedChunks, { type: 'video/webm' });
-    const webmBuf  = await webmBlob.arrayBuffer();
-    await ffmpeg.writeFile('input.webm', new Uint8Array(webmBuf));
-
-    // Determine scale filter
-    let scaleFilter = '';
-    if (resPref === '1080') {
-      scaleFilter = VS.aspectRatio === '16:9' ? 'scale=1920:1080' : 'scale=1080:1920';
-    } else if (resPref === '720') {
-      scaleFilter = VS.aspectRatio === '16:9' ? 'scale=1280:720' : 'scale=720:1280';
-    } else if (resPref === '480') {
-      scaleFilter = VS.aspectRatio === '16:9' ? 'scale=854:480' : 'scale=480:854';
+    if (webmBlob.size < 1000) {
+      vsToast('⚠️ Recording appears empty — try again or use a shorter clip');
+      if (progWrap) progWrap.style.display = 'none';
+      if (exportBtn) exportBtn.disabled = false;
+      VS._exporting = false;
+      return;
     }
 
-    // Build FFmpeg command
-    let ffArgs;
-    if (codec === 'h265') {
-      // H.265 / HEVC
-      ffArgs = [
-        '-i', 'input.webm',
-        '-c:v', 'libx265',
-        '-crf', String(crf),
-        '-preset', 'medium',
-        '-tag:v', 'hvc1',   // Apple compat
-        '-c:a', 'aac',
-        '-b:a', '192k',
-        '-movflags', '+faststart',
-      ];
-      if (scaleFilter) ffArgs.splice(2, 0, '-vf', scaleFilter);
-      ffArgs.push('output.mp4');
-    } else {
-      // H.264 / AVC (default)
-      ffArgs = [
-        '-i', 'input.webm',
-        '-c:v', 'libx264',
-        '-crf', String(crf),
-        '-preset', 'medium',
-        '-profile:v', 'high',
-        '-level', '4.2',
-        '-pix_fmt', 'yuv420p',
-        '-c:a', 'aac',
-        '-b:a', '192k',
-        '-movflags', '+faststart',
-      ];
-      if (scaleFilter) ffArgs.splice(2, 0, '-vf', scaleFilter);
-      ffArgs.push('output.mp4');
+    // Try FFmpeg transcode for H.264/H.265 but gracefully fall back to WebM
+    if (codec !== 'webm') {
+      try {
+        if (progStage) progStage.textContent = 'Stage 2/2: Transcoding to MP4…';
+        const ffmpeg = await _vsLoadFFmpeg();
+
+        const webmBuf = await webmBlob.arrayBuffer();
+        await ffmpeg.writeFile('input.webm', new Uint8Array(webmBuf));
+
+        let scaleFilter = '';
+        if (resPref === '1080') scaleFilter = VS.aspectRatio === '16:9' ? 'scale=1920:1080' : 'scale=1080:1920';
+        else if (resPref === '720') scaleFilter = VS.aspectRatio === '16:9' ? 'scale=1280:720' : 'scale=720:1280';
+        else if (resPref === '480') scaleFilter = VS.aspectRatio === '16:9' ? 'scale=854:480' : 'scale=480:854';
+
+        const ffArgs = codec === 'h265' ? [
+          '-i','input.webm',
+          ...(scaleFilter ? ['-vf', scaleFilter] : []),
+          '-c:v','libx265','-crf',String(crf),'-preset','fast',
+          '-tag:v','hvc1','-c:a','aac','-b:a','192k',
+          '-movflags','+faststart','output.mp4'
+        ] : [
+          '-i','input.webm',
+          ...(scaleFilter ? ['-vf', scaleFilter] : []),
+          '-c:v','libx264','-crf',String(crf),'-preset','fast',
+          '-profile:v','high','-level','4.2','-pix_fmt','yuv420p',
+          '-c:a','aac','-b:a','192k',
+          '-movflags','+faststart','output.mp4'
+        ];
+
+        await ffmpeg.exec(ffArgs);
+        const mp4Data = await ffmpeg.readFile('output.mp4');
+        const mp4Blob = new Blob([mp4Data instanceof Uint8Array ? mp4Data : new Uint8Array(mp4Data)], { type: 'video/mp4' });
+        _vsTriggerDownload(mp4Blob, `shashi-${codec === 'h265' ? 'H265' : 'H264'}-${Date.now()}.mp4`);
+        if (progBar)   progBar.style.width = '100%';
+        if (progLabel) progLabel.textContent = `✅ MP4 (${codec.toUpperCase()}) exported!`;
+        vsToast(`✅ MP4 exported successfully!`);
+        try { await ffmpeg.deleteFile('input.webm'); await ffmpeg.deleteFile('output.mp4'); } catch(_) {}
+        VS._exporting = false;
+        if (exportBtn) exportBtn.disabled = false;
+        setTimeout(() => { if (progWrap) progWrap.style.display = 'none'; }, 4000);
+        return;
+      } catch(err) {
+        console.warn('FFmpeg transcode failed, falling back to WebM:', err);
+        if (progLabel) progLabel.textContent = '⚠️ MP4 transcode unavailable — saving as WebM (VP9)';
+      }
     }
 
-    await ffmpeg.exec(ffArgs);
-
-    const mp4Data = await ffmpeg.readFile('output.mp4');
-    const mp4Blob = new Blob([mp4Data.buffer], { type: 'video/mp4' });
-    const mp4Url  = URL.createObjectURL(mp4Blob);
-    const codecLabel = codec === 'h265' ? 'HEVC-H265' : 'H264';
-    const a = document.createElement('a');
-    a.href = mp4Url;
-    a.download = `shashi-${codecLabel}-CRF${crf}-${Date.now()}.mp4`;
-    document.body.appendChild(a); a.click();
-    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(mp4Url); }, 3000);
-
-    if (progBar) progBar.style.width = '100%';
-    if (progLabel) progLabel.textContent = `✅ MP4 (${codec === 'h265' ? 'H.265/HEVC' : 'H.264'}) downloaded!`;
-    vsToast(`✅ MP4 (${codec === 'h265' ? 'H.265 HEVC' : 'H.264'}) exported at CRF ${crf}!`);
-
-    // Cleanup
-    await ffmpeg.deleteFile('input.webm');
-    await ffmpeg.deleteFile('output.mp4');
-
-  } catch (err) {
-    console.error('FFmpeg transcode error:', err);
-    // Fallback: download raw WebM
-    if (progLabel) progLabel.textContent = '⚠️ Transcode failed — downloading WebM instead';
-    vsToast('⚠️ FFmpeg transcode failed — saving as WebM. ' + err.message);
-    _vsDirectDownload('video/webm', 'webm');
+    // Download as WebM
+    _vsTriggerDownload(webmBlob, `shashi-video-${Date.now()}.webm`);
+    if (progBar)   progBar.style.width = '100%';
+    if (progLabel) progLabel.textContent = '✅ Video downloaded (WebM VP9)!';
+    vsToast('✅ Video exported!');
   }
 
   VS._exporting = false;
@@ -1286,22 +1224,37 @@ async function _vsExportAsync(codec, crf, resPref) {
   setTimeout(() => { if (progWrap) progWrap.style.display = 'none'; }, 4000);
 }
 
-function _vsDirectDownload(mimeType, ext) {
-  const blob = new Blob(VS.recordedChunks, { type: mimeType });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url;
-  a.download = 'shashi-video-' + Date.now() + '.' + ext;
-  document.body.appendChild(a); a.click();
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
+// Separate playback function for export — uses RAF for smooth real-time rendering
+function _vsExportPlay() {
+  VS.playing    = true;
+  VS.currentTime = 0;
+  VS._playStart = performance.now();
+  VS._clipIdx   = 0;
+  VS._clipStart = 0;
+
+  // Start first video clip
+  const first = VS.clips[0];
+  if (first?._vidEl) {
+    first._vidEl.muted = true; // keep muted — audio handled via AudioContext
+    first._vidEl.currentTime = first.trimStart || 0;
+    first._vidEl.playbackRate = first.speed || 1;
+    first._vidEl.play().catch(() => {});
+  }
+  _vsRAF();
 }
 
-function vsDownloadExport(mimeType) {
-  _vsDirectDownload(mimeType || 'video/webm', (mimeType||'').includes('mp4') ? 'mp4' : 'webm');
-  vsToast('✅ Video downloaded!');
+function _vsTriggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 5000);
 }
 
-/* ── split clip (future advanced) ──────────────────── */
+/* ── split clip ──────────────────────────────────────── */
 function vsSplitClip() {
   const c = VS.clips[VS.activeClip]; if (!c || c.type !== 'vid') return vsToast('⚠️ Select a video clip to split');
   const clipStart = _vsClipStartTime(VS.activeClip);
