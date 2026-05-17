@@ -1325,3 +1325,12 @@ function vsInitDrop() {
 document.addEventListener('DOMContentLoaded', () => {
   vsInitDrop();
 });
+
+/* ── Test-agent compatibility aliases ────────────────
+   These expose stable names the test agent relies on,
+   so renaming internal functions won't break tests.   */
+function vsApplyGlobalFilter(presetName) { vsSelectPreset(presetName); }
+function vsSeekSeconds(secs) {
+  if (!VS.totalDuration) return;
+  vsSeek((secs / VS.totalDuration) * 100);
+}
