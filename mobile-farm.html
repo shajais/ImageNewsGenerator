@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>📱 Mobile Farm Research — Shashi Creator Studio</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:linear-gradient(135deg,#0f0f1e 0%,#1a1a2e 100%);color:#e0e0e0;font-family:'Segoe UI',sans-serif;min-height:100vh}
+a{text-decoration:none;color:inherit}
+
+/* Navbar */
+.navbar{position:sticky;top:0;z-index:100;background:rgba(15,15,30,.95);border-bottom:2px solid #a855f7;padding:0 24px;display:flex;align-items:center;gap:16px;height:56px;backdrop-filter:blur(12px)}
+.nav-logo{font-size:1.15rem;font-weight:700;background:linear-gradient(135deg,#a855f7,#ec4899);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap}
+.nav-back{margin-left:auto;padding:6px 14px;border-radius:20px;border:1px solid rgba(168,85,247,.4);color:#a855f7;font-size:.82rem;white-space:nowrap;cursor:pointer;transition:all .2s}
+.nav-back:hover{background:rgba(168,85,247,.1)}
+
+/* Hero stats */
+.hero{padding:20px 24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;border-bottom:1px solid rgba(168,85,247,.15)}
+.stat-card{background:rgba(26,26,46,.7);border:1px solid rgba(168,85,247,.25);border-radius:12px;padding:16px;text-align:center;transition:all .2s}
+.stat-card:hover{border-color:#a855f7;box-shadow:0 0 16px rgba(168,85,247,.15)}
+.stat-val{font-size:1.8rem;font-weight:800;background:linear-gradient(135deg,#a855f7,#ec4899);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;line-height:1}
+.stat-val.green{background:linear-gradient(135deg,#00ff88,#00d4ff);-webkit-background-clip:text;background-clip:text}
+.stat-val.red{background:linear-gradient(135deg,#ff4444,#ff8800);-webkit-background-clip:text;background-clip:text}
+.stat-lbl{font-size:.72rem;color:#888;margin-top:6px;text-transform:uppercase;letter-spacing:.5px}
+
+/* Main layout */
+.main{display:grid;grid-template-columns:320px 1fr;gap:0;min-height:calc(100vh - 56px)}
+
+/* Control panel */
+.control-panel{background:rgba(26,26,46,.5);border-right:1px solid rgba(168,85,247,.15);padding:20px;display:flex;flex-direction:column;gap:16px;overflow-y:auto}
+.panel-section{background:rgba(15,15,30,.5);border:1px solid rgba(168,85,247,.2);border-radius:10px;padding:14px}
+.panel-section h3{font-size:.85rem;color:#a855f7;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.form-row{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.form-row label{font-size:.72rem;color:#888;text-transform:uppercase;letter-spacing:.5px}
+.farm-input{width:100%;padding:7px 10px;background:rgba(15,15,30,.8);border:1px solid rgba(168,85,247,.3);border-radius:7px;color:#e0e0e0;font-size:.85rem;outline:none}
+.farm-input:focus{border-color:#a855f7;box-shadow:0 0 6px rgba(168,85,247,.25)}
+.farm-select{width:100%;padding:7px 10px;background:rgba(15,15,30,.9);border:1px solid rgba(168,85,247,.3);border-radius:7px;color:#e0e0e0;font-size:.85rem;outline:none;cursor:pointer}
+.range-row{display:flex;align-items:center;gap:10px}
+.range-row input[type=range]{flex:1;accent-color:#a855f7}
+.range-val{font-size:.82rem;color:#a855f7;font-weight:700;min-width:36px;text-align:right}
+
+/* Buttons */
+.btn-primary{width:100%;padding:10px;border-radius:8px;border:none;cursor:pointer;background:linear-gradient(135deg,#a855f7,#ec4899);color:#fff;font-weight:700;font-size:.9rem;transition:all .2s;margin-top:4px}
+.btn-primary:hover{opacity:.85;transform:scale(1.02)}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-secondary{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(168,85,247,.4);cursor:pointer;background:transparent;color:#a855f7;font-weight:600;font-size:.85rem;transition:all .2s;margin-top:4px}
+.btn-secondary:hover{background:rgba(168,85,247,.1)}
+.btn-danger{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,68,68,.4);cursor:pointer;background:transparent;color:#ff4444;font-weight:600;font-size:.85rem;transition:all .2s;margin-top:4px}
+.btn-danger:hover{background:rgba(255,68,68,.1)}
+
+/* Farm view */
+.farm-view{padding:20px;display:flex;flex-direction:column;gap:16px;overflow-y:auto}
+.farm-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.farm-header h2{font-size:1.1rem;color:#e0e0e0;font-weight:700}
+.farm-controls{display:flex;gap:8px;flex-wrap:wrap}
+.ctrl-btn{padding:6px 14px;border-radius:8px;border:1px solid rgba(168,85,247,.35);background:transparent;color:#a855f7;font-size:.8rem;cursor:pointer;transition:all .2s;font-weight:600}
+.ctrl-btn:hover{background:rgba(168,85,247,.15)}
+.ctrl-btn.active{background:rgba(168,85,247,.2);border-color:#a855f7}
+.ctrl-btn.green-btn{border-color:rgba(0,255,136,.4);color:#00ff88}
+.ctrl-btn.green-btn:hover{background:rgba(0,255,136,.1)}
+.ctrl-btn.red-btn{border-color:rgba(255,68,68,.4);color:#ff4444}
+.ctrl-btn.red-btn:hover{background:rgba(255,68,68,.1)}
+
+/* Progress bar */
+.progress-bar-wrap{background:rgba(15,15,30,.6);border:1px solid rgba(168,85,247,.2);border-radius:8px;padding:12px}
+.progress-label{font-size:.78rem;color:#a0a0a0;margin-bottom:6px;display:flex;justify-content:space-between}
+.progress-track{height:8px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden}
+.progress-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#a855f7,#ec4899);transition:width .5s ease}
+.progress-fill.green{background:linear-gradient(90deg,#00ff88,#00d4ff)}
+.progress-fill.orange{background:linear-gradient(90deg,#ff8800,#ff4444)}
+
+/* Device grid */
+.device-grid-wrap{background:rgba(15,15,30,.4);border:1px solid rgba(168,85,247,.15);border-radius:10px;padding:16px}
+.device-grid-wrap h3{font-size:.85rem;color:#a855f7;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.device-grid{display:flex;flex-wrap:wrap;gap:4px;max-height:280px;overflow-y:auto}
+.device-dot{width:14px;height:14px;border-radius:3px;cursor:pointer;transition:all .15s}
+.device-dot.idle{background:#2a2a4a;border:1px solid #3a3a6a}
+.device-dot.playing{background:#a855f7;box-shadow:0 0 4px rgba(168,85,247,.6);animation:pulse 2s infinite}
+.device-dot.paused{background:#ffc800}
+.device-dot.error{background:#ff4444}
+.device-dot.finished{background:#00ff88}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.dot-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
+.dot-legend-item{display:flex;align-items:center;gap:5px;font-size:.72rem;color:#888}
+.dot-legend-color{width:10px;height:10px;border-radius:2px}
+
+/* Log */
+.log-wrap{background:rgba(15,15,30,.5);border:1px solid rgba(168,85,247,.15);border-radius:10px}
+.log-header{padding:10px 14px;border-bottom:1px solid rgba(168,85,247,.1);display:flex;justify-content:space-between;align-items:center}
+.log-header h3{font-size:.82rem;color:#a855f7;font-weight:700}
+.log-body{padding:10px 14px;height:180px;overflow-y:auto;font-family:'Cascadia Code','Consolas',monospace;font-size:.72rem;line-height:1.8}
+.log-line{color:#888}
+.log-line.info{color:#00d4ff}
+.log-line.success{color:#00ff88}
+.log-line.warn{color:#ffc800}
+.log-line.error{color:#ff4444}
+
+/* Charts row */
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.chart-card{background:rgba(15,15,30,.5);border:1px solid rgba(168,85,247,.15);border-radius:10px;padding:14px}
+.chart-card h3{font-size:.82rem;color:#a855f7;margin-bottom:10px}
+.mini-bar-chart{display:flex;align-items:flex-end;gap:4px;height:80px}
+.mini-bar{flex:1;border-radius:3px 3px 0 0;background:linear-gradient(0deg,#a855f7,#ec4899);min-width:8px;transition:height .4s ease;position:relative}
+.mini-bar:hover::after{content:attr(data-val);position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#1a1a2e;border:1px solid #a855f7;padding:2px 6px;border-radius:4px;font-size:.65rem;color:#e0e0e0;white-space:nowrap}
+.mini-bar-labels{display:flex;gap:4px;margin-top:4px}
+.mini-bar-label{flex:1;text-align:center;font-size:.6rem;color:#666;min-width:8px}
+.donut-wrap{display:flex;align-items:center;gap:14px}
+.donut-svg{flex-shrink:0}
+.donut-legend{display:flex;flex-direction:column;gap:6px;font-size:.72rem}
+.donut-legend-item{display:flex;align-items:center;gap:6px}
+.donut-color{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:rgba(15,15,30,.4)}
+::-webkit-scrollbar-thumb{background:#a855f733;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#a855f766}
+
+@media(max-width:900px){
+  .main{grid-template-columns:1fr}
+  .control-panel{border-right:none;border-bottom:1px solid rgba(168,85,247,.15)}
+  .charts-row{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="nav-logo">📱 Mobile Farm Research</div>
+  <a href="index.html" class="nav-back">← Studio</a>
+</nav>
+
+<!-- Hero Stats -->
+<div class="hero" id="heroStats">
+  <div class="stat-card"><div class="stat-val" id="sTotalDevices">0</div><div class="stat-lbl">Total Devices</div></div>
+  <div class="stat-card"><div class="stat-val green" id="sActive">0</div><div class="stat-lbl">▶ Active</div></div>
+  <div class="stat-card"><div class="stat-val" id="sFinished">0</div><div class="stat-lbl">✅ Finished</div></div>
+  <div class="stat-card"><div class="stat-val red" id="sErrors">0</div><div class="stat-lbl">❌ Errors</div></div>
+  <div class="stat-card"><div class="stat-val green" id="sTotalViews">0</div><div class="stat-lbl">Total Views</div></div>
+  <div class="stat-card"><div class="stat-val" id="sAvgWatch">0s</div><div class="stat-lbl">Avg Watch Time</div></div>
+  <div class="stat-card"><div class="stat-val green" id="sViewRate">0%</div><div class="stat-lbl">View Rate</div></div>
+  <div class="stat-card"><div class="stat-val" id="sElapsed">0s</div><div class="stat-lbl">Elapsed</div></div>
+</div>
+
+<div class="main">
+  <!-- Control Panel -->
+  <div class="control-panel">
+
+    <div class="panel-section">
+      <h3>🎬 Video Target</h3>
+      <div class="form-row">
+        <label>Video URL</label>
+        <input class="farm-input" id="videoUrl" placeholder="https://youtube.com/watch?v=..." value=""/>
+      </div>
+      <div class="form-row">
+        <label>Platform</label>
+        <select class="farm-select" id="platform">
+          <option value="youtube">YouTube</option>
+          <option value="instagram">Instagram Reels</option>
+          <option value="tiktok">TikTok</option>
+          <option value="facebook">Facebook Video</option>
+          <option value="twitter">X / Twitter</option>
+          <option value="custom">Custom URL</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Video Duration (seconds)</label>
+        <input class="farm-input" id="videoDuration" type="number" value="180" min="10"/>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>📱 Device Fleet</h3>
+      <div class="form-row">
+        <label>Number of Devices</label>
+        <div class="range-row">
+          <input type="range" id="deviceCount" min="10" max="5000" step="10" value="100" oninput="document.getElementById('deviceCountVal').textContent=this.value"/>
+          <span class="range-val" id="deviceCountVal">100</span>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Device Mix</label>
+        <select class="farm-select" id="deviceMix">
+          <option value="android">Android Only</option>
+          <option value="ios">iOS Only</option>
+          <option value="mixed" selected>Mixed (Android + iOS)</option>
+          <option value="tablet">Tablets Only</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Geographic Distribution</label>
+        <select class="farm-select" id="geoMix">
+          <option value="india">India (IN)</option>
+          <option value="us">United States (US)</option>
+          <option value="global" selected>Global Mixed</option>
+          <option value="europe">Europe (EU)</option>
+          <option value="se_asia">SE Asia</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Proxy / Network Type</label>
+        <select class="farm-select" id="networkType">
+          <option value="4g" selected>4G Mobile</option>
+          <option value="5g">5G</option>
+          <option value="wifi">WiFi</option>
+          <option value="3g">3G (Slow)</option>
+          <option value="mixed">Mixed</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>⚙️ Behavior Settings</h3>
+      <div class="form-row">
+        <label>Watch Duration Mode</label>
+        <select class="farm-select" id="watchMode">
+          <option value="full">Full Video</option>
+          <option value="random" selected>Random (40–100%)</option>
+          <option value="short">Short (10–40%)</option>
+          <option value="custom">Custom Range</option>
+        </select>
+      </div>
+      <div class="form-row" id="customWatchRow" style="display:none">
+        <label>Custom Watch % (min–max)</label>
+        <div style="display:flex;gap:6px">
+          <input class="farm-input" id="watchMin" type="number" value="20" min="5" max="95" placeholder="Min %"/>
+          <input class="farm-input" id="watchMax" type="number" value="90" min="10" max="100" placeholder="Max %"/>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Inter-device Delay (ms)</label>
+        <div class="range-row">
+          <input type="range" id="startDelay" min="0" max="5000" step="100" value="500" oninput="document.getElementById('startDelayVal').textContent=this.value+'ms'"/>
+          <span class="range-val" id="startDelayVal">500ms</span>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Engagement Actions</label>
+        <select class="farm-select" id="engagement">
+          <option value="view_only">View Only</option>
+          <option value="like" selected>View + Like</option>
+          <option value="like_comment">View + Like + Comment</option>
+          <option value="like_subscribe">View + Like + Subscribe</option>
+          <option value="full">Full Engagement</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Scroll / Swipe Behavior</label>
+        <select class="farm-select" id="scrollBehavior">
+          <option value="none">No Scroll</option>
+          <option value="light" selected>Light (natural)</option>
+          <option value="heavy">Heavy (explore feed)</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Repeat Cycles</label>
+        <input class="farm-input" id="repeatCycles" type="number" value="1" min="1" max="100"/>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>🚀 Session Control</h3>
+      <button class="btn-primary" id="startBtn" onclick="startFarm()">▶ Start Farm Session</button>
+      <button class="btn-secondary" id="pauseBtn" onclick="pauseFarm()" disabled>⏸ Pause All</button>
+      <button class="btn-secondary" id="resumeBtn" onclick="resumeFarm()" disabled>▶ Resume All</button>
+      <button class="btn-danger" id="stopBtn" onclick="stopFarm()" disabled>⏹ Stop &amp; Reset</button>
+      <button class="btn-secondary" onclick="exportReport()" style="margin-top:12px">📊 Export Report (CSV)</button>
+    </div>
+
+  </div>
+
+  <!-- Farm View -->
+  <div class="farm-view">
+
+    <div class="farm-header">
+      <h2 id="sessionLabel">🌾 No Active Session</h2>
+      <div class="farm-controls">
+        <button class="ctrl-btn" onclick="setView('grid')" id="viewGrid">Grid View</button>
+        <button class="ctrl-btn active" onclick="setView('log')" id="viewLog">Log View</button>
+        <button class="ctrl-btn green-btn" onclick="boostSpeed(1.5)">⚡ Speed ×1.5</button>
+        <button class="ctrl-btn green-btn" onclick="boostSpeed(1)">◼ Normal Speed</button>
+      </div>
+    </div>
+
+    <!-- Overall progress -->
+    <div class="progress-bar-wrap">
+      <div class="progress-label"><span>Session Progress</span><span id="progressPct">0%</span></div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+    <div class="progress-bar-wrap" style="margin-top:-4px">
+      <div class="progress-label"><span>Active Devices</span><span id="activeDevicePct">0 / 0</span></div>
+      <div class="progress-track"><div class="progress-fill green" id="activeDeviceFill" style="width:0%"></div></div>
+    </div>
+
+    <!-- Device grid -->
+    <div class="device-grid-wrap" id="gridWrap" style="display:none">
+      <h3>📱 Device Grid <span id="gridCount" style="color:#888;font-weight:400;font-size:.75rem"></span></h3>
+      <div class="device-grid" id="deviceGrid"></div>
+      <div class="dot-legend">
+        <div class="dot-legend-item"><div class="dot-legend-color" style="background:#2a2a4a;border:1px solid #3a3a6a"></div>Idle</div>
+        <div class="dot-legend-item"><div class="dot-legend-color" style="background:#a855f7"></div>Playing</div>
+        <div class="dot-legend-item"><div class="dot-legend-color" style="background:#ffc800"></div>Paused</div>
+        <div class="dot-legend-item"><div class="dot-legend-color" style="background:#00ff88"></div>Finished</div>
+        <div class="dot-legend-item"><div class="dot-legend-color" style="background:#ff4444"></div>Error</div>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="log-wrap" id="logWrap">
+      <div class="log-header">
+        <h3>📋 Session Log</h3>
+        <button class="ctrl-btn" onclick="clearLog()" style="padding:3px 10px;font-size:.72rem">Clear</button>
+      </div>
+      <div class="log-body" id="logBody">
+        <div class="log-line info">[SYSTEM] Mobile Farm Research Tool ready.</div>
+        <div class="log-line">[SYSTEM] Configure settings and click Start Farm Session.</div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-row">
+      <div class="chart-card">
+        <h3>📈 Views Per Minute</h3>
+        <div class="mini-bar-chart" id="vpmChart"></div>
+        <div class="mini-bar-labels" id="vpmLabels"></div>
+      </div>
+      <div class="chart-card">
+        <h3>🥧 Device Status</h3>
+        <div class="donut-wrap">
+          <svg class="donut-svg" viewBox="0 0 80 80" width="80" height="80" id="donutSvg">
+            <circle cx="40" cy="40" r="30" fill="none" stroke="#2a2a4a" stroke-width="12"/>
+            <circle cx="40" cy="40" r="30" fill="none" stroke="#a855f7" stroke-width="12"
+              stroke-dasharray="0 188.5" stroke-dashoffset="47" id="donutPlaying" style="transition:stroke-dasharray .5s"/>
+            <circle cx="40" cy="40" r="30" fill="none" stroke="#00ff88" stroke-width="12"
+              stroke-dasharray="0 188.5" stroke-dashoffset="47" id="donutFinished" style="transition:all .5s"/>
+            <circle cx="40" cy="40" r="30" fill="none" stroke="#ff4444" stroke-width="12"
+              stroke-dasharray="0 188.5" stroke-dashoffset="47" id="donutError" style="transition:all .5s"/>
+          </svg>
+          <div class="donut-legend">
+            <div class="donut-legend-item"><div class="donut-color" style="background:#a855f7"></div><span id="dLegPlay">Playing: 0</span></div>
+            <div class="donut-legend-item"><div class="donut-color" style="background:#00ff88"></div><span id="dLegFin">Finished: 0</span></div>
+            <div class="donut-legend-item"><div class="donut-color" style="background:#ffc800"></div><span id="dLegPause">Paused: 0</span></div>
+            <div class="donut-legend-item"><div class="donut-color" style="background:#ff4444"></div><span id="dLegErr">Errors: 0</span></div>
+            <div class="donut-legend-item"><div class="donut-color" style="background:#2a2a4a;border:1px solid #3a3a6a"></div><span id="dLegIdle">Idle: 0</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── State ──
+let farm = {
+  running: false, paused: false,
+  total: 0, devices: [],
+  timer: null, statsTimer: null,
+  startTime: null, elapsed: 0,
+  speedMult: 1,
+  views: 0, totalWatch: 0,
+  vpmHistory: [],
+  lastMinViews: 0, lastMinTime: 0,
+  cycles: 1, currentCycle: 1,
+  log: []
+};
+
+const DEVICE_MODELS = {
+  android: ['Samsung Galaxy S24','Xiaomi 14','OnePlus 12','Realme 12 Pro','Oppo Reno 12','Vivo V30','Motorola Edge 50','Google Pixel 8'],
+  ios: ['iPhone 15 Pro','iPhone 14','iPhone 13 mini','iPad Air 5','iPhone SE 3rd','iPhone 15 Plus'],
+  tablet: ['Samsung Tab S9','iPad Pro 12.9','Lenovo Tab P12','Xiaomi Pad 6']
+};
+const COUNTRIES_GLOBAL = ['IN','US','BR','ID','PH','VN','TH','NG','PK','BD','DE','FR','GB','MX','TR'];
+const COUNTRIES = { india:['IN'],us:['US'],europe:['DE','FR','GB','IT','ES','NL'],se_asia:['ID','PH','VN','TH','SG','MY'],global:COUNTRIES_GLOBAL };
+
+// ── DOM helpers ──
+const $  = id => document.getElementById(id);
+const log = (msg, type='') => {
+  const el = document.getElementById('logBody');
+  const ts = new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  div.className = 'log-line ' + type;
+  div.textContent = `[${ts}] ${msg}`;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+  if (el.children.length > 500) el.removeChild(el.firstChild);
+};
+
+// ── Build devices ──
+function buildDevices(count) {
+  const mix   = $('deviceMix').value;
+  const geo   = $('geoMix').value;
+  const net   = $('networkType').value;
+  const dur   = parseInt($('videoDuration').value) || 180;
+  const mode  = $('watchMode').value;
+  const eng   = $('engagement').value;
+  const nets  = net === 'mixed' ? ['4g','5g','wifi','3g'] : [net];
+  const geos  = COUNTRIES[geo] || COUNTRIES.global;
+  const models = mix === 'mixed' ? [...DEVICE_MODELS.android,...DEVICE_MODELS.ios]
+               : mix === 'android' ? DEVICE_MODELS.android
+               : mix === 'ios'    ? DEVICE_MODELS.ios
+               : DEVICE_MODELS.tablet;
+
+  return Array.from({length:count}, (_,i) => {
+    let watchPct;
+    if      (mode === 'full')   watchPct = 95 + Math.random()*5;
+    else if (mode === 'short')  watchPct = 10 + Math.random()*30;
+    else if (mode === 'custom') watchPct = parseInt($('watchMin').value||20) + Math.random()*(parseInt($('watchMax').value||90)-parseInt($('watchMin').value||20));
+    else watchPct = 40 + Math.random()*60;
+
+    return {
+      id: i+1,
+      model:   models[Math.floor(Math.random()*models.length)],
+      country: geos[Math.floor(Math.random()*geos.length)],
+      network: nets[Math.floor(Math.random()*nets.length)],
+      watchSec: Math.round(dur * watchPct / 100),
+      status:  'idle',   // idle | playing | paused | finished | error
+      progress: 0,
+      watchedSec: 0,
+      engagement: eng,
+      liked: false, commented: false, subscribed: false,
+      startDelay: i * parseInt($('startDelay').value||500),
+      startedAt: null,
+      errorRate: Math.random() < 0.03  // 3% error rate
+    };
+  });
+}
+
+// ── Start ──
+function startFarm() {
+  const count   = parseInt($('deviceCount').value) || 100;
+  const cycles  = parseInt($('repeatCycles').value) || 1;
+  const videoUrl = $('videoUrl').value.trim();
+  if (!videoUrl) { alert('Please enter a Video URL.'); return; }
+
+  farm.total   = count;
+  farm.devices = buildDevices(count);
+  farm.running = true;
+  farm.paused  = false;
+  farm.views   = 0;
+  farm.totalWatch = 0;
+  farm.vpmHistory = [];
+  farm.lastMinViews = 0;
+  farm.lastMinTime = Date.now();
+  farm.startTime = Date.now();
+  farm.elapsed = 0;
+  farm.cycles  = cycles;
+  farm.currentCycle = 1;
+  farm.speedMult = 1;
+
+  $('startBtn').disabled = true;
+  $('pauseBtn').disabled = false;
+  $('stopBtn').disabled  = false;
+  $('sessionLabel').textContent = `🌾 Session Running — ${count} devices × ${cycles} cycle(s)`;
+
+  log(`Session started: ${count} devices, ${cycles} cycles, platform: ${$('platform').value}`, 'info');
+  log(`Video: ${videoUrl}`, 'info');
+  log(`Watch mode: ${$('watchMode').value} | Engagement: ${$('engagement').value}`, 'info');
+
+  renderDeviceGrid();
+  scheduleDevices();
+
+  farm.statsTimer = setInterval(updateStats, 1000);
+  updateVpmChart();
+}
+
+// ── Schedule devices ──
+function scheduleDevices() {
+  farm.devices.forEach(d => {
+    if (d.status !== 'idle') return;
+    setTimeout(() => {
+      if (!farm.running || farm.paused) return;
+      if (d.errorRate) {
+        d.status = 'error';
+        log(`Device #${d.id} (${d.model}/${d.country}) — connection error`, 'error');
+        updateDeviceDot(d);
+        return;
+      }
+      d.status = 'playing';
+      d.startedAt = Date.now();
+      log(`Device #${d.id} (${d.model} · ${d.country} · ${d.network}) — started playback`, 'success');
+      updateDeviceDot(d);
+
+      // Simulate playback completion
+      const playMs = d.watchSec * 1000 / farm.speedMult;
+      d._playTimer = setTimeout(() => finishDevice(d), playMs);
+    }, d.startDelay / farm.speedMult);
+  });
+}
+
+function finishDevice(d) {
+  if (!farm.running) return;
+  d.status     = 'finished';
+  d.watchedSec = d.watchSec;
+  farm.views++;
+  farm.totalWatch += d.watchSec;
+
+  const eng = d.engagement;
+  const actions = [];
+  if (eng !== 'view_only') { d.liked = true; actions.push('👍 Liked'); }
+  if (eng === 'like_comment' || eng === 'full') { d.commented = true; actions.push('💬 Commented'); }
+  if (eng === 'like_subscribe' || eng === 'full') { d.subscribed = true; actions.push('🔔 Subscribed'); }
+
+  log(`Device #${d.id} — finished (${d.watchSec}s watched) ${actions.join(' ')}`, 'success');
+  updateDeviceDot(d);
+}
+
+// ── Pause / Resume / Stop ──
+function pauseFarm() {
+  farm.paused = true;
+  farm.devices.forEach(d => {
+    if (d.status === 'playing') {
+      d.status = 'paused';
+      clearTimeout(d._playTimer);
+      updateDeviceDot(d);
+    }
+  });
+  $('pauseBtn').disabled  = true;
+  $('resumeBtn').disabled = false;
+  $('sessionLabel').textContent = '⏸ Session Paused';
+  log('Session paused by user.', 'warn');
+}
+
+function resumeFarm() {
+  farm.paused = false;
+  farm.devices.forEach(d => {
+    if (d.status === 'paused') {
+      d.status = 'playing';
+      const remainMs = (d.watchSec - (d.watchedSec||0)) * 1000 / farm.speedMult;
+      d._playTimer = setTimeout(() => finishDevice(d), remainMs);
+      updateDeviceDot(d);
+    }
+  });
+  $('pauseBtn').disabled  = false;
+  $('resumeBtn').disabled = true;
+  $('sessionLabel').textContent = `🌾 Session Resumed`;
+  log('Session resumed.', 'info');
+}
+
+function stopFarm() {
+  farm.running = false;
+  farm.paused  = false;
+  clearInterval(farm.statsTimer);
+  farm.devices.forEach(d => clearTimeout(d._playTimer));
+  $('startBtn').disabled  = false;
+  $('pauseBtn').disabled  = true;
+  $('resumeBtn').disabled = true;
+  $('stopBtn').disabled   = true;
+  $('sessionLabel').textContent = '⏹ Session Stopped';
+  log(`Session stopped. Total views delivered: ${farm.views}`, 'warn');
+  updateStats();
+}
+
+function boostSpeed(mult) {
+  farm.speedMult = mult;
+  log(`Speed multiplier set to ×${mult}`, 'info');
+}
+
+// ── Stats update ──
+function updateStats() {
+  const devices = farm.devices;
+  const total   = devices.length;
+  const playing = devices.filter(d=>d.status==='playing').length;
+  const finished= devices.filter(d=>d.status==='finished').length;
+  const errored = devices.filter(d=>d.status==='error').length;
+  const paused  = devices.filter(d=>d.status==='paused').length;
+  const idle    = devices.filter(d=>d.status==='idle').length;
+
+  $('sTotalDevices').textContent = total;
+  $('sActive').textContent       = playing;
+  $('sFinished').textContent     = finished;
+  $('sErrors').textContent       = errored;
+  $('sTotalViews').textContent   = farm.views.toLocaleString();
+  $('sAvgWatch').textContent     = farm.views > 0 ? Math.round(farm.totalWatch/farm.views)+'s' : '0s';
+  $('sViewRate').textContent     = total > 0 ? Math.round((finished/total)*100)+'%' : '0%';
+
+  if (farm.startTime) {
+    farm.elapsed = Math.round((Date.now() - farm.startTime)/1000);
+    $('sElapsed').textContent = farm.elapsed >= 60 ? Math.floor(farm.elapsed/60)+'m '+( farm.elapsed%60)+'s' : farm.elapsed+'s';
+  }
+
+  // Progress bars
+  const pct = total > 0 ? Math.round((finished+errored)/total*100) : 0;
+  $('progressFill').style.width  = pct + '%';
+  $('progressPct').textContent   = pct + '%';
+  $('activeDeviceFill').style.width = total > 0 ? (playing/total*100)+'%' : '0%';
+  $('activeDevicePct').textContent = `${playing} / ${total}`;
+
+  // Donut
+  updateDonut(playing, finished, paused, errored, idle, total);
+
+  // VPM
+  const now = Date.now();
+  if (now - farm.lastMinTime >= 5000) {
+    const vpm = Math.round((farm.views - farm.lastMinViews) / ((now - farm.lastMinTime)/60000));
+    farm.vpmHistory.push(vpm);
+    if (farm.vpmHistory.length > 12) farm.vpmHistory.shift();
+    farm.lastMinViews = farm.views;
+    farm.lastMinTime  = now;
+    updateVpmChart();
+  }
+
+  // Auto-stop when all done
+  if (total > 0 && (finished + errored) >= total && farm.running) {
+    log(`🎉 All ${total} devices completed! Total views: ${farm.views}`, 'success');
+    if (farm.currentCycle < farm.cycles) {
+      farm.currentCycle++;
+      log(`Starting cycle ${farm.currentCycle} of ${farm.cycles}...`, 'info');
+      farm.devices = buildDevices(total);
+      renderDeviceGrid();
+      scheduleDevices();
+    } else {
+      stopFarm();
+      $('sessionLabel').textContent = `✅ Session Complete — ${farm.views.toLocaleString()} views delivered`;
+    }
+  }
+}
+
+// ── Donut chart ──
+function updateDonut(playing, finished, paused, errored, idle, total) {
+  const circ = 188.5;
+  const toArc = n => total > 0 ? (n/total)*circ : 0;
+
+  const pPlay = toArc(playing);
+  const pFin  = toArc(finished);
+  const pErr  = toArc(errored);
+
+  $('donutPlaying').setAttribute('stroke-dasharray', `${pPlay} ${circ-pPlay}`);
+  $('donutFinished').setAttribute('stroke-dasharray',`${pFin}  ${circ-pFin}`);
+  $('donutFinished').setAttribute('stroke-dashoffset', 47 - pPlay);
+  $('donutError').setAttribute('stroke-dasharray',`${pErr}  ${circ-pErr}`);
+  $('donutError').setAttribute('stroke-dashoffset', 47 - pPlay - pFin);
+
+  $('dLegPlay').textContent   = `Playing: ${playing}`;
+  $('dLegFin').textContent    = `Finished: ${finished}`;
+  $('dLegPause').textContent  = `Paused: ${paused}`;
+  $('dLegErr').textContent    = `Errors: ${errored}`;
+  $('dLegIdle').textContent   = `Idle: ${idle}`;
+}
+
+// ── VPM Bar Chart ──
+function updateVpmChart() {
+  const data = farm.vpmHistory.length ? farm.vpmHistory : Array(12).fill(0);
+  const max  = Math.max(...data, 1);
+  const chart = $('vpmChart');
+  const labels = $('vpmLabels');
+  chart.innerHTML = data.map(v=>`<div class="mini-bar" data-val="${v} vpm" style="height:${Math.round(v/max*100)}%"></div>`).join('');
+  labels.innerHTML = data.map((_,i)=>`<span class="mini-bar-label">${i===data.length-1?'now':''}</span>`).join('');
+}
+
+// ── Device Grid ──
+function renderDeviceGrid() {
+  const grid = $('deviceGrid');
+  const total = farm.devices.length;
+  $('gridCount').textContent = `(${total} devices)`;
+  grid.innerHTML = farm.devices.map(d =>
+    `<div class="device-dot ${d.status}" id="dot-${d.id}" title="Device #${d.id} · ${d.model} · ${d.country}"></div>`
+  ).join('');
+}
+
+function updateDeviceDot(d) {
+  const dot = document.getElementById('dot-'+d.id);
+  if (dot) dot.className = 'device-dot ' + d.status;
+}
+
+// ── View switch ──
+function setView(v) {
+  $('viewGrid').classList.toggle('active', v==='grid');
+  $('viewLog').classList.toggle('active',  v==='log');
+  $('gridWrap').style.display = v==='grid' ? 'block' : 'none';
+  $('logWrap').style.display  = v==='log'  ? 'block' : 'none';
+}
+
+function clearLog() { $('logBody').innerHTML = ''; }
+
+// ── Watch mode custom reveal ──
+$('watchMode').addEventListener('change', e => {
+  $('customWatchRow').style.display = e.target.value === 'custom' ? 'flex' : 'none';
+});
+
+// ── Export CSV ──
+function exportReport() {
+  const rows = [['Device ID','Model','Country','Network','Status','Watch(s)','Liked','Commented','Subscribed']];
+  farm.devices.forEach(d => rows.push([d.id, d.model, d.country, d.network, d.status, d.watchedSec||0, d.liked, d.commented, d.subscribed]));
+  const csv = rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `farm_report_${Date.now()}.csv`;
+  a.click();
+  log('Report exported as CSV.', 'info');
+}
+</script>
+</body>
+</html>
