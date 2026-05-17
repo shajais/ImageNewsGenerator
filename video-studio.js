@@ -271,21 +271,19 @@ function _vsShortName(n) { return (n||'clip').replace(/\.[^.]+$/, '').substring(
 
 function _vsGenThumb(clip, i) {
   if (VS._lastThumb[i]) return;
-  if (clip._imgEl) {
-    const tc = document.createElement('canvas'); tc.width=60; tc.height=60;
-    tc.getContext('2d').drawImage(clip._imgEl, 0, 0, 60, 60);
-    const el = document.getElementById('vsThumb' + i);
-    if (el) { el.innerHTML=''; const img=document.createElement('img'); img.src=tc.toDataURL(); img.style.cssText='width:100%;height:100%;object-fit:cover;border-radius:4px'; el.appendChild(img); }
-    VS._lastThumb[i] = true;
-  } else if (clip._vidEl && clip._vidEl.readyState >= 2) {
-    // Video already has frame data — draw directly
+  const _applyThumb = (src) => {
     try {
       const tc = document.createElement('canvas'); tc.width=60; tc.height=60;
-      tc.getContext('2d').drawImage(clip._vidEl, 0, 0, 60, 60);
+      tc.getContext('2d').drawImage(src, 0, 0, 60, 60);
       const el = document.getElementById('vsThumb' + i);
       if (el) { el.innerHTML=''; const img=document.createElement('img'); img.src=tc.toDataURL(); img.style.cssText='width:100%;height:100%;object-fit:cover;border-radius:4px'; el.appendChild(img); }
       VS._lastThumb[i] = true;
-    } catch(e) {}
+    } catch(e) { /* tainted or not ready — leave emoji placeholder */ }
+  };
+  if (clip._imgEl) {
+    _applyThumb(clip._imgEl);
+  } else if (clip._vidEl && clip._vidEl.readyState >= 2) {
+    _applyThumb(clip._vidEl);
   }
   // If video not ready yet, it will be drawn via onseeked in vsAddClip
 }
@@ -421,7 +419,7 @@ function vsRenderClip(idx, progress) {
     const dw = iw * scale, dh = ih * scale;
     const dx = (cv.width - dw) / 2, dy = (cv.height - dh) / 2;
     ctx.filter = p.filter;
-    ctx.drawImage(img, dx, dy, dw, dh);
+    try { ctx.drawImage(img, dx, dy, dw, dh); } catch(e) { ctx.fillStyle='#1e1b4b'; ctx.fillRect(0,0,cv.width,cv.height); }
     ctx.filter = 'none';
   } else if (c._vidEl) {
     const vid = c._vidEl;
@@ -431,7 +429,7 @@ function vsRenderClip(idx, progress) {
     const dw = vw * scale, dh = vh * scale;
     const dx = (cv.width - dw)/2, dy = (cv.height - dh)/2;
     ctx.filter = p.filter;
-    ctx.drawImage(vid, dx, dy, dw, dh);
+    try { ctx.drawImage(vid, dx, dy, dw, dh); } catch(e) { ctx.fillStyle='#1e1b4b'; ctx.fillRect(0,0,cv.width,cv.height); }
     ctx.filter = 'none';
     // Watermark removal: blur bottom-right and top-left corners
     const wmRemove = document.getElementById('vsWatermarkRemove')?.checked;
@@ -586,16 +584,24 @@ function _vsBlurWatermarkZones(ctx, cv) {
     { x: 0,               y: cv.height * 0.92,  w: cv.width * 0.35, h: cv.height * 0.08 },  // bottom-left
   ];
   zones.forEach(z => {
-    // Smear blur by pixel-sampling (canvas doesn't have native blur on drawImage)
-    ctx.save();
-    ctx.filter = 'blur(14px) brightness(0.95)';
-    const snap = ctx.getImageData(z.x, z.y, Math.max(1,z.w), Math.max(1,z.h));
-    ctx.putImageData(snap, z.x, z.y);
-    ctx.filter = 'none';
-    // Overlay a soft semi-transparent fill matching background to soften
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(z.x, z.y, z.w, z.h);
-    ctx.restore();
+    try {
+      // Draw the zone back onto itself with a blur filter to obscure watermarks
+      // Use a temporary offscreen canvas to avoid getImageData (which taints on some hosts)
+      const off = document.createElement('canvas');
+      off.width  = Math.ceil(z.w);
+      off.height = Math.ceil(z.h);
+      const offCtx = off.getContext('2d');
+      offCtx.filter = 'blur(12px) brightness(0.88)';
+      offCtx.drawImage(cv, z.x, z.y, z.w, z.h, 0, 0, z.w, z.h);
+      offCtx.filter = 'none';
+      ctx.drawImage(off, z.x, z.y, z.w, z.h);
+    } catch(e) {
+      // Canvas tainted or security error — fall back to a dark overlay
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(z.x, z.y, z.w, z.h);
+      ctx.restore();
+    }
   });
 }
 
