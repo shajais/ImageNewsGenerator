@@ -746,6 +746,15 @@ function vsPlay() {
       if (VS.audioCtx.state === 'suspended') VS.audioCtx.resume().then(_startAudio);
       else _startAudio();
     } catch(e) { console.warn('Audio start error:', e); }
+  } else if (VS.audioTrack?.url) {
+    // Buffer unavailable (CORS) — play via <audio> element instead
+    const audEl = document.getElementById('vsAudioPreviewEl');
+    if (audEl && audEl.src) {
+      audEl.loop = true;
+      audEl.volume = parseFloat(document.getElementById('vsVolumeSlider')?.value || 0.5);
+      audEl.currentTime = VS.audioOffset || 0;
+      audEl.play().catch(() => {});
+    }
   }
 }
 
@@ -753,6 +762,9 @@ function vsStop() {
   VS.playing = false;
   if (VS._raf) { cancelAnimationFrame(VS._raf); VS._raf = null; }
   if (VS._audioSrc) try { VS._audioSrc.stop(); } catch(_){}
+  // Also pause the <audio> preview element if active
+  const audEl = document.getElementById('vsAudioPreviewEl');
+  if (audEl) audEl.pause();
   VS.clips.forEach(c => { if (c._vidEl) { c._vidEl.pause(); } });
   document.getElementById('vsPlayBtn').textContent = '▶️ Play';
 }
@@ -884,29 +896,86 @@ function vsSelectTrack(idx) {
   const track = VS_TRACKS[idx]; if (!track) return;
   vsToast('⏳ Loading track: ' + track.name + ' …');
   if (!VS.audioCtx) VS.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  fetch(track.url)
-    .then(r => r.arrayBuffer())
-    .then(buf => VS.audioCtx.decodeAudioData(buf))
-    .then(decoded => {
-      VS.audioTrack = { ...track, buffer: decoded };
-      vsToast('🎵 Track loaded: ' + track.name);
-      document.getElementById('vsCurrentTrack').textContent = track.name;
-      vsDetectBeats(decoded);
-    })
-    .catch(() => {
-      vsToast('⚠️ Could not load track (CORS). Try uploading your own music.');
-    });
+
+  // Resume context if suspended (browser autoplay policy)
+  if (VS.audioCtx.state === 'suspended') VS.audioCtx.resume();
+
+  // Update UI immediately
+  const trackEl = document.getElementById('vsCurrentTrack');
+  if (trackEl) trackEl.textContent = '⏳ ' + track.name;
+
+  // Try direct fetch first, then CORS proxies, then fall back to BPM-based beats
+  const proxiedUrls = [
+    track.url,
+    'https://corsproxy.io/?' + encodeURIComponent(track.url),
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(track.url),
+  ];
+
+  function tryFetch(urls, i) {
+    if (i >= urls.length) {
+      // All fetches failed — use BPM-based synthetic beat generation
+      vsToast('⚠️ Track audio blocked by CORS — using BPM sync (' + track.bpm + ' BPM)');
+      if (trackEl) trackEl.textContent = track.name + ' (BPM sync)';
+      VS.audioTrack = { ...track, buffer: null }; // mark track selected without buffer
+      vsGenerateBpmBeats(track.bpm, VS.totalDuration || 60);
+
+      // Still set up <audio> element for playback preview (doesn't need CORS)
+      _vsSetAudioElement(track.url, track.name);
+      return;
+    }
+    fetch(urls[i])
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+      .then(buf => VS.audioCtx.decodeAudioData(buf))
+      .then(decoded => {
+        VS.audioTrack = { ...track, buffer: decoded };
+        vsToast('🎵 Track loaded: ' + track.name);
+        if (trackEl) trackEl.textContent = track.name;
+        vsDetectBeats(decoded);
+        _vsSetAudioElement(track.url, track.name);
+      })
+      .catch(() => tryFetch(urls, i + 1));
+  }
+  tryFetch(proxiedUrls, 0);
+}
+
+/* Set up a plain <audio> element for preview playback (bypasses CORS restriction on fetch) */
+function _vsSetAudioElement(url, name) {
+  let aud = document.getElementById('vsAudioPreviewEl');
+  if (!aud) {
+    aud = document.createElement('audio');
+    aud.id = 'vsAudioPreviewEl';
+    aud.crossOrigin = 'anonymous';
+    aud.loop = true;
+    aud.style.display = 'none';
+    document.body.appendChild(aud);
+  }
+  aud.src = url;
+  aud.load();
+}
+
+/* Generate synthetic beat markers from a known BPM when audio decode is unavailable */
+function vsGenerateBpmBeats(bpm, durationSec) {
+  if (!bpm || !durationSec) return;
+  const interval = 60 / bpm; // seconds per beat
+  VS.beatMarkers = [];
+  for (let t = 0; t < durationSec; t += interval) {
+    VS.beatMarkers.push(parseFloat(t.toFixed(3)));
+  }
+  vsToast('🥁 ' + VS.beatMarkers.length + ' beats generated (' + bpm + ' BPM)');
+  _vsRenderBeatMarkers();
 }
 
 function vsUploadAudio(file) {
   if (!file) return;
   if (!VS.audioCtx) VS.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (VS.audioCtx.state === 'suspended') VS.audioCtx.resume();
   const url = URL.createObjectURL(file);
   fetch(url).then(r => r.arrayBuffer()).then(buf => VS.audioCtx.decodeAudioData(buf)).then(decoded => {
     VS.audioTrack = { name: file.name, url, buffer: decoded, bpm: null };
     vsToast('🎵 Custom track loaded: ' + file.name);
     document.getElementById('vsCurrentTrack').textContent = '🎵 ' + file.name;
     vsDetectBeats(decoded);
+    _vsSetAudioElement(url, file.name);
   }).catch(() => vsToast('❌ Could not decode audio file'));
 }
 
@@ -941,17 +1010,34 @@ function _vsRenderBeatMarkers() {
 
 /* auto-cut: set clip durations to match beat intervals */
 function vsAutoCutToBeats() {
-  if (!VS.beatMarkers.length) return vsToast('🥁 No beats detected — load a track first');
   if (!VS.clips.length) return vsToast('📁 Add clips first');
+
+  // If no track loaded at all, prompt user
+  if (!VS.audioTrack) return vsToast('🎵 Select a music track first, then try again');
+
+  // If beats are missing but we have a known BPM, regenerate them now
+  if (!VS.beatMarkers.length && VS.audioTrack.bpm) {
+    vsGenerateBpmBeats(VS.audioTrack.bpm, VS.totalDuration || 60);
+  }
+
+  // If still no beats (uploaded track with no BPM metadata), run energy detection if buffer available
+  if (!VS.beatMarkers.length && VS.audioTrack.buffer) {
+    vsDetectBeats(VS.audioTrack.buffer);
+  }
+
+  if (!VS.beatMarkers.length) return vsToast('🥁 No beats detected — try uploading your own music file');
+
   const intervals = VS.beatMarkers.slice(0, VS.clips.length + 1);
   VS.clips.forEach((c, i) => {
     if (i < intervals.length - 1) {
       const dur = intervals[i+1] - intervals[i];
       if (c.type === 'img') c.duration = Math.max(0.5, dur);
+      // For video clips, adjust trim end to match beat duration
+      if (c.type === 'vid') c.duration = Math.max(0.3, dur);
     }
   });
   vsRebuildTimeline();
-  vsToast('✅ Clips synced to beat!');
+  vsToast('✅ ' + VS.clips.length + ' clips synced to beat!');
 }
 
 function vsSetVolume(val) {
@@ -1087,27 +1173,90 @@ async function _vsExportAsync(codec, crf, resPref) {
   const fps = 30;
   const stream = VS.canvas.captureStream(fps);
 
-  // Audio setup: route background music into the stream
-  if (!VS.audioCtx) VS.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (VS.audioCtx.state === 'suspended') await VS.audioCtx.resume();
-
+  // ── Audio setup: always use a dedicated export AudioContext ──────────
+  // Using a fresh context avoids stale/suspended state from the playback context.
+  let exportAudioCtx = null;
   let exportMusicSrc = null;
-  if (VS.audioTrack?.buffer) {
-    const dest = VS.audioCtx.createMediaStreamDestination();
-    exportMusicSrc = VS.audioCtx.createBufferSource();
-    exportMusicSrc.buffer = VS.audioTrack.buffer;
-    exportMusicSrc.loop   = true;
-    const mg = VS.audioCtx.createGain();
-    mg.gain.value = parseFloat(document.getElementById('vsVolumeSlider')?.value || 0.5);
-    exportMusicSrc.connect(mg).connect(dest);
+  const exportVideoSrcs = []; // track video element audio sources so we can stop them
+  try {
+    exportAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const dest = exportAudioCtx.createMediaStreamDestination();
+
+    // ── Route original video audio tracks into the export mix ──
+    const videoMixGain = exportAudioCtx.createGain();
+    const videoVolSlider = document.getElementById('vsVideoVolumeSlider');
+    videoMixGain.gain.value = videoVolSlider ? parseFloat(videoVolSlider.value) : 1.0;
+    videoMixGain.connect(dest);
+
+    VS.clips.forEach(c => {
+      if (c._vidEl && c.type === 'vid') {
+        try {
+          // Unmute so Web Audio can capture the element's audio
+          c._vidEl.muted = false;
+          const vidSrc = exportAudioCtx.createMediaElementSource(c._vidEl);
+          vidSrc.connect(videoMixGain);
+          exportVideoSrcs.push({ src: vidSrc, vidEl: c._vidEl });
+        } catch(e) {
+          // createMediaElementSource throws if element is already connected to another context
+          // In that case we can't capture its audio — keep it muted to avoid double-play
+          console.warn('Could not route video audio for clip:', c.name, e.message);
+          c._vidEl.muted = true;
+        }
+      }
+    });
+
+    if (VS.audioTrack?.buffer) {
+      // Re-decode the audio buffer in the new context to avoid cross-context errors
+      exportMusicSrc = exportAudioCtx.createBufferSource();
+      exportMusicSrc.buffer = VS.audioTrack.buffer;
+      exportMusicSrc.loop   = true;
+      const mg = exportAudioCtx.createGain();
+      mg.gain.value = parseFloat(document.getElementById('vsVolumeSlider')?.value ?? 0.5);
+      exportMusicSrc.connect(mg);
+      mg.connect(dest);
+    } else if (VS.audioTrack?.url) {
+      // Track was selected but buffer failed to decode (CORS) — use <audio> element source
+      try {
+        const audEl = document.getElementById('vsAudioPreviewEl');
+        if (audEl && audEl.src) {
+          audEl.loop = true;
+          audEl.currentTime = 0;
+          const audSrc = exportAudioCtx.createMediaElementSource(audEl);
+          const mg = exportAudioCtx.createGain();
+          mg.gain.value = parseFloat(document.getElementById('vsVolumeSlider')?.value ?? 0.5);
+          audSrc.connect(mg);
+          mg.connect(dest);
+          exportMusicSrc = { _audEl: audEl, stop: () => { audEl.pause(); } };
+          audEl.play().catch(() => {});
+        }
+      } catch(e) {
+        console.warn('Could not route audio element to export context:', e.message);
+      }
+    }
+
+    if (exportVideoSrcs.length === 0 && !VS.audioTrack) {
+      // No music and no video audio — add a silent oscillator so the stream always carries an audio track.
+      // Without an audio track, some decoders/players reject the file or show "no audio".
+      const silence = exportAudioCtx.createGain();
+      silence.gain.value = 0;
+      const osc = exportAudioCtx.createOscillator();
+      osc.connect(silence);
+      silence.connect(dest);
+      osc.start(0);
+    }
+
+    // Add the audio track(s) to the canvas stream BEFORE creating MediaRecorder
     dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+  } catch(audioErr) {
+    console.warn('Export audio setup failed, video will have no audio:', audioErr);
   }
 
-  // Choose best supported codec for WebM intermediate
+  // Choose best supported codec — ALWAYS prefer codecs that include audio (opus)
   const recMime = [
     'video/webm;codecs=vp9,opus',
-    'video/webm;codecs=vp9',
     'video/webm;codecs=vp8,opus',
+    'video/webm;codecs=h264,opus',
+    'video/webm;codecs=vp9',
     'video/webm'
   ].find(t => { try { return MediaRecorder.isTypeSupported(t); } catch(_){ return false; } }) || 'video/webm';
 
@@ -1145,7 +1294,10 @@ async function _vsExportAsync(codec, crf, resPref) {
 
   // Stop everything
   vsStop();
-  if (exportMusicSrc) try { exportMusicSrc.stop(); } catch(_) {}
+  if (exportMusicSrc) try { exportMusicSrc.stop ? exportMusicSrc.stop() : exportMusicSrc.stop(0); } catch(_) {}
+  // Mute video elements again now that export is done (they've been captured)
+  exportVideoSrcs.forEach(({ vidEl }) => { try { vidEl.muted = true; } catch(_) {} });
+  if (exportAudioCtx) try { exportAudioCtx.close(); } catch(_) {}
   VS.mediaRecorder.stop();
   await recordingDone;
 
@@ -1235,7 +1387,7 @@ function _vsExportPlay() {
   // Start first video clip
   const first = VS.clips[0];
   if (first?._vidEl) {
-    first._vidEl.muted = true; // keep muted — audio handled via AudioContext
+    // Do NOT mute — audio is routed through exportAudioCtx to the stream
     first._vidEl.currentTime = first.trimStart || 0;
     first._vidEl.playbackRate = first.speed || 1;
     first._vidEl.play().catch(() => {});

@@ -97,20 +97,20 @@ a{color:#a78bfa;text-decoration:none}
     </div>
 
     <div>
-      <div class="ta-section">📋 Test Suites</div>
+      <div class="ta-section" style="display:flex;align-items:center;justify-content:space-between">📋 Test Suites <button onclick="taToggleAllSuites()" id="taToggleAllBtn" style="font-size:.6rem;padding:2px 8px;border-radius:6px;border:1px solid rgba(124,58,237,.4);background:rgba(124,58,237,.12);color:#c4b5fd;cursor:pointer;font-weight:700">Deselect All</button></div>
       <div class="suite-grid" id="suitePicker">
-        <div class="suite-item on" data-suite="structure"><span>🏗</span>Structure</div>
-        <div class="suite-item on" data-suite="seo"><span>📈</span>SEO</div>
-        <div class="suite-item on" data-suite="accessibility"><span>♿</span>Accessibility</div>
-        <div class="suite-item on" data-suite="security"><span>🔒</span>Security</div>
-        <div class="suite-item on" data-suite="performance"><span>⚡</span>Performance</div>
-        <div class="suite-item on" data-suite="ux"><span>🎨</span>UX/Usability</div>
-        <div class="suite-item on" data-suite="mobile"><span>📱</span>Mobile</div>
-        <div class="suite-item on" data-suite="forms"><span>📝</span>Forms</div>
-        <div class="suite-item on" data-suite="features"><span>🔧</span>Features</div>
-        <div class="suite-item on" data-suite="media"><span>🖼</span>Media/Canvas</div>
-        <div class="suite-item on" data-suite="links"><span>🔗</span>Links</div>
-        <div class="suite-item on" data-suite="api"><span>🔌</span>API/Network</div>
+        <div class="suite-item on" data-suite="structure" onclick="taToggleSuite(this)"><span>🏗</span>Structure</div>
+        <div class="suite-item on" data-suite="seo" onclick="taToggleSuite(this)"><span>📈</span>SEO</div>
+        <div class="suite-item on" data-suite="accessibility" onclick="taToggleSuite(this)"><span>♿</span>Accessibility</div>
+        <div class="suite-item on" data-suite="security" onclick="taToggleSuite(this)"><span>🔒</span>Security</div>
+        <div class="suite-item on" data-suite="performance" onclick="taToggleSuite(this)"><span>⚡</span>Performance</div>
+        <div class="suite-item on" data-suite="ux" onclick="taToggleSuite(this)"><span>🎨</span>UX/Usability</div>
+        <div class="suite-item on" data-suite="mobile" onclick="taToggleSuite(this)"><span>📱</span>Mobile</div>
+        <div class="suite-item on" data-suite="forms" onclick="taToggleSuite(this)"><span>📝</span>Forms</div>
+        <div class="suite-item on" data-suite="features" onclick="taToggleSuite(this)"><span>🔧</span>Features</div>
+        <div class="suite-item on" data-suite="media" onclick="taToggleSuite(this)"><span>🖼</span>Media/Canvas</div>
+        <div class="suite-item on" data-suite="links" onclick="taToggleSuite(this)"><span>🔗</span>Links</div>
+        <div class="suite-item on" data-suite="api" onclick="taToggleSuite(this)"><span>🔌</span>API/Network</div>
       </div>
     </div>
 
@@ -167,12 +167,27 @@ a{color:#a78bfa;text-decoration:none}
 </div>
 
 <script>
+/* Global helpers — defined BEFORE the IIFE so onclick attributes work */
+function taToggleSuite(el){
+  el.classList.toggle('on');
+  var allOn=document.querySelectorAll('.suite-item.on').length===document.querySelectorAll('.suite-item').length;
+  var allOff=document.querySelectorAll('.suite-item.on').length===0;
+  var btn=document.getElementById('taToggleAllBtn');
+  if(btn)btn.textContent=allOff?'Select All':'Deselect All';
+}
+function taToggleAllSuites(){
+  var items=document.querySelectorAll('.suite-item');
+  var allOn=document.querySelectorAll('.suite-item.on').length===items.length;
+  items.forEach(function(el){allOn?el.classList.remove('on'):el.classList.add('on');});
+  var btn=document.getElementById('taToggleAllBtn');
+  if(btn)btn.textContent=allOn?'Select All':'Deselect All';
+}
+</script>
+<script>
 /* ═══════════════════════════════════════════════════════════
    AutoQA v4 — Universal Full-Functional Web Test Agent
    12 suites · Feature detection · UX audit · Downloadable report
    ═══════════════════════════════════════════════════════════ */
-(function(){
-'use strict';
 
 var _running=false,_stop=false;
 var P=0,F=0,W=0,SK=0,TOT=0,_pagesVisited=0;
@@ -254,10 +269,7 @@ window.taTab=function(tab){
   });
 };
 
-// Suite toggle
-document.querySelectorAll('.suite-item').forEach(function(el){
-  el.addEventListener('click',function(){el.classList.toggle('on');});
-});
+// Suite toggle handled by global taToggleSuite() on each item
 
 // Gemini key
 $('taGeminiKey').addEventListener('input',function(){
@@ -777,7 +789,7 @@ function buildUXReport(){
 }
 
 // ── Download Report ──
-window.taDownloadReport=function(){
+function taDownloadReport(){
   var baseUrl=$('taUrl').value||'Unknown';
   var score=Math.round((P/(P+F||1))*100);
   var now=new Date().toLocaleString();
@@ -806,7 +818,7 @@ window.taDownloadReport=function(){
 };
 
 // ── Main Run ──
-window.taRun=function(){
+function taRun(){
   var seedUrl=($('taUrl').value||'').trim();
   if(!seedUrl){alert('Enter a URL to test');return;}
   if(!seedUrl.startsWith('http')){alert('URL must start with http:// or https://');return;}
@@ -926,12 +938,11 @@ window.taRun=function(){
   });
 };
 
-window.taStop=function(){_stop=true;log('warn','\u23F9','Stop requested\u2026');};
+window.taStop=function taStop(){_stop=true;log('warn','\u23F9','Stop requested\u2026');};
 
 // Set default URL
-(function(){if(!$('taUrl').value)$('taUrl').value='https://shajais.github.io/ShashiNewsGen/';})();
+if(!document.getElementById('taUrl').value) document.getElementById('taUrl').value='https://shajais.github.io/ShashiNewsGen/';
 
-})();
 </script>
 </body>
 </html>

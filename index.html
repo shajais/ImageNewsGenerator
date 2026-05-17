@@ -2938,8 +2938,12 @@
       <input type="file" id="vsAudioInput" accept="audio/*" style="display:none" onchange="vsUploadAudio(this.files[0])">
       <button class="vs-btn" onclick="document.getElementById('vsAudioInput').click()">📁 Upload MP3 / Audio</button>
 
-      <label class="vs-label" style="margin-top:4px">Volume</label>
+      <label class="vs-label" style="margin-top:4px">🎵 Music Volume</label>
       <input type="range" class="vs-range" id="vsVolumeSlider" min="0" max="1" step="0.05" value="0.7" oninput="vsSetVolume(this.value)">
+
+      <label class="vs-label" style="margin-top:4px">🎬 Video Audio Volume</label>
+      <input type="range" class="vs-range" id="vsVideoVolumeSlider" min="0" max="2" step="0.05" value="1.0">
+      <div style="font-size:.62rem;color:#64748b;margin-top:2px">Controls original audio from your video clips in the export</div>
 
       <button class="vs-btn primary" onclick="vsAutoCutToBeats()" style="margin-top:6px">🥁 Auto-Cut to Beat</button>
       <div style="font-size:.66rem;color:#64748b;margin-top:4px">Detects beats and trims each clip to match the rhythm automatically</div>
