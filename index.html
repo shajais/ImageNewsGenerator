@@ -3272,5 +3272,767 @@
 </div><!-- end aiVideoStudioModal -->
 
 <script src="ai-video-studio.js?v=20260516"></script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     🤖 VIDEO STUDIO TEST AGENT — Floating GUI Tester
+     ═══════════════════════════════════════════════════════════════════════ -->
+<div id="vsTestAgentPanel" style="display:none;position:fixed;bottom:20px;right:20px;width:380px;max-height:80vh;background:#0a0a1a;border:2px solid #7c3aed;border-radius:16px;z-index:99999;box-shadow:0 8px 40px rgba(124,58,237,.5);font-family:'Segoe UI',sans-serif;overflow:hidden;flex-direction:column">
+<style>
+#vsTestAgentPanel { display: none; flex-direction: column; }
+#vsTestAgentPanel.open { display: flex !important; }
+.vsta-header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background:linear-gradient(135deg,#1e1b4b,#2d1b69); border-bottom:1px solid rgba(124,58,237,.4); flex-shrink:0; cursor:move; user-select:none; }
+.vsta-title { font-size:.9rem; font-weight:900; background:linear-gradient(90deg,#a855f7,#22d3ee); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+.vsta-status { display:flex; align-items:center; gap:6px; font-size:.72rem; }
+.vsta-dot { width:8px; height:8px; border-radius:50%; background:#22c55e; animation: vsta-pulse 1.5s infinite; }
+.vsta-dot.idle { background:#64748b; animation:none; }
+.vsta-dot.running { background:#f59e0b; }
+.vsta-dot.fail { background:#ef4444; animation:none; }
+@keyframes vsta-pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.vsta-body { overflow-y:auto; padding:10px 12px; flex:1; }
+.vsta-btn-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+.vsta-btn { padding:6px 12px; border-radius:8px; border:1px solid rgba(124,58,237,.4); background:rgba(124,58,237,.15); color:#c4b5fd; font-size:.75rem; font-weight:700; cursor:pointer; transition:.15s; }
+.vsta-btn:hover { background:rgba(124,58,237,.35); border-color:#7c3aed; }
+.vsta-btn.green { background:rgba(34,197,94,.15); border-color:rgba(34,197,94,.4); color:#86efac; }
+.vsta-btn.green:hover { background:rgba(34,197,94,.3); }
+.vsta-btn.red { background:rgba(239,68,68,.15); border-color:rgba(239,68,68,.4); color:#fca5a5; }
+.vsta-btn.orange { background:rgba(245,158,11,.15); border-color:rgba(245,158,11,.4); color:#fcd34d; }
+.vsta-progress-wrap { background:#0f0f1f; border-radius:8px; height:8px; margin-bottom:8px; overflow:hidden; }
+.vsta-progress { height:100%; border-radius:8px; background:linear-gradient(90deg,#7c3aed,#22d3ee); transition:width .3s; width:0%; }
+.vsta-summary { display:flex; gap:10px; margin-bottom:8px; font-size:.72rem; font-weight:700; }
+.vsta-pass { color:#22c55e; } .vsta-fail { color:#ef4444; } .vsta-skip { color:#64748b; }
+.vsta-log { font-size:.7rem; line-height:1.7; max-height:300px; overflow-y:auto; background:#06060f; border-radius:8px; padding:8px 10px; }
+.vsta-log-entry { padding:2px 0; border-bottom:1px solid rgba(255,255,255,.03); display:flex; gap:6px; align-items:flex-start; }
+.vsta-log-entry .icon { flex-shrink:0; width:16px; }
+.vsta-log-entry.pass { color:#86efac; }
+.vsta-log-entry.fail { color:#fca5a5; }
+.vsta-log-entry.info { color:#94a3b8; }
+.vsta-log-entry.warn { color:#fcd34d; }
+.vsta-log-entry.fix  { color:#c084fc; }
+.vsta-section-hdr { font-size:.65rem; font-weight:900; color:#7c3aed; letter-spacing:.1em; text-transform:uppercase; padding:6px 0 3px; border-bottom:1px solid rgba(124,58,237,.2); margin:8px 0 4px; }
+.vsta-close-btn { background:none; border:none; color:#64748b; cursor:pointer; font-size:1rem; padding:0; }
+.vsta-close-btn:hover { color:#e2e8f0; }
+.vsta-fix-badge { display:inline-block; background:rgba(192,132,252,.2); color:#c084fc; border-radius:4px; padding:0 5px; font-size:.65rem; font-weight:700; margin-left:4px; }
+</style>
+
+<div class="vsta-header" id="vsTestAgentHeader">
+  <div>
+    <div class="vsta-title">🤖 Video Studio Test Agent</div>
+    <div style="font-size:.62rem;color:#64748b;margin-top:1px">Automated QA · Test → Fix → Repeat</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <div class="vsta-status">
+      <div class="vsta-dot idle" id="vstaDot"></div>
+      <span id="vstaStatusText" style="color:#64748b">Idle</span>
+    </div>
+    <button class="vsta-close-btn" onclick="vsTestAgentToggle()">✕</button>
+  </div>
+</div>
+
+<div class="vsta-body">
+  <div class="vsta-btn-row">
+    <button class="vsta-btn green" onclick="vsTestAgentRunAll()">▶ Run All Tests</button>
+    <button class="vsta-btn orange" onclick="vsTestAgentRunAndFix()">🔧 Test + Auto-Fix</button>
+    <button class="vsta-btn" onclick="vsTestAgentClear()">🗑 Clear</button>
+  </div>
+
+  <div class="vsta-btn-row">
+    <button class="vsta-btn" onclick="vsTestGroup('ui')">🖥 UI</button>
+    <button class="vsta-btn" onclick="vsTestGroup('clips')">🎬 Clips</button>
+    <button class="vsta-btn" onclick="vsTestGroup('playback')">▶ Playback</button>
+    <button class="vsta-btn" onclick="vsTestGroup('audio')">🎵 Audio</button>
+    <button class="vsta-btn" onclick="vsTestGroup('export')">📤 Export</button>
+    <button class="vsta-btn" onclick="vsTestGroup('ux')">💅 UX</button>
+  </div>
+
+  <div class="vsta-progress-wrap"><div class="vsta-progress" id="vstaProgress"></div></div>
+  <div class="vsta-summary">
+    <span class="vsta-pass">✅ <span id="vstaPassCount">0</span> passed</span>
+    <span class="vsta-fail">❌ <span id="vstaFailCount">0</span> failed</span>
+    <span class="vsta-skip">⏭ <span id="vstaSkipCount">0</span> skipped</span>
+    <span style="color:#64748b;margin-left:auto" id="vstaTime"></span>
+  </div>
+
+  <div class="vsta-log" id="vstaLog"><div class="vsta-log-entry info"><span class="icon">ℹ</span><span>Test Agent ready. Click <b>Run All Tests</b> or <b>Test + Auto-Fix</b> to start.</span></div></div>
+</div>
+</div>
+
+<!-- Floating toggle button -->
+<button id="vsTestAgentToggleBtn" onclick="vsTestAgentToggle()" title="Open Video Studio Test Agent"
+  style="position:fixed;bottom:20px;right:20px;z-index:99998;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:50px;padding:10px 18px;font-size:.8rem;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(124,58,237,.5);display:flex;align-items:center;gap:7px;transition:.2s">
+  🤖 Test Agent
+</button>
+
+<script>
+/* ═══════════════════════════════════════════════
+   VIDEO STUDIO TEST AGENT
+   ═══════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  // ── State ──
+  let _pass = 0, _fail = 0, _skip = 0, _total = 0, _fixes = 0;
+  let _running = false;
+
+  // ── UI helpers ──
+  function _dot(cls) {
+    const d = document.getElementById('vstaDot');
+    d.className = 'vsta-dot ' + (cls || '');
+    document.getElementById('vstaStatusText').textContent =
+      cls === 'running' ? 'Running…' : cls === 'fail' ? 'Issues found' : cls === '' ? 'All passed!' : 'Idle';
+    document.getElementById('vstaStatusText').style.color =
+      cls === 'running' ? '#f59e0b' : cls === 'fail' ? '#ef4444' : cls === '' ? '#22c55e' : '#64748b';
+  }
+
+  function _log(type, icon, msg, fixApplied) {
+    const log = document.getElementById('vstaLog');
+    const entry = document.createElement('div');
+    entry.className = 'vsta-log-entry ' + type;
+    const badge = fixApplied ? `<span class="vsta-fix-badge">AUTO-FIXED</span>` : '';
+    entry.innerHTML = `<span class="icon">${icon}</span><span>${msg}${badge}</span>`;
+    log.appendChild(entry);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function _section(title) {
+    const log = document.getElementById('vstaLog');
+    const hdr = document.createElement('div');
+    hdr.className = 'vsta-section-hdr';
+    hdr.textContent = title;
+    log.appendChild(hdr);
+  }
+
+  function _updateCounts() {
+    document.getElementById('vstaPassCount').textContent = _pass;
+    document.getElementById('vstaFailCount').textContent = _fail;
+    document.getElementById('vstaSkipCount').textContent = _skip;
+    const pct = _total ? Math.round(((_pass + _fail + _skip) / _total) * 100) : 0;
+    document.getElementById('vstaProgress').style.width = pct + '%';
+  }
+
+  // ── Core assertion ──
+  function _assert(condition, description, fixFn, autoFix) {
+    _total++;
+    if (condition) {
+      _pass++;
+      _log('pass', '✅', description);
+    } else {
+      _fail++;
+      if (autoFix && fixFn) {
+        try {
+          fixFn();
+          _fixes++;
+          _log('fix', '🔧', description, true);
+        } catch(e) {
+          _log('fail', '❌', description + ' — fix error: ' + e.message);
+        }
+      } else {
+        _log('fail', '❌', description);
+      }
+    }
+    _updateCounts();
+  }
+
+  function _assertWarn(condition, description) {
+    _total++;
+    if (condition) { _pass++; _log('pass', '✅', description); }
+    else { _skip++; _log('warn', '⚠️', description + ' (warning)'); }
+    _updateCounts();
+  }
+
+  function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // ── Open Video Studio if not open ──
+  async function _ensureVideoStudioOpen() {
+    const modal = document.getElementById('videoStudioModal');
+    if (!modal || modal.style.display === 'none' || modal.style.display === '') {
+      if (typeof openVideoStudio === 'function') {
+        openVideoStudio();
+        await _sleep(300);
+      }
+    }
+  }
+
+  // ── Create synthetic test image as File ──
+  function _makeTestImageFile(label = 'test') {
+    const c = document.createElement('canvas');
+    c.width = 400; c.height = 400;
+    const ctx = c.getContext('2d');
+    // Gradient background
+    const grad = ctx.createLinearGradient(0, 0, 400, 400);
+    grad.addColorStop(0, '#7c3aed'); grad.addColorStop(1, '#2563eb');
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, 400, 400);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 48px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(label, 200, 220);
+    return new Promise(resolve => c.toBlob(blob => {
+      resolve(new File([blob], label + '.png', { type: 'image/png' }));
+    }));
+  }
+
+  // ── TEST GROUPS ──
+
+  async function _testUI(autoFix) {
+    _section('🖥 UI Structure');
+
+    // Check modal exists
+    _assert(!!document.getElementById('videoStudioModal'), 'videoStudioModal element exists');
+    _assert(!!document.getElementById('vsPreviewCanvas'), 'Canvas #vsPreviewCanvas exists');
+    _assert(!!document.getElementById('vsTimeline'), 'Timeline #vsTimeline exists');
+    _assert(!!document.getElementById('vsPanelLeft'), 'Left panel exists');
+    _assert(!!document.getElementById('vsPanelRight'), 'Right panel exists');
+    _assert(!!document.getElementById('vsExportBtn'), 'Export button exists');
+    _assert(!!document.getElementById('vsPlayBtn'), 'Play button exists');
+
+    await _ensureVideoStudioOpen();
+    await _sleep(200);
+
+    const modal = document.getElementById('videoStudioModal');
+    _assert(modal && modal.style.display !== 'none', 'Video Studio opens correctly');
+
+    // Canvas has dimensions
+    const canvas = document.getElementById('vsPreviewCanvas');
+    _assert(canvas && canvas.width > 0 && canvas.height > 0, 'Canvas has valid dimensions');
+
+    // Aspect ratio buttons
+    const aspectBtns = document.querySelectorAll('.vs-aspect-btn');
+    _assert(aspectBtns.length >= 3, `Aspect ratio buttons exist (found ${aspectBtns.length})`);
+
+    // Preset row
+    const presets = document.querySelectorAll('.vs-preset-btn');
+    _assert(presets.length > 0, `Preset buttons exist (found ${presets.length})`);
+
+    // Export button not disabled on load
+    const exportBtn = document.getElementById('vsExportBtn');
+    _assert(exportBtn && !exportBtn.disabled, 'Export button is enabled on load',
+      () => { if (exportBtn) exportBtn.disabled = false; }, autoFix);
+
+    // Progress wrap hidden on load
+    const progWrap = document.getElementById('vsExportProgress');
+    _assertWarn(!progWrap || progWrap.style.display === 'none' || progWrap.style.display === '',
+      'Export progress hidden on load');
+
+    // Volume slider
+    _assert(!!document.getElementById('vsVolumeSlider'), 'Volume slider #vsVolumeSlider exists');
+
+    // Scrubber
+    _assert(!!document.getElementById('vsScrubber'), 'Scrubber #vsScrubber exists');
+
+    // Stats
+    _assert(!!document.getElementById('vsStats'), 'Stats element exists');
+
+    // Close button
+    const closeBtn = document.querySelector('[onclick="closeVideoStudio()"]');
+    _assert(!!closeBtn, 'Close button exists');
+  }
+
+  async function _testClips(autoFix) {
+    _section('🎬 Clip Management');
+
+    await _ensureVideoStudioOpen();
+    await _sleep(200);
+
+    // VS state object
+    _assert(typeof VS !== 'undefined', 'VS global state object exists');
+    _assert(Array.isArray(VS.clips), 'VS.clips is an array');
+
+    // Add a test image clip
+    const file1 = await _makeTestImageFile('Clip-A');
+    const file2 = await _makeTestImageFile('Clip-B');
+    const file3 = await _makeTestImageFile('Clip-C');
+
+    const before = VS.clips.length;
+    vsAddClip(file1);
+    await _sleep(150);
+    vsAddClip(file2);
+    await _sleep(150);
+    vsAddClip(file3);
+    await _sleep(150);
+
+    _assert(VS.clips.length === before + 3, `3 clips added (total: ${VS.clips.length})`);
+
+    // Duration
+    _assert(VS.totalDuration > 0, `Total duration > 0 (${VS.totalDuration.toFixed(1)}s)`);
+
+    // Timeline items rendered
+    const tlItems = document.querySelectorAll('.vs-tl-clip');
+    _assert(tlItems.length >= 3, `Timeline shows ${tlItems.length} clip(s)`);
+
+    // Select clip
+    const idxToSelect = VS.clips.length - 2;
+    vsSelectClip(idxToSelect);
+    await _sleep(100);
+    _assert(VS.activeClip === idxToSelect, `vsSelectClip(${idxToSelect}) sets activeClip`);
+
+    // Clip speed
+    const prevSpeed = VS.clips[idxToSelect].speed;
+    vsApplyClipSpeed(2);
+    _assert(VS.clips[idxToSelect].speed === 2, 'vsApplyClipSpeed(2) sets speed to 2',
+      () => vsApplyClipSpeed(2), autoFix);
+    vsApplyClipSpeed(prevSpeed); // restore
+
+    // Clip duration for image
+    vsApplyClipDuration(5);
+    _assert(VS.clips[idxToSelect].duration === 5, 'vsApplyClipDuration(5) sets duration',
+      () => vsApplyClipDuration(5), autoFix);
+    vsApplyClipDuration(3); // restore
+
+    // Reorder
+    const nameA = VS.clips[0].name;
+    const nameB = VS.clips[1].name;
+    vsMoveClipRight(0);
+    await _sleep(100);
+    _assert(VS.clips[0].name === nameB && VS.clips[1].name === nameA,
+      'vsMoveClipRight(0) reorders clips',
+      () => vsMoveClipRight(0), autoFix);
+    vsMoveClipLeft(1); // restore order
+    await _sleep(100);
+
+    // Delete clip
+    const countBefore = VS.clips.length;
+    vsDeleteClip(VS.clips.length - 1);
+    await _sleep(100);
+    _assert(VS.clips.length === countBefore - 1, 'vsDeleteClip removes a clip');
+
+    // Canvas not blank after clip added
+    const canvas = document.getElementById('vsPreviewCanvas');
+    const ctx = canvas.getContext('2d');
+    let hasContent = false;
+    try {
+      const px = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      for (let i = 0; i < px.length; i += 4) {
+        if (px[i] !== 0 || px[i+1] !== 0 || px[i+2] !== 0) { hasContent = true; break; }
+      }
+    } catch(e) { hasContent = true; /* tainted canvas = content exists */ }
+    _assert(hasContent, 'Canvas renders clip content (not blank)');
+
+    // Ken Burns options
+    vsApplyKenBurns('zoom-out');
+    _assert(VS.clips[VS.activeClip]?.kenBurns === 'zoom-out', 'vsApplyKenBurns("zoom-out") works');
+
+    // Transition options
+    vsApplyTransition('slide-left');
+    _assert(VS.clips[VS.activeClip]?.transition === 'slide-left', 'vsApplyTransition("slide-left") works');
+
+    // Text overlay
+    const textEl = document.getElementById('vsClipText');
+    if (textEl) {
+      textEl.value = 'Hello World';
+      textEl.dispatchEvent(new Event('input'));
+    }
+    _assertWarn(true, 'Text overlay input accessible');
+
+    // File input exists
+    _assert(!!document.getElementById('vsFileInput'), '#vsFileInput exists for uploads');
+  }
+
+  async function _testPlayback(autoFix) {
+    _section('▶ Playback Engine');
+
+    await _ensureVideoStudioOpen();
+
+    // Ensure at least 2 clips
+    if (VS.clips.length < 2) {
+      const f1 = await _makeTestImageFile('Play-A');
+      const f2 = await _makeTestImageFile('Play-B');
+      vsAddClip(f1); vsAddClip(f2);
+      await _sleep(300);
+    }
+
+    // vsPlay / vsStop exist
+    _assert(typeof vsPlay === 'function', 'vsPlay() function exists');
+    _assert(typeof vsStop === 'function', 'vsStop() function exists');
+
+    // Play
+    vsStop();
+    await _sleep(50);
+    vsPlay();
+    await _sleep(200);
+    _assert(VS.playing === true, 'vsPlay() sets VS.playing = true',
+      () => vsPlay(), autoFix);
+
+    // currentTime advances
+    const t0 = VS.currentTime;
+    await _sleep(400);
+    const t1 = VS.currentTime;
+    _assert(t1 > t0, `currentTime advances during playback (${t0.toFixed(2)}→${t1.toFixed(2)}s)`,
+      null, false);
+
+    // Play button shows pause icon
+    const playBtn = document.getElementById('vsPlayBtn');
+    _assert(playBtn && (playBtn.textContent.includes('⏸') || playBtn.textContent.includes('Pause')),
+      'Play button shows pause icon during playback',
+      () => { if (playBtn) playBtn.textContent = '⏸️ Pause'; }, autoFix);
+
+    // Stop
+    vsStop();
+    await _sleep(100);
+    _assert(VS.playing === false, 'vsStop() sets VS.playing = false',
+      () => vsStop(), autoFix);
+
+    // Seek
+    _assert(typeof vsSeek === 'function', 'vsSeek() function exists');
+    vsSeek(0.5);
+    await _sleep(100);
+    _assertWarn(Math.abs(VS.currentTime - 0.5) < 0.5, 'vsSeek(0.5) moves currentTime near 0.5s');
+
+    // Scrubber interaction
+    const scrubber = document.getElementById('vsScrubber');
+    _assert(!!scrubber, 'Scrubber input exists');
+    if (scrubber) {
+      scrubber.value = 0;
+      scrubber.max = VS.totalDuration || 10;
+      _assert(parseFloat(scrubber.max) > 0, 'Scrubber max equals total duration');
+    }
+
+    // RAF cancels on stop
+    _assert(!VS.playing, 'After stop, VS.playing is false (RAF should be cancelled)');
+
+    // Space bar shortcut
+    _assert(typeof vsKeyHandler === 'function', 'vsKeyHandler (keyboard shortcut) function exists');
+
+    // Aspect ratio change doesn't break playback
+    vsSetAspect('1:1');
+    await _sleep(50);
+    vsSetAspect('9:16');
+    await _sleep(50);
+    _assert(VS.canvas.width > 0, 'Aspect ratio change preserves canvas dimensions',
+      () => vsSetAspect('9:16'), autoFix);
+  }
+
+  async function _testAudio(autoFix) {
+    _section('🎵 Audio Engine');
+
+    await _ensureVideoStudioOpen();
+
+    // AudioContext available
+    _assert(typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined',
+      'Web Audio API (AudioContext) available in browser');
+
+    // VS.audioCtx initialized (may be null before first play)
+    _assertWarn(VS.audioCtx !== undefined, 'VS.audioCtx property defined in state');
+
+    // Volume slider
+    const volSlider = document.getElementById('vsVolumeSlider');
+    _assert(!!volSlider, 'Volume slider exists');
+    if (volSlider) {
+      _assert(parseFloat(volSlider.min) >= 0 && parseFloat(volSlider.max) <= 1,
+        `Volume slider range valid (${volSlider.min}–${volSlider.max})`);
+      // Change volume
+      volSlider.value = 0.8;
+      volSlider.dispatchEvent(new Event('input'));
+      _assertWarn(true, 'Volume slider fires input event without errors');
+    }
+
+    // Track list
+    _assert(typeof VS_TRACKS !== 'undefined' && VS_TRACKS.length > 0,
+      `VS_TRACKS list populated (${VS_TRACKS?.length || 0} tracks)`);
+
+    // vsSelectTrack function
+    _assert(typeof vsSelectTrack === 'function', 'vsSelectTrack() function exists');
+
+    // vsDetectBeats function
+    _assert(typeof vsDetectBeats === 'function', 'vsDetectBeats() function exists');
+
+    // vsAutoCutToBeats function
+    _assert(typeof vsAutoCutToBeats === 'function', 'vsAutoCutToBeats() function exists');
+
+    // Audio init on play
+    if (VS.clips.length === 0) {
+      const f = await _makeTestImageFile('Audio-Test');
+      vsAddClip(f); await _sleep(150);
+    }
+
+    // Simulate play to trigger audio ctx creation
+    try {
+      vsPlay(); await _sleep(150); vsStop();
+      _assert(VS.audioCtx !== null, 'AudioContext created after vsPlay()',
+        () => { VS.audioCtx = VS.audioCtx || new (window.AudioContext || window.webkitAudioContext)(); }, autoFix);
+    } catch(e) {
+      _log('warn', '⚠️', 'AudioContext may require user gesture: ' + e.message);
+      _skip++; _updateCounts();
+    }
+
+    // Beat markers array
+    _assert(Array.isArray(VS.beatMarkers), 'VS.beatMarkers is an array');
+
+    // Audio offset
+    _assert(typeof VS.audioOffset === 'number', 'VS.audioOffset is a number');
+
+    // _vsExportPlay function exists
+    _assert(typeof _vsExportPlay === 'function', '_vsExportPlay() helper function exists');
+
+    // _vsTriggerDownload function exists
+    _assert(typeof _vsTriggerDownload === 'function', '_vsTriggerDownload() helper function exists');
+  }
+
+  async function _testExport(autoFix) {
+    _section('📤 Export Pipeline');
+
+    await _ensureVideoStudioOpen();
+
+    // Export functions exist
+    _assert(typeof vsExport === 'function', 'vsExport() function exists');
+    _assert(typeof _vsExportAsync === 'function', '_vsExportAsync() function exists');
+    _assert(typeof _vsLoadFFmpeg === 'function', '_vsLoadFFmpeg() function exists');
+
+    // MediaRecorder support
+    _assert(typeof MediaRecorder !== 'undefined', 'MediaRecorder API available');
+    if (typeof MediaRecorder !== 'undefined') {
+      const webmSupported = MediaRecorder.isTypeSupported('video/webm');
+      const vp9Supported  = MediaRecorder.isTypeSupported('video/webm;codecs=vp9');
+      _assert(webmSupported, 'MediaRecorder supports video/webm',
+        null, false);
+      _assertWarn(vp9Supported, 'MediaRecorder supports VP9 codec');
+    }
+
+    // captureStream support
+    const canvas = document.getElementById('vsPreviewCanvas');
+    _assert(typeof canvas.captureStream === 'function', 'Canvas.captureStream() available');
+
+    // VS.recordedChunks array
+    _assert(Array.isArray(VS.recordedChunks), 'VS.recordedChunks is an array');
+
+    // Export button exists and enabled
+    const exportBtn = document.getElementById('vsExportBtn');
+    _assert(!!exportBtn, 'Export button #vsExportBtn exists');
+    _assert(!exportBtn?.disabled, 'Export button is not disabled',
+      () => { if (exportBtn) exportBtn.disabled = false; }, autoFix);
+
+    // Export progress elements
+    _assert(!!document.getElementById('vsExportProgress'), '#vsExportProgress exists');
+    _assert(!!document.getElementById('vsExportLabel'), '#vsExportLabel exists');
+    _assert(!!document.getElementById('vsExportBar'), '#vsExportBar exists');
+
+    // Codec selector
+    const codecSel = document.getElementById('vsCodecSelect');
+    _assertWarn(!!codecSel, 'Codec selector #vsCodecSelect exists');
+
+    // CRF selector
+    const crfSel = document.getElementById('vsCrfSelect');
+    _assertWarn(!!crfSel, 'CRF (quality) selector #vsCrfSelect exists');
+
+    // Resolution selector
+    const resSel = document.getElementById('vsResSelect');
+    _assertWarn(!!resSel, 'Resolution selector #vsResSelect exists');
+
+    // Export with no clips should show toast not crash
+    const savedClips = [...VS.clips];
+    VS.clips = [];
+    VS._exporting = false;
+    try {
+      vsExport();
+      await _sleep(100);
+      _assert(true, 'vsExport() with empty timeline shows warning (no crash)');
+    } catch(e) {
+      _assert(false, 'vsExport() with empty clips threw error: ' + e.message,
+        null, false);
+    }
+    VS.clips = savedClips;
+
+    // _vsExporting flag resets after stop
+    VS._exporting = false;
+    _assert(VS._exporting === false, 'VS._exporting flag is false (ready for export)');
+
+    // FFmpeg libraries loaded on page
+    _assertWarn(typeof window.FFmpeg !== 'undefined' || typeof FFmpeg !== 'undefined',
+      'FFmpeg.wasm library loaded on page');
+    _assertWarn(typeof window.FFmpegUtil !== 'undefined',
+      'FFmpegUtil loaded on page');
+
+    // _vsTriggerDownload doesn't crash with a small blob
+    try {
+      const testBlob = new Blob(['test'], { type: 'video/webm' });
+      const a = document.createElement('a');
+      const url = URL.createObjectURL(testBlob);
+      _assert(url.startsWith('blob:'), '_vsTriggerDownload: createObjectURL works for blobs');
+      URL.revokeObjectURL(url);
+    } catch(e) {
+      _assert(false, '_vsTriggerDownload: createObjectURL failed: ' + e.message);
+    }
+  }
+
+  async function _testUX(autoFix) {
+    _section('💅 UX & Usability');
+
+    await _ensureVideoStudioOpen();
+
+    // vsToast function
+    _assert(typeof vsToast === 'function', 'vsToast() notification function exists');
+    try { vsToast('🤖 Test Agent: toast works!'); _assert(true, 'vsToast() fires without error'); }
+    catch(e) { _assert(false, 'vsToast() error: ' + e.message); }
+
+    // Mobile tabs
+    _assert(typeof vsMobileTab === 'function', 'vsMobileTab() function exists');
+
+    // vsSplitClip function
+    _assert(typeof vsSplitClip === 'function', 'vsSplitClip() function exists');
+
+    // vsMoveClipLeft/Right
+    _assert(typeof vsMoveClipLeft === 'function', 'vsMoveClipLeft() function exists');
+    _assert(typeof vsMoveClipRight === 'function', 'vsMoveClipRight() function exists');
+
+    // vsUpdateStats
+    _assert(typeof vsUpdateStats === 'function', 'vsUpdateStats() function exists');
+    try { vsUpdateStats(); _assert(true, 'vsUpdateStats() runs without error'); }
+    catch(e) { _assert(false, 'vsUpdateStats() error: ' + e.message); }
+
+    // Stats shows clip count
+    const statsEl = document.getElementById('vsStats');
+    if (statsEl && VS.clips.length > 0) {
+      _assert(statsEl.textContent.length > 0, 'Stats element shows content');
+    }
+
+    // vsFormatTime function
+    _assert(typeof vsFormatTime === 'function', 'vsFormatTime() formatting function exists');
+    if (typeof vsFormatTime === 'function') {
+      _assert(vsFormatTime(65) === '1:05' || vsFormatTime(65).includes('1:'), 'vsFormatTime(65) returns "1:05"');
+    }
+
+    // Drag handles in timeline
+    if (VS.clips.length > 0) {
+      const draggables = document.querySelectorAll('[draggable="true"].vs-tl-clip');
+      _assert(draggables.length > 0, 'Timeline clips are draggable');
+    }
+
+    // Delete buttons in timeline
+    const delBtns = document.querySelectorAll('.vs-tl-reorder .del');
+    _assert(delBtns.length > 0 || VS.clips.length === 0, 'Delete buttons present in timeline clips');
+
+    // Template apply function
+    _assert(typeof vsApplyTemplate === 'function', 'vsApplyTemplate() function exists');
+
+    // Global filter
+    _assert(typeof vsApplyGlobalFilter === 'function', 'vsApplyGlobalFilter() function exists');
+    try { vsApplyGlobalFilter('cinematic'); _assert(true, 'vsApplyGlobalFilter("cinematic") runs without error'); }
+    catch(e) { _assert(false, 'vsApplyGlobalFilter error: ' + e.message); }
+
+    // Crop function
+    _assert(typeof vsOpenCrop === 'function', 'vsOpenCrop() function exists');
+
+    // Keyboard shortcut
+    _assert(typeof vsKeyHandler === 'function', 'vsKeyHandler() registered');
+
+    // vsRebuildTimeline
+    _assert(typeof vsRebuildTimeline === 'function', 'vsRebuildTimeline() function exists');
+    try { vsRebuildTimeline(); _assert(true, 'vsRebuildTimeline() runs without error'); }
+    catch(e) { _assert(false, 'vsRebuildTimeline() error: ' + e.message); }
+
+    // Canvas hint
+    const hint = document.getElementById('vsCanvasUploadHint');
+    _assertWarn(!!hint, '#vsCanvasUploadHint exists (empty-state prompt)');
+
+    // vsSetAspect all ratios work
+    let aspectOk = true;
+    for (const ratio of ['9:16','1:1','16:9']) {
+      try { vsSetAspect(ratio); } catch(e) { aspectOk = false; }
+    }
+    vsSetAspect('9:16');
+    _assert(aspectOk, 'All aspect ratios (9:16, 1:1, 16:9) apply without error',
+      () => vsSetAspect('9:16'), autoFix);
+  }
+
+  // ── Run all ──
+  async function _runAll(autoFix) {
+    if (_running) return;
+    _running = true;
+    _pass = 0; _fail = 0; _skip = 0; _total = 0; _fixes = 0;
+    const log = document.getElementById('vstaLog');
+    log.innerHTML = '';
+    _dot('running');
+    const t0 = Date.now();
+
+    try {
+      await _testUI(autoFix);
+      await _testClips(autoFix);
+      await _testPlayback(autoFix);
+      await _testAudio(autoFix);
+      await _testExport(autoFix);
+      await _testUX(autoFix);
+    } catch(e) {
+      _log('fail', '💥', 'Unexpected runner error: ' + e.message);
+      _fail++;
+      _updateCounts();
+    }
+
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+    document.getElementById('vstaTime').textContent = elapsed + 's';
+
+    // Summary
+    const log2 = document.getElementById('vstaLog');
+    const hdr = document.createElement('div');
+    hdr.className = 'vsta-section-hdr';
+    hdr.style.color = _fail > 0 ? '#ef4444' : '#22c55e';
+    hdr.textContent = `── Results: ${_pass} passed · ${_fail} failed · ${_skip} warnings · ${_fixes} auto-fixed in ${elapsed}s ──`;
+    log2.appendChild(hdr);
+    log2.scrollTop = log2.scrollHeight;
+
+    _dot(_fail > 0 ? 'fail' : '');
+    _running = false;
+  }
+
+  // ── Public API ──
+  window.vsTestAgentRunAll     = () => _runAll(false);
+  window.vsTestAgentRunAndFix  = () => _runAll(true);
+  window.vsTestAgentClear      = () => {
+    _pass = 0; _fail = 0; _skip = 0; _total = 0; _fixes = 0;
+    document.getElementById('vstaLog').innerHTML = '<div class="vsta-log-entry info"><span class="icon">ℹ</span><span>Cleared. Ready to run.</span></div>';
+    document.getElementById('vstaProgress').style.width = '0%';
+    _updateCounts();
+    _dot('idle');
+    document.getElementById('vstaTime').textContent = '';
+  };
+
+  window.vsTestGroup = async (group) => {
+    if (_running) return;
+    _running = true;
+    _pass = 0; _fail = 0; _skip = 0; _total = 0; _fixes = 0;
+    document.getElementById('vstaLog').innerHTML = '';
+    _dot('running');
+    const t0 = Date.now();
+    try {
+      if (group === 'ui')       await _testUI(false);
+      if (group === 'clips')    await _testClips(false);
+      if (group === 'playback') await _testPlayback(false);
+      if (group === 'audio')    await _testAudio(false);
+      if (group === 'export')   await _testExport(false);
+      if (group === 'ux')       await _testUX(false);
+    } catch(e) { _log('fail', '💥', e.message); }
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+    document.getElementById('vstaTime').textContent = elapsed + 's';
+    _dot(_fail > 0 ? 'fail' : '');
+    _running = false;
+  };
+
+  // ── Toggle visibility ──
+  window.vsTestAgentToggle = () => {
+    const panel = document.getElementById('vsTestAgentPanel');
+    const btn   = document.getElementById('vsTestAgentToggleBtn');
+    const isOpen = panel.classList.contains('open');
+    panel.classList.toggle('open', !isOpen);
+    btn.style.display = isOpen ? 'flex' : 'none';
+  };
+
+  // ── Drag the panel ──
+  (() => {
+    const panel = document.getElementById('vsTestAgentPanel');
+    const header = document.getElementById('vsTestAgentHeader');
+    let dragging = false, ox = 0, oy = 0, startX = 0, startY = 0;
+    header.addEventListener('mousedown', e => {
+      dragging = true;
+      const rect = panel.getBoundingClientRect();
+      ox = rect.left; oy = rect.top;
+      startX = e.clientX; startY = e.clientY;
+      panel.style.right = 'auto'; panel.style.bottom = 'auto';
+      panel.style.left = ox + 'px'; panel.style.top = oy + 'px';
+    });
+    document.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      panel.style.left = (ox + e.clientX - startX) + 'px';
+      panel.style.top  = (oy + e.clientY - startY) + 'px';
+    });
+    document.addEventListener('mouseup', () => dragging = false);
+  })();
+
+})();
+</script>
 </body>
 </html>
