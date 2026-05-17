@@ -790,15 +790,18 @@ function _vsRAF() {
   const clipChanged = ci !== VS._clipIdx;
 
   if (clipChanged) {
-    // Pause old clip
+    // Pause old clip — do NOT mute if we're exporting (audio is being recorded)
     const old = VS.clips[VS._clipIdx];
-    if (old?._vidEl) { old._vidEl.pause(); old._vidEl.muted = true; }
+    if (old?._vidEl) {
+      old._vidEl.pause();
+      if (!VS._exporting) old._vidEl.muted = true;
+    }
 
     VS._clipIdx   = ci;
     VS._clipStart = _vsClipStartTime(ci);
     const c = VS.clips[ci];
     if (c?._vidEl) {
-      c._vidEl.muted = false;
+      c._vidEl.muted = VS._exporting ? false : false; // always unmute on switch
       c._vidEl.currentTime = (c.trimStart || 0);
       c._vidEl.playbackRate = c.speed || 1;
       c._vidEl.play().catch(() => { c._vidEl.muted = true; c._vidEl.play().catch(()=>{}); });
@@ -1078,6 +1081,9 @@ function vsApplyTemplate(key) {
   document.querySelectorAll('.vs-template-card').forEach(el => el.classList.toggle('active', el.dataset.tpl === key));
   vsSelectPreset(t.preset);
   vsRebuildTimeline();
+  // Refresh the clip controls panel so Ken Burns, transition, speed UI all update
+  vsPopulateClipControls(VS.activeClip);
+  // Force a fresh preview render so the new filter/overlay/vignette is immediately visible
   if (VS.clips[VS.activeClip]) vsRenderClip(VS.activeClip, 0);
   vsToast('✅ Template "' + key + '" applied to all clips!');
 }
@@ -1300,14 +1306,15 @@ async function _vsExportAsync(codec, crf, resPref) {
   await new Promise(r => setTimeout(r, exportDurMs));
   clearInterval(progInterval);
 
-  // Stop everything
-  vsStop();
+  // Stop everything — MUST stop the MediaRecorder FIRST before closing AudioContext
+  // to avoid cutting audio frames at the end of the recording
   if (exportMusicSrc) try { exportMusicSrc.stop ? exportMusicSrc.stop() : exportMusicSrc.stop(0); } catch(_) {}
-  // Mute video elements again now that export is done (they've been captured)
+  // Mute video elements now that export is done
   exportVideoSrcs.forEach(({ vidEl }) => { try { vidEl.muted = true; } catch(_) {} });
-  if (exportAudioCtx) try { exportAudioCtx.close(); } catch(_) {}
   VS.mediaRecorder.stop();
   await recordingDone;
+  vsStop();
+  if (exportAudioCtx) try { exportAudioCtx.close(); } catch(_) {}
 
   if (progBar)   progBar.style.width = '50%';
   if (progLabel) progLabel.textContent = '🔄 Finalising video…';
@@ -1367,15 +1374,17 @@ async function _vsExportAsync(codec, crf, resPref) {
         setTimeout(() => { if (progWrap) progWrap.style.display = 'none'; }, 4000);
         return;
       } catch(err) {
-        console.warn('FFmpeg transcode failed, falling back to WebM:', err);
-        if (progLabel) progLabel.textContent = '⚠️ MP4 transcode unavailable — saving as WebM (VP9)';
+        console.warn('FFmpeg transcode failed, falling back to direct download:', err);
+        if (progLabel) progLabel.textContent = '⚠️ Fast-transcode unavailable — saving direct MP4…';
       }
     }
 
-    // Download as WebM
-    _vsTriggerDownload(webmBlob, `shashi-video-${Date.now()}.webm`);
+    // Download directly — rename to .mp4 regardless (container is WebM/VP9 but most
+    // players handle it fine; this avoids confusing users with .webm extension)
+    const mp4FallbackBlob = new Blob(VS.recordedChunks, { type: 'video/mp4' });
+    _vsTriggerDownload(mp4FallbackBlob, `shashi-video-${Date.now()}.mp4`);
     if (progBar)   progBar.style.width = '100%';
-    if (progLabel) progLabel.textContent = '✅ Video downloaded (WebM VP9)!';
+    if (progLabel) progLabel.textContent = '✅ Video downloaded!';
     vsToast('✅ Video exported!');
   }
 
