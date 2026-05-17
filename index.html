@@ -2563,13 +2563,13 @@
 @media(max-width:768px){
   .vs-layout{display:flex;flex-direction:column;height:auto;overflow-y:auto;overflow-x:hidden}
   .vs-panel{width:100%;border-right:none!important;border-left:none!important;border-top:1px solid rgba(139,92,246,.18);max-height:0;overflow:hidden;transition:max-height .4s ease,padding .2s}
-  .vs-panel.vs-mobile-open{max-height:2000px;overflow-y:auto}
-  .vs-center{display:none}
+  .vs-panel.vs-mobile-open{max-height:3000px;overflow-y:auto;padding:12px}
+  .vs-center{display:none!important;width:100%;box-sizing:border-box;padding:10px;overflow:visible;align-items:center}
   .vs-center.vs-mobile-open{display:flex!important}
-  .vs-center{width:100%;box-sizing:border-box;padding:10px;overflow:visible;align-items:center}
-  #vsPreviewWrap{width:100%!important;max-width:340px}
+  #vsPreviewWrap{width:100%!important;max-width:360px}
   #vsPreviewCanvas{width:100%!important;height:auto!important}
   .vs-controls{flex-wrap:wrap;gap:6px;justify-content:center}
+  .vs-ctrl-btn{padding:5px 10px;font-size:.75rem}
   .vs-ctrl-btn.export{width:auto;text-align:center;padding:6px 12px;font-size:.78rem}
   #vsScrubber{width:100%;min-width:0;order:10;flex-basis:100%}
   .vs-timeline-wrap{overflow-x:auto}
@@ -2577,6 +2577,9 @@
   .vs-template-grid{grid-template-columns:repeat(3,1fr)}
   .vs-preset-row{grid-template-columns:repeat(4,1fr)}
   .vs-mobile-panel-tabs{display:flex!important}
+  .vs-panel-right .vs-section{cursor:pointer;user-select:none}
+  #vsPanelRight{padding:0}
+  #vsPanelRight > *{padding-left:12px;padding-right:12px}
 }
 @media(max-width:480px){
   .vs-template-grid{grid-template-columns:repeat(2,1fr)}
@@ -2634,14 +2637,18 @@
 /* timeline */
 .vs-timeline-wrap{width:100%;position:relative;background:#0a0a18;border:1px solid rgba(139,92,246,.2);border-radius:10px;overflow:hidden;min-height:72px}
 #vsTimeline{display:flex;align-items:stretch;gap:2px;padding:6px;min-height:62px;overflow-x:auto}
-.vs-tl-clip{position:relative;min-width:56px;background:rgba(139,92,246,.15);border:1.5px solid rgba(139,92,246,.3);border-radius:7px;cursor:pointer;transition:.15s;overflow:hidden;padding-bottom:18px}
+.vs-tl-clip{position:relative;min-width:56px;background:rgba(139,92,246,.15);border:1.5px solid rgba(139,92,246,.3);border-radius:7px;cursor:grab;transition:.15s;overflow:hidden;padding-bottom:22px}
 .vs-tl-clip.vs-tl-active{border-color:#7c3aed;background:rgba(139,92,246,.3);box-shadow:0 0 0 2px #7c3aed40}
 .vs-tl-clip:hover{border-color:#a78bfa}
+.vs-tl-clip.vs-tl-dragging{opacity:.45;cursor:grabbing}
+.vs-tl-clip.vs-tl-drop-target{border-color:#22d3ee;box-shadow:0 0 0 2px #22d3ee55}
 .vs-tl-thumb{height:44px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;background:#0f0f1f;border-radius:5px 5px 0 0;overflow:hidden}
 .vs-tl-label{font-size:.58rem;color:#94a3b8;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vs-tl-dur{font-size:.58rem;color:#7c3aed;padding:0 4px}
-.vs-tl-del{position:absolute;top:3px;right:3px;background:rgba(239,68,68,.7);color:#fff;border:none;border-radius:50%;width:16px;height:16px;font-size:.6rem;cursor:pointer;line-height:16px;padding:0;display:none}
-.vs-tl-clip:hover .vs-tl-del{display:block}
+.vs-tl-reorder{position:absolute;bottom:2px;left:0;right:0;display:flex;justify-content:center;gap:3px}
+.vs-tl-reorder button{background:rgba(139,92,246,.35);color:#c4b5fd;border:none;border-radius:3px;font-size:.55rem;padding:1px 4px;cursor:pointer;line-height:1.4}
+.vs-tl-reorder button.del{background:rgba(239,68,68,.6);color:#fff}
+.vs-tl-reorder button:hover{background:rgba(139,92,246,.7)}
 .vs-tl-add{min-width:50px;display:flex;align-items:center;justify-content:center;border:2px dashed rgba(139,92,246,.35);border-radius:7px;cursor:pointer;color:#7c3aed;font-size:.75rem;font-weight:700}
 .vs-tl-add:hover{border-color:#7c3aed;background:rgba(139,92,246,.1)}
 
@@ -2854,6 +2861,11 @@
         <option value="middle">Middle</option>
         <option value="bottom" selected>Bottom</option>
       </select>
+
+      <!-- Crop -->
+      <div class="vs-section" style="margin-top:8px">✂️ Crop &amp; Trim</div>
+      <button class="vs-btn" onclick="vsOpenCrop()" style="margin-bottom:4px">✂️ Crop Clip (Zoom/Pan)</button>
+      <div style="font-size:.68rem;color:#64748b;margin-bottom:8px">Drag the ◀▶ reorder arrows in the timeline to reorder clips, or drag-and-drop clips directly.</div>
 
       <!-- Audio / Music -->
       <div class="vs-section" style="margin-top:10px">🎵 Music &amp; Beat Sync</div>

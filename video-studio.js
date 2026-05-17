@@ -102,6 +102,10 @@ function openVideoStudio() {
   document.getElementById('videoStudioBtn')?.classList.add('active-studio-btn');
 
   vsInit();
+  // On mobile, default to showing Preview tab; use setTimeout to let DOM settle
+  setTimeout(() => {
+    if (window.innerWidth <= 768) vsMobileTab('center');
+  }, 50);
 }
 function closeVideoStudio() {
   document.getElementById('videoStudioModal').style.display = 'none';
@@ -219,26 +223,47 @@ function vsRebuildTimeline() {
 
   VS.clips.forEach((clip, i) => {
     const dur = clip.duration || 3;
-    // Use px widths proportional to duration so timeline can scroll horizontally
-    // Each second = 40px, minimum 80px per clip
     const PX_PER_SEC = 40;
-    const minPx = 80;
-    const widthPx = Math.max(minPx, dur * PX_PER_SEC);
+    const widthPx = Math.max(80, dur * PX_PER_SEC);
     const div = document.createElement('div');
     div.className = 'vs-tl-clip' + (i === VS.activeClip ? ' vs-tl-active' : '');
     div.style.flex = 'none';
     div.style.width = widthPx + 'px';
     div.dataset.idx = i;
+    div.draggable = true;
     div.innerHTML = `
       <div class="vs-tl-thumb" id="vsThumb${i}">
         ${clip.type === 'vid' ? '🎬' : '🖼️'}
       </div>
       <div class="vs-tl-label">${_vsShortName(clip.name)} · ${dur.toFixed(1)}s</div>
       <div class="vs-tl-dur">${vsSpeedLabel(clip.speed)}</div>
-      <button class="vs-tl-del" onclick="vsDeleteClip(${i})" title="Delete">✕</button>`;
-    div.onclick = (e) => { if (!e.target.classList.contains('vs-tl-del')) vsSelectClip(i); };
+      <div class="vs-tl-reorder">
+        <button onclick="event.stopPropagation();vsMoveClipLeft(${i})" title="Move left">◀</button>
+        <button onclick="event.stopPropagation();vsMoveClipRight(${i})" title="Move right">▶</button>
+        <button class="del" onclick="event.stopPropagation();vsDeleteClip(${i})" title="Delete">✕</button>
+      </div>`;
+    div.onclick = (e) => { if (!e.target.closest('.vs-tl-reorder')) vsSelectClip(i); };
+    // Drag-to-reorder
+    div.addEventListener('dragstart', e => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', i);
+      div.classList.add('vs-tl-dragging');
+    });
+    div.addEventListener('dragend', () => div.classList.remove('vs-tl-dragging'));
+    div.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; div.classList.add('vs-tl-drop-target'); });
+    div.addEventListener('dragleave', () => div.classList.remove('vs-tl-drop-target'));
+    div.addEventListener('drop', e => {
+      e.preventDefault();
+      div.classList.remove('vs-tl-drop-target');
+      const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
+      const toIdx   = parseInt(div.dataset.idx);
+      if (fromIdx === toIdx) return;
+      const moved = VS.clips.splice(fromIdx, 1)[0];
+      VS.clips.splice(toIdx, 0, moved);
+      VS.activeClip = toIdx;
+      vsRebuildTimeline();
+    });
     tl.appendChild(div);
-    // generate thumb
     _vsGenThumb(clip, i);
   });
 
@@ -354,6 +379,70 @@ function vsApplyClipDuration(val) {
   c.duration = parseFloat(val) || 3;
   vsRebuildTimeline();
 }
+
+/* ── Crop functionality ──────────────────────────────── */
+// Each clip can store crop: { x, y, w, h } as fractions (0–1) of source dimensions
+// Default: no crop (full frame)
+function vsOpenCrop() {
+  const c = VS.clips[VS.activeClip];
+  if (!c) return vsToast('⚠️ Select a clip first');
+  const crop = c.crop || { x: 0, y: 0, w: 1, h: 1 };
+
+  // Build a simple inline crop UI overlay on the canvas
+  let existing = document.getElementById('vsCropOverlay');
+  if (existing) existing.remove();
+
+  const wrap  = document.getElementById('vsPreviewWrap');
+  const ov    = document.createElement('div');
+  ov.id       = 'vsCropOverlay';
+  ov.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;border-radius:8px;gap:10px;padding:16px;color:#e2e8f0;font-size:.82rem';
+  ov.innerHTML = `
+    <div style="font-weight:700;color:#c4b5fd;font-size:.95rem">✂️ Crop Clip</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%">
+      <label>Left % <input type="range" min="0" max="49" value="${Math.round(crop.x*100)}" id="vsCropX" oninput="vsPreviewCrop()"> <span id="vsCropXV">${Math.round(crop.x*100)}%</span></label>
+      <label>Top % <input type="range" min="0" max="49" value="${Math.round(crop.y*100)}" id="vsCropY" oninput="vsPreviewCrop()"> <span id="vsCropYV">${Math.round(crop.y*100)}%</span></label>
+      <label>Right % <input type="range" min="0" max="49" value="${Math.round((1-(crop.x+crop.w))*100)}" id="vsCropR" oninput="vsPreviewCrop()"> <span id="vsCropRV">${Math.round((1-(crop.x+crop.w))*100)}%</span></label>
+      <label>Bottom % <input type="range" min="0" max="49" value="${Math.round((1-(crop.y+crop.h))*100)}" id="vsCropB" oninput="vsPreviewCrop()"> <span id="vsCropBV">${Math.round((1-(crop.y+crop.h))*100)}%</span></label>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button onclick="vsApplyCrop()" style="padding:6px 16px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">✅ Apply</button>
+      <button onclick="vsResetCrop()" style="padding:6px 12px;background:rgba(255,255,255,.1);color:#e2e8f0;border:none;border-radius:8px;cursor:pointer">↺ Reset</button>
+      <button onclick="document.getElementById('vsCropOverlay').remove()" style="padding:6px 12px;background:rgba(255,0,0,.2);color:#fca5a5;border:none;border-radius:8px;cursor:pointer">✕ Cancel</button>
+    </div>`;
+  wrap.style.position = 'relative';
+  wrap.appendChild(ov);
+}
+
+function vsPreviewCrop() {
+  const x = parseInt(document.getElementById('vsCropX')?.value || 0) / 100;
+  const y = parseInt(document.getElementById('vsCropY')?.value || 0) / 100;
+  const r = parseInt(document.getElementById('vsCropR')?.value || 0) / 100;
+  const b = parseInt(document.getElementById('vsCropB')?.value || 0) / 100;
+  document.getElementById('vsCropXV').textContent = Math.round(x*100) + '%';
+  document.getElementById('vsCropYV').textContent = Math.round(y*100) + '%';
+  document.getElementById('vsCropRV').textContent = Math.round(r*100) + '%';
+  document.getElementById('vsCropBV').textContent = Math.round(b*100) + '%';
+  const c = VS.clips[VS.activeClip]; if (!c) return;
+  c.crop = { x, y, w: Math.max(0.1, 1-x-r), h: Math.max(0.1, 1-y-b) };
+  vsRenderClip(VS.activeClip, 0);
+}
+
+function vsApplyCrop() {
+  vsPreviewCrop();
+  document.getElementById('vsCropOverlay')?.remove();
+  vsToast('✅ Crop applied!');
+}
+
+function vsResetCrop() {
+  const c = VS.clips[VS.activeClip]; if (!c) return;
+  c.crop = { x:0, y:0, w:1, h:1 };
+  document.getElementById('vsCropX').value = 0;
+  document.getElementById('vsCropY').value = 0;
+  document.getElementById('vsCropR').value = 0;
+  document.getElementById('vsCropB').value = 0;
+  vsPreviewCrop();
+  vsToast('↺ Crop reset');
+}
 function vsApplyClipText(val) {
   const c = VS.clips[VS.activeClip]; if (!c) return;
   c.textOverlay = val;
@@ -413,22 +502,28 @@ function vsRenderClip(idx, progress) {
   if (c._imgEl) {
     const img = c._imgEl;
     const iw = img.naturalWidth || 1, ih = img.naturalHeight || 1;
-    // cover: fill canvas maintaining aspect ratio (no distortion)
-    const scale = Math.max(cv.width/iw, cv.height/ih);
-    const dw = iw * scale, dh = ih * scale;
+    const crop = c.crop || { x:0, y:0, w:1, h:1 };
+    // Source crop region
+    const sx = crop.x * iw, sy = crop.y * ih;
+    const sw = crop.w * iw, sh = crop.h * ih;
+    // Cover canvas with cropped region
+    const scale = Math.max(cv.width/sw, cv.height/sh);
+    const dw = sw * scale, dh = sh * scale;
     const dx = (cv.width - dw) / 2, dy = (cv.height - dh) / 2;
     ctx.filter = p.filter;
-    try { ctx.drawImage(img, dx, dy, dw, dh); } catch(e) { ctx.fillStyle='#1e1b4b'; ctx.fillRect(0,0,cv.width,cv.height); }
+    try { ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh); } catch(e) { ctx.fillStyle='#1e1b4b'; ctx.fillRect(0,0,cv.width,cv.height); }
     ctx.filter = 'none';
   } else if (c._vidEl) {
     const vid = c._vidEl;
     const vw = vid.videoWidth || cv.width, vh = vid.videoHeight || cv.height;
-    // cover: fill canvas maintaining aspect ratio (no distortion)
-    const scale = Math.max(cv.width/vw, cv.height/vh);
-    const dw = vw * scale, dh = vh * scale;
+    const crop = c.crop || { x:0, y:0, w:1, h:1 };
+    const sx = crop.x * vw, sy = crop.y * vh;
+    const sw = crop.w * vw, sh = crop.h * vh;
+    const scale = Math.max(cv.width/sw, cv.height/sh);
+    const dw = sw * scale, dh = sh * scale;
     const dx = (cv.width - dw)/2, dy = (cv.height - dh)/2;
     ctx.filter = p.filter;
-    try { ctx.drawImage(vid, dx, dy, dw, dh); } catch(e) { ctx.fillStyle='#1e1b4b'; ctx.fillRect(0,0,cv.width,cv.height); }
+    try { ctx.drawImage(vid, sx, sy, sw, sh, dx, dy, dw, dh); } catch(e) { ctx.fillStyle='#1e1b4b'; ctx.fillRect(0,0,cv.width,cv.height); }
     ctx.filter = 'none';
     // Watermark removal: blur bottom-right and top-left corners
     const wmRemove = document.getElementById('vsWatermarkRemove')?.checked;
@@ -967,44 +1062,45 @@ async function _vsExportAsync(codec, crf, resPref) {
   const exportBtn = document.getElementById('vsExportBtn');
 
   if (progWrap) progWrap.style.display = 'block';
-  if (progLabel) progLabel.textContent = '⏳ Recording canvas…';
+  if (progLabel) progLabel.textContent = '⏳ Preparing export…';
   if (progBar)   progBar.style.width = '0%';
-  if (progStage) progStage.textContent = 'Stage 1/2: Rendering video frames';
+  if (progStage) progStage.textContent = 'Stage 1/2: Rendering frames';
   if (exportBtn) exportBtn.disabled = true;
 
   VS._exporting = true;
   vsStop();
   VS.currentTime = 0;
 
+  // Pause all video elements and reset to start
+  VS.clips.forEach(c => {
+    if (c._vidEl) { c._vidEl.pause(); c._vidEl.currentTime = c.trimStart || 0; }
+  });
+
+  // Draw the first frame immediately so the stream doesn't start blank
+  const ci0 = _vsClipAtTime(0);
+  if (VS.clips[ci0]) vsRenderClip(ci0, 0);
+
   // ── Stage 1: Record canvas to WebM ───────────────────
   const fps = 30;
   const stream = VS.canvas.captureStream(fps);
 
-  // Audio mix setup
+  // Audio: background music only (video audio via muted elements is captured separately if possible)
   if (!VS.audioCtx) VS.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (VS.audioCtx.state === 'suspended') await VS.audioCtx.resume();
 
-  const dest = VS.audioCtx.createMediaStreamDestination();
-  VS.clips.forEach(c => {
-    if (c._vidEl && c._audioSrcNode) {
-      try {
-        const g = VS.audioCtx.createGain();
-        g.gain.value = VS.audioTrack?.buffer ? 0.8 : 1.0;
-        c._audioSrcNode.connect(g).connect(dest);
-      } catch(_) {}
-    }
-  });
   let exportMusicSrc = null;
+  let audioStream = null;
   if (VS.audioTrack?.buffer) {
+    const dest = VS.audioCtx.createMediaStreamDestination();
     exportMusicSrc = VS.audioCtx.createBufferSource();
     exportMusicSrc.buffer = VS.audioTrack.buffer;
     exportMusicSrc.loop   = true;
     const mg = VS.audioCtx.createGain();
     mg.gain.value = parseFloat(document.getElementById('vsVolumeSlider')?.value || 0.5);
     exportMusicSrc.connect(mg).connect(dest);
-    exportMusicSrc.start(0);
+    audioStream = dest.stream;
+    dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
   }
-  dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
 
   // Prefer VP9 for best quality WebM intermediate
   const recMime = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp9','video/webm;codecs=vp8,opus','video/webm']
@@ -1013,38 +1109,86 @@ async function _vsExportAsync(codec, crf, resPref) {
   VS.recordedChunks = [];
   VS.mediaRecorder = new MediaRecorder(stream, {
     mimeType: recMime,
-    videoBitsPerSecond: 20_000_000,  // 20Mbps for high-quality intermediate
+    videoBitsPerSecond: 20_000_000,
     audioBitsPerSecond: 256_000,
   });
   VS.mediaRecorder.ondataavailable = e => { if (e.data.size > 0) VS.recordedChunks.push(e.data); };
 
   const recordingDone = new Promise(resolve => { VS.mediaRecorder.onstop = resolve; });
+
+  // Start music AFTER recorder starts to sync audio
   VS.mediaRecorder.start(100);
-  vsPlay();
+  if (exportMusicSrc) exportMusicSrc.start(0);
 
-  const exportDur = VS.totalDuration * 1000 + 800;
-  let elapsed = 0;
-  const tick = 300;
-  const recInterval = setInterval(() => {
-    elapsed += tick;
-    const pct = Math.min(48, (elapsed / exportDur) * 48);
-    if (progBar) progBar.style.width = pct + '%';
-    if (progLabel) progLabel.textContent = `⏳ Recording… ${Math.round((elapsed / exportDur) * 100)}%`;
-  }, tick);
+  // ── Use our own render loop (not vsPlay) to guarantee frames are drawn ──
+  const exportDur   = VS.totalDuration;
+  const msPerFrame  = 1000 / fps;
+  let   exportTime  = 0;
+  let   lastClipIdx = -1;
 
-  await new Promise(resolve => setTimeout(resolve, Math.min(exportDur, 120_000)));
-  clearInterval(recInterval);
+  if (progLabel) progLabel.textContent = '🎬 Rendering frames…';
+
+  await new Promise(resolve => {
+    let frameCount = 0;
+    const totalFrames = Math.ceil(exportDur * fps);
+
+    const renderFrame = async () => {
+      if (exportTime >= exportDur) {
+        resolve();
+        return;
+      }
+
+      // Find clip for this time
+      const ci   = _vsClipAtTime(exportTime);
+      const cs   = _vsClipStartTime(ci);
+      const clip = VS.clips[ci];
+      const prog = clip ? Math.min(1, (exportTime - cs) / (clip.duration || 3)) : 0;
+
+      // Seek video if needed
+      if (clip?._vidEl) {
+        const vid    = clip._vidEl;
+        const target = (clip.trimStart || 0) + (exportTime - cs) * (clip.speed || 1);
+        if (lastClipIdx !== ci) {
+          lastClipIdx = ci;
+          vid.currentTime = target;
+          // Wait for seek
+          await new Promise(r => {
+            if (vid.readyState >= 2) { r(); return; }
+            vid.onseeked = r;
+            setTimeout(r, 500); // timeout fallback
+          });
+        } else if (Math.abs(vid.currentTime - target) > 0.1) {
+          vid.currentTime = target;
+          await new Promise(r => { vid.onseeked = r; setTimeout(r, 200); });
+        }
+      }
+
+      vsRenderClip(ci, prog);
+
+      frameCount++;
+      exportTime += 1 / fps;
+
+      const pct = Math.min(48, (frameCount / totalFrames) * 48);
+      if (progBar)   progBar.style.width = pct + '%';
+      if (progLabel) progLabel.textContent = `🎬 Rendering… ${Math.round((frameCount / totalFrames) * 100)}% (frame ${frameCount}/${totalFrames})`;
+
+      // Yield to browser so canvas stream picks up the frame
+      setTimeout(renderFrame, msPerFrame);
+    };
+
+    renderFrame();
+  });
+
   vsStop();
   VS.mediaRecorder.stop();
   if (exportMusicSrc) try { exportMusicSrc.stop(); } catch(_) {}
   await recordingDone;
 
   if (progBar)   progBar.style.width = '50%';
-  if (progLabel) progLabel.textContent = '🔄 Transcoding to MP4…';
+  if (progLabel) progLabel.textContent = '🔄 Finalising…';
 
   // ── Stage 2: WebM → MP4 via FFmpeg.wasm (if H.264 or H.265) ──
   if (codec === 'webm') {
-    // No transcode needed — just download as WebM
     VS._exporting = false;
     if (exportBtn) exportBtn.disabled = false;
     if (progBar) progBar.style.width = '100%';
@@ -1222,8 +1366,6 @@ function vsInitDrop() {
       vsHandleFiles(e.dataTransfer.files);
     });
   }
-  // Responsive: default open left panel on desktop, center on mobile
-  if (window.innerWidth <= 768) vsMobileTab('center');
 }
 
 /* call on DOMContentLoaded */
