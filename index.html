@@ -1044,21 +1044,8 @@
           </div>
         </div>
 
-        <!-- ── Step 4: Caption — collapsible ── -->
-        <div class="meme-section meme-accordion">
-          <div class="meme-accordion-header" onclick="toggleMemeAccordion(this)">
-            <span class="meme-section-title" style="margin:0">📝 Caption &amp; Hashtags</span>
-            <span class="meme-accordion-arrow">▾</span>
-          </div>
-          <div class="meme-accordion-body">
-            <textarea id="memeCaptionText" class="meme-textarea" rows="3"
-              placeholder="मिमको caption यहाँ… #NepalMeme #ShashiNewsGen"></textarea>
-            <button class="btn btn-ghost" style="font-size:.75rem;padding:5px 12px;margin-top:6px" onclick="memeGenerateCaption()">✨ AI Caption</button>
-          </div>
-        </div>
-
-        <!-- ── Step 5: Trending Topics — collapsible ── -->
-        <div class="meme-section meme-accordion">
+        <!-- ── Step 5: Trending Topics — collapsible (collapsed by default) ── -->
+        <div class="meme-section meme-accordion collapsed">
           <div class="meme-accordion-header" onclick="toggleMemeAccordion(this)">
             <span class="meme-section-title" style="margin:0">🔥 Trending Topics</span>
             <span class="meme-accordion-arrow">▾</span>
@@ -2600,243 +2587,284 @@
 </div><!-- end faceSwapModal -->
 
 <!-- ══════════════════════════════════════════════════════════════
-     🎬 VIDEO STUDIO MODAL — CapCut-killer Reel/Shorts Editor
+     🎬 VIDEO STUDIO MODAL — Professional Reel/Shorts/MP4 Editor
 ══════════════════════════════════════════════════════════════ -->
-<div id="videoStudioModal" style="display:none;position:fixed;inset:0;z-index:15000;background:#07070f;overflow-y:auto">
+<div id="videoStudioModal" style="display:none;position:fixed;inset:0;z-index:15000;background:#06060e;overflow:hidden;flex-direction:column">
 <style>
-/* ── Video Studio Styles ────────────────────────── */
-.vs-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:#0d0d1f;border-bottom:1px solid rgba(139,92,246,.3);position:sticky;top:0;z-index:10}
-.vs-header h2{font-size:1.2rem;font-weight:900;background:linear-gradient(90deg,#a855f7,#6366f1,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin:0}
-.vs-layout{display:grid;grid-template-columns:260px 1fr 260px;gap:0;height:calc(100vh - 56px);overflow:hidden}
-/* ── Mobile responsive ── */
-@media(max-width:960px){
-  .vs-layout{grid-template-columns:220px 1fr 220px}
-}
+/* ═══════════════════════════════════════════════
+   VIDEO STUDIO — Clean Professional UI
+   ═══════════════════════════════════════════════ */
+
+/* ── Layout ── */
+.vs-header{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:linear-gradient(90deg,#0d0d1f,#0f0a1e);border-bottom:1px solid rgba(139,92,246,.25);position:sticky;top:0;z-index:10;flex-shrink:0}
+.vs-header-left{display:flex;align-items:center;gap:12px}
+.vs-logo{width:34px;height:34px;background:linear-gradient(135deg,#7c3aed,#ec4899);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
+.vs-header h2{font-size:1.15rem;font-weight:900;background:linear-gradient(90deg,#a855f7,#6366f1,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin:0;line-height:1.2}
+.vs-header-sub{font-size:.6rem;color:#64748b;margin-top:1px}
+.vs-header-stats{display:flex;align-items:center;gap:16px}
+.vs-stat-pill{display:flex;align-items:center;gap:5px;font-size:.72rem;color:#64748b;font-weight:600}
+.vs-stat-pill span{color:#a78bfa}
+.vs-close-btn{padding:7px 16px;border-radius:8px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.1);color:#fca5a5;cursor:pointer;font-size:.8rem;font-weight:700;transition:.15s}
+.vs-close-btn:hover{background:rgba(239,68,68,.25)}
+
+/* ── 3-col layout ── */
+.vs-layout{display:grid;grid-template-columns:240px 1fr 300px;height:calc(100vh - 57px);overflow:hidden}
+/* ── Shared vars ── */
+@media(max-width:960px){.vs-layout{grid-template-columns:210px 1fr 270px}}
 @media(max-width:768px){
-  .vs-layout{display:flex;flex-direction:column;height:auto;overflow-y:auto;overflow-x:hidden}
-  .vs-panel{width:100%;border-right:none!important;border-left:none!important;border-top:1px solid rgba(139,92,246,.18);max-height:0;overflow:hidden;transition:max-height .4s ease,padding .2s}
-  .vs-panel.vs-mobile-open{max-height:3000px;overflow-y:auto;padding:12px}
-  .vs-center{display:none!important;width:100%;box-sizing:border-box;padding:10px;overflow:visible;align-items:center}
+  .vs-layout{display:flex;flex-direction:column;height:auto;overflow-y:auto}
+  .vs-panel{width:100%;border:none!important;border-top:1px solid rgba(139,92,246,.15)!important;max-height:0;overflow:hidden;transition:max-height .35s ease}
+  .vs-panel.vs-mobile-open{max-height:2400px;overflow-y:auto}
+  .vs-center{width:100%;padding:10px;overflow:visible}
   .vs-center.vs-mobile-open{display:flex!important}
-  #vsPreviewWrap{width:100%!important;max-width:360px}
-  #vsPreviewCanvas{width:100%!important;height:auto!important}
-  .vs-controls{flex-wrap:wrap;gap:6px;justify-content:center}
-  .vs-ctrl-btn{padding:5px 10px;font-size:.75rem}
-  .vs-ctrl-btn.export{width:auto;text-align:center;padding:6px 12px;font-size:.78rem}
-  #vsScrubber{width:100%;min-width:0;order:10;flex-basis:100%}
-  .vs-timeline-wrap{overflow-x:auto}
-  #vsTimeline{min-width:200px}
-  .vs-template-grid{grid-template-columns:repeat(3,1fr)}
-  .vs-preset-row{grid-template-columns:repeat(4,1fr)}
   .vs-mobile-panel-tabs{display:flex!important}
-  .vs-panel-right .vs-section{cursor:pointer;user-select:none}
-  #vsPanelRight{padding:0}
-  #vsPanelRight > *{padding-left:12px;padding-right:12px}
-}
-@media(max-width:480px){
-  .vs-template-grid{grid-template-columns:repeat(2,1fr)}
-  .vs-preset-row{grid-template-columns:repeat(4,1fr)}
-  .vs-header h2{font-size:1rem}
   #vsStats{display:none}
-  .vs-controls{gap:4px}
 }
-.vs-mobile-panel-tabs{display:none;gap:0;background:#0d0d1f;border-top:1px solid rgba(139,92,246,.18);flex-shrink:0}
+.vs-mobile-panel-tabs{display:none;background:#0a0a18;border-top:1px solid rgba(139,92,246,.15);flex-shrink:0}
 .vs-mobile-tab{flex:1;padding:9px 4px;text-align:center;font-size:.7rem;font-weight:700;color:#64748b;cursor:pointer;border:none;background:none;border-top:2px solid transparent;transition:.15s}
-.vs-mobile-tab.active,.vs-mobile-tab:hover{color:#c4b5fd;border-top-color:#7c3aed;background:rgba(139,92,246,.08)}
-.vs-panel{background:#0d0d1f;border-right:1px solid rgba(139,92,246,.18);overflow-y:auto;padding:12px}
-.vs-panel:last-child{border-right:none;border-left:1px solid rgba(139,92,246,.18)}
-.vs-center{display:flex;flex-direction:column;align-items:center;background:#07070f;padding:14px;gap:10px;overflow:hidden}
-.vs-section{font-size:.68rem;font-weight:700;color:#7c3aed;letter-spacing:.1em;text-transform:uppercase;padding:8px 0 4px;border-bottom:1px solid rgba(139,92,246,.15);margin-bottom:6px}
-.vs-btn{display:block;width:100%;padding:7px 10px;border-radius:8px;border:1px solid rgba(139,92,246,.3);background:rgba(139,92,246,.1);color:#c4b5fd;font-size:.8rem;font-weight:600;cursor:pointer;text-align:center;transition:.15s;margin-bottom:5px}
-.vs-btn:hover{background:rgba(139,92,246,.25);border-color:#7c3aed}
-.vs-btn.danger{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#fca5a5}
-.vs-btn.primary{background:linear-gradient(135deg,#7c3aed,#6366f1);color:#fff;border-color:transparent}
-.vs-btn.primary:hover{background:linear-gradient(135deg,#9333ea,#818cf8)}
-.vs-btn.active,.vs-btn:active{background:rgba(139,92,246,.4)!important}
-.vs-select,.vs-input{width:100%;padding:6px 8px;border-radius:8px;border:1px solid rgba(139,92,246,.3);background:#0f0f23;color:#e2e8f0;font-size:.8rem;margin-bottom:6px;box-sizing:border-box}
-.vs-label{font-size:.72rem;color:#94a3b8;margin-bottom:3px;display:block;font-weight:600}
-.vs-range{width:100%;accent-color:#7c3aed;margin-bottom:6px}
+.vs-mobile-tab.active{color:#c4b5fd;border-top-color:#7c3aed;background:rgba(139,92,246,.07)}
 
-/* templates */
-.vs-template-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
-.vs-template-card{padding:8px 6px;border-radius:10px;border:1px solid rgba(139,92,246,.2);background:rgba(139,92,246,.06);cursor:pointer;text-align:center;font-size:.72rem;color:#c4b5fd;transition:.15s;line-height:1.3}
-.vs-template-card:hover,.vs-template-card.active{background:rgba(139,92,246,.22);border-color:#7c3aed;color:#fff}
-.vs-template-card span{display:block;font-size:1.3rem;margin-bottom:2px}
+/* ── Panels ── */
+.vs-panel{background:#0c0c1e;border-right:1px solid rgba(139,92,246,.15);overflow-y:auto;padding:14px}
+.vs-panel-right{border-right:none;border-left:1px solid rgba(139,92,246,.15)}
+.vs-center{display:flex;flex-direction:column;align-items:center;background:#06060e;padding:14px 16px;gap:10px;overflow:hidden}
 
-/* presets */
-.vs-preset-row{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:8px}
-.vs-preset-card{padding:6px 4px;border-radius:8px;border:1px solid rgba(139,92,246,.2);background:rgba(139,92,246,.05);cursor:pointer;text-align:center;font-size:.65rem;color:#94a3b8;transition:.15s}
-.vs-preset-card:hover,.vs-preset-card.active{background:rgba(139,92,246,.2);border-color:#7c3aed;color:#fff}
-.vs-preset-card span{display:block;font-size:1.1rem}
+/* ── Section headers ── */
+.vs-section{font-size:.6rem;font-weight:800;color:#7c3aed;letter-spacing:.12em;text-transform:uppercase;padding:10px 0 5px;border-bottom:1px solid rgba(139,92,246,.12);margin-bottom:8px;display:flex;align-items:center;gap:6px}
 
-/* preview */
-#vsPreviewWrap{position:relative;display:flex;align-items:center;justify-content:center;background:#000;border-radius:12px;overflow:hidden;box-shadow:0 0 40px rgba(139,92,246,.25)}
-#vsPreviewCanvas{display:block;image-rendering:pixelated}
+/* ── Buttons ── */
+.vs-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:8px 12px;border-radius:9px;border:1px solid rgba(139,92,246,.28);background:rgba(139,92,246,.09);color:#c4b5fd;font-size:.79rem;font-weight:600;cursor:pointer;text-align:center;transition:.15s;margin-bottom:5px}
+.vs-btn:hover{background:rgba(139,92,246,.22);border-color:#7c3aed;transform:translateY(-1px)}
+.vs-btn.danger{background:rgba(239,68,68,.09);border-color:rgba(239,68,68,.28);color:#fca5a5}
+.vs-btn.primary{background:linear-gradient(135deg,#7c3aed,#6366f1);color:#fff;border:none;box-shadow:0 4px 16px rgba(124,58,237,.3)}
+.vs-btn.primary:hover{background:linear-gradient(135deg,#9333ea,#818cf8);box-shadow:0 6px 20px rgba(124,58,237,.45)}
+.vs-btn.green{background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;box-shadow:0 4px 14px rgba(16,185,129,.25)}
+.vs-btn.green:hover{filter:brightness(1.1)}
+.vs-btn:disabled{opacity:.4;cursor:not-allowed;transform:none!important}
 
-/* controls bar */
-.vs-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;padding:6px 0}
-.vs-ctrl-btn{padding:6px 14px;border-radius:8px;border:1px solid rgba(139,92,246,.3);background:rgba(139,92,246,.1);color:#c4b5fd;font-size:.82rem;font-weight:700;cursor:pointer;transition:.15s}
-.vs-ctrl-btn:hover{background:rgba(139,92,246,.25)}
-.vs-ctrl-btn.export{background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;padding:8px 18px;font-size:.88rem}
-#vsScrubber{flex:1;min-width:80px;accent-color:#7c3aed;height:4px}
-#vsTimecode{font-size:.7rem;color:#7c3aed;font-family:monospace;min-width:96px;text-align:center}
+/* ── Inputs ── */
+.vs-select,.vs-input{width:100%;padding:7px 10px;border-radius:8px;border:1px solid rgba(139,92,246,.25);background:#0f0f23;color:#e2e8f0;font-size:.79rem;margin-bottom:6px;box-sizing:border-box;outline:none;transition:.15s}
+.vs-select:focus,.vs-input:focus{border-color:#7c3aed;background:rgba(124,58,237,.06)}
+.vs-label{font-size:.7rem;color:#94a3b8;margin-bottom:3px;display:block;font-weight:600}
+.vs-range{width:100%;accent-color:#7c3aed;margin-bottom:4px;cursor:pointer}
 
-/* aspect buttons */
-.vs-aspect-row{display:flex;gap:6px;margin-bottom:8px}
-.vs-aspect-btn{flex:1;padding:5px 4px;border-radius:7px;border:1px solid rgba(139,92,246,.25);background:rgba(139,92,246,.06);color:#94a3b8;font-size:.72rem;font-weight:600;cursor:pointer;text-align:center;transition:.15s}
+/* ── Templates grid ── */
+.vs-tpl-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;margin-bottom:10px}
+.vs-tpl-card{padding:9px 5px 7px;border-radius:10px;border:1px solid rgba(139,92,246,.18);background:rgba(139,92,246,.05);cursor:pointer;text-align:center;font-size:.68rem;color:#94a3b8;transition:.15s;line-height:1.4;user-select:none}
+.vs-tpl-card:hover{background:rgba(139,92,246,.18);border-color:#7c3aed;color:#c4b5fd;transform:translateY(-1px)}
+.vs-tpl-card.active{background:rgba(139,92,246,.25);border-color:#a78bfa;color:#fff;box-shadow:0 0 10px rgba(124,58,237,.2)}
+.vs-tpl-card .tpl-icon{font-size:1.35rem;display:block;margin-bottom:3px}
+.vs-tpl-tag{display:inline-block;font-size:.55rem;padding:1px 5px;border-radius:4px;background:rgba(236,72,153,.2);color:#f9a8d4;margin-top:2px;font-weight:700}
+
+/* ── Color filter chips ── */
+.vs-filter-row{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:10px}
+.vs-filter-chip{padding:7px 3px 5px;border-radius:8px;border:1px solid rgba(139,92,246,.18);background:rgba(139,92,246,.04);cursor:pointer;text-align:center;font-size:.62rem;color:#94a3b8;transition:.15s;user-select:none}
+.vs-filter-chip:hover,.vs-filter-chip.active{background:rgba(139,92,246,.2);border-color:#7c3aed;color:#fff}
+.vs-filter-chip .fi{display:block;font-size:1rem;margin-bottom:2px}
+
+/* ── Aspect ratio ── */
+.vs-aspect-row{display:flex;gap:5px;margin-bottom:10px}
+.vs-aspect-btn{flex:1;padding:7px 4px;border-radius:8px;border:1px solid rgba(139,92,246,.2);background:rgba(139,92,246,.05);color:#94a3b8;font-size:.68rem;font-weight:700;cursor:pointer;text-align:center;transition:.15s;line-height:1.3}
 .vs-aspect-btn.active,.vs-aspect-btn:hover{background:rgba(139,92,246,.22);border-color:#7c3aed;color:#fff}
 
-/* timeline */
-.vs-timeline-wrap{width:100%;position:relative;background:#0a0a18;border:1px solid rgba(139,92,246,.2);border-radius:10px;overflow:hidden;min-height:72px}
-#vsTimeline{display:flex;align-items:stretch;gap:2px;padding:6px;min-height:62px;overflow-x:auto}
-.vs-tl-clip{position:relative;min-width:56px;background:rgba(139,92,246,.15);border:1.5px solid rgba(139,92,246,.3);border-radius:7px;cursor:grab;transition:.15s;overflow:hidden;padding-bottom:22px}
-.vs-tl-clip.vs-tl-active{border-color:#7c3aed;background:rgba(139,92,246,.3);box-shadow:0 0 0 2px #7c3aed40}
+/* ── Drop zone ── */
+#vsDropZone{border:2px dashed rgba(139,92,246,.28);border-radius:12px;padding:20px 16px;text-align:center;color:#7c3aed;font-size:.82rem;cursor:pointer;transition:.15s;margin-bottom:8px;background:rgba(139,92,246,.03)}
+#vsDropZone.vs-drop-active,#vsDropZone:hover{border-color:#7c3aed;background:rgba(139,92,246,.09)}
+
+/* ── Preview ── */
+#vsPreviewWrap{position:relative;display:flex;align-items:center;justify-content:center;background:#000;border-radius:14px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.7),0 0 0 1px rgba(139,92,246,.2);cursor:pointer;flex-shrink:0}
+#vsPreviewCanvas{display:block}
+
+/* ── Transport bar ── */
+.vs-transport{display:flex;align-items:center;gap:8px;width:100%;background:#0c0c1e;border-radius:10px;padding:8px 12px;border:1px solid rgba(139,92,246,.15)}
+.vs-tport-btn{width:34px;height:34px;border-radius:8px;border:1px solid rgba(139,92,246,.25);background:rgba(139,92,246,.09);color:#c4b5fd;font-size:.85rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;flex-shrink:0}
+.vs-tport-btn:hover{background:rgba(139,92,246,.25)}
+.vs-tport-btn.play{background:linear-gradient(135deg,#7c3aed,#6366f1);border:none;color:#fff;width:38px;height:38px;font-size:.9rem}
+.vs-scrubber-wrap{flex:1;display:flex;flex-direction:column;gap:3px}
+.vs-scrubber-row{display:flex;align-items:center;gap:8px}
+#vsScrubber{flex:1;height:4px;accent-color:#7c3aed;cursor:pointer}
+#vsTimecode{font-size:.68rem;color:#7c3aed;font-family:monospace;white-space:nowrap}
+.vs-export-btn{padding:8px 18px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:9px;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:.15s;box-shadow:0 4px 14px rgba(124,58,237,.3)}
+.vs-export-btn:hover{filter:brightness(1.1);transform:translateY(-1px)}
+
+/* ── Timeline ── */
+.vs-timeline-wrap{width:100%;background:#080814;border:1px solid rgba(139,92,246,.15);border-radius:10px;overflow:hidden;position:relative}
+#vsTimeline{display:flex;gap:3px;padding:8px;min-height:72px;overflow-x:auto;align-items:stretch}
+.vs-tl-clip{position:relative;min-width:60px;background:rgba(139,92,246,.12);border:1.5px solid rgba(139,92,246,.25);border-radius:8px;cursor:grab;transition:.12s;overflow:hidden;padding-bottom:20px;flex-shrink:0}
+.vs-tl-clip.vs-tl-active{border-color:#a78bfa;background:rgba(139,92,246,.26);box-shadow:0 0 0 2px rgba(167,139,250,.3)}
 .vs-tl-clip:hover{border-color:#a78bfa}
-.vs-tl-clip.vs-tl-dragging{opacity:.45;cursor:grabbing}
-.vs-tl-clip.vs-tl-drop-target{border-color:#22d3ee;box-shadow:0 0 0 2px #22d3ee55}
-.vs-tl-thumb{height:44px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;background:#0f0f1f;border-radius:5px 5px 0 0;overflow:hidden}
-.vs-tl-label{font-size:.58rem;color:#94a3b8;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.vs-tl-dur{font-size:.58rem;color:#7c3aed;padding:0 4px}
-.vs-tl-reorder{position:absolute;bottom:2px;left:0;right:0;display:flex;justify-content:center;gap:3px}
-.vs-tl-reorder button{background:rgba(139,92,246,.35);color:#c4b5fd;border:none;border-radius:3px;font-size:.55rem;padding:1px 4px;cursor:pointer;line-height:1.4}
-.vs-tl-reorder button.del{background:rgba(239,68,68,.6);color:#fff}
-.vs-tl-reorder button:hover{background:rgba(139,92,246,.7)}
-.vs-tl-add{min-width:50px;display:flex;align-items:center;justify-content:center;border:2px dashed rgba(139,92,246,.35);border-radius:7px;cursor:pointer;color:#7c3aed;font-size:.75rem;font-weight:700}
+.vs-tl-clip.vs-tl-dragging{opacity:.4;cursor:grabbing}
+.vs-tl-clip.vs-tl-drop-target{border-color:#22d3ee;box-shadow:0 0 0 2px rgba(34,211,238,.3)}
+.vs-tl-thumb{height:44px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;background:#0a0a1a;border-radius:6px 6px 0 0;overflow:hidden}
+.vs-tl-thumb img{width:100%;height:100%;object-fit:cover}
+.vs-tl-info{padding:2px 5px;display:flex;justify-content:space-between;align-items:center}
+.vs-tl-name{font-size:.55rem;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60px}
+.vs-tl-dur{font-size:.55rem;color:#a78bfa;font-weight:700}
+.vs-tl-actions{position:absolute;bottom:2px;left:0;right:0;display:flex;justify-content:center;gap:2px}
+.vs-tl-actions button{background:rgba(139,92,246,.3);color:#c4b5fd;border:none;border-radius:3px;font-size:.52rem;padding:1px 4px;cursor:pointer;line-height:1.5;transition:.1s}
+.vs-tl-actions button:hover{background:rgba(139,92,246,.6)}
+.vs-tl-actions button.del{background:rgba(239,68,68,.5);color:#fff}
+.vs-tl-add{min-width:46px;display:flex;align-items:center;justify-content:center;border:2px dashed rgba(139,92,246,.28);border-radius:8px;cursor:pointer;color:#7c3aed;font-size:.72rem;font-weight:700;flex-shrink:0}
 .vs-tl-add:hover{border-color:#7c3aed;background:rgba(139,92,246,.1)}
+#vsBeatTrack{position:absolute;bottom:0;left:8px;right:8px;height:4px;pointer-events:none}
+.vs-beat-marker{position:absolute;bottom:0;width:2px;height:6px;background:#fbbf24;border-radius:1px;opacity:.8}
 
-/* beat markers */
-#vsBeatTrack{position:absolute;bottom:0;left:6px;right:6px;height:8px;pointer-events:none}
-.vs-beat-marker{position:absolute;bottom:0;width:2px;height:8px;background:#f59e0b;border-radius:1px;opacity:.7}
+/* ── Right panel tabs ── */
+.vs-rtabs{display:flex;border-bottom:1px solid rgba(139,92,246,.15);margin-bottom:0;flex-shrink:0;background:#0c0c1e}
+.vs-rtab{flex:1;padding:9px 4px;font-size:.65rem;font-weight:700;color:#64748b;cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;transition:.15s;text-align:center}
+.vs-rtab.active{color:#c4b5fd;border-bottom-color:#7c3aed;background:rgba(139,92,246,.06)}
+.vs-rtab:hover:not(.active){color:#a78bfa}
+.vs-rpane{display:none;padding:12px;overflow-y:auto;flex:1}
+.vs-rpane.active{display:block}
 
-/* track list */
-.vs-track-item{display:flex;align-items:center;gap:7px;padding:7px 8px;border-radius:8px;border:1px solid rgba(139,92,246,.15);background:rgba(139,92,246,.04);margin-bottom:4px;cursor:pointer;transition:.15s;font-size:.75rem;color:#c4b5fd}
-.vs-track-item:hover{background:rgba(139,92,246,.15);border-color:#7c3aed}
+/* ── Clip property rows ── */
+.vs-prop-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.vs-prop-row .vs-label{margin:0;min-width:64px;flex-shrink:0}
+.vs-prop-row .vs-range{margin:0;flex:1}
+.vs-prop-row .vs-val{font-size:.7rem;color:#7c3aed;font-weight:700;min-width:32px;text-align:right}
 
-/* text chip */
-.vs-text-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);border-radius:20px;padding:3px 10px;font-size:.72rem;color:#c4b5fd;margin:2px}
-.vs-text-chip button{background:none;border:none;color:#f87171;cursor:pointer;font-size:.8rem;padding:0;line-height:1}
+/* ── Track list ── */
+.vs-track-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;border:1px solid rgba(139,92,246,.12);background:rgba(139,92,246,.04);margin-bottom:4px;cursor:pointer;transition:.15s;font-size:.74rem;color:#c4b5fd;user-select:none}
+.vs-track-item:hover{background:rgba(139,92,246,.15);border-color:#7c3aed;transform:translateX(2px)}
+.vs-track-item.active{background:rgba(139,92,246,.2);border-color:#a78bfa}
+.vs-track-item .trk-bpm{margin-left:auto;font-size:.6rem;color:#64748b;font-weight:700}
 
-/* drop zone */
-#vsDropZone{border:2px dashed rgba(139,92,246,.3);border-radius:12px;padding:24px;text-align:center;color:#7c3aed;font-size:.85rem;cursor:pointer;transition:.15s;margin-bottom:8px}
-#vsDropZone.vs-drop-active,#vsDropZone:hover{border-color:#7c3aed;background:rgba(139,92,246,.08)}
+/* ── Text chip ── */
+.vs-text-chip{display:inline-flex;align-items:center;gap:5px;background:rgba(139,92,246,.14);border:1px solid rgba(139,92,246,.28);border-radius:16px;padding:3px 10px;font-size:.7rem;color:#c4b5fd;margin:2px}
+.vs-text-chip button{background:none;border:none;color:#f87171;cursor:pointer;font-size:.75rem;padding:0;line-height:1}
+
+/* ── Export panel ── */
+.vs-export-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+.vs-export-card{padding:10px 8px;border-radius:10px;border:1px solid rgba(139,92,246,.2);background:rgba(139,92,246,.06);cursor:pointer;text-align:center;font-size:.7rem;color:#94a3b8;transition:.15s;user-select:none}
+.vs-export-card:hover,.vs-export-card.active{background:rgba(139,92,246,.2);border-color:#7c3aed;color:#fff}
+.vs-export-card .ec-icon{font-size:1.4rem;display:block;margin-bottom:3px}
+.vs-export-card .ec-sub{font-size:.58rem;color:#64748b;margin-top:2px;display:block}
+
+/* ── Progress bar ── */
+.vs-prog-wrap{background:#080814;border-radius:8px;overflow:hidden;height:6px;margin:6px 0}
+.vs-prog-fill{height:100%;border-radius:8px;background:linear-gradient(90deg,#7c3aed,#ec4899);transition:width .3s}
 </style>
 
-  <!-- Header -->
+  <!-- ── HEADER ── -->
   <div class="vs-header">
-    <div style="display:flex;align-items:center;gap:10px">
-      <span style="font-size:1.6rem">🎬</span>
+    <div class="vs-header-left">
+      <div class="vs-logo">🎬</div>
       <div>
         <h2>Video Studio</h2>
-        <div style="font-size:.68rem;color:#6366f1;font-weight:600">Reel · Shorts · Stories — Beat Sync · Ken Burns · Transitions</div>
+        <div class="vs-header-sub">HD Export · Beat Sync · 18 Templates · Real-time Preview</div>
       </div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <span id="vsStats" style="font-size:.72rem;color:#64748b">0 clips · 00:00.0 · 9:16</span>
-      <button onclick="closeVideoStudio()" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:.82rem">✕ Close</button>
+    <div class="vs-header-stats">
+      <div class="vs-stat-pill">📹 <span id="vsClipCount">0</span> clips</div>
+      <div class="vs-stat-pill">⏱ <span id="vsDurStat">00:00</span></div>
+      <div class="vs-stat-pill">📐 <span id="vsRatioStat">9:16</span></div>
+      <button onclick="closeVideoStudio()" class="vs-close-btn">✕ Close</button>
     </div>
   </div>
 
-  <!-- Mobile panel tabs (visible only on mobile) -->
+  <!-- Mobile tabs -->
   <div class="vs-mobile-panel-tabs" id="vsMobileTabs">
-    <button class="vs-mobile-tab active" onclick="vsMobileTab('left')">🎨 Templates</button>
-    <button class="vs-mobile-tab" onclick="vsMobileTab('center')">🎬 Preview</button>
-    <button class="vs-mobile-tab" onclick="vsMobileTab('right')">🎛️ Controls</button>
+    <button class="vs-mobile-tab active" onclick="vsMobileTab('left')">🎨 Style</button>
+    <button class="vs-mobile-tab" onclick="vsMobileTab('center')">🎬 Edit</button>
+    <button class="vs-mobile-tab" onclick="vsMobileTab('right')">🎛 Settings</button>
   </div>
 
-  <!-- 3-col layout -->
+  <!-- ── 3-COL LAYOUT ── -->
   <div class="vs-layout">
 
-    <!-- ── LEFT PANEL: Templates + Presets ── -->
+    <!-- ════ LEFT PANEL ════ -->
     <div class="vs-panel vs-panel-left vs-mobile-open" id="vsPanelLeft">
 
-      <!-- Viral Templates -->
-      <div class="vs-section">⚡ Viral Templates</div>
-      <div class="vs-template-grid">
-        <div class="vs-template-card" data-tpl="viral-travel" onclick="vsApplyTemplate('viral-travel')"><span>✈️</span>Travel Vlog</div>
-        <div class="vs-template-card" data-tpl="motivational" onclick="vsApplyTemplate('motivational')"><span>💪</span>Motivation</div>
-        <div class="vs-template-card" data-tpl="aesthetic"    onclick="vsApplyTemplate('aesthetic')"><span>🌸</span>Aesthetic</div>
-        <div class="vs-template-card" data-tpl="slo-mo"        onclick="vsApplyTemplate('slo-mo')"><span>💫</span>Slow-Mo</div>
-        <div class="vs-template-card" data-tpl="timelapse"    onclick="vsApplyTemplate('timelapse')"><span>⏩</span>Timelapse</div>
-        <div class="vs-template-card" data-tpl="news-reel"    onclick="vsApplyTemplate('news-reel')"><span>📰</span>News Reel</div>
-        <div class="vs-template-card" data-tpl="birthday"     onclick="vsApplyTemplate('birthday')"><span>🎂</span>Birthday</div>
-        <div class="vs-template-card" data-tpl="neon-night"   onclick="vsApplyTemplate('neon-night')"><span>🌃</span>Neon Night</div>
-        <div class="vs-template-card" data-tpl="vintage-film" onclick="vsApplyTemplate('vintage-film')"><span>🎞️</span>Vintage Film</div>
-        <div class="vs-template-card" data-tpl="vlog"         onclick="vsApplyTemplate('vlog')"><span>📹</span>Daily Vlog</div>
-      </div>
-
-      <!-- Motion Effect Templates -->
-      <div class="vs-section">✨ Motion Effects</div>
-      <div class="vs-template-grid">
-        <div class="vs-template-card" data-tpl="fade-in-out"  onclick="vsApplyTemplate('fade-in-out')"><span>🌑</span>Fade In/Out</div>
-        <div class="vs-template-card" data-tpl="zoom-in-out"  onclick="vsApplyTemplate('zoom-in-out')"><span>🔍</span>Zoom In/Out</div>
-        <div class="vs-template-card" data-tpl="slow-motion"  onclick="vsApplyTemplate('slow-motion')"><span>🐌</span>Slow Motion</div>
-        <div class="vs-template-card" data-tpl="fast-motion"  onclick="vsApplyTemplate('fast-motion')"><span>⚡</span>Fast Motion</div>
-        <div class="vs-template-card" data-tpl="pan-slide"    onclick="vsApplyTemplate('pan-slide')"><span>↔️</span>Pan Slide</div>
-        <div class="vs-template-card" data-tpl="glitch-pop"   onclick="vsApplyTemplate('glitch-pop')"><span>⚡</span>Glitch Pop</div>
-        <div class="vs-template-card" data-tpl="whip-snap"    onclick="vsApplyTemplate('whip-snap')"><span>💨</span>Whip Snap</div>
-        <div class="vs-template-card" data-tpl="blur-reveal"  onclick="vsApplyTemplate('blur-reveal')"><span>🌀</span>Blur Reveal</div>
-      </div>
-
-      <!-- Color Presets / Filters -->
-      <div class="vs-section">🎨 Color Style</div>
-      <div class="vs-preset-row">
-        <div class="vs-preset-card active" data-preset="cinematic" onclick="vsSelectPreset('cinematic')"><span>🎬</span>Cinematic</div>
-        <div class="vs-preset-card" data-preset="aesthetic"   onclick="vsSelectPreset('aesthetic')"><span>🌸</span>Aesthetic</div>
-        <div class="vs-preset-card" data-preset="vlog"        onclick="vsSelectPreset('vlog')"><span>📹</span>Vlog</div>
-        <div class="vs-preset-card" data-preset="news"        onclick="vsSelectPreset('news')"><span>📰</span>News</div>
-        <div class="vs-preset-card" data-preset="motivational"onclick="vsSelectPreset('motivational')"><span>💪</span>Motivate</div>
-        <div class="vs-preset-card" data-preset="vintage"     onclick="vsSelectPreset('vintage')"><span>🎞️</span>Vintage</div>
-        <div class="vs-preset-card" data-preset="neon"        onclick="vsSelectPreset('neon')"><span>🌃</span>Neon</div>
-        <div class="vs-preset-card" data-preset="blackwhite"  onclick="vsSelectPreset('blackwhite')"><span>⬛</span>B&W</div>
-      </div>
-
-      <!-- Aspect Ratio -->
-      <div class="vs-section">📐 Format</div>
-      <div class="vs-aspect-row">
-        <button class="vs-aspect-btn active" data-ratio="9:16" onclick="vsSetAspect('9:16')">📱 9:16<br><span style="font-size:.6rem">Reels/Shorts</span></button>
-        <button class="vs-aspect-btn" data-ratio="1:1"  onclick="vsSetAspect('1:1')">⬛ 1:1<br><span style="font-size:.6rem">Instagram</span></button>
-        <button class="vs-aspect-btn" data-ratio="16:9" onclick="vsSetAspect('16:9')">🖥️ 16:9<br><span style="font-size:.6rem">YouTube</span></button>
-      </div>
-
-      <!-- Upload -->
-      <div class="vs-section">📁 Media</div>
+      <!-- UPLOAD -->
       <div id="vsDropZone" onclick="document.getElementById('vsFileInput').click()">
-        <div style="font-size:2rem;margin-bottom:6px">📸🎬</div>
-        <div>Drop photos &amp; videos here</div>
-        <div style="font-size:.72rem;color:#64748b;margin-top:4px">or click to browse</div>
+        <div style="font-size:2rem;margin-bottom:5px">📸 🎬</div>
+        <div style="font-weight:700;color:#c4b5fd">Drop Photos &amp; Videos</div>
+        <div style="font-size:.7rem;color:#64748b;margin-top:3px">or click to browse · MP4, MOV, WebM, JPG, PNG</div>
       </div>
       <input type="file" id="vsFileInput" multiple accept="image/*,video/*" style="display:none" onchange="vsHandleFiles(this.files)">
 
-    </div><!-- end left panel -->
-
-    <!-- ── CENTER: Preview + Timeline ── -->
-    <div class="vs-center vs-panel-center" id="vsPanelCenter">
-
-      <!-- Preview canvas — click to upload if empty -->
-      <div id="vsPreviewWrap" style="cursor:pointer" title="Click to add photos/videos" onclick="vsCanvasClick()">
-        <canvas id="vsPreviewCanvas"></canvas>
-        <div id="vsCanvasUploadHint" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;opacity:.0;transition:opacity .2s">
-          <span style="font-size:2.5rem">📸</span>
-          <span style="font-size:.85rem;color:#c4b5fd;font-weight:700;margin-top:6px">Click to add photos/videos</span>
-        </div>
+      <!-- FORMAT -->
+      <div class="vs-section">📐 Format</div>
+      <div class="vs-aspect-row">
+        <button class="vs-aspect-btn active" data-ratio="9:16" onclick="vsSetAspect('9:16')">📱<br>9:16<br><span style="font-size:.56rem;color:inherit">Reels</span></button>
+        <button class="vs-aspect-btn" data-ratio="1:1" onclick="vsSetAspect('1:1')">⬛<br>1:1<br><span style="font-size:.56rem;color:inherit">Insta</span></button>
+        <button class="vs-aspect-btn" data-ratio="16:9" onclick="vsSetAspect('16:9')">🖥️<br>16:9<br><span style="font-size:.56rem;color:inherit">YouTube</span></button>
+        <button class="vs-aspect-btn" data-ratio="4:5" onclick="vsSetAspect('4:5')">🖼️<br>4:5<br><span style="font-size:.56rem;color:inherit">Feed</span></button>
       </div>
 
-      <!-- Transport controls -->
-      <div class="vs-controls">
-        <button class="vs-ctrl-btn" onclick="vsStop();vsSeek(0)" title="Rewind">⏮️</button>
-        <button class="vs-ctrl-btn" id="vsPlayBtn" onclick="vsTogglePlay()">▶️ Play</button>
-        <input type="range" id="vsScrubber" min="0" max="100" value="0" step="0.1" oninput="vsStop();vsSeek(parseFloat(this.value))">
-        <span id="vsTimecode">00:00.0 / 00:00.0</span>
-        <button class="vs-ctrl-btn export" onclick="vsExport()" title="Export WebM video">⬇️ Export</button>
+      <!-- VIRAL TEMPLATES -->
+      <div class="vs-section">⚡ Viral Templates</div>
+      <div class="vs-tpl-grid">
+        <div class="vs-tpl-card" data-tpl="viral-travel"  onclick="vsApplyTemplate('viral-travel')"><span class="tpl-icon">✈️</span>Travel Vlog<div class="vs-tpl-tag">TRENDING</div></div>
+        <div class="vs-tpl-card" data-tpl="motivational"  onclick="vsApplyTemplate('motivational')"><span class="tpl-icon">💪</span>Motivation<div class="vs-tpl-tag">VIRAL</div></div>
+        <div class="vs-tpl-card" data-tpl="aesthetic"     onclick="vsApplyTemplate('aesthetic')"><span class="tpl-icon">🌸</span>Aesthetic<div class="vs-tpl-tag">POPULAR</div></div>
+        <div class="vs-tpl-card" data-tpl="neon-night"    onclick="vsApplyTemplate('neon-night')"><span class="tpl-icon">🌃</span>Neon Night<div class="vs-tpl-tag">NEW</div></div>
+        <div class="vs-tpl-card" data-tpl="vlog"          onclick="vsApplyTemplate('vlog')"><span class="tpl-icon">📹</span>Daily Vlog</div>
+        <div class="vs-tpl-card" data-tpl="news-reel"     onclick="vsApplyTemplate('news-reel')"><span class="tpl-icon">📰</span>News Reel</div>
+        <div class="vs-tpl-card" data-tpl="vintage-film"  onclick="vsApplyTemplate('vintage-film')"><span class="tpl-icon">🎞️</span>Vintage Film</div>
+        <div class="vs-tpl-card" data-tpl="birthday"      onclick="vsApplyTemplate('birthday')"><span class="tpl-icon">🎂</span>Birthday</div>
+        <div class="vs-tpl-card" data-tpl="slo-mo"        onclick="vsApplyTemplate('slo-mo')"><span class="tpl-icon">💫</span>Cinematic Slo-Mo</div>
+        <div class="vs-tpl-card" data-tpl="timelapse"     onclick="vsApplyTemplate('timelapse')"><span class="tpl-icon">⏩</span>Timelapse</div>
+      </div>
+
+      <!-- MOTION EFFECTS -->
+      <div class="vs-section">✨ Motion Effects</div>
+      <div class="vs-tpl-grid">
+        <div class="vs-tpl-card" data-tpl="glitch-pop"  onclick="vsApplyTemplate('glitch-pop')"><span class="tpl-icon">⚡</span>Glitch Pop<div class="vs-tpl-tag">TRENDING</div></div>
+        <div class="vs-tpl-card" data-tpl="whip-snap"   onclick="vsApplyTemplate('whip-snap')"><span class="tpl-icon">💨</span>Whip Snap</div>
+        <div class="vs-tpl-card" data-tpl="blur-reveal" onclick="vsApplyTemplate('blur-reveal')"><span class="tpl-icon">🌀</span>Blur Reveal</div>
+        <div class="vs-tpl-card" data-tpl="zoom-in-out" onclick="vsApplyTemplate('zoom-in-out')"><span class="tpl-icon">🔍</span>Zoom Drama</div>
+        <div class="vs-tpl-card" data-tpl="pan-slide"   onclick="vsApplyTemplate('pan-slide')"><span class="tpl-icon">↔️</span>Pan Slide</div>
+        <div class="vs-tpl-card" data-tpl="fade-in-out" onclick="vsApplyTemplate('fade-in-out')"><span class="tpl-icon">🌑</span>Smooth Fade</div>
+        <div class="vs-tpl-card" data-tpl="slow-motion" onclick="vsApplyTemplate('slow-motion')"><span class="tpl-icon">🐌</span>Slow Motion</div>
+        <div class="vs-tpl-card" data-tpl="fast-motion" onclick="vsApplyTemplate('fast-motion')"><span class="tpl-icon">🚀</span>Fast Cuts</div>
+      </div>
+
+      <!-- COLOR STYLES -->
+      <div class="vs-section">🎨 Color Style</div>
+      <div class="vs-filter-row">
+        <div class="vs-filter-chip active" data-preset="cinematic"   onclick="vsSelectPreset('cinematic')"><span class="fi">🎬</span>Cinema</div>
+        <div class="vs-filter-chip" data-preset="aesthetic"          onclick="vsSelectPreset('aesthetic')"><span class="fi">🌸</span>Aesthetic</div>
+        <div class="vs-filter-chip" data-preset="vlog"               onclick="vsSelectPreset('vlog')"><span class="fi">📹</span>Vlog</div>
+        <div class="vs-filter-chip" data-preset="news"               onclick="vsSelectPreset('news')"><span class="fi">📰</span>News</div>
+        <div class="vs-filter-chip" data-preset="motivational"       onclick="vsSelectPreset('motivational')"><span class="fi">💪</span>Hype</div>
+        <div class="vs-filter-chip" data-preset="vintage"            onclick="vsSelectPreset('vintage')"><span class="fi">🎞️</span>Vintage</div>
+        <div class="vs-filter-chip" data-preset="neon"               onclick="vsSelectPreset('neon')"><span class="fi">🌃</span>Neon</div>
+        <div class="vs-filter-chip" data-preset="blackwhite"         onclick="vsSelectPreset('blackwhite')"><span class="fi">⬛</span>B&amp;W</div>
+      </div>
+
+    </div><!-- end left panel -->
+
+    <!-- ════ CENTER PANEL ════ -->
+    <div class="vs-center" id="vsPanelCenter">
+
+      <!-- Preview canvas -->
+      <div id="vsPreviewWrap" title="Click to add photos/videos" onclick="vsCanvasClick()">
+        <canvas id="vsPreviewCanvas"></canvas>
+      </div>
+
+      <!-- Transport bar -->
+      <div class="vs-transport">
+        <button class="vs-tport-btn" onclick="vsStop();vsSeek(0)" title="Rewind to start">⏮</button>
+        <button class="vs-tport-btn play" id="vsPlayBtn" onclick="vsTogglePlay()">▶</button>
+        <div class="vs-scrubber-wrap">
+          <div class="vs-scrubber-row">
+            <input type="range" id="vsScrubber" min="0" max="100" value="0" step="0.1" oninput="vsStop();vsSeek(parseFloat(this.value))">
+            <span id="vsTimecode">00:00 / 00:00</span>
+          </div>
+        </div>
+        <button class="vs-export-btn" onclick="vsExport()">⬇ Export HD</button>
       </div>
 
       <!-- Timeline -->
       <div style="width:100%">
-        <div style="font-size:.7rem;color:#7c3aed;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:8px">
-          🎞️ Timeline
-          <button class="vs-ctrl-btn" style="padding:3px 8px;font-size:.68rem" onclick="vsMoveClipLeft(VS.activeClip)" title="Move clip left">◀</button>
-          <button class="vs-ctrl-btn" style="padding:3px 8px;font-size:.68rem" onclick="vsMoveClipRight(VS.activeClip)" title="Move clip right">▶</button>
-          <button class="vs-ctrl-btn" style="padding:3px 8px;font-size:.68rem" onclick="vsSplitClip()" title="Split at playhead">✂️</button>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:0 2px">
+          <span style="font-size:.7rem;color:#7c3aed;font-weight:800;letter-spacing:.06em;text-transform:uppercase">🎞 Timeline</span>
+          <div style="display:flex;gap:4px;margin-left:auto">
+            <button class="vs-tport-btn" style="width:28px;height:28px;font-size:.72rem" onclick="vsMoveClipLeft(VS.activeClip)" title="Move left">◀</button>
+            <button class="vs-tport-btn" style="width:28px;height:28px;font-size:.72rem" onclick="vsMoveClipRight(VS.activeClip)" title="Move right">▶</button>
+            <button class="vs-tport-btn" style="width:28px;height:28px;font-size:.72rem" onclick="vsSplitClip()" title="Split clip at playhead">✂</button>
+          </div>
         </div>
         <div class="vs-timeline-wrap">
           <div id="vsTimeline"></div>
@@ -2844,165 +2872,174 @@
         </div>
       </div>
 
-      <!-- Global text overlay row -->
-      <div style="width:100%;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <input id="vsGlobalText" class="vs-input" style="flex:1;min-width:120px;margin:0" placeholder="✏️ Add text overlay to all clips…">
-        <button class="vs-ctrl-btn" onclick="vsAddTextLayer()" style="padding:6px 12px">＋ Add</button>
-        <button class="vs-ctrl-btn" onclick="vsClearTextLayers()" style="padding:6px 12px;color:#f87171">✕ Clear</button>
+      <!-- Global text row -->
+      <div style="width:100%;display:flex;gap:6px;align-items:center">
+        <input id="vsGlobalText" class="vs-input" style="flex:1;margin:0" placeholder="✏️ Global text overlay on all clips…">
+        <button class="vs-tport-btn" style="width:32px;height:32px;font-size:.82rem;flex-shrink:0" onclick="vsAddTextLayer()" title="Add text">＋</button>
+        <button class="vs-tport-btn" style="width:32px;height:32px;font-size:.82rem;flex-shrink:0;color:#f87171" onclick="vsClearTextLayers()" title="Clear text">✕</button>
       </div>
-      <div id="vsTextLayerList" style="width:100%;display:flex;flex-wrap:wrap;gap:4px;min-height:20px"></div>
+      <div id="vsTextLayerList" style="width:100%;display:flex;flex-wrap:wrap;gap:4px;min-height:16px"></div>
 
     </div><!-- end center -->
 
-    <!-- ── RIGHT PANEL: Clip Controls + Audio ── -->
-    <div class="vs-panel vs-panel-right" id="vsPanelRight">
+    <!-- ════ RIGHT PANEL ════ -->
+    <div class="vs-panel vs-panel-right" id="vsPanelRight" style="display:flex;flex-direction:column;padding:0;overflow:hidden">
 
-      <!-- Clip Controls -->
-      <div class="vs-section">🎛️ Clip Controls</div>
-      <div style="font-size:.72rem;color:#64748b;margin-bottom:8px">Select a clip in the timeline to edit it</div>
-
-      <label class="vs-label">Speed</label>
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-        <input type="range" class="vs-range" id="vsClipSpeedSlider" min="0.1" max="4" step="0.05" value="1"
-          oninput="document.getElementById('vsClipSpeed').value=parseFloat(this.value).toFixed(2);vsApplyClipSpeed(this.value)">
-      </div>
-      <select class="vs-select" id="vsClipSpeed" onchange="vsApplyClipSpeed(this.value);document.getElementById('vsClipSpeedSlider').value=this.value">
-        <option value="0.25">🐢 0.25x — Super Slow-Mo</option>
-        <option value="0.5">🐌 0.5x — Slow Motion</option>
-        <option value="0.75">🚶 0.75x — Slightly Slow</option>
-        <option value="1" selected>▶️ 1x — Normal</option>
-        <option value="1.25">🏃 1.25x — Slightly Fast</option>
-        <option value="1.5">⚡ 1.5x — Fast</option>
-        <option value="2">⚡⚡ 2x — Very Fast</option>
-        <option value="4">🚀 4x — Timelapse</option>
-      </select>
-      <span id="vsSpeedLabel" style="font-size:.72rem;color:#7c3aed">▶️ 1x</span>
-
-      <label class="vs-label" style="margin-top:8px">Ken Burns Effect</label>
-      <select class="vs-select" id="vsClipKenBurns" onchange="vsApplyKenBurns(this.value)">
-        <option value="none">None</option>
-        <option value="zoom-in" selected>🔍 Zoom In</option>
-        <option value="zoom-out">🔎 Zoom Out</option>
-        <option value="pan-left">◀️ Pan Left</option>
-        <option value="pan-right">▶️ Pan Right</option>
-        <option value="tilt-up">⬆️ Tilt Up</option>
-        <option value="drift">🌊 Drift (Diagonal)</option>
-      </select>
-
-      <label class="vs-label">Transition In/Out</label>
-      <select class="vs-select" id="vsClipTransition" onchange="vsApplyTransition(this.value)">
-        <option value="none">None</option>
-        <option value="fade" selected>🌑 Fade</option>
-        <option value="flash">⚡ Flash</option>
-        <option value="zoom-in">🔍 Zoom In</option>
-        <option value="zoom-out">🔎 Zoom Out</option>
-        <option value="slide-left">◀️ Slide Left</option>
-        <option value="slide-right">▶️ Slide Right</option>
-        <option value="glitch">⚡ Glitch</option>
-        <option value="whip-pan">💨 Whip Pan</option>
-        <option value="blur">🌀 Blur</option>
-      </select>
-
-      <label class="vs-label">Duration (sec, images only)</label>
-      <input class="vs-input" type="number" id="vsClipDuration" min="0.5" max="30" step="0.5" value="3" onchange="vsApplyClipDuration(this.value)">
-
-      <label class="vs-label">Text Overlay (this clip)</label>
-      <input class="vs-input" id="vsClipText" placeholder="e.g. Day 1 in Paris 🗼" oninput="vsApplyClipText(this.value)">
-      <select class="vs-select" id="vsClipTextPos" onchange="vsApplyClipTextPos(this.value)">
-        <option value="top">Top</option>
-        <option value="middle">Middle</option>
-        <option value="bottom" selected>Bottom</option>
-      </select>
-
-      <!-- Crop -->
-      <div class="vs-section" style="margin-top:8px">✂️ Crop &amp; Trim</div>
-      <button class="vs-btn" onclick="vsOpenCrop()" style="margin-bottom:4px">✂️ Crop Clip (Zoom/Pan)</button>
-      <div style="font-size:.68rem;color:#64748b;margin-bottom:8px">Drag the ◀▶ reorder arrows in the timeline to reorder clips, or drag-and-drop clips directly.</div>
-
-      <!-- Audio / Music -->
-      <div class="vs-section" style="margin-top:10px">🎵 Music &amp; Beat Sync</div>
-      <div id="vsCurrentTrack" style="font-size:.72rem;color:#a78bfa;margin-bottom:6px">No track loaded</div>
-
-      <div style="max-height:180px;overflow-y:auto;margin-bottom:6px">
-      ${VS_TRACKS ? '' : ''}
-        <div class="vs-track-item" onclick="vsSelectTrack(0)"><span>🎵</span>Epic Cinematic Rise</div>
-        <div class="vs-track-item" onclick="vsSelectTrack(1)"><span>🔥</span>Trap Beat (Viral)</div>
-        <div class="vs-track-item" onclick="vsSelectTrack(2)"><span>💫</span>Lofi Aesthetic Chill</div>
-        <div class="vs-track-item" onclick="vsSelectTrack(3)"><span>🌟</span>Motivational Upbeat</div>
-        <div class="vs-track-item" onclick="vsSelectTrack(4)"><span>😂</span>Comedy Boing Vlog</div>
-        <div class="vs-track-item" onclick="vsSelectTrack(5)"><span>🕉️</span>Devotional Flute</div>
-        <div class="vs-track-item" onclick="vsSelectTrack(6)"><span>🏙️</span>Urban Hip-Hop Swagger</div>
-        <div class="vs-track-item" onclick="vsSelectTrack(7)"><span>🌊</span>Peaceful Ambient</div>
+      <!-- Tab bar -->
+      <div class="vs-rtabs">
+        <button class="vs-rtab active" id="vsRTab0" onclick="vsRightTab(0)">🎛 Clip</button>
+        <button class="vs-rtab" id="vsRTab1" onclick="vsRightTab(1)">🎵 Audio</button>
+        <button class="vs-rtab" id="vsRTab2" onclick="vsRightTab(2)">⬇ Export</button>
       </div>
 
-      <label class="vs-label">🎚️ Upload your own music</label>
-      <input type="file" id="vsAudioInput" accept="audio/*" style="display:none" onchange="vsUploadAudio(this.files[0])">
-      <button class="vs-btn" onclick="document.getElementById('vsAudioInput').click()">📁 Upload MP3 / Audio</button>
+      <!-- Tab 0: Clip Controls -->
+      <div class="vs-rpane active" id="vsRPane0">
+        <div style="font-size:.72rem;color:#64748b;margin-bottom:10px;line-height:1.5">Click a clip in the timeline to select and edit it</div>
 
-      <label class="vs-label" style="margin-top:4px">🎵 Music Volume</label>
-      <input type="range" class="vs-range" id="vsVolumeSlider" min="0" max="1" step="0.05" value="0.7" oninput="vsSetVolume(this.value)">
-
-      <label class="vs-label" style="margin-top:4px">🎬 Video Audio Volume</label>
-      <input type="range" class="vs-range" id="vsVideoVolumeSlider" min="0" max="2" step="0.05" value="1.0">
-      <div style="font-size:.62rem;color:#64748b;margin-top:2px">Controls original audio from your video clips in the export</div>
-
-      <button class="vs-btn primary" onclick="vsAutoCutToBeats()" style="margin-top:6px">🥁 Auto-Cut to Beat</button>
-      <div style="font-size:.66rem;color:#64748b;margin-top:4px">Detects beats and trims each clip to match the rhythm automatically</div>
-
-      <!-- Export info -->
-      <div class="vs-section" style="margin-top:10px">⬇️ Export</div>
-
-      <label class="vs-label">Export Codec</label>
-      <select class="vs-select" id="vsExportFormat" onchange="vsUpdateExportBtn(this.value)">
-        <option value="h264">🏆 H.264 / AVC — MP4 (Universal, best compat.)</option>
-        <option value="h265">🚀 H.265 / HEVC — MP4 (Smaller size, high quality)</option>
-        <option value="webm">⚡ WebM VP9 (Fastest — no transcoding)</option>
-      </select>
-
-      <label class="vs-label">Quality (CRF — lower = better)</label>
-      <select class="vs-select" id="vsExportQuality">
-        <option value="18">🏆 CRF 18 — Visually Lossless</option>
-        <option value="23" selected>🎯 CRF 23 — High Quality (recommended)</option>
-        <option value="28">📱 CRF 28 — Balanced / Mobile</option>
-        <option value="35">💾 CRF 35 — Small File Size</option>
-      </select>
-
-      <label class="vs-label">Resolution</label>
-      <select class="vs-select" id="vsExportRes">
-        <option value="source">📐 Source Resolution (full canvas)</option>
-        <option value="1080">🖥️ 1080p (1920×1080 or 1080×1920)</option>
-        <option value="720">📱 720p</option>
-        <option value="480">💾 480p (smallest file)</option>
-      </select>
-
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:7px 10px;background:rgba(139,92,246,.07);border-radius:8px;border:1px solid rgba(139,92,246,.15)">
-        <input type="checkbox" id="vsWatermarkRemove" style="accent-color:#7c3aed;width:15px;height:15px">
-        <label for="vsWatermarkRemove" style="font-size:.75rem;color:#c4b5fd;cursor:pointer;font-weight:600">🚫 Remove watermarks from videos</label>
-      </div>
-
-      <button class="vs-btn primary" onclick="vsExport()" id="vsExportBtn">🎬 Export MP4 (H.264)</button>
-      <div id="vsExportProgress" style="display:none;margin-top:8px">
-        <div style="font-size:.72rem;color:#a78bfa;margin-bottom:4px" id="vsExportLabel">⏳ Rendering…</div>
-        <div style="background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden;height:6px">
-          <div id="vsExportBar" style="height:100%;background:linear-gradient(90deg,#7c3aed,#ec4899);width:0%;transition:width .3s"></div>
+        <div class="vs-section">⚡ Speed</div>
+        <div class="vs-prop-row">
+          <span class="vs-label">Speed</span>
+          <input type="range" class="vs-range" id="vsClipSpeedSlider" min="0.1" max="4" step="0.05" value="1" oninput="vsApplyClipSpeed(this.value);document.getElementById('vsSpeedVal').textContent=parseFloat(this.value).toFixed(2)+'x'">
+          <span class="vs-val" id="vsSpeedVal">1x</span>
         </div>
-        <div id="vsExportStage" style="font-size:.65rem;color:#64748b;margin-top:3px"></div>
-      </div>
-      <div style="font-size:.66rem;color:#64748b;margin-top:6px;line-height:1.5">
-        H.264/H.265 uses <b style="color:#a78bfa">FFmpeg.wasm</b> for in-browser transcoding.<br>
-        First export loads ~32MB WASM (cached after).
-      </div>
+        <select class="vs-select" id="vsClipSpeed" onchange="vsApplyClipSpeed(this.value);document.getElementById('vsClipSpeedSlider').value=this.value;document.getElementById('vsSpeedVal').textContent=parseFloat(this.value).toFixed(2)+'x'">
+          <option value="0.25">🐢 0.25x — Super Slow-Mo</option>
+          <option value="0.5">🐌 0.5x — Slow Motion</option>
+          <option value="0.75">🚶 0.75x — Slightly Slow</option>
+          <option value="1" selected>▶️ 1x — Normal</option>
+          <option value="1.5">⚡ 1.5x — Fast</option>
+          <option value="2">⚡⚡ 2x — Very Fast</option>
+          <option value="4">🚀 4x — Timelapse</option>
+        </select>
 
-      <div style="background:rgba(139,92,246,.07);border:1px solid rgba(139,92,246,.15);border-radius:8px;padding:10px;margin-top:10px;font-size:.68rem;color:#94a3b8;line-height:1.6">
-        <b style="color:#c4b5fd">💡 Pro Tips:</b><br>
-        • Space = Play/Pause<br>
-        • Click timeline clip to select<br>
-        • Apply template for one-click style<br>
-        • 🥁 Auto-Cut syncs to music beat<br>
-        • Use 9:16 for Reels/Shorts/TikTok<br>
-        • Upload your own trending songs<br>
-        • Slow-Mo 0.25x = cinematic effect
-      </div>
+        <div class="vs-section">🎞 Motion &amp; Transition</div>
+        <label class="vs-label">Ken Burns Effect</label>
+        <select class="vs-select" id="vsClipKenBurns" onchange="vsApplyKenBurns(this.value)">
+          <option value="none">None</option>
+          <option value="zoom-in" selected>🔍 Zoom In</option>
+          <option value="zoom-out">🔎 Zoom Out</option>
+          <option value="pan-left">◀️ Pan Left</option>
+          <option value="pan-right">▶️ Pan Right</option>
+          <option value="tilt-up">⬆️ Tilt Up</option>
+          <option value="drift">🌊 Drift Diagonal</option>
+        </select>
+
+        <label class="vs-label">Transition</label>
+        <select class="vs-select" id="vsClipTransition" onchange="vsApplyTransition(this.value)">
+          <option value="none">None</option>
+          <option value="fade" selected>🌑 Fade</option>
+          <option value="flash">⚡ Flash</option>
+          <option value="zoom-in">🔍 Zoom In</option>
+          <option value="zoom-out">🔎 Zoom Out</option>
+          <option value="slide-left">◀️ Slide Left</option>
+          <option value="slide-right">▶️ Slide Right</option>
+          <option value="glitch">⚡ Glitch</option>
+          <option value="whip-pan">💨 Whip Pan</option>
+          <option value="blur">🌀 Blur</option>
+        </select>
+
+        <div class="vs-section">✏️ Text &amp; Duration</div>
+        <label class="vs-label">Text overlay (this clip)</label>
+        <input class="vs-input" id="vsClipText" placeholder="e.g. Day 1 in Paris 🗼" oninput="vsApplyClipText(this.value)">
+        <label class="vs-label">Text position</label>
+        <select class="vs-select" id="vsClipTextPos" onchange="vsApplyClipTextPos(this.value)">
+          <option value="top">Top</option>
+          <option value="middle">Middle</option>
+          <option value="bottom" selected>Bottom</option>
+        </select>
+        <label class="vs-label">Duration (seconds — images only)</label>
+        <input class="vs-input" type="number" id="vsClipDuration" min="0.5" max="30" step="0.5" value="3" onchange="vsApplyClipDuration(this.value)">
+
+        <div class="vs-section">✂️ Crop</div>
+        <button class="vs-btn" onclick="vsOpenCrop()">✂️ Crop / Zoom this clip</button>
+      </div><!-- end clip pane -->
+
+      <!-- Tab 1: Audio -->
+      <div class="vs-rpane" id="vsRPane1">
+        <div class="vs-section">🎵 Background Music</div>
+        <div id="vsCurrentTrack" style="font-size:.74rem;color:#a78bfa;margin-bottom:10px;padding:8px 10px;background:rgba(139,92,246,.07);border-radius:8px;border:1px solid rgba(139,92,246,.15)">No track loaded</div>
+
+        <div style="max-height:200px;overflow-y:auto;margin-bottom:10px">
+          <div class="vs-track-item" onclick="vsSelectTrack(0)"><span>🎵</span><span>Epic Cinematic Rise</span><span class="trk-bpm">120 BPM</span></div>
+          <div class="vs-track-item" onclick="vsSelectTrack(1)"><span>🔥</span><span>Trap Beat (Viral)</span><span class="trk-bpm">140 BPM</span></div>
+          <div class="vs-track-item" onclick="vsSelectTrack(2)"><span>💫</span><span>Lofi Aesthetic Chill</span><span class="trk-bpm">80 BPM</span></div>
+          <div class="vs-track-item" onclick="vsSelectTrack(3)"><span>🌟</span><span>Motivational Upbeat</span><span class="trk-bpm">128 BPM</span></div>
+          <div class="vs-track-item" onclick="vsSelectTrack(4)"><span>😂</span><span>Comedy Boing Vlog</span><span class="trk-bpm">100 BPM</span></div>
+          <div class="vs-track-item" onclick="vsSelectTrack(5)"><span>🕉️</span><span>Devotional Flute</span><span class="trk-bpm">60 BPM</span></div>
+          <div class="vs-track-item" onclick="vsSelectTrack(6)"><span>🏙️</span><span>Urban Hip-Hop</span><span class="trk-bpm">95 BPM</span></div>
+          <div class="vs-track-item" onclick="vsSelectTrack(7)"><span>🌊</span><span>Peaceful Ambient</span><span class="trk-bpm">70 BPM</span></div>
+        </div>
+
+        <input type="file" id="vsAudioInput" accept="audio/*" style="display:none" onchange="vsUploadAudio(this.files[0])">
+        <button class="vs-btn" onclick="document.getElementById('vsAudioInput').click()">📁 Upload Your Own Music</button>
+
+        <div class="vs-section" style="margin-top:4px">🎚 Volume</div>
+        <label class="vs-label">Music volume</label>
+        <div class="vs-prop-row">
+          <input type="range" class="vs-range" id="vsVolumeSlider" min="0" max="1" step="0.05" value="0.7" oninput="vsSetVolume(this.value);document.getElementById('vsMusicVolVal').textContent=Math.round(this.value*100)+'%'">
+          <span class="vs-val" id="vsMusicVolVal">70%</span>
+        </div>
+        <label class="vs-label">Original video audio</label>
+        <div class="vs-prop-row">
+          <input type="range" class="vs-range" id="vsVideoVolumeSlider" min="0" max="2" step="0.05" value="1.0" oninput="document.getElementById('vsVidVolVal').textContent=Math.round(this.value*100)+'%'">
+          <span class="vs-val" id="vsVidVolVal">100%</span>
+        </div>
+
+        <div class="vs-section" style="margin-top:4px">🥁 Beat Sync</div>
+        <button class="vs-btn primary" onclick="vsAutoCutToBeats()">🥁 Auto-Cut to Beat</button>
+        <div style="font-size:.68rem;color:#64748b;margin-top:4px;line-height:1.6">Automatically trims each clip to match the music beat. Select a track first.</div>
+      </div><!-- end audio pane -->
+
+      <!-- Tab 2: Export -->
+      <div class="vs-rpane" id="vsRPane2">
+        <div class="vs-section">📐 Resolution</div>
+        <div class="vs-export-row">
+          <div class="vs-export-card active" data-res="1080" onclick="vsSelectRes(this,'1080')"><span class="ec-icon">🏆</span>1080p HD<span class="ec-sub">Best Quality</span></div>
+          <div class="vs-export-card" data-res="720"  onclick="vsSelectRes(this,'720')"><span class="ec-icon">📱</span>720p<span class="ec-sub">Balanced</span></div>
+          <div class="vs-export-card" data-res="source" onclick="vsSelectRes(this,'source')"><span class="ec-icon">📐</span>Source<span class="ec-sub">As recorded</span></div>
+          <div class="vs-export-card" data-res="480" onclick="vsSelectRes(this,'480')"><span class="ec-icon">💾</span>480p<span class="ec-sub">Small file</span></div>
+        </div>
+
+        <div class="vs-section">🎬 Format</div>
+        <div class="vs-export-row">
+          <div class="vs-export-card active" data-fmt="h264" onclick="vsSelectFmt(this,'h264')"><span class="ec-icon">🏅</span>MP4 H.264<span class="ec-sub">Universal</span></div>
+          <div class="vs-export-card" data-fmt="webm" onclick="vsSelectFmt(this,'webm')"><span class="ec-icon">⚡</span>WebM VP9<span class="ec-sub">Fastest</span></div>
+        </div>
+
+        <div class="vs-section">🎯 Quality</div>
+        <select class="vs-select" id="vsExportQuality">
+          <option value="18">🏆 Visually Lossless (CRF 18)</option>
+          <option value="23" selected>🎯 High Quality — Recommended (CRF 23)</option>
+          <option value="28">📱 Balanced / Mobile (CRF 28)</option>
+          <option value="35">💾 Small File Size (CRF 35)</option>
+        </select>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:9px 11px;background:rgba(139,92,246,.07);border-radius:9px;border:1px solid rgba(139,92,246,.14)">
+          <input type="checkbox" id="vsWatermarkRemove" style="accent-color:#7c3aed;width:15px;height:15px;cursor:pointer">
+          <label for="vsWatermarkRemove" style="font-size:.76rem;color:#c4b5fd;cursor:pointer;font-weight:600">🚫 Remove video watermarks</label>
+        </div>
+
+        <!-- Hidden legacy fields still read by JS -->
+        <input type="hidden" id="vsExportFormat" value="h264">
+        <input type="hidden" id="vsExportRes" value="1080">
+
+        <button class="vs-btn green" onclick="vsExport()" id="vsExportBtn" style="font-size:.9rem;padding:12px">🎬 Export MP4 · HD 1080p</button>
+
+        <div id="vsExportProgress" style="display:none;margin-top:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span id="vsExportLabel" style="font-size:.74rem;color:#a78bfa;font-weight:600">⏳ Rendering…</span>
+            <span id="vsExportStage" style="font-size:.65rem;color:#64748b"></span>
+          </div>
+          <div class="vs-prog-wrap"><div class="vs-prog-fill" id="vsExportBar" style="width:0%"></div></div>
+        </div>
+
+        <div style="margin-top:12px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.18);border-radius:9px;padding:10px 12px;font-size:.69rem;color:#6ee7b7;line-height:1.7">
+          <b style="color:#34d399">✅ HD Export</b> — Full 1080p quality, no watermark<br>
+          <b style="color:#34d399">✅ Audio Retained</b> — Original video audio + music mixed<br>
+          <b style="color:#34d399">✅ No Lag</b> — Real-time canvas recording for frame-perfect sync<br>
+          <b style="color:#34d399">✅ MP4 Compatible</b> — Plays on all devices &amp; platforms
+        </div>
+      </div><!-- end export pane -->
 
     </div><!-- end right panel -->
 
@@ -3011,7 +3048,7 @@
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
 <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
-<script src="video-studio.js?v=20260517b"></script>
+<script src="video-studio.js?v=20260530"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════
      🤖 AI SHORT-FORM VIDEO GENERATOR MODAL

@@ -48,24 +48,24 @@ const VS_PRESETS = {
 
 const VS_TRANSITIONS = ['none','fade','slide-left','slide-right','zoom-in','zoom-out','glitch','whip-pan','flash','blur'];
 const VS_TEXT_STYLES = ['bold-center','subtitle','title-top','caption-bottom','glitch-text','neon-text','typewriter','split-reveal'];
-const VS_ASPECT = { '9:16':{w:1080,h:1920}, '1:1':{w:1080,h:1080}, '16:9':{w:1920,h:1080} };
+const VS_ASPECT = { '9:16':{w:1080,h:1920}, '1:1':{w:1080,h:1080}, '16:9':{w:1920,h:1080}, '4:5':{w:1080,h:1350} };
 
-/* royalty-free / demo tracks list (YouTube Audio Library URLs or user-provided) */
+/* royalty-free / demo tracks list */
 const VS_TRACKS = [
-  { name:'🎵 Epic Cinematic Rise',    bpm:120, mood:'epic',       url:'https://cdn.pixabay.com/audio/2023/11/06/audio_f1b3e3c5a6.mp3' },
-  { name:'🔥 Trap Beat (Viral)',       bpm:140, mood:'hype',       url:'https://cdn.pixabay.com/audio/2023/05/24/audio_0a1a5e86d3.mp3' },
-  { name:'💫 Lofi Aesthetic Chill',    bpm:80,  mood:'chill',      url:'https://cdn.pixabay.com/audio/2023/02/28/audio_856f1f47aa.mp3' },
-  { name:'🌟 Motivational Upbeat',     bpm:128, mood:'motivation', url:'https://cdn.pixabay.com/audio/2022/10/25/audio_0c3b9f7e1b.mp3' },
-  { name:'😂 Comedy Boing Vlog',       bpm:100, mood:'fun',        url:'https://cdn.pixabay.com/audio/2022/03/15/audio_6f8e8e81d3.mp3' },
-  { name:'🕉️ Devotional Flute',        bpm:60,  mood:'spiritual',  url:'https://cdn.pixabay.com/audio/2022/01/20/audio_d08522dfb0.mp3' },
-  { name:'🏙️ Urban Hip-Hop Swagger',   bpm:95,  mood:'swag',       url:'https://cdn.pixabay.com/audio/2023/06/07/audio_a04f1e0d80.mp3' },
-  { name:'🌊 Peaceful Ambient',        bpm:70,  mood:'peaceful',   url:'https://cdn.pixabay.com/audio/2022/08/04/audio_2dde668d05.mp3' },
+  { name:'🎵 Epic Cinematic Rise',    bpm:120, mood:'epic',       url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
+  { name:'🔥 Upbeat Dance Pop',        bpm:128, mood:'hype',       url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3' },
+  { name:'💫 Lofi Chill Beats',        bpm:80,  mood:'chill',      url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3' },
+  { name:'🌟 Motivational Rock',       bpm:120, mood:'motivation', url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3' },
+  { name:'🌊 Ambient Peaceful',        bpm:70,  mood:'peaceful',   url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3' },
+  { name:'🎸 Acoustic Indie',          bpm:95,  mood:'indie',      url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3' },
+  { name:'🥁 Trap Groove',             bpm:140, mood:'swag',       url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3' },
+  { name:'� Emotional Piano',         bpm:60,  mood:'emotional',  url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3' },
 ];
 
 /* ── Canvas click to upload ─────────────────────────── */
 function vsCanvasClick() {
-  // Only trigger file picker if clicking on an empty canvas (no clip active) OR always allow
-  document.getElementById('vsFileInput').click();
+  // Only open file picker when no clips exist (prevents accidental opens during editing)
+  if (VS.clips.length === 0) document.getElementById('vsFileInput').click();
 }
 
 /* ── Mobile panel tabs ──────────────────────────────── */
@@ -81,8 +81,40 @@ function vsMobileTab(panel) {
   const right  = document.getElementById('vsPanelRight');
   if (left)   left.classList.toggle('vs-mobile-open',   panel === 'left');
   if (right)  right.classList.toggle('vs-mobile-open',  panel === 'right');
-  // Center panel uses vs-center class — toggle its visibility
   if (center) center.classList.toggle('vs-mobile-open', panel === 'center');
+}
+
+/* ── Right-panel tab switching ──────────────────────── */
+function vsRightTab(idx) {
+  for (let i = 0; i < 3; i++) {
+    document.getElementById('vsRTab' + i)?.classList.toggle('active', i === idx);
+    document.getElementById('vsRPane' + i)?.classList.toggle('active', i === idx);
+  }
+}
+
+/* ── Export card selectors ──────────────────────────── */
+function vsSelectRes(el, val) {
+  document.querySelectorAll('.vs-export-card[data-res]').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  const hidden = document.getElementById('vsExportRes');
+  if (hidden) hidden.value = val;
+  _vsUpdateExportBtnLabel();
+}
+function vsSelectFmt(el, val) {
+  document.querySelectorAll('.vs-export-card[data-fmt]').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  const hidden = document.getElementById('vsExportFormat');
+  if (hidden) hidden.value = val;
+  _vsUpdateExportBtnLabel();
+}
+function _vsUpdateExportBtnLabel() {
+  const fmt = document.getElementById('vsExportFormat')?.value || 'h264';
+  const res = document.getElementById('vsExportRes')?.value || '1080';
+  const btn = document.getElementById('vsExportBtn');
+  if (!btn) return;
+  const resLabel = res === '1080' ? '1080p HD' : res === '720' ? '720p' : res === '480' ? '480p' : 'Source';
+  const fmtLabel = fmt === 'webm' ? 'WebM' : 'MP4';
+  btn.textContent = `🎬 Export ${fmtLabel} · ${resLabel}`;
 }
 
 
@@ -123,6 +155,7 @@ function vsInit() {
   vsRenderPlaceholder();
   vsRebuildTimeline();
   vsUpdateStats();
+  _vsUpdateExportBtnLabel();
   // keyboard shortcuts
   document.addEventListener('keydown', vsKeyHandler, { once: false });
   // Show canvas upload hint when empty
@@ -148,7 +181,7 @@ function vsSetAspect(ratio) {
   VS.canvas.style.width  = Math.round(dim.w * scale) + 'px';
   VS.canvas.style.height = Math.round(dim.h * scale) + 'px';
   document.querySelectorAll('.vs-aspect-btn').forEach(b => b.classList.toggle('active', b.dataset.ratio === ratio));
-  vsRenderPlaceholder();
+  if (VS.clips.length > 0) vsRenderClip(VS.activeClip, 0); else vsRenderPlaceholder();
 }
 
 /* ── file upload ────────────────────────────────────── */
@@ -175,42 +208,72 @@ function vsAddClip(file) {
     _imgEl   : null,
     _vidEl   : null,
     hasAudio : false,
+    _loading : type === 'vid',  // flag: still waiting for metadata
   };
+
   if (type === 'img') {
     const img = new Image();
     img.onload = () => {
       clip._imgEl = img;
-      vsRebuildTimeline(); vsUpdateStats();
-      // Always show first clip on canvas immediately
-      const isFirst = VS.clips.indexOf(clip) === 0;
-      if (isFirst || VS.activeClip === VS.clips.indexOf(clip)) vsRenderClip(VS.clips.indexOf(clip), 0);
+      clip._loading = false;
+      VS._lastThumb = VS._lastThumb || {};
+      const idx = VS.clips.indexOf(clip);
+      vsRebuildTimeline();
+      vsUpdateStats();
+      if (idx === 0 || idx === VS.activeClip) vsRenderClip(idx, 0);
     };
+    img.onerror = () => { clip._loading = false; vsToast('❌ Could not load image: ' + file.name); };
     img.src = url;
+
   } else {
+    // Video — create element, load first frame reliably
     const vid = document.createElement('video');
-    vid.src      = url;
-    vid.muted    = true;   // keep muted for canvas drawImage (audio via Web Audio)
-    vid.preload  = 'auto';
+    vid.src         = url;
+    vid.muted       = true;
+    vid.preload     = 'auto';
     vid.playsInline = true;
+    vid.crossOrigin = null; // blob URLs don't need crossOrigin — setting it breaks them
+
+    // Show loading toast
+    vsToast('⏳ Loading video: ' + file.name.substring(0, 24) + '…');
+
     vid.onloadedmetadata = () => {
       clip.duration = vid.duration / clip.speed;
       clip.trimEnd  = vid.duration;
       clip._vidEl   = vid;
-      vsRebuildTimeline(); vsUpdateStats();
-      // Seek to first frame so canvas shows something immediately
-      vid.currentTime = 0.05;
+      clip._loading = false;
+      vsRebuildTimeline();
+      vsUpdateStats();
+      // Seek to slightly past 0 to get the first visible frame
+      vid.currentTime = Math.min(0.1, vid.duration * 0.01);
     };
+
     vid.onseeked = () => {
-      // Draw the first frame on canvas as soon as it's ready
       const idx = VS.clips.indexOf(clip);
-      if (idx >= 0 && !VS.playing) vsRenderClip(idx, 0);
-      if (idx >= 0) _vsGenThumb(clip, idx);
+      if (idx < 0) return;
+      // Draw first frame immediately
+      if (!VS.playing) vsRenderClip(idx, 0);
+      _vsGenThumb(clip, idx);
     };
+
+    // Fallback: if onseeked doesn't fire within 2s, try drawing anyway
+    setTimeout(() => {
+      const idx = VS.clips.indexOf(clip);
+      if (idx < 0 || VS.playing) return;
+      if (clip._vidEl && !VS._lastThumb[idx]) {
+        if (!VS.playing) vsRenderClip(idx, 0);
+        _vsGenThumb(clip, idx);
+      }
+    }, 2000);
+
+    vid.onerror = () => { clip._loading = false; vsToast('❌ Could not load video: ' + file.name); };
     vid.load();
   }
+
   VS.clips.push(clip);
   vsRebuildTimeline();
-  vsToast('✅ Added: ' + file.name.substring(0, 30));
+  // Don't show duplicate "Added" toast for videos — we show "Loading" above
+  if (type === 'img') vsToast('✅ Added: ' + file.name.substring(0, 30));
 }
 
 /* ── timeline ───────────────────────────────────────── */
@@ -233,16 +296,18 @@ function vsRebuildTimeline() {
     div.draggable = true;
     div.innerHTML = `
       <div class="vs-tl-thumb" id="vsThumb${i}">
-        ${clip.type === 'vid' ? '🎬' : '🖼️'}
+        ${clip._loading ? '<span style="animation:tapulse 1s infinite;display:inline-block">⏳</span>' : clip.type === 'vid' ? '🎬' : '🖼️'}
       </div>
-      <div class="vs-tl-label">${_vsShortName(clip.name)} · ${dur.toFixed(1)}s</div>
-      <div class="vs-tl-dur">${vsSpeedLabel(clip.speed)}</div>
-      <div class="vs-tl-reorder">
+      <div class="vs-tl-info">
+        <span class="vs-tl-name">${_vsShortName(clip.name)}</span>
+        <span class="vs-tl-dur">${clip._loading ? 'loading…' : dur.toFixed(1) + 's'}</span>
+      </div>
+      <div class="vs-tl-actions">
         <button onclick="event.stopPropagation();vsMoveClipLeft(${i})" title="Move left">◀</button>
         <button onclick="event.stopPropagation();vsMoveClipRight(${i})" title="Move right">▶</button>
         <button class="del" onclick="event.stopPropagation();vsDeleteClip(${i})" title="Delete">✕</button>
       </div>`;
-    div.onclick = (e) => { if (!e.target.closest('.vs-tl-reorder')) vsSelectClip(i); };
+    div.onclick = (e) => { if (!e.target.closest('.vs-tl-actions')) vsSelectClip(i); };
     // Drag-to-reorder
     div.addEventListener('dragstart', e => {
       e.dataTransfer.effectAllowed = 'move';
@@ -278,38 +343,34 @@ function vsRebuildTimeline() {
 }
 
 function _vsUpdateCanvasHint() {
-  // When no clips, canvas itself shows an upload prompt — show hint overlay too
-  const hint = document.getElementById('vsCanvasUploadHint');
   const wrap = document.getElementById('vsPreviewWrap');
-  if (!hint || !wrap) return;
-  if (!VS.clips.length) {
-    hint.style.opacity = '1';
-    wrap.title = 'Click to add photos/videos';
-  } else {
-    hint.style.opacity = '0';
-    wrap.title = 'Click to add more photos/videos';
-  }
+  if (!wrap) return;
+  wrap.title = VS.clips.length === 0 ? 'Click to add photos/videos' : '';
 }
 
 function _vsShortName(n) { return (n||'clip').replace(/\.[^.]+$/, '').substring(0,12); }
 
 function _vsGenThumb(clip, i) {
-  if (VS._lastThumb[i]) return;
   const _applyThumb = (src) => {
     try {
-      const tc = document.createElement('canvas'); tc.width=60; tc.height=60;
-      tc.getContext('2d').drawImage(src, 0, 0, 60, 60);
+      const tc = document.createElement('canvas'); tc.width=64; tc.height=44;
+      tc.getContext('2d').drawImage(src, 0, 0, 64, 44);
       const el = document.getElementById('vsThumb' + i);
-      if (el) { el.innerHTML=''; const img=document.createElement('img'); img.src=tc.toDataURL(); img.style.cssText='width:100%;height:100%;object-fit:cover;border-radius:4px'; el.appendChild(img); }
+      if (el) {
+        el.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = tc.toDataURL();
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:5px 5px 0 0;display:block';
+        el.appendChild(img);
+      }
       VS._lastThumb[i] = true;
-    } catch(e) { /* tainted or not ready — leave emoji placeholder */ }
+    } catch(e) { /* tainted or not ready */ }
   };
   if (clip._imgEl) {
     _applyThumb(clip._imgEl);
   } else if (clip._vidEl && clip._vidEl.readyState >= 2) {
     _applyThumb(clip._vidEl);
   }
-  // If video not ready yet, it will be drawn via onseeked in vsAddClip
 }
 
 function vsDeleteClip(i) {
@@ -326,6 +387,7 @@ function vsSelectClip(i) {
   vsRebuildTimeline();
   vsRenderClip(i, 0);
   vsPopulateClipControls(i);
+  vsRightTab(0); // auto-switch to Clip tab
 }
 
 function vsPopulateClipControls(i) {
@@ -353,7 +415,9 @@ function vsApplyClipSpeed(val) {
     c.duration = (c.trimEnd || c._vidEl.duration) / c.speed;
   }
   vsRebuildTimeline();
-  document.getElementById('vsSpeedLabel').textContent = vsSpeedLabel(c.speed);
+  // Update both speed label elements (old and new UI)
+  const lbl = document.getElementById('vsSpeedLabel'); if (lbl) lbl.textContent = vsSpeedLabel(c.speed);
+  const val2 = document.getElementById('vsSpeedVal');  if (val2) val2.textContent = parseFloat(val).toFixed(2) + 'x';
 }
 
 function vsSpeedLabel(s) {
@@ -369,15 +433,18 @@ function vsSpeedLabel(s) {
 function vsApplyKenBurns(val) {
   const c = VS.clips[VS.activeClip]; if (!c) return;
   c.kenBurns = val;
+  if (!VS.playing) vsRenderClip(VS.activeClip, 0);
 }
 function vsApplyTransition(val) {
   const c = VS.clips[VS.activeClip]; if (!c) return;
   c.transition = val;
+  if (!VS.playing) vsRenderClip(VS.activeClip, 0);
 }
 function vsApplyClipDuration(val) {
   const c = VS.clips[VS.activeClip]; if (!c || c.type === 'vid') return;
   c.duration = parseFloat(val) || 3;
   vsRebuildTimeline();
+  if (!VS.playing) vsRenderClip(VS.activeClip, 0);
 }
 
 /* ── Crop functionality ──────────────────────────────── */
@@ -446,10 +513,12 @@ function vsResetCrop() {
 function vsApplyClipText(val) {
   const c = VS.clips[VS.activeClip]; if (!c) return;
   c.textOverlay = val;
+  if (!VS.playing) vsRenderClip(VS.activeClip, 0);
 }
 function vsApplyClipTextPos(val) {
   const c = VS.clips[VS.activeClip]; if (!c) return;
   c.textPos = val;
+  if (!VS.playing) vsRenderClip(VS.activeClip, 0);
 }
 
 /* ── render engine ──────────────────────────────────── */
@@ -515,6 +584,22 @@ function vsRenderClip(idx, progress) {
     ctx.filter = 'none';
   } else if (c._vidEl) {
     const vid = c._vidEl;
+    if (vid.readyState < 2) {
+      // Video not ready — draw dark placeholder with name
+      ctx.restore();
+      ctx.fillStyle = '#0d0d1f';
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.fillStyle = 'rgba(124,58,237,0.15)';
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(200,180,255,0.6)';
+      ctx.font = `bold ${Math.round(cv.width*0.045)}px sans-serif`;
+      ctx.fillText('⏳ Loading video…', cv.width/2, cv.height/2 - 16);
+      ctx.font = `${Math.round(cv.width*0.028)}px sans-serif`;
+      ctx.fillStyle = 'rgba(148,163,184,0.5)';
+      ctx.fillText(c.name || '', cv.width/2, cv.height/2 + 24);
+      return;
+    }
     const vw = vid.videoWidth || cv.width, vh = vid.videoHeight || cv.height;
     const crop = c.crop || { x:0, y:0, w:1, h:1 };
     const sx = crop.x * vw, sy = crop.y * vh;
@@ -721,7 +806,7 @@ function vsPlay() {
     });
   }
 
-  document.getElementById('vsPlayBtn').textContent = '⏸️ Pause';
+  document.getElementById('vsPlayBtn').textContent = '⏸';
   _vsRAF();
 
   // Background music track (optional)
@@ -762,7 +847,7 @@ function vsStop() {
   const audEl = document.getElementById('vsAudioPreviewEl');
   if (audEl) audEl.pause();
   VS.clips.forEach(c => { if (c._vidEl) { c._vidEl.pause(); } });
-  document.getElementById('vsPlayBtn').textContent = '▶️ Play';
+  document.getElementById('vsPlayBtn').textContent = '▶';
 }
 
 function vsTogglePlay() { VS.playing ? vsStop() : vsPlay(); }
@@ -870,7 +955,8 @@ function vsFormatTime(s) {
 /* ── presets ─────────────────────────────────────────── */
 function vsSelectPreset(name) {
   VS.preset = name;
-  document.querySelectorAll('.vs-preset-card').forEach(c => c.classList.toggle('active', c.dataset.preset === name));
+  // Support both old (.vs-preset-card) and new (.vs-filter-chip) class names
+  document.querySelectorAll('.vs-preset-card,.vs-filter-chip').forEach(c => c.classList.toggle('active', c.dataset.preset === name));
   const ci = VS.activeClip;
   if (VS.clips[ci]) vsRenderClip(ci, 0);
 }
@@ -1078,7 +1164,7 @@ function vsApplyTemplate(key) {
     if (!c.textOverlay) c.textOverlay = t.defaultText;
     c.textPos = 'bottom';
   });
-  document.querySelectorAll('.vs-template-card').forEach(el => el.classList.toggle('active', el.dataset.tpl === key));
+  document.querySelectorAll('.vs-template-card,.vs-tpl-card').forEach(el => el.classList.toggle('active', el.dataset.tpl === key));
   vsSelectPreset(t.preset);
   vsRebuildTimeline();
   // Refresh the clip controls panel so Ken Burns, transition, speed UI all update
@@ -1089,16 +1175,7 @@ function vsApplyTemplate(key) {
 }
 
 /* ── update export button label on codec change ─────── */
-function vsUpdateExportBtn(codec) {
-  const btn = document.getElementById('vsExportBtn');
-  if (!btn) return;
-  const labels = {
-    h264: '🎬 Export MP4 (H.264)',
-    h265: '🚀 Export MP4 (H.265/HEVC)',
-    webm: '⚡ Export WebM (VP9)',
-  };
-  btn.textContent = labels[codec] || '🎬 Export Video';
-}
+function vsUpdateExportBtn(codec) { _vsUpdateExportBtnLabel(); }
 
 /* ── FFmpeg.wasm instance (lazy-loaded) ─────────────── */
 let _vsFFmpeg = null;
@@ -1454,8 +1531,13 @@ function vsMoveClipRight(i) {
 
 /* ── stats ───────────────────────────────────────────── */
 function vsUpdateStats() {
-  const el = document.getElementById('vsStats'); if (!el) return;
-  el.textContent = `${VS.clips.length} clips · ${vsFormatTime(VS.totalDuration)} · ${VS.aspectRatio}`;
+  // Legacy stat element
+  const el = document.getElementById('vsStats');
+  if (el) el.textContent = `${VS.clips.length} clips · ${vsFormatTime(VS.totalDuration)} · ${VS.aspectRatio}`;
+  // New stat pills in redesigned header
+  const cc = document.getElementById('vsClipCount'); if (cc) cc.textContent = VS.clips.length;
+  const ds = document.getElementById('vsDurStat');   if (ds) ds.textContent = vsFormatTime(VS.totalDuration);
+  const rs = document.getElementById('vsRatioStat'); if (rs) rs.textContent = VS.aspectRatio;
 }
 
 /* ── toast ───────────────────────────────────────────── */
