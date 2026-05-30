@@ -434,15 +434,64 @@ async function callGemini(prompt){
 }
 
 // ── Fetch live prices from server ─────────────────────
+// ── Exchange suffix map ───────────────────────────────
+const SUFFIX_MAP = {NSE:'.NS', BSE:'.BO', NEPSE:'', NYSE:'', NASDAQ:'', CRYPTO:'-USD', FOREX:'=X'};
+
+function buildTicker(sym, market){
+  const sfx = SUFFIX_MAP[market] ?? '';
+  if(market==='CRYPTO') return sym.replace(/-USD$/i,'') + '-USD';
+  if(market==='FOREX')  return sym.replace(/=X$/i,'')   + '=X';
+  return sym + sfx;
+}
+
+// Try local server first; if offline/GitHub Pages, fall back to Yahoo Finance v8 via allorigins proxy
 async function fetchLivePrices(symbols, market){
-  const q = symbols.join(',');
+  // ── Attempt 1: local server ──────────────────────
   try{
-    const res = await fetch(`/api/live-prices?symbols=${encodeURIComponent(q)}&market=${market}`,{signal:AbortSignal.timeout(20000)});
-    if(!res.ok) return null;
-    const data = await res.json();
-    return data.ok ? data.prices : null;
+    const res = await fetch(`/api/live-prices?symbols=${encodeURIComponent(symbols.join(','))}&market=${market}`,
+                            {signal: AbortSignal.timeout(6000)});
+    if(res.ok){
+      const data = await res.json();
+      if(data.ok && Object.keys(data.prices||{}).length > 0) return data.prices;
+    }
+  }catch(e){ console.info('Local server offline, using Yahoo Finance directly.', e.message); }
+
+  // ── Attempt 2: Yahoo Finance v8 via allorigins CORS proxy ──
+  try{
+    const tickers = symbols.map(s => buildTicker(s, market));
+    const joined  = tickers.join(',');
+    const yhUrl   = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(joined)}&fields=regularMarketPrice,regularMarketOpen,regularMarketDayHigh,regularMarketDayLow,regularMarketPreviousClose,regularMarketChange,regularMarketChangePercent,regularMarketVolume`;
+    const proxy   = `https://api.allorigins.win/get?url=${encodeURIComponent(yhUrl)}`;
+
+    const res  = await fetch(proxy, {signal: AbortSignal.timeout(20000)});
+    if(!res.ok) throw new Error('allorigins HTTP '+res.status);
+    const wrap = await res.json();
+    const body = JSON.parse(wrap.contents);
+    const quotes = body?.quoteResponse?.result || [];
+    if(!quotes.length) throw new Error('No quotes returned');
+
+    const prices = {};
+    quotes.forEach((q, i) => {
+      const origSym = symbols[i] || q.symbol;
+      prices[origSym] = {
+        symbol:      origSym,
+        ticker:      q.symbol,
+        price:       q.regularMarketPrice       ?? null,
+        open:        q.regularMarketOpen        ?? null,
+        high:        q.regularMarketDayHigh     ?? null,
+        low:         q.regularMarketDayLow      ?? null,
+        prev_close:  q.regularMarketPreviousClose ?? null,
+        change:      q.regularMarketChange      ?? null,
+        change_pct:  parseFloat((q.regularMarketChangePercent||0).toFixed(2)),
+        volume:      q.regularMarketVolume      ?? null,
+        timestamp:   new Date().toISOString(),
+        source:      'yahoo-direct'
+      };
+    });
+    console.info(`✅ Yahoo Finance direct: ${Object.keys(prices).length} quotes fetched.`);
+    return prices;
   }catch(e){
-    console.warn('Live price fetch failed:', e.message);
+    console.warn('Yahoo Finance direct fetch failed:', e.message);
     return null;
   }
 }
@@ -637,11 +686,12 @@ async function loadSection(style){
     try{
       const liveMap = await fetchLivePrices(symbols, currentMarket);
       const priceCount = liveMap ? Object.values(liveMap).filter(d=>d.price).length : 0;
+      const src = liveMap && Object.values(liveMap)[0]?.source === 'yahoo-direct' ? 'Yahoo Finance' : 'Local Server';
 
       if(!liveMap || priceCount === 0){
         grid.innerHTML=`<div class="stock-loading" style="color:#ffaa00">
-          ⚠️ Live prices unavailable (server may be offline).<br>
-          <small style="color:#888">Add a <strong>Gemini API key</strong> above for AI-powered picks, or ensure <code>server.py</code> is running.</small>
+          ⚠️ Live prices unavailable.<br>
+          <small style="color:#888">Add a <strong>Gemini API key</strong> above for AI-powered picks, or check your internet connection.</small>
         </div>`;
         pfBar.classList.remove('show');
         btn.disabled=false;
@@ -675,7 +725,7 @@ async function loadSection(style){
       }).filter(Boolean).slice(0,10);
 
       renderGrid(picks, style, m.cur||'$', liveMap);
-      pfBar.textContent = `✅ ${priceCount} live prices loaded (no AI). Add API key for full AI-powered picks.`;
+      pfBar.textContent = `✅ ${priceCount} live prices loaded via ${src} (no AI). Add API key for full AI-powered picks.`;
       setTimeout(()=>{pfBar.classList.remove('show');},5000);
 
     }catch(e){
@@ -703,10 +753,11 @@ async function loadSection(style){
 
     const liveMap = await fetchLivePrices(symbols, currentMarket);
     const priceCount = liveMap ? Object.values(liveMap).filter(d=>d.price).length : 0;
+    const src = liveMap && Object.values(liveMap)[0]?.source === 'yahoo-direct' ? 'Yahoo Finance' : 'Local Server';
 
     pfBar.textContent = priceCount > 0
-      ? `✅ Live prices fetched for ${priceCount}/${symbols.length} symbols — running AI analysis…`
-      : `⚠️ Live prices unavailable (server may need restart) — using AI estimates…`;
+      ? `✅ Live prices fetched for ${priceCount}/${symbols.length} symbols via ${src} — running AI analysis…`
+      : `⚠️ Live prices unavailable — using AI estimates…`;
 
     // Step 3: Run full AI analysis with live price context
     grid.innerHTML=`<div class="stock-loading">🔬 Step 3/3 — AI running full analysis with live data for ${m.label}…</div>`;
