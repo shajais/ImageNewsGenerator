@@ -23,6 +23,16 @@ from socketserver import ThreadingMixIn
 # Render injects PORT; fall back to 3000 for local dev
 PORT = int(os.environ.get('PORT', 3000))
 
+# ── Optional: yfinance for live prices ──
+_yfinance_available = False
+try:
+    import yfinance as yf
+    _yfinance_available = True
+    print('✅  yfinance ready — /api/live-prices enabled')
+except ImportError:
+    print('⚠️  yfinance not installed — run: pip install yfinance>=0.2.40')
+
+
 # ── Optional: InsightFace face-swap (only available when pip deps installed) ──
 _faceswap_available = False
 try:
@@ -143,6 +153,117 @@ class Handler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         pathname = parsed.path
         qs = urllib.parse.parse_qs(parsed.query)
+
+        # ── Live prices: /api/live-prices?symbols=RELIANCE.NS,TCS.NS&market=NSE ──
+        if pathname == '/api/live-prices':
+            if not _yfinance_available:
+                err = json.dumps({'error': 'yfinance not installed on server. Run: pip install yfinance>=0.2.40'}).encode()
+                self.send_response(503)
+                self.send_header('Content-Type', 'application/json')
+                self.send_cors()
+                self.end_headers()
+                self.wfile.write(err)
+                return
+
+            symbols_raw  = qs.get('symbols', [''])[0]
+            market       = qs.get('market', ['NSE'])[0].upper()
+
+            if not symbols_raw:
+                err = json.dumps({'error': 'Missing ?symbols= parameter'}).encode()
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.send_cors()
+                self.end_headers()
+                self.wfile.write(err)
+                return
+
+            raw_list = [s.strip() for s in symbols_raw.split(',') if s.strip()]
+
+            # Auto-append exchange suffix based on market
+            SUFFIX_MAP = {
+                'NSE': '.NS', 'BSE': '.BO', 'NEPSE': '',
+                'NYSE': '', 'NASDAQ': '',
+                'CRYPTO': '-USD', 'FOREX': '=X'
+            }
+            suffix = SUFFIX_MAP.get(market, '')
+
+            def _ticker(sym):
+                # Already has suffix → use as-is
+                for known_sfx in ['.NS','.BO','-USD','=X','.L','.T']:
+                    if sym.endswith(known_sfx):
+                        return sym
+                return sym + suffix
+
+            ticker_map = {sym: _ticker(sym) for sym in raw_list}
+            yf_tickers = list(ticker_map.values())
+
+            try:
+                # Download 2-day history; period='1d' sometimes gives empty
+                import datetime
+                data = yf.download(
+                    tickers=yf_tickers,
+                    period='2d',
+                    interval='1d',
+                    group_by='ticker',
+                    auto_adjust=True,
+                    progress=False,
+                    threads=True
+                )
+                results = {}
+                for sym, ticker in ticker_map.items():
+                    try:
+                        if len(yf_tickers) == 1:
+                            df = data
+                        else:
+                            df = data[ticker] if ticker in data.columns.get_level_values(0) else None
+
+                        if df is None or df.empty:
+                            results[sym] = {'error': 'No data'}
+                            continue
+
+                        latest  = df.iloc[-1]
+                        prev    = df.iloc[-2] if len(df) >= 2 else df.iloc[-1]
+                        close   = float(latest['Close'])
+                        prev_cl = float(prev['Close'])
+                        chg     = close - prev_cl
+                        chg_pct = (chg / prev_cl * 100) if prev_cl else 0
+                        vol     = float(latest['Volume']) if 'Volume' in latest else 0
+                        high    = float(latest['High'])   if 'High'   in latest else close
+                        low     = float(latest['Low'])    if 'Low'    in latest else close
+                        open_p  = float(latest['Open'])   if 'Open'   in latest else close
+
+                        results[sym] = {
+                            'symbol':     sym,
+                            'ticker':     ticker,
+                            'price':      round(close, 2),
+                            'open':       round(open_p, 2),
+                            'high':       round(high, 2),
+                            'low':        round(low, 2),
+                            'prev_close': round(prev_cl, 2),
+                            'change':     round(chg, 2),
+                            'change_pct': round(chg_pct, 2),
+                            'volume':     int(vol),
+                            'timestamp':  datetime.datetime.utcnow().isoformat() + 'Z',
+                        }
+                    except Exception as sym_err:
+                        results[sym] = {'error': str(sym_err)}
+
+                payload = json.dumps({'ok': True, 'market': market, 'prices': results}).encode()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(payload)))
+                self.send_header('Cache-Control', 'no-store')
+                self.send_cors()
+                self.end_headers()
+                self.wfile.write(payload)
+            except Exception as e:
+                err = json.dumps({'error': str(e)}).encode()
+                self.send_response(502)
+                self.send_header('Content-Type', 'application/json')
+                self.send_cors()
+                self.end_headers()
+                self.wfile.write(err)
+            return
 
         # ── Proxy: /proxy/fetch?url=... → fetch any external URL (RSS, articles) ──
         if pathname == '/proxy/fetch':

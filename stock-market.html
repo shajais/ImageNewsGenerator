@@ -3,1009 +3,967 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>📈 AI Stock Analyzer — Shashi Creator Studio</title>
+<title>📈 AI Trading Picks — Shashi Creator Studio</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:linear-gradient(135deg,#0f0f1e 0%,#1a1a2e 100%);color:#e0e0e0;font-family:'Segoe UI',sans-serif;min-height:100vh}
 a{text-decoration:none;color:inherit}
 
+/* ── Wide scrollbar ── */
+::-webkit-scrollbar{width:14px;height:14px}
+::-webkit-scrollbar-track{background:rgba(15,15,30,.6);border-radius:7px}
+::-webkit-scrollbar-thumb{background:rgba(0,212,255,.5);border-radius:7px;border:3px solid rgba(15,15,30,.6)}
+::-webkit-scrollbar-thumb:hover{background:rgba(0,212,255,.8)}
+
 /* ── Navbar ── */
-.navbar{position:sticky;top:0;z-index:100;background:rgba(15,15,30,.95);border-bottom:2px solid #00d4ff;padding:0 24px;display:flex;align-items:center;gap:16px;height:56px;backdrop-filter:blur(12px)}
-.nav-logo{font-size:1.2rem;font-weight:700;background:linear-gradient(135deg,#00d4ff,#00ff88);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap}
-.nav-tabs{display:flex;gap:4px;flex:1;overflow-x:auto}
-.nav-tab{padding:6px 14px;border-radius:20px;border:1px solid transparent;cursor:pointer;font-size:.85rem;transition:all .2s;white-space:nowrap;background:transparent;color:#a0a0a0}
-.nav-tab:hover{color:#00d4ff;border-color:rgba(0,212,255,.3)}
-.nav-tab.active{background:linear-gradient(135deg,#00d4ff,#00ff88);color:#0f0f1e;font-weight:600;border-color:transparent}
-.nav-back{margin-left:auto;padding:6px 14px;border-radius:20px;border:1px solid rgba(0,212,255,.4);color:#00d4ff;font-size:.82rem;white-space:nowrap;cursor:pointer;transition:all .2s}
+.navbar{position:sticky;top:0;z-index:200;background:rgba(15,15,30,.97);border-bottom:2px solid #00d4ff;padding:0 24px;display:flex;align-items:center;gap:14px;height:58px;backdrop-filter:blur(14px)}
+.nav-logo{font-size:1.15rem;font-weight:700;background:linear-gradient(135deg,#00d4ff,#00ff88);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap;flex-shrink:0}
+.mkt-tabs{display:flex;gap:4px;flex:1;overflow-x:auto;padding:4px 0}
+.mkt-tab{padding:5px 13px;border-radius:20px;border:1px solid transparent;cursor:pointer;font-size:.82rem;transition:all .2s;white-space:nowrap;background:transparent;color:#a0a0a0}
+.mkt-tab:hover{color:#00d4ff;border-color:rgba(0,212,255,.35)}
+.mkt-tab.active{background:linear-gradient(135deg,#00d4ff,#00ff88);color:#0f0f1e;font-weight:700}
+.nav-back{margin-left:auto;padding:6px 14px;border-radius:20px;border:1px solid rgba(0,212,255,.4);color:#00d4ff;font-size:.82rem;white-space:nowrap;cursor:pointer;transition:all .2s;flex-shrink:0}
 .nav-back:hover{background:rgba(0,212,255,.1)}
 
-/* ── Config bar ── */
-.config-section{padding:16px 24px;background:rgba(26,26,46,.6);border-bottom:1px solid rgba(0,212,255,.15)}
-.config-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:12px}
-.config-row:last-child{margin-bottom:0}
-.config-label{font-size:.78rem;color:#a0a0a0;min-width:60px}
-.api-input{flex:1;min-width:200px;max-width:340px;padding:7px 12px;background:rgba(15,15,30,.8);border:1px solid rgba(0,212,255,.4);border-radius:8px;color:#e0e0e0;font-size:.85rem;outline:none}
+/* ── API Key bar ── */
+.config-bar{padding:10px 24px;background:rgba(26,26,46,.7);border-bottom:1px solid rgba(0,212,255,.12);display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.api-input{flex:1;min-width:200px;max-width:380px;padding:7px 12px;background:rgba(15,15,30,.8);border:1px solid rgba(0,212,255,.4);border-radius:10px;color:#e0e0e0;font-size:.85rem;outline:none}
 .api-input:focus{border-color:#00d4ff;box-shadow:0 0 8px rgba(0,212,255,.3)}
+.config-lbl{font-size:.78rem;color:#a0a0a0;flex-shrink:0}
 
-/* Market tabs */
-.market-tabs{display:flex;flex-wrap:wrap;gap:6px}
-.mkt-tab{padding:5px 12px;border-radius:20px;border:1px solid rgba(0,212,255,.25);cursor:pointer;font-size:.8rem;transition:all .2s;background:transparent;color:#a0a0a0}
-.mkt-tab:hover{border-color:#00d4ff;color:#00d4ff}
-.mkt-tab.active{background:linear-gradient(135deg,rgba(0,212,255,.25),rgba(0,255,136,.15));border-color:#00d4ff;color:#00d4ff;font-weight:600}
+/* ── Live banner ── */
+.live-banner{padding:8px 24px;background:linear-gradient(90deg,rgba(0,255,136,.07),rgba(0,212,255,.04));border-bottom:1px solid rgba(0,255,136,.15);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.live-dot{width:9px;height:9px;border-radius:50%;background:#00ff88;flex-shrink:0;animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,255,136,.7)}50%{box-shadow:0 0 0 6px rgba(0,255,136,0)}}
+.live-text{font-size:.8rem;color:#00ff88;font-weight:700}
+.live-time{font-size:.78rem;color:#a0a0a0}
+.live-price-status{font-size:.76rem;color:#888;flex:1}
+.refresh-all-btn{margin-left:auto;padding:8px 20px;border-radius:10px;border:none;cursor:pointer;background:linear-gradient(135deg,#00d4ff,#00ff88);color:#0f0f1e;font-weight:800;font-size:.85rem;transition:all .2s;box-shadow:0 4px 16px rgba(0,212,255,.3)}
+.refresh-all-btn:hover{transform:scale(1.04);box-shadow:0 6px 24px rgba(0,212,255,.45)}
+.refresh-all-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
 
-/* Pill selectors */
-.pill-group{display:flex;gap:6px;flex-wrap:wrap}
-.pill{padding:4px 12px;border-radius:20px;border:1px solid rgba(0,212,255,.25);cursor:pointer;font-size:.78rem;transition:all .2s;background:transparent;color:#a0a0a0}
-.pill:hover{border-color:#00ff88;color:#00ff88}
-.pill.active{background:rgba(0,255,136,.15);border-color:#00ff88;color:#00ff88;font-weight:600}
+/* ── Disclaimer ── */
+.disclaimer{margin:10px 24px 0;padding:7px 14px;border-radius:8px;background:rgba(255,200,0,.07);border:1px solid rgba(255,200,0,.22);color:#ffc800;font-size:.73rem}
 
-/* Sector chips */
-.sector-bar{padding:10px 24px;display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid rgba(0,212,255,.1)}
-.sector-chip{padding:4px 12px;border-radius:20px;border:1px solid rgba(0,212,255,.2);cursor:pointer;font-size:.75rem;transition:all .2s;background:transparent;color:#888}
-.sector-chip:hover{border-color:#00d4ff;color:#00d4ff;background:rgba(0,212,255,.08)}
-.sector-chip.active{background:rgba(0,212,255,.15);border-color:#00d4ff;color:#00d4ff}
+/* ── Trading section ── */
+.trading-section{margin:18px 24px 0;border-radius:16px;overflow:hidden;border:1px solid rgba(0,212,255,.2)}
+.section-header{padding:15px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.section-header.swing   {background:linear-gradient(135deg,rgba(0,212,255,.12),rgba(0,255,136,.05))}
+.section-header.intraday{background:linear-gradient(135deg,rgba(255,160,0,.12),rgba(255,90,0,.05))}
+.section-header.options {background:linear-gradient(135deg,rgba(200,0,255,.1),rgba(100,0,200,.05))}
+.section-header.longterm{background:linear-gradient(135deg,rgba(0,255,136,.1),rgba(0,180,70,.04))}
+.section-title-wrap h2{font-size:1.05rem;font-weight:700;margin-bottom:3px}
+.section-title-wrap h2.swing   {background:linear-gradient(135deg,#00d4ff,#00ff88);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.section-title-wrap h2.intraday{background:linear-gradient(135deg,#ffa500,#ff6000);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.section-title-wrap h2.options {background:linear-gradient(135deg,#cc00ff,#8800cc);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.section-title-wrap h2.longterm{background:linear-gradient(135deg,#00ff88,#00aa55);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.section-sub{font-size:.76rem;color:#a0a0a0}
+.section-refresh-btn{padding:7px 16px;border-radius:10px;border:1px solid rgba(0,212,255,.4);background:rgba(0,212,255,.08);color:#00d4ff;font-size:.8rem;font-weight:700;cursor:pointer;transition:all .2s}
+.section-refresh-btn:hover{background:rgba(0,212,255,.18);transform:scale(1.03)}
+.section-refresh-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.price-fetch-bar{padding:6px 20px;font-size:.74rem;color:#00d4ff;background:rgba(0,212,255,.04);border-bottom:1px solid rgba(0,212,255,.08);display:none}
+.price-fetch-bar.show{display:block}
+.section-error{margin:0 20px 12px;padding:9px 13px;border-radius:8px;background:rgba(255,50,50,.07);border:1px solid rgba(255,50,50,.28);color:#ff7070;font-size:.8rem;display:none}
 
-/* Disclaimer */
-.disclaimer{margin:12px 24px;padding:8px 14px;border-radius:8px;background:rgba(255,200,0,.08);border:1px solid rgba(255,200,0,.25);color:#ffc800;font-size:.75rem}
+/* ── Stock grid ── */
+.stock-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(285px,1fr));gap:15px;padding:16px 20px;background:rgba(12,12,28,.35)}
+.stock-loading{grid-column:1/-1;text-align:center;padding:40px;color:#a0a0a0;font-size:.88rem}
 
-/* ── Top Picks Hero ── */
-.picks-hero{margin:16px 24px 0;padding:18px 24px;background:linear-gradient(135deg,rgba(0,212,255,.07),rgba(0,255,136,.04));border:2px solid rgba(0,212,255,.3);border-radius:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
-.picks-hero-left h2{font-size:1.2rem;background:linear-gradient(135deg,#00d4ff,#00ff88);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
-.picks-hero-left p{color:#a0a0a0;font-size:.8rem}
-.picks-refresh-btn{padding:10px 22px;border-radius:10px;border:none;cursor:pointer;background:linear-gradient(135deg,#00d4ff,#00ff88);color:#0f0f1e;font-weight:800;font-size:.9rem;transition:all .2s;box-shadow:0 4px 16px rgba(0,212,255,.3);white-space:nowrap}
-.picks-refresh-btn:hover{transform:scale(1.04);box-shadow:0 6px 24px rgba(0,212,255,.45)}
-.picks-refresh-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+/* ── Stock card ── */
+.stock-card{background:linear-gradient(135deg,rgba(0,212,255,.07),rgba(0,255,136,.03));border:1.5px solid rgba(0,212,255,.22);border-radius:12px;padding:15px;cursor:pointer;transition:all .28s;position:relative}
+.stock-card:hover{transform:translateY(-6px);border-color:#00d4ff;box-shadow:0 10px 30px rgba(0,212,255,.2);background:linear-gradient(135deg,rgba(0,212,255,.13),rgba(0,255,136,.07))}
+.card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:9px}
+.card-rank{font-size:.68rem;color:#888;font-weight:700;margin-bottom:2px}
+.card-symbol{font-size:1.25rem;font-weight:800;background:linear-gradient(135deg,#00d4ff,#00ff88);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.card-name{font-size:.7rem;color:#a0a0a0;margin-top:2px;line-height:1.3}
+.card-right{text-align:right}
+.card-price{font-size:1rem;font-weight:700;color:#00ff88}
+.card-price.live{color:#00ff88}
+.card-price.stale{color:#ffc800}
+.card-change{font-size:.78rem;padding:2px 7px;border-radius:20px;display:inline-block;margin-top:3px;font-weight:700}
+.card-change.pos{background:rgba(0,255,136,.18);color:#00ff88}
+.card-change.neg{background:rgba(255,68,68,.18);color:#ff6060}
+.card-change.neu{background:rgba(255,200,0,.18);color:#ffc800}
+.live-badge{font-size:.62rem;padding:1px 5px;background:rgba(0,255,136,.15);color:#00ff88;border-radius:4px;border:1px solid rgba(0,255,136,.3);margin-top:2px;display:inline-block}
+.card-badges{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px}
+.badge{padding:2px 8px;border-radius:10px;font-size:.67rem;font-weight:700;text-transform:uppercase}
+.badge.breakout {background:rgba(0,255,136,.16);color:#00ff88;border:1px solid rgba(0,255,136,.35)}
+.badge.breakdown{background:rgba(255,50,50,.16);color:#ff4444;border:1px solid rgba(255,50,50,.35)}
+.badge.reversal {background:rgba(255,200,0,.16);color:#ffc800;border:1px solid rgba(255,200,0,.35)}
+.badge.momentum {background:rgba(0,150,255,.16);color:#40aaff;border:1px solid rgba(0,150,255,.35)}
+.badge.value    {background:rgba(180,0,255,.16);color:#cc66ff;border:1px solid rgba(180,0,255,.35)}
+.badge.buy {background:rgba(0,255,136,.16);color:#00ff88;border:1px solid rgba(0,255,136,.35)}
+.badge.sell{background:rgba(255,50,50,.16);color:#ff4444;border:1px solid rgba(255,50,50,.35)}
+.badge.hold{background:rgba(255,200,0,.16);color:#ffc800;border:1px solid rgba(255,200,0,.35)}
+.card-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:9px}
+.stat-item{display:flex;flex-direction:column}
+.stat-lbl{font-size:.65rem;color:#777;text-transform:uppercase;letter-spacing:.3px;margin-bottom:1px}
+.stat-val{font-size:.82rem;font-weight:600;color:#00d4ff}
+.stat-val.g{color:#00ff88}
+.stat-val.r{color:#ff6060}
+.conf-wrap{margin-bottom:8px}
+.conf-lbl{font-size:.66rem;color:#888;margin-bottom:2px}
+.conf-bar{height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}
+.conf-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#00d4ff,#00ff88);transition:width .6s ease}
+.card-why{font-size:.71rem;color:#a0a0a0;line-height:1.5;background:rgba(255,255,255,.03);padding:6px 9px;border-radius:7px;margin-bottom:9px}
+.card-meta{font-size:.66rem;color:#666;margin-bottom:8px}
+.analyze-btn{width:100%;padding:9px;border:none;border-radius:8px;background:linear-gradient(135deg,#00d4ff,#00ff88);color:#0f0f1e;font-weight:800;font-size:.8rem;cursor:pointer;transition:all .2s}
+.analyze-btn:hover{filter:brightness(1.12);box-shadow:0 4px 16px rgba(0,212,255,.4)}
 
-/* ── Style Filter ── */
-.style-filter-bar{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;padding:16px 24px 0}
-.style-filter-btn{padding:8px 20px;border-radius:8px;border:1px solid rgba(0,212,255,.3);background:transparent;color:#a0a0a0;cursor:pointer;font-size:.85rem;transition:all .2s}
-.style-filter-btn:hover{border-color:#00ff88;color:#00ff88}
-.style-filter-btn.active{border-color:#00ff88;background:rgba(0,255,136,.15);color:#00ff88;font-weight:700}
+/* ── Modal ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;backdrop-filter:blur(5px)}
+.modal-overlay.open{display:flex}
+.modal-box{background:linear-gradient(135deg,#0d0d1f,#131328);border:2px solid rgba(0,212,255,.4);border-radius:18px;width:100%;max-width:840px;overflow:hidden;position:relative;margin:auto;animation:mIn .28s ease}
+@keyframes mIn{from{transform:scale(.93) translateY(22px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
+.modal-close{position:absolute;top:13px;right:15px;font-size:1.5rem;cursor:pointer;color:#888;transition:color .2s;z-index:10;background:none;border:none;line-height:1;padding:2px 6px}
+.modal-close:hover{color:#ff5555}
+.modal-header{padding:20px 24px 14px;border-bottom:1px solid rgba(0,212,255,.14);padding-right:50px}
+.modal-sym{font-size:1.9rem;font-weight:800;background:linear-gradient(135deg,#00d4ff,#00ff88);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.modal-name{color:#a0a0a0;font-size:.84rem;margin-top:2px}
+.modal-price-row{display:flex;gap:16px;align-items:center;margin-top:9px;flex-wrap:wrap}
+.modal-price-live{font-size:1.5rem;font-weight:800;color:#00ff88}
+.modal-price-change{font-size:.9rem;font-weight:700;padding:3px 10px;border-radius:20px}
+.modal-price-change.pos{background:rgba(0,255,136,.18);color:#00ff88}
+.modal-price-change.neg{background:rgba(255,80,80,.18);color:#ff6060}
+.modal-ohlc{display:flex;gap:12px;flex-wrap:wrap;font-size:.75rem;color:#888;margin-top:4px}
+.modal-ohlc span strong{color:#a0c4c4}
+.modal-time{font-size:.72rem;color:#666}
+.modal-loading{padding:60px 24px;text-align:center;color:#00d4ff;font-style:italic}
+.modal-body{padding:20px 24px;display:none}
+.modal-body.show{display:block}
+.modal-error-box{padding:18px 24px;color:#ff7070;font-size:.84rem;display:none}
 
-/* ── Setup legend ── */
-.setup-legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:16px 24px 0;padding:16px;background:rgba(26,26,46,.5);border:1px solid rgba(0,212,255,.15);border-radius:12px}
-.legend-item{display:flex;align-items:flex-start;gap:10px;padding:10px;border-radius:8px}
-.legend-item.breakout{border-left:3px solid #00ff88}
-.legend-item.breakdown{border-left:3px solid #ff3232}
-.legend-item.reversal{border-left:3px solid #ffc800}
-.legend-item.trend-reversal{border-left:3px solid #ff69b4}
-.legend-icon{font-size:1.4rem;flex-shrink:0}
-.legend-content h4{font-size:.8rem;font-weight:700;color:#e0e0e0;margin-bottom:3px}
-.legend-content p{font-size:.72rem;color:#888;line-height:1.4}
+/* composite */
+.composite-wrap{display:flex;align-items:center;gap:20px;background:rgba(0,0,0,.3);border-radius:14px;padding:15px 20px;margin-bottom:18px;flex-wrap:wrap}
+.score-circle{width:88px;height:88px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;font-weight:800;border:4px solid}
+.score-circle.sb{border-color:#00ff88;background:rgba(0,255,136,.12)}
+.score-circle.b {border-color:#00d4ff;background:rgba(0,212,255,.1)}
+.score-circle.h {border-color:#ffc800;background:rgba(255,200,0,.1)}
+.score-circle.s {border-color:#ff6060;background:rgba(255,96,96,.1)}
+.score-num{font-size:1.6rem;line-height:1}
+.score-lbl{font-size:.58rem;text-transform:uppercase;letter-spacing:.07em;margin-top:2px}
+.comp-right{flex:1;min-width:200px}
+.comp-signal{font-size:1.2rem;font-weight:800;margin-bottom:4px}
+.comp-conf{font-size:.8rem;color:#a0a0a0;margin-bottom:7px}
+.comp-rec{font-size:.82rem;color:#d0d0d0;line-height:1.6}
 
-/* ── Momentum section ── */
-.high-momentum-section{margin:16px 24px 0;padding:20px;background:rgba(26,26,46,.4);border:1px solid rgba(0,212,255,.2);border-radius:14px}
-.momentum-section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.momentum-section-header h3{margin:0;font-size:1rem;color:#00d4ff}
-.momentum-section-sub{color:#a0a0a0;font-size:.8rem;margin-bottom:16px}
-.momentum-cards-container{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
-.momentum-loading{text-align:center;color:#a0a0a0;padding:40px;font-style:italic}
+/* dims */
+.dims-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:11px;margin-bottom:18px}
+.dim-card{background:rgba(26,26,46,.6);border:1px solid rgba(0,212,255,.14);border-radius:10px;padding:12px}
+.dim-hdr{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.dim-icon{font-size:1rem}
+.dim-ttl{font-size:.77rem;font-weight:700;color:#e0e0e0}
+.dim-sig{margin-left:auto;padding:2px 7px;border-radius:7px;font-size:.63rem;font-weight:700;text-transform:uppercase}
+.dim-sig.bullish {background:rgba(0,255,136,.18);color:#00ff88}
+.dim-sig.bearish {background:rgba(255,80,80,.18);color:#ff6060}
+.dim-sig.neutral {background:rgba(255,200,0,.18);color:#ffc800}
+.dim-sig.moderate{background:rgba(0,150,255,.18);color:#40aaff}
+.dim-score-lbl{font-size:.67rem;color:#888;margin-bottom:3px}
+.dim-bar{height:5px;background:rgba(255,255,255,.09);border-radius:3px;overflow:hidden;margin-bottom:7px}
+.dim-fill{height:100%;border-radius:3px;transition:width .8s ease}
+.dim-sum{font-size:.72rem;color:#a0a0a0;line-height:1.5;margin-bottom:4px}
+.dim-det{font-size:.68rem;color:#666;line-height:1.5}
 
-/* ── Momentum card (matches StockTrading exactly) ── */
-.momentum-card{background:linear-gradient(135deg,rgba(0,212,255,.1),rgba(0,255,136,.05));border:2px solid #00d4ff;border-radius:10px;padding:1.5rem;cursor:default;transition:all .3s;box-shadow:0 4px 15px rgba(0,212,255,.15)}
-.momentum-card:hover{transform:translateY(-8px);background:linear-gradient(135deg,rgba(0,212,255,.15),rgba(0,255,136,.1));box-shadow:0 8px 25px rgba(0,212,255,.25);border-color:#00ff88}
-.momentum-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;border-bottom:1px solid rgba(0,212,255,.2);padding-bottom:.75rem}
-.momentum-card-symbol{font-size:1.4rem;font-weight:700;background:linear-gradient(135deg,#00d4ff,#00ff88);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.momentum-card-name{font-size:.75rem;color:#a0a0a0;margin-top:2px}
-.momentum-card-right{text-align:right}
-.momentum-card-price{font-size:1.1rem;font-weight:600;color:#00ff88}
-.momentum-card-change{font-size:.85rem;font-weight:600;padding:.25rem .75rem;border-radius:20px;background:rgba(0,255,136,.2);color:#00ff88;display:inline-block;margin-top:4px}
-.momentum-card-change.negative{background:rgba(255,68,68,.2);color:#ff8888}
-.momentum-card-body{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem;font-size:.9rem}
-.momentum-card-stat{display:flex;flex-direction:column}
-.momentum-card-stat-label{color:#a0a0a0;font-size:.78rem;font-weight:500;margin-bottom:.25rem;text-transform:uppercase;letter-spacing:.5px}
-.momentum-card-stat-value{color:#00d4ff;font-weight:600;font-size:.95rem}
-.momentum-card-stat-value.green{color:#00ff88}
-.momentum-card-stat-value.red{color:#ff4444}
-.momentum-badge{display:inline-block;padding:.25rem .75rem;border-radius:20px;font-size:.75rem;font-weight:700;text-transform:uppercase;margin-bottom:.75rem}
-.momentum-badge.breakout{background:rgba(0,255,136,.2);color:#00ff88;border:1px solid #00ff88}
-.momentum-badge.breakdown{background:rgba(255,50,50,.2);color:#ff4444;border:1px solid #ff4444}
-.momentum-badge.reversal{background:rgba(255,200,0,.2);color:#ffc800;border:1px solid #ffc800}
-.momentum-badge.trend-reversal{background:rgba(255,105,180,.2);color:#ff69b4;border:1px solid #ff69b4}
-.momentum-badge.buy{background:rgba(0,255,136,.2);color:#00ff88;border:1px solid #00ff88}
-.momentum-badge.sell{background:rgba(255,50,50,.2);color:#ff4444;border:1px solid #ff4444}
-.momentum-card-reason{font-size:.75rem;color:#a0a0a0;line-height:1.5;padding:.6rem .5rem;background:rgba(255,255,255,.03);border-radius:6px;margin-top:.5rem}
-.momentum-card-footer{display:flex;gap:.75rem;margin-top:1rem;padding-top:1rem;border-top:1px solid rgba(0,212,255,.2)}
-.momentum-card-btn{flex:1;padding:.65rem 1rem;border:1px solid #00d4ff;background:rgba(0,212,255,.1);color:#00d4ff;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600;transition:all .2s}
-.momentum-card-btn:hover{background:#00d4ff;color:#0f0f1e}
-.rank-badge{font-size:.72rem;color:#888;font-weight:700;text-align:right}
+/* plan */
+.trade-plan{background:linear-gradient(135deg,rgba(0,212,255,.06),rgba(0,255,136,.02));border:1px solid rgba(0,212,255,.22);border-radius:12px;padding:15px 18px;margin-bottom:18px}
+.trade-plan h3{font-size:.88rem;font-weight:700;color:#00d4ff;margin-bottom:12px}
+.plan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px}
+.plan-item{display:flex;flex-direction:column;gap:2px}
+.plan-lbl{font-size:.66rem;color:#888;text-transform:uppercase;letter-spacing:.04em}
+.plan-val{font-size:.9rem;font-weight:700;color:#00ff88}
+.plan-val.r{color:#ff6060}
+.plan-val.c{color:#00d4ff}
 
-.picks-error{margin:12px 24px;padding:12px 16px;border-radius:8px;background:rgba(255,50,50,.08);border:1px solid rgba(255,50,50,.3);color:#ff6060;font-size:.85rem;display:none}
-
-/* ── Tool cards grid ── */
-.tools-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:20px;padding:20px 24px}
-.tool-card{background:rgba(26,26,46,.5);border:1px solid rgba(0,212,255,.2);border-radius:14px;overflow:hidden;transition:all .25s}
-.tool-card:hover{border-color:#00d4ff;box-shadow:0 0 24px rgba(0,212,255,.12);transform:translateY(-2px)}
-.card-header{padding:14px 18px;background:linear-gradient(135deg,rgba(0,212,255,.08),rgba(0,255,136,.04));border-bottom:1px solid rgba(0,212,255,.15);display:flex;align-items:flex-start;gap:12px}
-.card-icon{font-size:1.6rem;flex-shrink:0}
-.card-title{font-size:.95rem;font-weight:600;color:#00d4ff;margin-bottom:2px}
-.card-sub{font-size:.75rem;color:#888}
-.card-body{padding:14px 18px;display:flex;flex-direction:column;gap:10px}
-.tool-input{width:100%;padding:8px 12px;background:rgba(15,15,30,.7);border:1px solid rgba(0,212,255,.3);border-radius:8px;color:#e0e0e0;font-size:.85rem;outline:none;resize:vertical;min-height:36px}
-.tool-input:focus{border-color:#00d4ff;box-shadow:0 0 6px rgba(0,212,255,.2)}
-.run-btn{padding:8px 18px;border-radius:8px;border:none;cursor:pointer;background:linear-gradient(135deg,#00d4ff,#00ff88);color:#0f0f1e;font-weight:700;font-size:.85rem;transition:all .2s;align-self:flex-start}
-.run-btn:hover{opacity:.85;transform:scale(1.03)}
-.run-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
-
-/* Result box */
-.result-box{display:none;margin-top:8px;padding:12px;background:rgba(15,15,30,.6);border:1px solid rgba(0,212,255,.2);border-radius:8px;font-size:.82rem;line-height:1.6;color:#d0d0d0;white-space:pre-wrap;max-height:320px;overflow-y:auto}
-.result-box.show{display:block}
-.result-box.loading{color:#00d4ff;font-style:italic}
-.result-box.error{border-color:#ff3232;color:#ff6060}
-
-/* ── Metric rows ── */
-.metric-item{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05)}
-.metric-label{color:#a0a0a0;font-size:.8rem}
-.metric-value{color:#00ff88;font-size:.8rem;font-weight:600}
-
-/* signal badge */
-.signal-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:.75rem;font-weight:700;text-transform:uppercase}
-.signal-badge.buy{background:rgba(0,255,136,.2);color:#00ff88;border:1px solid #00ff88}
-.signal-badge.sell{background:rgba(255,50,50,.2);color:#ff3232;border:1px solid #ff3232}
-.signal-badge.hold{background:rgba(255,200,0,.2);color:#ffc800;border:1px solid #ffc800}
-
-/* Scrollbar */
-::-webkit-scrollbar{width:6px;height:6px}
-::-webkit-scrollbar-track{background:rgba(15,15,30,.4)}
-::-webkit-scrollbar-thumb{background:#00d4ff33;border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:#00d4ff66}
+/* reasons */
+.reasons-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:6px}
+.reason-box{background:rgba(26,26,46,.5);border-radius:10px;padding:13px}
+.reason-box h4{font-size:.78rem;font-weight:700;margin-bottom:9px}
+.reason-box.bull h4{color:#00ff88}
+.reason-box.bear h4{color:#ff6060}
+.reason-list{list-style:none;display:flex;flex-direction:column;gap:6px}
+.reason-list li{font-size:.74rem;color:#a0a0a0;line-height:1.5;display:flex;gap:6px;align-items:flex-start}
 
 @media(max-width:600px){
-  .tools-grid{grid-template-columns:1fr;padding:12px}
-  .config-section{padding:12px}
-  .navbar{padding:0 12px}
+  .navbar,.config-bar,.live-banner,.disclaimer{padding-left:12px;padding-right:12px}
+  .trading-section{margin:12px 10px 0}
+  .stock-grid{padding:10px;gap:10px;grid-template-columns:1fr}
+  .modal-overlay{padding:8px}
+  .reasons-grid{grid-template-columns:1fr}
+  .dims-grid{grid-template-columns:1fr}
 }
 </style>
 </head>
 <body>
 
-<!-- ── Navbar ── -->
+<!-- Navbar -->
 <nav class="navbar">
-  <div class="nav-logo">📈 AI Stock Analyzer</div>
-  <div class="nav-tabs">
-    <div class="nav-tab active" onclick="switchSection('stocks')">📊 Stocks</div>
-    <div class="nav-tab" onclick="switchSection('crypto')">₿ Crypto</div>
-    <div class="nav-tab" onclick="switchSection('portfolio')">💼 Portfolio</div>
-    <div class="nav-tab" onclick="switchSection('watchlist')">👁 Watchlist</div>
+  <div class="nav-logo">📈 AI Trading Picks</div>
+  <div class="mkt-tabs" id="mktTabs">
+    <div class="mkt-tab active" data-mkt="NSE"    onclick="setMarket(this)">NSE 🇮🇳</div>
+    <div class="mkt-tab"        data-mkt="BSE"    onclick="setMarket(this)">BSE 🇮🇳</div>
+    <div class="mkt-tab"        data-mkt="NEPSE"  onclick="setMarket(this)">NEPSE 🇳🇵</div>
+    <div class="mkt-tab"        data-mkt="NYSE"   onclick="setMarket(this)">NYSE 🇺🇸</div>
+    <div class="mkt-tab"        data-mkt="NASDAQ" onclick="setMarket(this)">NASDAQ 🇺🇸</div>
+    <div class="mkt-tab"        data-mkt="CRYPTO" onclick="setMarket(this)">Crypto ₿</div>
+    <div class="mkt-tab"        data-mkt="FOREX"  onclick="setMarket(this)">Forex 💱</div>
   </div>
   <a href="index.html" class="nav-back">← Studio</a>
 </nav>
 
-<!-- ── Config Section ── -->
-<div class="config-section">
-  <div class="config-row">
-    <span class="config-label">🔑 API Key</span>
-    <input class="api-input" id="apiKey" type="password" placeholder="Gemini API key (saved locally)"/>
-    <span style="font-size:.75rem;color:#888">Free key: <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#00d4ff">aistudio.google.com</a></span>
-  </div>
-  <div class="config-row">
-    <span class="config-label">🌏 Market</span>
-    <div class="market-tabs" id="marketTabs">
-      <div class="mkt-tab active" data-mkt="NSE" onclick="setMarket(this)">NSE 🇮🇳</div>
-      <div class="mkt-tab" data-mkt="BSE" onclick="setMarket(this)">BSE 🇮🇳</div>
-      <div class="mkt-tab" data-mkt="NEPSE" onclick="setMarket(this)">NEPSE 🇳🇵</div>
-      <div class="mkt-tab" data-mkt="NYSE" onclick="setMarket(this)">NYSE 🇺🇸</div>
-      <div class="mkt-tab" data-mkt="NASDAQ" onclick="setMarket(this)">NASDAQ 🇺🇸</div>
-      <div class="mkt-tab" data-mkt="CRYPTO" onclick="setMarket(this)">Crypto ₿</div>
-      <div class="mkt-tab" data-mkt="FOREX" onclick="setMarket(this)">Forex 💱</div>
+<!-- API Key -->
+<div class="config-bar">
+  <span class="config-lbl">🔑 Gemini Key</span>
+  <input class="api-input" id="apiKey" type="password" placeholder="Enter Gemini API key (stored locally)"/>
+  <span style="font-size:.75rem;color:#888">Free at <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#00d4ff">aistudio.google.com</a></span>
+</div>
+
+<!-- Live banner -->
+<div class="live-banner">
+  <span class="live-dot"></span>
+  <span class="live-text">LIVE</span>
+  <span class="live-time" id="liveClock"></span>
+  <span class="live-price-status" id="priceStatus">Real-time prices via yfinance • AI analysis via Gemini</span>
+  <button class="refresh-all-btn" id="refreshAllBtn" onclick="loadAll()">🔄 Refresh All Live Picks</button>
+</div>
+
+<div class="disclaimer">⚠️ Educational use only — not financial advice. Prices fetched live from market data. AI analysis via Gemini. Always do your own research.</div>
+
+<!-- 4 Trading Sections -->
+<div class="trading-section" id="sec-swing">
+  <div class="section-header swing">
+    <div class="section-title-wrap">
+      <h2 class="swing">🌊 Swing Trading — Top 10 Live Picks</h2>
+      <div class="section-sub">7–15 day momentum trades • Live prices • Best entry, exit & SL</div>
     </div>
+    <button class="section-refresh-btn" id="btn-swing" onclick="loadSection('swing')">🔄 Refresh</button>
   </div>
-  <div class="config-row">
-    <span class="config-label">⚠️ Risk</span>
-    <div class="pill-group" id="riskPills">
-      <div class="pill" data-v="Safe" onclick="setPill('risk',this)">🛡 Safe</div>
-      <div class="pill active" data-v="Moderate" onclick="setPill('risk',this)">⚖ Moderate</div>
-      <div class="pill" data-v="Aggressive" onclick="setPill('risk',this)">🚀 Aggressive</div>
+  <div class="price-fetch-bar" id="pfbar-swing"></div>
+  <div class="section-error"  id="err-swing"></div>
+  <div class="stock-grid"     id="grid-swing"><div class="stock-loading">Click <strong>Refresh All Live Picks</strong> to load live picks →</div></div>
+</div>
+
+<div class="trading-section" id="sec-intraday">
+  <div class="section-header intraday">
+    <div class="section-title-wrap">
+      <h2 class="intraday">⚡ Intraday Trading — Top 10 Live Picks</h2>
+      <div class="section-sub">Same-day momentum • Live prices • Precise entry/SL for today</div>
     </div>
-    <span class="config-label" style="margin-left:16px">⏱ Horizon</span>
-    <div class="pill-group" id="horizonPills">
-      <div class="pill" data-v="Intraday" onclick="setPill('horizon',this)">⚡ Intraday</div>
-      <div class="pill active" data-v="Swing" onclick="setPill('horizon',this)">🌊 Swing</div>
-      <div class="pill" data-v="Positional" onclick="setPill('horizon',this)">📅 Positional</div>
-      <div class="pill" data-v="Long-term" onclick="setPill('horizon',this)">🏔 Long-term</div>
+    <button class="section-refresh-btn" id="btn-intraday" onclick="loadSection('intraday')">🔄 Refresh</button>
+  </div>
+  <div class="price-fetch-bar" id="pfbar-intraday"></div>
+  <div class="section-error"  id="err-intraday"></div>
+  <div class="stock-grid"     id="grid-intraday"><div class="stock-loading">Click <strong>Refresh All Live Picks</strong> to load live picks →</div></div>
+</div>
+
+<div class="trading-section" id="sec-options">
+  <div class="section-header options">
+    <div class="section-title-wrap">
+      <h2 class="options">🎯 Options &amp; Derivatives — Top 10 Live Picks</h2>
+      <div class="section-sub">Weekly/monthly option setups • Live prices • IV plays &amp; expiry strategies</div>
     </div>
+    <button class="section-refresh-btn" id="btn-options" onclick="loadSection('options')">🔄 Refresh</button>
   </div>
+  <div class="price-fetch-bar" id="pfbar-options"></div>
+  <div class="section-error"  id="err-options"></div>
+  <div class="stock-grid"     id="grid-options"><div class="stock-loading">Click <strong>Refresh All Live Picks</strong> to load live picks →</div></div>
 </div>
 
-<!-- ── Sector chips ── -->
-<div class="sector-bar" id="sectorBar"></div>
-
-<!-- ── Disclaimer ── -->
-<div class="disclaimer">⚠️ For educational purposes only. Not financial advice. Always do your own research before investing.</div>
-
-<!-- ── TOP PICKS HEADER ── -->
-<div class="picks-hero">
-  <div class="picks-hero-left">
-    <h2 id="picksTitle">🏆 Top 10 High-Potential Picks — NSE 🇮🇳</h2>
-    <p id="picksSubtitle">AI-powered momentum scan · Swing · Moderate risk · Auto-updated on market change</p>
-  </div>
-  <button class="picks-refresh-btn" id="picksRefreshBtn" onclick="runTopPicks()">🔄 Refresh Picks</button>
-</div>
-
-<!-- ── Trading Style Filter ── -->
-<div class="style-filter-bar">
-  <button class="style-filter-btn active" id="styleBtn-swing" onclick="switchStyle('swing')">🌊 Swing Trading</button>
-  <button class="style-filter-btn" id="styleBtn-intraday" onclick="switchStyle('intraday')">⚡ Intraday</button>
-  <button class="style-filter-btn" id="styleBtn-positional" onclick="switchStyle('positional')">📅 Positional</button>
-  <button class="style-filter-btn" id="styleBtn-longterm" onclick="switchStyle('longterm')">🏔 Long-term</button>
-</div>
-
-<!-- ── Setup Legend ── -->
-<div class="setup-legend">
-  <div class="legend-item breakout"><div class="legend-icon">🚀</div><div class="legend-content"><h4>BREAKOUT</h4><p>Breaking above resistance with volume. High reward potential.</p></div></div>
-  <div class="legend-item breakdown"><div class="legend-icon">📉</div><div class="legend-content"><h4>BREAKDOWN</h4><p>Breaking below support. Potential for larger downside move.</p></div></div>
-  <div class="legend-item reversal"><div class="legend-icon">🔄</div><div class="legend-content"><h4>REVERSAL</h4><p>Bouncing from support. Good for mean-reversion trades.</p></div></div>
-  <div class="legend-item trend-reversal"><div class="legend-icon">⚠️</div><div class="legend-content"><h4>TREND REVERSAL</h4><p>Major direction change. High risk/reward opportunity.</p></div></div>
-</div>
-
-<!-- ── Picks Error ── -->
-<div class="picks-error" id="picksError"></div>
-
-<!-- ── Momentum Cards Section ── -->
-<div class="high-momentum-section" id="picksSection">
-  <div class="momentum-section-header">
-    <h3 id="picksSectionTitle">🌊 Swing Trading Picks (7–15 Days)</h3>
-  </div>
-  <p class="momentum-section-sub" id="picksSectionSub">High momentum stocks optimized for swing trading with 7–15 day holding periods</p>
-  <div class="momentum-cards-container" id="picksGrid">
-    <div class="momentum-loading">⏳ Enter your Gemini API key above, then picks will load automatically…</div>
-  </div>
-</div>
-
-<!-- ── Tool Cards ── -->
-
-<!-- ── Tool Cards ── -->
-<div class="tools-grid" id="toolsGrid">
-
-  <!-- 1. Deep Stock Analysis -->
-  <div class="tool-card">
-    <div class="card-header">
-      <div class="card-icon">🔬</div>
-      <div><div class="card-title">Single Stock Deep Analysis</div><div class="card-sub">Technical + Fundamental + Sentiment + Trade Plan</div></div>
+<div class="trading-section" id="sec-longterm" style="margin-bottom:36px">
+  <div class="section-header longterm">
+    <div class="section-title-wrap">
+      <h2 class="longterm">🏔 Long-term Investment — Top 10 Live Picks</h2>
+      <div class="section-sub">1–2 year wealth creation • Live prices • Undervalued quality stocks</div>
     </div>
-    <div class="card-body">
-      <input class="tool-input" id="stk_sym" placeholder="Stock symbol or name (e.g. RELIANCE, TCS, AAPL)"/>
-      <input class="tool-input" id="stk_price" placeholder="Current price (optional, e.g. 2850)" style="margin-top:6px"/>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
-        <button class="run-btn" onclick="smRun('stk')">🔬 Full Analysis</button>
-        <button class="run-btn" style="background:linear-gradient(135deg,#00d4ff,#0080ff)" onclick="smRun('tech')">📊 Technical Only</button>
-        <button class="run-btn" style="background:linear-gradient(135deg,#00ff88,#00b060)" onclick="smRun('fund')">📈 Fundamental Only</button>
+    <button class="section-refresh-btn" id="btn-longterm" onclick="loadSection('longterm')">🔄 Refresh</button>
+  </div>
+  <div class="price-fetch-bar" id="pfbar-longterm"></div>
+  <div class="section-error"  id="err-longterm"></div>
+  <div class="stock-grid"     id="grid-longterm"><div class="stock-loading">Click <strong>Refresh All Live Picks</strong> to load live picks →</div></div>
+</div>
+
+<!-- Deep Analysis Modal -->
+<div class="modal-overlay" id="analysisModal" onclick="overlayClick(event)">
+  <div class="modal-box" id="modalBox">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-header">
+      <div class="modal-sym"  id="mSym">—</div>
+      <div class="modal-name" id="mName">—</div>
+      <div class="modal-price-row">
+        <span class="modal-price-live" id="mPrice">—</span>
+        <span class="modal-price-change" id="mChange"></span>
       </div>
-      <div class="result-box" id="stk_res"></div>
-      <div class="result-box" id="tech_res"></div>
-      <div class="result-box" id="fund_res"></div>
+      <div class="modal-ohlc" id="mOHLC"></div>
+      <div class="modal-time" id="mTime"></div>
+    </div>
+    <div class="modal-loading" id="mLoading">
+      <div style="font-size:2rem;margin-bottom:12px">🔬</div>
+      <div style="color:#00d4ff;font-size:.95rem;margin-bottom:6px">Fetching live price + running 8-dimension analysis…</div>
+      <div style="color:#888;font-size:.78rem">Technical · Price Action · Fundamental · News · Social · Market · Smart Money · Risk</div>
+      <div style="margin-top:18px;height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;max-width:300px;margin-inline:auto">
+        <div id="mProgress" style="height:100%;width:0%;background:linear-gradient(90deg,#00d4ff,#00ff88);transition:width 20s linear;border-radius:2px"></div>
+      </div>
+    </div>
+    <div class="modal-error-box" id="mError"></div>
+    <div class="modal-body" id="mBody">
+      <div class="composite-wrap">
+        <div class="score-circle" id="mScoreCircle"><span class="score-num" id="mScoreNum">—</span><span class="score-lbl">/ 100</span></div>
+        <div class="comp-right">
+          <div class="comp-signal" id="mSignal">—</div>
+          <div class="comp-conf"   id="mConf">—</div>
+          <div class="comp-rec"    id="mRec">—</div>
+        </div>
+      </div>
+      <div class="dims-grid"   id="mDims"></div>
+      <div class="trade-plan">
+        <h3>🎯 Recommended Trading Plan</h3>
+        <div class="plan-grid" id="mPlan"></div>
+      </div>
+      <div class="reasons-grid">
+        <div class="reason-box bull"><h4>✅ Key Reasons to Trade</h4><ul class="reason-list" id="mReasons"></ul></div>
+        <div class="reason-box bear"><h4>⚠️ Key Risks</h4><ul class="reason-list" id="mRisks"></ul></div>
+      </div>
     </div>
   </div>
-
-  <!-- 2. Market Sentiment -->
-  <div class="tool-card">
-    <div class="card-header">
-      <div class="card-icon">🌡️</div>
-      <div><div class="card-title">Market Sentiment Analysis</div><div class="card-sub">Overall market mood with breakdown by sector</div></div>
-    </div>
-    <div class="card-body">
-      <input class="tool-input" id="sent_q" placeholder="Optional: focus topic (e.g. IT sector, FII flows, Budget)"/>
-      <button class="run-btn" onclick="smRun('sent')">🌡️ Gauge Sentiment</button>
-      <div class="result-box" id="sent_res"></div>
-    </div>
-  </div>
-
-  <!-- 3. Portfolio Analyzer -->
-  <div class="tool-card">
-    <div class="card-header">
-      <div class="card-icon">💼</div>
-      <div><div class="card-title">Portfolio Analyzer</div><div class="card-sub">Health check, diversification & rebalancing advice</div></div>
-    </div>
-    <div class="card-body">
-      <textarea class="tool-input" id="port_list" rows="3" placeholder="List your holdings (e.g. RELIANCE 30%, INFY 20%, HDFC 15%, TATA 35%)"></textarea>
-      <button class="run-btn" onclick="smRun('port')">💼 Analyze Portfolio</button>
-      <div class="result-box" id="port_res"></div>
-    </div>
-  </div>
-
-  <!-- 4. Buy/Sell Screener -->
-  <div class="tool-card">
-    <div class="card-header">
-      <div class="card-icon">🎯</div>
-      <div><div class="card-title">Buy / Sell Signal Screener</div><div class="card-sub">Quick signals for a list of stocks</div></div>
-    </div>
-    <div class="card-body">
-      <input class="tool-input" id="scr_list" placeholder="Comma-separated symbols (e.g. TCS, WIPRO, INFY, HCL)"/>
-      <button class="run-btn" onclick="smRun('scr')">🎯 Screen Signals</button>
-      <div class="result-box" id="scr_res"></div>
-    </div>
-  </div>
-
-  <!-- 5. Trade Planner -->
-  <div class="tool-card">
-    <div class="card-header">
-      <div class="card-icon">📐</div>
-      <div><div class="card-title">Trade Entry / Exit / SL Planner</div><div class="card-sub">Precise entry zones, targets & stop-loss with position sizing</div></div>
-    </div>
-    <div class="card-body">
-      <input class="tool-input" id="tp_sym" placeholder="Stock symbol (e.g. NIFTY, BANKNIFTY, RELIANCE)"/>
-      <input class="tool-input" id="tp_capital" placeholder="Capital to deploy (e.g. 50000)" style="margin-top:6px"/>
-      <button class="run-btn" onclick="smRun('tp')">📐 Plan Trade</button>
-      <div class="result-box" id="tp_res"></div>
-    </div>
-  </div>
-
-  <!-- 6. News & Macro Impact -->
-  <div class="tool-card">
-    <div class="card-header">
-      <div class="card-icon">📰</div>
-      <div><div class="card-title">News & Macro Impact</div><div class="card-sub">How current events affect the market</div></div>
-    </div>
-    <div class="card-body">
-      <input class="tool-input" id="news_q" placeholder="News topic or stock (e.g. RBI rate cut, Adani, US Fed)"/>
-      <button class="run-btn" onclick="smRun('news')">📰 Analyze Impact</button>
-      <div class="result-box" id="news_res"></div>
-    </div>
-  </div>
-
-  <!-- 7. Social Sentiment -->
-  <div class="tool-card">
-    <div class="card-header">
-      <div class="card-icon">📱</div>
-      <div><div class="card-title">Social Sentiment Scanner</div><div class="card-sub">Retail mood from Twitter/Reddit/Telegram signals</div></div>
-    </div>
-    <div class="card-body">
-      <input class="tool-input" id="social_sym" placeholder="Stock or topic (e.g. TATAMOTORS, Nifty, Bitcoin)"/>
-      <button class="run-btn" onclick="smRun('social')">📱 Scan Social Buzz</button>
-      <div class="result-box" id="social_res"></div>
-    </div>
-  </div>
-
-  <!-- 8. Strategy Builder -->
-  <div class="tool-card">
-    <div class="card-header">
-      <div class="card-icon">🗺️</div>
-      <div><div class="card-title">Investment Strategy Builder</div><div class="card-sub">Custom strategy matching your goals & risk profile</div></div>
-    </div>
-    <div class="card-body">
-      <input class="tool-input" id="strat_goal" placeholder="Your goal (e.g. wealth creation, monthly income, child education)"/>
-      <input class="tool-input" id="strat_amount" placeholder="Monthly investment amount (e.g. 10000)" style="margin-top:6px"/>
-      <button class="run-btn" onclick="smRun('strat')">🗺️ Build Strategy</button>
-      <div class="result-box" id="strat_res"></div>
-    </div>
-  </div>
-
 </div>
 
 <script>
-// ── Market configs ──
+// ── Market configs ──────────────────────────────────────
 const MARKETS = {
-  NSE:    { label:'NSE India', currency:'₹', idx:'NIFTY 50', sectors:['Banking','IT','Auto','Pharma','FMCG','Metal','Energy','Realty','Infra','Media'] },
-  BSE:    { label:'BSE India', currency:'₹', idx:'SENSEX',   sectors:['Banking','IT','Auto','Pharma','FMCG','Metal','Energy','Realty','Infra','Telecom'] },
-  NEPSE:  { label:'NEPSE Nepal', currency:'Rs', idx:'NEPSE Index', sectors:['Banking','Hydropower','Insurance','Finance','Hotels','Manufacturing','Microfinance','Others'] },
-  NYSE:   { label:'NYSE US',  currency:'$', idx:'Dow Jones',  sectors:['Finance','Healthcare','Energy','Consumer','Industrials','Materials','Utilities','Real Estate'] },
-  NASDAQ: { label:'NASDAQ US', currency:'$', idx:'NASDAQ Composite', sectors:['Technology','Biotech','Consumer Tech','Semiconductors','Cloud','AI','EV','Fintech'] },
-  CRYPTO: { label:'Crypto',  currency:'$', idx:'Total Market Cap', sectors:['Bitcoin','Ethereum','DeFi','Layer1','Layer2','GameFi','NFT','Stablecoins'] },
-  FOREX:  { label:'Forex',   currency:'',  idx:'DXY',         sectors:['USD Pairs','EUR Pairs','GBP Pairs','JPY Pairs','AUD Pairs','Emerging Markets','Commodities FX'] }
+  NSE:    { label:'NSE India',     cur:'₹',  idx:'NIFTY 50',         suffix:'.NS',  sectors:['Banking','IT','Auto','Pharma','FMCG','Metal','Energy','Realty'] },
+  BSE:    { label:'BSE India',     cur:'₹',  idx:'SENSEX',           suffix:'.BO',  sectors:['Banking','IT','Auto','Pharma','FMCG','Metal','Energy','Infra'] },
+  NEPSE:  { label:'NEPSE Nepal',   cur:'Rs', idx:'NEPSE Index',      suffix:'',     sectors:['Banking','Hydropower','Insurance','Finance','Hotels'] },
+  NYSE:   { label:'NYSE US',       cur:'$',  idx:'Dow Jones',        suffix:'',     sectors:['Finance','Healthcare','Energy','Consumer','Industrials'] },
+  NASDAQ: { label:'NASDAQ US',     cur:'$',  idx:'NASDAQ Composite', suffix:'',     sectors:['Technology','Biotech','Semiconductors','Cloud','AI','EV'] },
+  CRYPTO: { label:'Crypto Global', cur:'$',  idx:'Total Market Cap', suffix:'-USD', sectors:['Bitcoin','Ethereum','DeFi','Layer1','Layer2','GameFi'] },
+  FOREX:  { label:'Forex Global',  cur:'',   idx:'DXY',              suffix:'=X',   sectors:['USD Pairs','EUR Pairs','GBP Pairs','JPY Pairs','AUD Pairs'] }
 };
 
-let currentMarket = localStorage.getItem('sm_market') || 'NSE';
-let currentRisk    = localStorage.getItem('sm_risk')   || 'Moderate';
-let currentHorizon = localStorage.getItem('sm_horizon')|| 'Swing';
-let currentSector  = '';
-
-// ── Init ──
-window.onload = () => {
-  const k = localStorage.getItem('ghp_gemini_key');
-  if (k) document.getElementById('apiKey').value = k;
-  document.getElementById('apiKey').addEventListener('change', e => {
-    localStorage.setItem('ghp_gemini_key', e.target.value.trim());
-    runTopPicks();
-  });
-
-  // Restore market tab
-  document.querySelectorAll('.mkt-tab').forEach(t => {
-    if (t.dataset.mkt === currentMarket) t.classList.add('active');
-    else t.classList.remove('active');
-  });
-  // Restore risk/horizon pills
-  restorePill('riskPills', currentRisk);
-  restorePill('horizonPills', currentHorizon);
-  renderSectors();
-  document.getElementById('picksMktLabel') && (document.getElementById('picksMktLabel').textContent = currentMarket);
-  runTopPicks();
+const STYLE_META = {
+  swing:    { icon:'🌊', label:'Swing Trading',          horizon:'7–15 days',    criteria:'momentum breakouts, volume surge, RSI pullbacks, trend continuation, swing support/resistance' },
+  intraday: { icon:'⚡', label:'Intraday Trading',        horizon:'same day',     criteria:'opening range breakouts, high relative volume today, pre-market movers, news catalysts, tight spreads' },
+  options:  { icon:'🎯', label:'Options & Derivatives',  horizon:'1–4 weeks',    criteria:'high implied volatility, upcoming earnings/events, option chain build-up, gamma plays, weekly expiry candidates' },
+  longterm: { icon:'🏔', label:'Long-term Investment',   horizon:'12–24 months', criteria:'strong revenue growth, low debt, wide moat, sector tailwinds, undervalued vs intrinsic value, consistent cash flow' }
 };
 
-function restorePill(groupId, val) {
-  document.querySelectorAll(`#${groupId} .pill`).forEach(p => {
-    p.classList.toggle('active', p.dataset.v === val);
-  });
+// ── Fallback stock lists when AI is unavailable ───────
+const FALLBACK_SYMBOLS = {
+  NSE:    ['RELIANCE','TCS','HDFCBANK','INFY','ICICIBANK','HINDUNILVR','SBIN','BHARTIARTL','ITC','AXISBANK',
+           'WIPRO','KOTAKBANK','LT','BAJFINANCE','NTPC','POWERGRID','TATASTEEL','MARUTI','SUNPHARMA','ADANIENT'],
+  BSE:    ['RELIANCE','TCS','HDFCBANK','INFY','ICICIBANK','HINDUNILVR','SBIN','BHARTIARTL','ITC','AXISBANK',
+           'WIPRO','KOTAKBANK','LT','BAJFINANCE','NTPC','TATASTEEL','MARUTI','SUNPHARMA','ADANIENT','ULTRACEMCO'],
+  NEPSE:  ['NABIL','NICA','SCB','EBL','HBL','KBL','PCBL','NIMB','SBI','MBL',
+           'CHCL','BPCL','NHPC','RURU','API','SJCL','KPCL','UMHL','GHL','HIDCL'],
+  NYSE:   ['JPM','BAC','WFC','GS','MS','JNJ','PFE','MRK','XOM','CVX',
+           'WMT','HD','MCD','KO','PG','T','VZ','BA','CAT','GE'],
+  NASDAQ: ['AAPL','MSFT','GOOGL','AMZN','NVDA','META','TSLA','AVGO','AMD','INTC',
+           'NFLX','ADBE','PYPL','QCOM','TXN','MU','LRCX','KLAC','AMAT','ASML'],
+  CRYPTO: ['BTC','ETH','BNB','SOL','XRP','ADA','AVAX','DOT','LINK','MATIC',
+           'DOGE','SHIB','UNI','LTC','ATOM','NEAR','FTM','ARB','OP','INJ'],
+  FOREX:  ['EURUSD','GBPUSD','USDJPY','USDCHF','AUDUSD','USDCAD','NZDUSD','EURGBP','EURJPY','GBPJPY',
+           'XAUUSD','XAGUSD','USDMXN','USDINR','USDSGD','USDKRW','EURCHF','AUDNZD','CADJPY','GBPCAD']
+};
+
+// Pick 10 from fallback list based on style (vary by style for diversity)
+function getFallbackSymbols(style){
+  const list = FALLBACK_SYMBOLS[currentMarket] || FALLBACK_SYMBOLS.NSE;
+  const offsets = {swing:0, intraday:5, options:10, longterm:2};
+  const start = offsets[style] || 0;
+  const result = [];
+  for(let i=0;i<10;i++) result.push(list[(start+i)%list.length]);
+  return result;
 }
 
-// ── Market switch ──
-function setMarket(el) {
+let currentMarket = localStorage.getItem('sm_mkt') || 'NSE';
+
+const mkt      = () => MARKETS[currentMarket] || MARKETS.NSE;
+const getKey   = () => document.getElementById('apiKey').value.trim() || localStorage.getItem('ghp_gemini_key') || '';
+const nowStr   = () => new Date().toLocaleString('en-IN',{weekday:'short',year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
+const fmtPrice = (p, cur) => p != null ? `${cur}${Number(p).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
+
+// ── Clock ──────────────────────────────────────────────
+function tickClock(){ const e=document.getElementById('liveClock'); if(e) e.textContent='⏰ '+nowStr(); }
+tickClock(); setInterval(tickClock,30000);
+
+// ── Init ──────────────────────────────────────────────
+window.onload = () => {
+  const k = localStorage.getItem('ghp_gemini_key');
+  if(k) document.getElementById('apiKey').value = k;
+  document.getElementById('apiKey').addEventListener('change', e => localStorage.setItem('ghp_gemini_key', e.target.value.trim()));
+  document.querySelectorAll('.mkt-tab').forEach(t => t.classList.toggle('active', t.dataset.mkt === currentMarket));
+};
+
+// ── Market switch ─────────────────────────────────────
+function setMarket(el){
   document.querySelectorAll('.mkt-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   currentMarket = el.dataset.mkt;
-  localStorage.setItem('sm_market', currentMarket);
-  currentSector = '';
-  renderSectors();
-  document.getElementById('picksMktLabel') && (document.getElementById('picksMktLabel').textContent = currentMarket);
-  runTopPicks();
+  localStorage.setItem('sm_mkt', currentMarket);
+  ['swing','intraday','options','longterm'].forEach(s => {
+    document.getElementById('grid-'+s).innerHTML = '<div class="stock-loading">Market changed to <strong>'+mkt().label+'</strong> — click Refresh to load live picks</div>';
+    document.getElementById('err-'+s).style.display = 'none';
+    document.getElementById('pfbar-'+s).classList.remove('show');
+  });
 }
 
-function renderSectors() {
-  const bar = document.getElementById('sectorBar');
-  const sectors = MARKETS[currentMarket]?.sectors || [];
-  bar.innerHTML = '<span style="font-size:.75rem;color:#888;margin-right:4px">Sector:</span>' +
-    sectors.map(s => `<div class="sector-chip${s===currentSector?' active':''}" onclick="setSector(this,'${s}')">${s}</div>`).join('');
-}
-
-function setSector(el, s) {
-  currentSector = currentSector === s ? '' : s;
-  renderSectors();
-}
-
-// ── Pill selector ──
-function setPill(type, el) {
-  const groupId = type === 'risk' ? 'riskPills' : 'horizonPills';
-  document.querySelectorAll(`#${groupId} .pill`).forEach(p => p.classList.remove('active'));
-  el.classList.add('active');
-  if (type === 'risk') { currentRisk = el.dataset.v; localStorage.setItem('sm_risk', currentRisk); }
-  else { currentHorizon = el.dataset.v; localStorage.setItem('sm_horizon', currentHorizon); }
-}
-
-// ── Nav section switch ──
-function switchSection(s) {
-  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-  event.target.classList.add('active');
-}
-
-// ── Helpers ──
-const getMarket   = () => MARKETS[currentMarket]?.label || currentMarket;
-const getCurrency = () => MARKETS[currentMarket]?.currency || '';
-const getIndex    = () => MARKETS[currentMarket]?.idx || '';
-const getRisk     = () => currentRisk;
-const getHorizon  = () => currentHorizon;
-const getSector   = () => currentSector || 'general market';
-const getApiKey   = () => document.getElementById('apiKey').value.trim() || localStorage.getItem('ghp_gemini_key') || '';
-
-async function callGemini(prompt) {
-  const key = getApiKey();
-  if (!key) throw new Error('Please enter your Gemini API key above.');
-
-  // Model fallback chain — try each until one works
-  const MODELS = [
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-8b',
-    'gemini-1.0-pro',
-  ];
-
+// ── Gemini call ───────────────────────────────────────
+async function callGemini(prompt){
+  const key = getKey();
+  if(!key) throw new Error('Please enter your Gemini API key.');
+  const MODELS = ['gemini-2.0-flash','gemini-1.5-flash','gemini-1.5-flash-8b','gemini-1.0-pro'];
   let lastErr = null;
-  for (const model of MODELS) {
-    try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+  for(const model of MODELS){
+    try{
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
       });
-      if (!res.ok) {
-        const e = await res.json();
-        const msg = e.error?.message || `HTTP ${res.status}`;
-        // Quota / rate-limit → try next model
-        if (res.status === 429 || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('rate')) {
-          lastErr = new Error(`[${model}] Quota exceeded — trying next model…`);
-          continue;
-        }
+      if(!res.ok){
+        const e=await res.json(); const msg=e.error?.message||`HTTP ${res.status}`;
+        if(res.status===429||msg.toLowerCase().includes('quota')){lastErr=new Error(msg);continue;}
         throw new Error(msg);
       }
-      const data = await res.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) throw new Error('Empty response from ' + model);
-      return text; // ✅ success
-    } catch (e) {
-      if (e.message?.includes('trying next model')) { lastErr = e; continue; }
-      throw e; // non-quota error — propagate immediately
+      const d=await res.json(); const t=d.candidates?.[0]?.content?.parts?.[0]?.text;
+      if(!t) throw new Error('Empty response from '+model);
+      return t;
+    }catch(e){
+      if(e.message?.includes('quota')||e.message?.includes('rate')||e.message?.includes('429')){lastErr=e;continue;}
+      throw e;
     }
   }
-  // All models exhausted
-  throw new Error('All Gemini models are over quota. Please wait a minute and try again, or check your API plan at https://ai.dev/rate-limit');
+  throw new Error('All Gemini models quota exceeded. Wait a minute and retry.');
 }
 
-function showResult(id, text, isError) {
-  const el = document.getElementById(id);
-  el.className = 'result-box show' + (isError ? ' error' : '');
-  el.textContent = text;
-}
-
-// ── Prompt builders ──
-const PROMPTS = {
-  stk: () => {
-    const sym = document.getElementById('stk_sym').value.trim();
-    const price = document.getElementById('stk_price').value.trim();
-    if (!sym) throw new Error('Please enter a stock symbol.');
-    return `You are a senior ${getMarket()} equity analyst with deep expertise in both technical and fundamental analysis. Analyze ${sym}${price ? ` (current price: ${getCurrency()}${price})` : ''} for a ${getRisk()} risk ${getHorizon()} trader. Use your training data to provide the most recent known information. Do NOT say you cannot provide analysis — give your best assessment with available knowledge.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 SECTION 1: TECHNICAL ANALYSIS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Trend: (Primary trend — Uptrend/Downtrend/Sideways, with timeframe)
-• Moving Averages: (50 DMA vs 200 DMA position, Golden/Death cross status)
-• RSI (14): (value estimate and interpretation — overbought/oversold/neutral)
-• MACD: (Signal — bullish crossover / bearish crossover / divergence)
-• Volume: (Recent volume trend vs average — accumulation or distribution)
-• Support Levels: (2 key support zones in ${getCurrency()})
-• Resistance Levels: (2 key resistance zones in ${getCurrency()})
-• Chart Pattern: (Any visible pattern — flag, cup, wedge, breakout, consolidation)
-• Momentum: (Bullish / Bearish / Neutral with reasoning)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📈 SECTION 2: FUNDAMENTAL ANALYSIS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• P/E Ratio: (vs industry average — expensive/fair/cheap)
-• EPS: (Earnings Per Share — growth trend YoY)
-• Revenue Growth: (YoY % — accelerating/decelerating)
-• Net Profit Margin: (% and trend)
-• Debt-to-Equity: (ratio and risk level)
-• ROE / ROCE: (Return metrics vs sector)
-• Promoter Holding: (% and any recent changes — for Indian stocks)
-• FII/DII Activity: (recent buying/selling trend)
-• Dividend Yield: (if applicable)
-• Valuation Verdict: (Overvalued / Fairly Valued / Undervalued)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎯 SECTION 3: TRADE RECOMMENDATION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Signal: BUY / SELL / HOLD / ACCUMULATE / AVOID
-• Confidence: X% (Technical: X% | Fundamental: X%)
-• Entry Zone: ${getCurrency()}___  to  ${getCurrency()}___
-• Target 1: ${getCurrency()}___  (+__%)
-• Target 2: ${getCurrency()}___  (+__%)
-• Stop-Loss: ${getCurrency()}___  (-__%)
-• Horizon: ${getHorizon()} | Risk: ${getRisk()}
-
-⚠️ KEY RISKS: List 3 specific risks for this stock right now.
-Market context: ${getMarket()}, ${getSector()} sector.`;
-  },
-
-  tech: () => {
-    const sym = document.getElementById('stk_sym').value.trim();
-    const price = document.getElementById('stk_price').value.trim();
-    if (!sym) throw new Error('Please enter a stock symbol.');
-    return `You are a professional technical analyst specializing in ${getMarket()} stocks. Perform a deep technical analysis of ${sym}${price ? ` (current price: ${getCurrency()}${price})` : ''}. Use your training knowledge — do NOT refuse or say you lack real-time data. Give your best analysis.
-
-DEEP TECHNICAL ANALYSIS — ${sym} on ${getMarket()}
-═══════════════════════════════════
-
-1. TREND STRUCTURE
-   • Primary Trend (Weekly): Uptrend / Downtrend / Sideways
-   • Secondary Trend (Daily): 
-   • Price vs 20/50/200 DMA: (above/below each)
-   • EMA Ribbon Status: (bullish stack / bearish stack / mixed)
-
-2. MOMENTUM INDICATORS
-   • RSI (14-day): value ~___ → (Overbought >70 / Oversold <30 / Neutral)
-   • RSI Divergence: (any bullish/bearish divergence)
-   • MACD (12,26,9): Signal line cross status, histogram trend
-   • Stochastic: (K/D values, overbought/oversold)
-   • ADX: (trend strength — strong >25, weak <20)
-
-3. VOLUME ANALYSIS
-   • Volume trend: (rising/falling vs 20-day avg)
-   • OBV (On Balance Volume): (confirming or diverging from price)
-   • Volume on up days vs down days
-   • Any unusual volume spikes (accumulation/distribution signal)
-
-4. SUPPORT & RESISTANCE MAP
-   • Strong Support 1: ${getCurrency()}___  (reason)
-   • Strong Support 2: ${getCurrency()}___  (reason)
-   • Key Resistance 1: ${getCurrency()}___  (reason)
-   • Key Resistance 2: ${getCurrency()}___  (reason)
-   • Pivot Point (approx): ${getCurrency()}___
-
-5. CHART PATTERNS
-   • Current Pattern: (name and stage — forming/breakout/failed)
-   • Pattern Target: ${getCurrency()}___
-   • Breakout Level to watch: ${getCurrency()}___
-   • Breakdown Risk Level: ${getCurrency()}___
-
-6. CANDLESTICK SIGNALS
-   • Recent significant candle patterns (Doji, Engulfing, Hammer etc.)
-
-7. TECHNICAL VERDICT
-   • Overall Technical Score: ___/10
-   • Signal: STRONG BUY / BUY / NEUTRAL / SELL / STRONG SELL
-   • For ${getHorizon()} ${getRisk()} trader:
-     Entry: ${getCurrency()}___  | Target: ${getCurrency()}___  | SL: ${getCurrency()}___`;
-  },
-
-  fund: () => {
-    const sym = document.getElementById('stk_sym').value.trim();
-    if (!sym) throw new Error('Please enter a stock symbol.');
-    return `You are a CFA-level fundamental analyst specializing in ${getMarket()} equities. Provide a thorough fundamental analysis of ${sym}. Use your training knowledge — give actual known numbers and estimates. Do NOT say you cannot provide this.
-
-FUNDAMENTAL ANALYSIS REPORT — ${sym}
-═══════════════════════════════════
-
-1. BUSINESS OVERVIEW
-   • Sector & Industry: 
-   • Core Business Model:
-   • Key Revenue Segments:
-   • Market Position: (market share, moat, competitive edge)
-
-2. FINANCIAL HEALTH (most recent known data)
-   • Revenue: ${getCurrency()}___  (YoY growth: __%)
-   • Net Profit: ${getCurrency()}___  (margin: __%)
-   • EBITDA Margin: ___%
-   • Free Cash Flow: Positive / Negative / trend
-   • Cash & Equivalents: ${getCurrency()}___
-   • Total Debt: ${getCurrency()}___
-   • Debt/Equity Ratio: ___
-
-3. VALUATION METRICS
-   • P/E Ratio: ___  (Industry avg: ___)  → Expensive / Fair / Cheap
-   • PEG Ratio: ___  (growth-adjusted valuation)
-   • P/B Ratio: ___  (vs book value)
-   • EV/EBITDA: ___
-   • Dividend Yield: ___%  (Payout ratio: __%)
-   • Intrinsic Value estimate (DCF/peer-based): ${getCurrency()}___
-
-4. GROWTH ANALYSIS
-   • Revenue CAGR (3-year): ___%
-   • EPS Growth (YoY): ___%
-   • Guidance / Management outlook:
-   • Upcoming catalysts (product launches, expansion, capex):
-   • Headwinds to growth:
-
-5. MANAGEMENT & GOVERNANCE
-   • Promoter Holding: ___%  (increasing/stable/decreasing)
-   • FII Holding: ___%
-   • DII Holding: ___%
-   • Management quality: (key strengths/concerns)
-   • Recent major corporate actions:
-
-6. SECTOR & MACRO CONTEXT
-   • Industry tailwinds for ${getMarket()}:
-   • Regulatory environment:
-   • Key sector competitors:
-   • ${sym} vs peers valuation comparison:
-
-7. FUNDAMENTAL VERDICT
-   • Fundamental Score: ___/10
-   • Valuation: Overvalued / Fairly Valued / Undervalued
-   • Investment Thesis: (2-3 key reasons to own/avoid)
-   • Suitable for: ${getRisk()} risk, ${getHorizon()} investor
-   • Target Price (12-month): ${getCurrency()}___`;
-  },
-
-  sent: () => {
-    const q = document.getElementById('sent_q').value.trim();
-    return `You are a ${getMarket()} market sentiment analyst. Analyze the current overall market sentiment for ${getMarket()} (${getIndex()}).
-${q ? `Special focus: ${q}` : ''}
-
-Cover:
-1. 🌡️ OVERALL SENTIMENT — Bullish/Bearish/Neutral with score (1-10)
-2. 📊 SENTIMENT BREAKDOWN — By sector (${MARKETS[currentMarket]?.sectors?.slice(0,5).join(', ')})
-3. 🏦 INSTITUTIONAL FLOWS — FII/DII/Foreign investor activity
-4. 📰 KEY MACRO FACTORS — Top 3 factors driving sentiment
-5. ⚡ MARKET BREADTH — Advance/Decline signals
-6. 🔮 OUTLOOK — 1-week and 1-month sentiment projection`;
-  },
-
-  port: () => {
-    const list = document.getElementById('port_list').value.trim();
-    if (!list) throw new Error('Please enter your portfolio holdings.');
-    return `You are a portfolio manager for ${getMarket()}. Analyze this portfolio: ${list}
-
-Provide:
-1. 💼 PORTFOLIO HEALTH SCORE — Overall score out of 10
-2. 📊 DIVERSIFICATION ANALYSIS — Sector/stock concentration risks
-3. ⚖️ RISK ASSESSMENT — Portfolio risk level vs ${getRisk()} target
-4. 🔄 REBALANCING SUGGESTIONS — What to add/reduce/exit
-5. 📈 PERFORMANCE OUTLOOK — Expected portfolio performance for ${getHorizon()} horizon
-6. 🆕 ADD TO WATCHLIST — 2-3 stocks to consider adding for better balance
-Currency: ${getCurrency()}`;
-  },
-
-  scr: () => {
-    const list = document.getElementById('scr_list').value.trim();
-    if (!list) throw new Error('Please enter stock symbols to screen.');
-    return `You are a ${getMarket()} technical screener. Quickly screen these stocks: ${list}
-
-For each stock provide a one-line signal table:
-| Symbol | Signal | Strength | Entry Zone | Target | Stop-Loss | Reason |
-
-Signal: BUY / SELL / HOLD / WATCH
-Risk profile: ${getRisk()} | Horizon: ${getHorizon()} | Market: ${getMarket()}
-Currency: ${getCurrency()}
-
-After the table, highlight the TOP PICK with brief rationale.`;
-  },
-
-  tp: () => {
-    const sym = document.getElementById('tp_sym').value.trim();
-    const cap = document.getElementById('tp_capital').value.trim();
-    if (!sym) throw new Error('Please enter a stock symbol.');
-    return `You are a professional trade planner for ${getMarket()}. Create a detailed trade plan for ${sym}.
-${cap ? `Capital available: ${getCurrency()}${cap}` : ''}
-
-Provide:
-1. 📐 ENTRY STRATEGY
-   • Ideal entry zone (${getCurrency()})
-   • Entry triggers to watch
-   • Candle/volume confirmation needed
-
-2. 🎯 PROFIT TARGETS
-   • Target 1 (conservative): ${getCurrency()} — % gain
-   • Target 2 (moderate): ${getCurrency()} — % gain  
-   • Target 3 (aggressive): ${getCurrency()} — % gain
-
-3. 🛡️ STOP LOSS
-   • Hard stop-loss: ${getCurrency()}
-   • Trailing stop strategy
-
-4. 💰 POSITION SIZING${cap ? ` (for ${getCurrency()}${cap} capital)` : ''}
-   • Recommended position size
-   • Max risk per trade (${getRisk()} profile)
-   • Risk-Reward ratio
-
-5. ⏱️ TRADE MANAGEMENT — ${getHorizon()} horizon
-   • When to add / average
-   • Exit strategy if trade goes wrong`;
-  },
-
-  news: () => {
-    const q = document.getElementById('news_q').value.trim();
-    if (!q) throw new Error('Please enter a news topic or stock.');
-    return `You are a ${getMarket()} macro analyst. Analyze the market impact of: "${q}"
-
-Provide:
-1. 📰 EVENT SUMMARY — What happened and why it matters
-2. 📊 DIRECT MARKET IMPACT — Effect on ${getMarket()} / ${getIndex()}
-3. 🏭 SECTOR IMPACT — Which sectors benefit / suffer and why
-4. 📈 STOCKS TO WATCH — Top 3-5 stocks most affected (bullish & bearish)
-5. ⏱️ TIMELINE — Short-term (1-7 days) vs medium-term (1-3 months) impact
-6. 🔮 TRADER STRATEGY — How ${getRisk()} risk ${getHorizon()} traders should position
-Currency: ${getCurrency()}`;
-  },
-
-  social: () => {
-    const sym = document.getElementById('social_sym').value.trim();
-    if (!sym) throw new Error('Please enter a stock or topic.');
-    return `You are a social sentiment analyst for ${getMarket()}. Analyze the retail/social media sentiment for: ${sym}
-
-Based on typical social patterns, provide:
-1. 📱 SOCIAL SENTIMENT SCORE — Bullish/Bearish/Neutral (1-10)
-2. 🐦 TWITTER/X SIGNALS — Trending hashtags, influencer sentiment
-3. 💬 REDDIT/FORUMS — Retail investor discussion themes
-4. 📲 TELEGRAM/WHATSAPP GROUPS — Typical retail buzz signals
-5. 🆚 SMART vs RETAIL — Divergence between institutional and retail sentiment
-6. ⚠️ CONTRARIAN SIGNAL — Is the crowd too bullish/bearish? What does it mean?
-7. 🎯 TRADING IMPLICATION — For ${getRisk()} risk ${getHorizon()} trader on ${getMarket()}`;
-  },
-
-  strat: () => {
-    const goal = document.getElementById('strat_goal').value.trim();
-    const amount = document.getElementById('strat_amount').value.trim();
-    if (!goal) throw new Error('Please enter your investment goal.');
-    return `You are a certified financial planner for ${getMarket()} investors. Build a personalized investment strategy.
-
-Investor Profile:
-- Goal: ${goal}
-- Monthly investment: ${amount ? getCurrency() + amount : 'Not specified'}
-- Risk tolerance: ${getRisk()}
-- Investment horizon: ${getHorizon()}
-- Market preference: ${getMarket()}
-
-Create a complete strategy:
-1. 🗺️ STRATEGY OVERVIEW — Type of strategy (SIP/Lump sum/Value/Growth/Dividend etc.)
-2. 📊 ASSET ALLOCATION — % split across equity/debt/gold/alternatives
-3. 🏭 SECTOR ALLOCATION — Top sectors to focus on in ${getMarket()}
-4. 📋 STOCK/FUND SELECTION — Specific recommendations (5-8 instruments)
-5. 🔄 REVIEW FREQUENCY — When to rebalance
-6. 📈 EXPECTED RETURNS — Realistic return expectations
-7. ⚠️ RISK MANAGEMENT — Key risks and mitigation
-All amounts in ${getCurrency() || 'local currency'}.`;
+// ── Fetch live prices from server ─────────────────────
+async function fetchLivePrices(symbols, market){
+  const q = symbols.join(',');
+  try{
+    const res = await fetch(`/api/live-prices?symbols=${encodeURIComponent(q)}&market=${market}`,{signal:AbortSignal.timeout(20000)});
+    if(!res.ok) return null;
+    const data = await res.json();
+    return data.ok ? data.prices : null;
+  }catch(e){
+    console.warn('Live price fetch failed:', e.message);
+    return null;
   }
-};
-
-// ── Trading style ──
-let currentStyle = 'swing';
-const STYLE_META = {
-  swing:      { label:'🌊 Swing Trading Picks (7–15 Days)',      sub:'High momentum stocks optimized for swing trading with 7–15 day holding periods',   horizon:'7-15 days' },
-  intraday:   { label:'⚡ Intraday Trading Picks (15min–2hr)',   sub:'High momentum stocks for quick intraday scalping (15 minutes to 2 hours)',          horizon:'Same day' },
-  positional: { label:'📅 Positional Picks (1–3 Months)',        sub:'Strong fundamental + technical setups for 1–3 month holding period',               horizon:'1-3 months' },
-  longterm:   { label:'🏔 Long-term Investment Picks (1+ Year)', sub:'Quality stocks with strong business moat for long-term wealth creation (1+ year)', horizon:'1+ year' }
-};
-
-function switchStyle(style) {
-  currentStyle = style;
-  document.querySelectorAll('.style-filter-btn').forEach(b => b.classList.remove('active'));
-  const btn = document.getElementById('styleBtn-' + style);
-  if (btn) btn.classList.add('active');
-  runTopPicks();
 }
 
-async function runTopPicks() {
-  const btn    = document.getElementById('picksRefreshBtn');
-  const grid   = document.getElementById('picksGrid');
-  const errEl  = document.getElementById('picksError');
-  const meta   = STYLE_META[currentStyle] || STYLE_META.swing;
-  const mkt    = MARKETS[currentMarket];
-  const isCrypto = currentMarket === 'CRYPTO';
-  const isForex  = currentMarket === 'FOREX';
-  const assetWord = isCrypto ? 'cryptocurrencies' : isForex ? 'currency pairs' : 'stocks';
+// ── Build picks prompt (AI first decides which 10 stocks, then we fetch prices) ──
+function buildPicksPrompt(style, priceMap){
+  const m = mkt();
+  const s = STYLE_META[style];
+  const now = nowStr();
 
-  // Update labels
-  const mktEmoji = {NSE:'🇮🇳',BSE:'🇮🇳',NEPSE:'🇳🇵',NYSE:'🇺🇸',NASDAQ:'🇺🇸',CRYPTO:'₿',FOREX:'💱'}[currentMarket]||'';
-  document.getElementById('picksTitle').textContent = `🏆 Top 10 High-Potential Picks — ${currentMarket} ${mktEmoji}`;
-  document.getElementById('picksSubtitle').textContent = `AI-powered momentum scan · ${currentStyle} · ${currentRisk} risk · ${mkt.label}`;
-  document.getElementById('picksSectionTitle').textContent = meta.label;
-  document.getElementById('picksSectionSub').textContent = meta.sub;
+  let priceContext = '';
+  if(priceMap && Object.keys(priceMap).length > 0){
+    const lines = Object.entries(priceMap).map(([sym,d]) =>
+      d.price ? `  ${sym}: Price=${m.cur}${d.price}, Change=${d.change_pct > 0 ? '+' : ''}${d.change_pct}%, High=${m.cur}${d.high}, Low=${m.cur}${d.low}, Volume=${d.volume?.toLocaleString()}` : `  ${sym}: price unavailable`
+    );
+    priceContext = `\n\nLIVE MARKET DATA (fetched right now at ${now}):\n${lines.join('\n')}\n\nUse these LIVE prices as the actual current prices in your analysis. Do NOT use any other prices.`;
+  }
 
-  if (!getApiKey()) {
-    grid.innerHTML = '<div class="momentum-loading">🔑 Please enter your Gemini API key above to load picks.</div>';
+  return `You are a world-class ${m.label} market analyst and trader with expertise in ${s.label}.
+
+CURRENT DATE & TIME: ${now}
+MARKET: ${m.label} (${m.idx})
+TRADING STYLE: ${s.label} | HORIZON: ${s.horizon}
+SELECTION CRITERIA: ${s.criteria}${priceContext}
+
+Task: Identify the TOP 10 best stocks/assets in ${m.label} for ${s.label} trades RIGHT NOW.
+${priceMap ? 'Use the LIVE prices provided above — these are the actual current market prices.' : 'Use the most current price estimates you know as of today.'}
+
+Return EXACTLY a valid JSON array of 10 objects. No markdown, no code fences, no explanation — only raw JSON:
+[
+  {
+    "rank": 1,
+    "symbol": "SYMBOL",
+    "name": "Full Name",
+    "sector": "Sector",
+    "currentPrice": "2450",
+    "change": "+1.8%",
+    "setupType": "BREAKOUT",
+    "signal": "BUY",
+    "entry": "2420-2460",
+    "target1": "2650",
+    "target2": "2850",
+    "stoploss": "2280",
+    "upside": "16%",
+    "rr": "1:3",
+    "confidence": 85,
+    "whyNow": "Specific reason this is a top ${s.label} pick right now — mention live price context, catalyst, or technical trigger."
+  }
+]
+Rules: setupType=BREAKOUT|BREAKDOWN|REVERSAL|MOMENTUM|VALUE, signal=BUY|SELL|HOLD, confidence=number 0-100, all prices in ${m.cur||'$'}, diversify sectors: ${m.sectors.join(', ')}.`;
+}
+
+// ── Build deep analysis prompt with LIVE price ────────
+function buildAnalysisPrompt(sym, liveData, style){
+  const m = mkt();
+  const s = STYLE_META[style];
+  const now = nowStr();
+  const cur = m.cur || '$';
+
+  const priceBlock = liveData?.price ? `
+LIVE PRICE DATA FOR ${sym} (fetched at ${now}):
+  Current Price : ${cur}${liveData.price}
+  Change        : ${liveData.change_pct > 0 ? '+' : ''}${liveData.change_pct}% (${liveData.change > 0 ? '+' : ''}${liveData.change})
+  Today's High  : ${cur}${liveData.high}
+  Today's Low   : ${cur}${liveData.low}
+  Today's Open  : ${cur}${liveData.open}
+  Prev Close    : ${cur}${liveData.prev_close}
+  Volume        : ${liveData.volume?.toLocaleString()}
+  
+These are the ACTUAL LIVE prices. Base all entry/exit/SL levels on ${cur}${liveData.price} as the current price.
+` : `Current price for ${sym} is not available from live feed — use your best estimate as of ${now}.`;
+
+  return `You are an elite multi-asset market analyst. Perform a COMPREHENSIVE 8-dimension analysis of ${sym} on ${m.label}.
+
+ANALYSIS DATE & TIME: ${now}
+MARKET: ${m.label} | INDEX: ${m.idx}
+ASSET: ${sym}
+TRADING STYLE: ${s.label} (${s.horizon} horizon)
+${priceBlock}
+
+Score each of the 8 dimensions 0-10 (10 = most bullish/favorable).
+Return ONLY valid JSON — no markdown, no code fences:
+
+{
+  "symbol": "${sym}",
+  "name": "Full name",
+  "currentPrice": "${liveData?.price || 'estimate'}",
+  "analysisTime": "${now}",
+  "dimensions": {
+    "technical": {
+      "score": 7, "signal": "BULLISH",
+      "summary": "Current trend, key moving averages status, momentum",
+      "detail": "RSI ~XX, MACD status, 50DMA vs 200DMA, key support ${cur}XX resistance ${cur}XX"
+    },
+    "priceAction": {
+      "score": 7, "signal": "BULLISH",
+      "summary": "Current price structure and recent candle analysis",
+      "detail": "HH/HL or LH/LL structure, recent candle pattern, consolidation or breakout stage"
+    },
+    "fundamental": {
+      "score": 7, "signal": "BULLISH",
+      "summary": "Valuation and financial health vs peers right now",
+      "detail": "P/E vs sector avg, revenue growth %, margins, debt/equity, ROE — overvalued/fair/cheap"
+    },
+    "news": {
+      "score": 6, "signal": "NEUTRAL",
+      "summary": "Latest news and catalysts affecting ${sym}",
+      "detail": "Most recent relevant news events as of ${now} — earnings, deals, macro, sector news"
+    },
+    "socialSentiment": {
+      "score": 6, "signal": "NEUTRAL",
+      "summary": "Retail and social media buzz level right now",
+      "detail": "Twitter/X, Reddit, Telegram retail interest — greed vs fear signals for ${sym}"
+    },
+    "marketContext": {
+      "score": 7, "signal": "BULLISH",
+      "summary": "Broader market and sector backdrop as of ${now}",
+      "detail": "${m.idx} trend, sector rotation, FII/DII flows, macro tailwinds or headwinds"
+    },
+    "smartMoney": {
+      "score": 7, "signal": "BULLISH",
+      "summary": "Institutional and smart money positioning",
+      "detail": "FII/DII buying, promoter activity, block deals, high delivery%, options OI bias"
+    },
+    "risk": {
+      "score": 6, "signal": "MODERATE",
+      "summary": "Current risk level for this trade",
+      "detail": "Top 3 specific risks right now: market risk, company risk, regulatory/macro risk"
+    }
+  },
+  "compositeScore": 72,
+  "finalSignal": "BUY",
+  "confidence": "78%",
+  "tradingPlan": {
+    "entry": "${cur}XXX–${cur}XXX",
+    "target1": "${cur}XXX (+X%)",
+    "target2": "${cur}XXX (+X%)",
+    "target3": "${cur}XXX (+X%)",
+    "stoploss": "${cur}XXX (-X%)",
+    "horizon": "${s.horizon}",
+    "riskReward": "1:X",
+    "positionSizing": "Risk max 1-2% of capital. Position = (Capital × Risk%) / (Entry – SL)"
+  },
+  "keyReasons": ["Reason 1", "Reason 2", "Reason 3"],
+  "keyRisks": ["Risk 1", "Risk 2", "Risk 3"],
+  "recommendation": "Concise 2-3 sentence final recommendation for a ${s.label} trader using the live price of ${cur}${liveData?.price || 'current market price'}."
+}
+
+IMPORTANT: compositeScore = weighted average of all 8 dimension scores × 10 (range 0–100). finalSignal: STRONG BUY|BUY|HOLD|SELL|STRONG SELL.`;
+}
+
+// ── Step 1: Ask AI for top 10 stock names ─────────────
+async function getAISymbolList(style){
+  const m   = mkt();
+  const s   = STYLE_META[style];
+  const now = nowStr();
+  const prompt = `You are a ${m.label} market expert. As of ${now}, list the TOP 10 stock symbols best suited for ${s.label} (${s.horizon} horizon).
+Criteria: ${s.criteria}
+Market: ${m.label} sectors: ${m.sectors.join(', ')}
+
+Return ONLY a JSON array of 10 ticker symbols — no exchange suffix, no explanation, no markdown:
+["SYM1","SYM2","SYM3","SYM4","SYM5","SYM6","SYM7","SYM8","SYM9","SYM10"]`;
+
+  const raw = await callGemini(prompt);
+  const match = raw.match(/\[[\s\S]*?\]/);
+  if(!match) throw new Error('Could not parse symbol list from AI.');
+  const symbols = JSON.parse(match[0]);
+  if(!Array.isArray(symbols)||symbols.length===0) throw new Error('Empty symbol list.');
+  return symbols.slice(0,10).map(s=>String(s).trim().toUpperCase());
+}
+
+// ── Load a section (2-step: get symbols → fetch live prices → get full picks) ──
+async function loadSection(style){
+  const grid  = document.getElementById('grid-'+style);
+  const errEl = document.getElementById('err-'+style);
+  const btn   = document.getElementById('btn-'+style);
+  const pfBar = document.getElementById('pfbar-'+style);
+  const m     = mkt();
+
+  btn.disabled=true; errEl.style.display='none';
+  pfBar.classList.remove('show');
+
+  const hasKey = !!getKey();
+
+  if(!hasKey){
+    // ── FALLBACK MODE: No AI key — use built-in symbol list + live prices only ──
+    const symbols = getFallbackSymbols(style);
+    grid.innerHTML=`<div class="stock-loading">� No AI key — fetching live prices for popular ${m.label} stocks…</div>`;
+    pfBar.textContent = `📡 Fetching live prices for ${symbols.length} symbols (AI key not set — showing live data only)…`;
+    pfBar.classList.add('show');
+
+    try{
+      const liveMap = await fetchLivePrices(symbols, currentMarket);
+      const priceCount = liveMap ? Object.values(liveMap).filter(d=>d.price).length : 0;
+
+      if(!liveMap || priceCount === 0){
+        grid.innerHTML=`<div class="stock-loading" style="color:#ffaa00">
+          ⚠️ Live prices unavailable (server may be offline).<br>
+          <small style="color:#888">Add a <strong>Gemini API key</strong> above for AI-powered picks, or ensure <code>server.py</code> is running.</small>
+        </div>`;
+        pfBar.classList.remove('show');
+        btn.disabled=false;
+        return;
+      }
+
+      // Build basic picks from live data (no AI scoring)
+      const picks = symbols.map((sym, i) => {
+        const live = liveMap[sym] || null;
+        if(!live?.price) return null;
+        return {
+          rank: i+1,
+          symbol: sym,
+          name: sym,
+          sector: m.label,
+          currentPrice: String(live.price),
+          change: (live.change_pct>0?'+':'')+live.change_pct+'%',
+          liveConfirmed: true,
+          ohlc: {h:live.high, l:live.low, o:live.open, v:live.volume, prev:live.prev_close},
+          signal: live.change_pct >= 1 ? 'BUY' : live.change_pct <= -1 ? 'SELL' : 'HOLD',
+          setupType: live.change_pct >= 2 ? 'MOMENTUM' : live.change_pct <= -2 ? 'REVERSAL' : 'BREAKOUT',
+          entry: String(live.price),
+          stoploss: String((live.price * 0.97).toFixed(2)),
+          target1: String((live.price * 1.03).toFixed(2)),
+          target2: String((live.price * 1.06).toFixed(2)),
+          upside: ((live.change_pct||0) >= 0 ? '+' : '') + live.change_pct + '%',
+          rr: '1:2',
+          confidence: 50,
+          whyNow: `Live price data only. Add a Gemini API key for full AI analysis with entry/exit strategy.`
+        };
+      }).filter(Boolean).slice(0,10);
+
+      renderGrid(picks, style, m.cur||'$', liveMap);
+      pfBar.textContent = `✅ ${priceCount} live prices loaded (no AI). Add API key for full AI-powered picks.`;
+      setTimeout(()=>{pfBar.classList.remove('show');},5000);
+
+    }catch(e){
+      errEl.innerHTML = `❌ ${e.message}`;
+      errEl.style.display='block';
+      grid.innerHTML='<div class="stock-loading" style="color:#ff6060">Failed to load. See error above.</div>';
+      pfBar.classList.remove('show');
+    }finally{
+      btn.disabled=false;
+    }
     return;
   }
 
-  if (btn) btn.disabled = true;
-  grid.innerHTML = `<div class="momentum-loading">⏳ AI is scanning ${mkt.label} for top ${assetWord}… please wait 10–20 seconds…</div>`;
-  errEl.style.display = 'none';
+  // ── AI MODE: Full 3-step flow ──────────────────────
+  grid.innerHTML=`<div class="stock-loading">⏳ Step 1/3 — AI identifying top ${STYLE_META[style].icon} ${STYLE_META[style].label} stocks for ${m.label}…</div>`;
 
-  const prompt = `You are a world-class ${mkt.label} market analyst. Identify the TOP 10 best ${assetWord} in ${mkt.label} with HIGHEST POSSIBLE RETURNS for a ${currentRisk} risk trader with ${meta.horizon} horizon (${currentStyle} style).
+  try{
+    // Step 1: Get symbol list from AI
+    const symbols = await getAISymbolList(style);
 
-Use your complete training knowledge. Do NOT refuse or say you lack real-time data. Provide your best expert assessment based on known fundamentals, technicals, and market dynamics.
+    // Step 2: Fetch live prices for those symbols
+    grid.innerHTML=`<div class="stock-loading">📡 Step 2/3 — Fetching live prices for: ${symbols.join(', ')}…</div>`;
+    pfBar.textContent = `📡 Fetching live prices for ${symbols.length} symbols from market data feed…`;
+    pfBar.classList.add('show');
 
-Return EXACTLY a JSON array of 10 objects. Output ONLY the JSON array — no markdown, no explanation, no code fences:
+    const liveMap = await fetchLivePrices(symbols, currentMarket);
+    const priceCount = liveMap ? Object.values(liveMap).filter(d=>d.price).length : 0;
 
-[{"rank":1,"symbol":"SYMBOL","name":"Full Name","sector":"Sector","setupType":"BREAKOUT","signal":"BUY","currentPrice":"2450","entry":"2420-2460","target1":"2650","target2":"2850","stoploss":"2280","upside":"16%","rsi":"58","volume":"Above avg","confidence":"88%","reason":"2-sentence catalyst and technical setup explanation."}]
+    pfBar.textContent = priceCount > 0
+      ? `✅ Live prices fetched for ${priceCount}/${symbols.length} symbols — running AI analysis…`
+      : `⚠️ Live prices unavailable (server may need restart) — using AI estimates…`;
 
-Rules:
-- setupType: BREAKOUT, BREAKDOWN, REVERSAL, or TREND REVERSAL
-- signal: BUY, SELL, or HOLD
-- All prices in ${mkt.currency || '$'}
-- Diversify across sectors: ${mkt.sectors?.slice(0,5).join(', ')}
-- Rank 1 = highest conviction
-- upside = % gain from entry to target2
-${currentSector ? '- Focus on ' + currentSector + ' sector.' : ''}`;
-
-  try {
-    const raw = await callGemini(prompt);
+    // Step 3: Run full AI analysis with live price context
+    grid.innerHTML=`<div class="stock-loading">🔬 Step 3/3 — AI running full analysis with live data for ${m.label}…</div>`;
+    const raw = await callGemini(buildPicksPrompt(style, liveMap));
     let jsonStr = (raw.match(/\[[\s\S]*?\]/) || raw.match(/\[[\s\S]*/))?.[0] || '';
-    if (!jsonStr) throw new Error('Could not parse AI response. Please try again.');
-    if (!jsonStr.trim().endsWith(']')) jsonStr = jsonStr + ']';
-    const picks = JSON.parse(jsonStr);
-    if (!Array.isArray(picks) || picks.length === 0) throw new Error('No picks returned. Please try again.');
-    renderMomentumCards(picks, mkt.currency || '$');
-  } catch(e) {
-    // Show friendly error + static fallback picks
-    const isQuota = e.message?.toLowerCase().includes('quota') || e.message?.toLowerCase().includes('rate');
+    if(!jsonStr) throw new Error('Could not parse AI picks response.');
+    if(!jsonStr.trim().endsWith(']')) jsonStr+=']';
+    let picks = JSON.parse(jsonStr);
+    if(!Array.isArray(picks)||picks.length===0) throw new Error('No picks returned.');
+
+    // Overlay live prices onto picks
+    if(liveMap){
+      picks = picks.map(p=>{
+        const live = liveMap[p.symbol] || liveMap[p.symbol+m.suffix] || null;
+        if(live?.price){
+          p.currentPrice = String(live.price);
+          p.change = (live.change_pct>0?'+':'')+live.change_pct+'%';
+          p.liveConfirmed = true;
+          p.ohlc = {h:live.high,l:live.low,o:live.open,v:live.volume,prev:live.prev_close};
+        }
+        return p;
+      });
+    }
+
+    renderGrid(picks, style, m.cur||'$', liveMap);
+    setTimeout(()=>{pfBar.classList.remove('show');},3000);
+
+  }catch(e){
+    const isQuota=e.message?.toLowerCase().includes('quota')||e.message?.includes('429');
     errEl.innerHTML = isQuota
-      ? `⚠️ <strong>Gemini API quota exceeded</strong> on all models. This happens on free-tier keys after heavy usage.<br>
-         <span style="font-size:.8rem">✅ Showing curated static picks below. 
-         <a href="https://ai.dev/rate-limit" target="_blank" style="color:#00d4ff">Check your rate limits</a> · 
-         <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#00ff88">Get a fresh key</a></span>`
+      ? `⚠️ <strong>Gemini API quota exceeded.</strong> Wait 1–2 min. <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#00d4ff">Get a fresh key</a>`
       : `❌ ${e.message}`;
-    errEl.style.display = 'block';
-    // Render static fallback
-    renderMomentumCards(getStaticFallbackPicks(currentMarket, currentStyle), mkt.currency || '$');
-  } finally {
-    if (btn) btn.disabled = false;
+    errEl.style.display='block';
+    grid.innerHTML='<div class="stock-loading" style="color:#ff6060">Failed to load. See error above.</div>';
+    pfBar.classList.remove('show');
+  }finally{
+    btn.disabled=false;
   }
 }
 
-function renderMomentumCards(picks, currency) {
-  const grid = document.getElementById('picksGrid');
-  const setupColors = {'BREAKOUT':'breakout','BREAKDOWN':'breakdown','REVERSAL':'reversal','TREND REVERSAL':'trend-reversal'};
-  grid.innerHTML = picks.map(p => {
-    const setup = (p.setupType||'BREAKOUT').toUpperCase();
-    const setupClass = setupColors[setup] || 'breakout';
-    const signal = (p.signal||'BUY').toUpperCase();
-    const sigClass = signal==='BUY'?'buy':signal==='SELL'?'sell':'hold';
-    const sigIcon = signal==='BUY'?'🟢':signal==='SELL'?'🔴':'🟡';
-    return `<div class="momentum-card">
-  <div class="momentum-card-header">
+// ── Load all 4 sections sequentially ─────────────────
+async function loadAll(){
+  const btn=document.getElementById('refreshAllBtn');
+  btn.disabled=true; btn.textContent='⏳ Loading…';
+  for(const s of ['swing','intraday','options','longterm']){
+    await loadSection(s);
+  }
+  btn.disabled=false; btn.textContent='🔄 Refresh All Live Picks';
+}
+
+// ── Render cards ──────────────────────────────────────
+function renderGrid(picks, style, cur, liveMap){
+  const grid=document.getElementById('grid-'+style);
+  const setupMap={BREAKOUT:'breakout',BREAKDOWN:'breakdown',REVERSAL:'reversal',MOMENTUM:'momentum',VALUE:'value'};
+  const sigMap  ={BUY:'buy',SELL:'sell',HOLD:'hold'};
+
+  grid.innerHTML=picks.map(p=>{
+    const setup=(p.setupType||'BREAKOUT').toUpperCase();
+    const sc=setupMap[setup]||'breakout';
+    const sig=(p.signal||'BUY').toUpperCase();
+    const sigCls=sigMap[sig]||'buy';
+    const chgPct=parseFloat((p.change||'0').replace(/[^0-9.-]/g,''));
+    const chgCls=p.change?.startsWith('-')?'neg':chgPct>0?'pos':'neu';
+    const conf=parseInt(p.confidence)||70;
+    const symE=String(p.symbol||'').replace(/['"]/g,'');
+    const priceE=String(p.currentPrice||'').replace(/['"]/g,'');
+    const nameE=String(p.name||'').replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+    const isLive=!!p.liveConfirmed;
+    const ohlcStr=p.ohlc?`O:${cur}${p.ohlc.o} H:${cur}${p.ohlc.h} L:${cur}${p.ohlc.l} V:${Number(p.ohlc.v||0).toLocaleString()}`:'';
+
+    return `<div class="stock-card" onclick="openAnalysis('${symE}','${priceE}','${style}','${nameE}')">
+  <div class="card-top">
     <div>
-      <div class="rank-badge">#${p.rank}</div>
-      <div class="momentum-card-symbol">${p.symbol}</div>
-      <div class="momentum-card-name">${p.name} · ${p.sector||''}</div>
+      <div class="card-rank">#${p.rank} ${STYLE_META[style].icon}</div>
+      <div class="card-symbol">${p.symbol}</div>
+      <div class="card-name">${p.name}<br>${p.sector||''}</div>
     </div>
-    <div class="momentum-card-right">
-      <div class="momentum-card-price">${currency}${p.currentPrice||'—'}</div>
-      <div class="momentum-card-change">📈 ${p.upside||'—'}</div>
+    <div class="card-right">
+      <div class="card-price ${isLive?'live':'stale'}">${cur}${p.currentPrice||'—'}</div>
+      <div class="card-change ${chgCls}">${p.change||'—'}</div>
+      ${isLive?'<div class="live-badge">🔴 LIVE</div>':''}
     </div>
   </div>
-  <span class="momentum-badge ${setupClass}">${setup}</span>
-  <span class="momentum-badge ${sigClass}" style="margin-left:6px">${sigIcon} ${signal}</span>
-  <div class="momentum-card-body">
-    <div class="momentum-card-stat"><span class="momentum-card-stat-label">📥 Entry</span><span class="momentum-card-stat-value">${currency}${p.entry}</span></div>
-    <div class="momentum-card-stat"><span class="momentum-card-stat-label">🛡 Stop-Loss</span><span class="momentum-card-stat-value red">${currency}${p.stoploss}</span></div>
-    <div class="momentum-card-stat"><span class="momentum-card-stat-label">🎯 Target 1</span><span class="momentum-card-stat-value green">${currency}${p.target1}</span></div>
-    <div class="momentum-card-stat"><span class="momentum-card-stat-label">🎯 Target 2</span><span class="momentum-card-stat-value green">${currency}${p.target2}</span></div>
-    <div class="momentum-card-stat"><span class="momentum-card-stat-label">📊 RSI</span><span class="momentum-card-stat-value">${p.rsi||'—'}</span></div>
-    <div class="momentum-card-stat"><span class="momentum-card-stat-label">🎰 Confidence</span><span class="momentum-card-stat-value">${p.confidence||'—'}</span></div>
+  ${ohlcStr?`<div class="card-meta">📊 ${ohlcStr}</div>`:''}
+  <div class="card-badges">
+    <span class="badge ${sc}">${setup}</span>
+    <span class="badge ${sigCls}">${sig==='BUY'?'🟢':sig==='SELL'?'🔴':'🟡'} ${sig}</span>
   </div>
-  <div class="momentum-card-reason">💡 ${p.reason||''}</div>
-  <div class="momentum-card-footer">
-    <button class="momentum-card-btn" onclick="prefillAndAnalyze('${p.symbol}','${(p.currentPrice||'').replace(/'/g,'')}')">🔬 Deep Analysis</button>
-    <button class="momentum-card-btn" onclick="navigator.clipboard?.writeText('${p.symbol} | Entry: ${currency}${p.entry} | T1: ${currency}${p.target1} | T2: ${currency}${p.target2} | SL: ${currency}${p.stoploss}').then(()=>alert('Copied!'))">📋 Copy</button>
+  <div class="card-stats">
+    <div class="stat-item"><span class="stat-lbl">Entry</span><span class="stat-val">${cur}${p.entry||'—'}</span></div>
+    <div class="stat-item"><span class="stat-lbl">Stop-Loss</span><span class="stat-val r">${cur}${p.stoploss||'—'}</span></div>
+    <div class="stat-item"><span class="stat-lbl">Target 1</span><span class="stat-val g">${cur}${p.target1||'—'}</span></div>
+    <div class="stat-item"><span class="stat-lbl">Target 2</span><span class="stat-val g">${cur}${p.target2||'—'}</span></div>
+    <div class="stat-item"><span class="stat-lbl">Upside</span><span class="stat-val g">${p.upside||'—'}</span></div>
+    <div class="stat-item"><span class="stat-lbl">Risk:Reward</span><span class="stat-val">${p.rr||'—'}</span></div>
   </div>
+  <div class="conf-wrap">
+    <div class="conf-lbl">AI Confidence: ${conf}%</div>
+    <div class="conf-bar"><div class="conf-fill" style="width:${conf}%"></div></div>
+  </div>
+  <div class="card-why">💡 ${p.whyNow||''}</div>
+  <button class="analyze-btn">🔬 Deep 8-Dimension Analysis →</button>
 </div>`;
   }).join('');
-  document.getElementById('picksSection').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-function prefillAndAnalyze(sym, price) {
-  document.getElementById('stk_sym').value = sym;
-  if (price) document.getElementById('stk_price').value = price.replace(/[^\d.]/g,'');
-  document.querySelector('.tools-grid').scrollIntoView({behavior:'smooth'});
-  setTimeout(()=>smRun('stk'), 400);
-}
+// ── Open deep analysis modal ──────────────────────────
+function openAnalysis(sym, price, style, name){
+  const modal=document.getElementById('analysisModal');
+  const loading=document.getElementById('mLoading');
+  const body=document.getElementById('mBody');
+  const errEl=document.getElementById('mError');
+  const prog=document.getElementById('mProgress');
+  const m=mkt();
 
-// ── Static fallback picks when AI quota is hit ──
-function getStaticFallbackPicks(market, style) {
-  const FALLBACKS = {
-    NSE: [
-      {rank:1,symbol:'RELIANCE',name:'Reliance Industries',sector:'Energy/Retail',setupType:'BREAKOUT',signal:'BUY',currentPrice:'2850',entry:'2820-2860',target1:'3050',target2:'3250',stoploss:'2680',upside:'14%',rsi:'58',volume:'Above avg',confidence:'82%',reason:'Jio + retail segment growing strongly. Consolidating near key support with breakout potential above ₹2900.'},
-      {rank:2,symbol:'TCS',name:'Tata Consultancy Services',sector:'IT',setupType:'REVERSAL',signal:'BUY',currentPrice:'3950',entry:'3900-3960',target1:'4200',target2:'4450',stoploss:'3720',upside:'13%',rsi:'52',volume:'Avg',confidence:'79%',reason:'IT sector recovering on US deal wins. Strong cash flows and consistent dividend make it a quality swing pick.'},
-      {rank:3,symbol:'HDFC BANK',name:'HDFC Bank',sector:'Banking',setupType:'BREAKOUT',signal:'BUY',currentPrice:'1680',entry:'1660-1690',target1:'1800',target2:'1920',stoploss:'1580',upside:'14%',rsi:'55',volume:'Above avg',confidence:'80%',reason:'Largest private bank with strong NIM recovery. FII buying seen at support levels.'},
-      {rank:4,symbol:'INFOSYS',name:'Infosys Ltd',sector:'IT',setupType:'REVERSAL',signal:'BUY',currentPrice:'1780',entry:'1760-1790',target1:'1920',target2:'2050',stoploss:'1670',upside:'15%',rsi:'49',volume:'Avg',confidence:'76%',reason:'Oversold on valuation basis. Deal pipeline improving with AI-led transformation projects.'},
-      {rank:5,symbol:'SBI',name:'State Bank of India',sector:'Banking',setupType:'BREAKOUT',signal:'BUY',currentPrice:'810',entry:'800-815',target1:'870',target2:'940',stoploss:'755',upside:'16%',rsi:'60',volume:'High',confidence:'78%',reason:'PSU bank with strong credit growth. Government capex push benefits SBI directly.'},
-      {rank:6,symbol:'TATAMOTORS',name:'Tata Motors',sector:'Auto',setupType:'REVERSAL',signal:'BUY',currentPrice:'950',entry:'930-960',target1:'1050',target2:'1150',stoploss:'880',upside:'21%',rsi:'47',volume:'Above avg',confidence:'74%',reason:'JLR EV transition and domestic EV dominance. Oversold after correction — good re-entry zone.'},
-      {rank:7,symbol:'SUNPHARMA',name:'Sun Pharmaceutical',sector:'Pharma',setupType:'BREAKOUT',signal:'BUY',currentPrice:'1680',entry:'1660-1690',target1:'1800',target2:'1900',stoploss:'1580',upside:'13%',rsi:'62',volume:'Avg',confidence:'75%',reason:'US specialty pharma growth and strong India branded generic business driving re-rating.'},
-      {rank:8,symbol:'BAJFINANCE',name:'Bajaj Finance',sector:'Finance',setupType:'REVERSAL',signal:'BUY',currentPrice:'7200',entry:'7100-7250',target1:'7800',target2:'8400',stoploss:'6700',upside:'17%',rsi:'46',volume:'Above avg',confidence:'73%',reason:'Premium NBFC with strong AUM growth. NIM stable. Correction offers attractive entry for swing trade.'},
-      {rank:9,symbol:'LTIM',name:'LTIMindtree',sector:'IT',setupType:'BREAKOUT',signal:'BUY',currentPrice:'5400',entry:'5350-5420',target1:'5800',target2:'6200',stoploss:'5050',upside:'15%',rsi:'57',volume:'Avg',confidence:'72%',reason:'Mid-cap IT with strong deal wins and margin improvement trajectory. Outperforming large-cap IT peers.'},
-      {rank:10,symbol:'COALINDIA',name:'Coal India',sector:'Energy',setupType:'REVERSAL',signal:'BUY',currentPrice:'480',entry:'470-485',target1:'520',target2:'560',stoploss:'440',upside:'17%',rsi:'44',volume:'Below avg',confidence:'70%',reason:'High dividend yield stock at attractive valuation. Government energy security focus supports volume guidance.'},
-    ],
-    NEPSE: [
-      {rank:1,symbol:'NABIL',name:'Nabil Bank',sector:'Banking',setupType:'BREAKOUT',signal:'BUY',currentPrice:'1050',entry:'1020-1060',target1:'1150',target2:'1250',stoploss:'960',upside:'19%',rsi:'56',volume:'Above avg',confidence:'80%',reason:'Largest private bank with strong fundamentals and consistent dividend. Sector leader in digital banking.'},
-      {rank:2,symbol:'UPPER',name:'Upper Tamakoshi Hydropower',sector:'Hydropower',setupType:'REVERSAL',signal:'BUY',currentPrice:'320',entry:'310-325',target1:'360',target2:'400',stoploss:'290',upside:'25%',rsi:'48',volume:'Avg',confidence:'76%',reason:'Largest hydro project in Nepal with stable cash flow. Peak season production boosts earnings significantly.'},
-      {rank:3,symbol:'NICA',name:'NIC Asia Bank',sector:'Banking',setupType:'BREAKOUT',signal:'BUY',currentPrice:'780',entry:'760-790',target1:'860',target2:'940',stoploss:'710',upside:'21%',rsi:'54',volume:'Above avg',confidence:'74%',reason:'Strong loan growth and improving NPA ratios. Digital banking expansion gaining market share.'},
-      {rank:4,symbol:'NHPC',name:'Nepal Hydro Power Co',sector:'Hydropower',setupType:'REVERSAL',signal:'BUY',currentPrice:'180',entry:'175-185',target1:'200',target2:'220',stoploss:'162',upside:'22%',rsi:'45',volume:'Avg',confidence:'72%',reason:'Undervalued hydro stock with strong seasonal tailwinds. Good entry point after correction.'},
-      {rank:5,symbol:'SICL',name:'Siddhartha Insurance',sector:'Insurance',setupType:'BREAKOUT',signal:'BUY',currentPrice:'2200',entry:'2150-2220',target1:'2400',target2:'2600',stoploss:'2000',upside:'18%',rsi:'58',volume:'Below avg',confidence:'70%',reason:'Insurance sector undervalued vs banking. Premium growth accelerating with Nepal\'s growing middle class.'},
-      {rank:6,symbol:'EBL',name:'Everest Bank',sector:'Banking',setupType:'REVERSAL',signal:'BUY',currentPrice:'1200',entry:'1170-1210',target1:'1320',target2:'1440',stoploss:'1090',upside:'20%',rsi:'50',volume:'Avg',confidence:'71%',reason:'Strong NIM and low NPA. Technical setup shows accumulation at current levels.'},
-      {rank:7,symbol:'BPCL',name:'Butwal Power Company',sector:'Hydropower',setupType:'BREAKOUT',signal:'BUY',currentPrice:'280',entry:'272-285',target1:'310',target2:'340',stoploss:'255',upside:'21%',rsi:'57',volume:'Avg',confidence:'69%',reason:'Multiple projects in pipeline. Energy export agreement with India adds long-term revenue visibility.'},
-      {rank:8,symbol:'GBIME',name:'Global IME Bank',sector:'Banking',setupType:'REVERSAL',signal:'BUY',currentPrice:'430',entry:'420-440',target1:'480',target2:'530',stoploss:'390',upside:'23%',rsi:'46',volume:'Avg',confidence:'68%',reason:'Largest commercial bank by network. Integration benefits post-merger driving efficiency improvements.'},
-      {rank:9,symbol:'NLG',name:'Nepal Life Insurance',sector:'Insurance',setupType:'REVERSAL',signal:'BUY',currentPrice:'1800',entry:'1760-1820',target1:'1980',target2:'2150',stoploss:'1640',upside:'19%',rsi:'49',volume:'Below avg',confidence:'67%',reason:'Largest life insurer with strong reserve growth. Low competition in market supports premium pricing.'},
-      {rank:10,symbol:'CHCL',name:'Chilime Hydropower',sector:'Hydropower',setupType:'BREAKOUT',signal:'BUY',currentPrice:'620',entry:'605-630',target1:'690',target2:'760',stoploss:'565',upside:'23%',rsi:'55',volume:'Avg',confidence:'66%',reason:'Oldest hydro company with strong track record. Peak generation season ahead with high PPA rates.'},
-    ],
-    CRYPTO: [
-      {rank:1,symbol:'BTC',name:'Bitcoin',sector:'Bitcoin',setupType:'BREAKOUT',signal:'BUY',currentPrice:'65000',entry:'63000-66000',target1:'72000',target2:'82000',stoploss:'58000',upside:'26%',rsi:'58',volume:'Above avg',confidence:'82%',reason:'ETF inflows continue to drive institutional demand. Halving cycle momentum supports medium-term bullish trend.'},
-      {rank:2,symbol:'ETH',name:'Ethereum',sector:'Ethereum',setupType:'REVERSAL',signal:'BUY',currentPrice:'3200',entry:'3100-3250',target1:'3600',target2:'4100',stoploss:'2850',upside:'28%',rsi:'52',volume:'Avg',confidence:'78%',reason:'ETF approval catalyst and EIP improvements driving re-rating. Staking yield attractive vs risk-free rate.'},
-      {rank:3,symbol:'SOL',name:'Solana',sector:'Layer1',setupType:'BREAKOUT',signal:'BUY',currentPrice:'185',entry:'178-190',target1:'215',target2:'245',stoploss:'162',upside:'32%',rsi:'61',volume:'High',confidence:'76%',reason:'Fastest growing L1 ecosystem with DeFi and NFT activity surging. Technical breakout from 3-month consolidation.'},
-      {rank:4,symbol:'BNB',name:'BNB',sector:'Layer1',setupType:'REVERSAL',signal:'BUY',currentPrice:'580',entry:'565-590',target1:'640',target2:'710',stoploss:'520',upside:'22%',rsi:'54',volume:'Avg',confidence:'73%',reason:'BSC ecosystem growth and BNB burn mechanism reduce supply. Strong support from Binance exchange volume.'},
-      {rank:5,symbol:'AVAX',name:'Avalanche',sector:'Layer1',setupType:'BREAKOUT',signal:'BUY',currentPrice:'38',entry:'36-39',target1:'46',target2:'56',stoploss:'31',upside:'47%',rsi:'50',volume:'Avg',confidence:'70%',reason:'Subnet growth accelerating with institutional chains being built. Undervalued vs SOL at current market cap.'},
-      {rank:6,symbol:'LINK',name:'Chainlink',sector:'DeFi',setupType:'REVERSAL',signal:'BUY',currentPrice:'16',entry:'15-17',target1:'20',target2:'25',stoploss:'13',upside:'56%',rsi:'46',volume:'Below avg',confidence:'68%',reason:'Critical oracle infrastructure for all DeFi. CCIP cross-chain protocol adoption growing rapidly.'},
-      {rank:7,symbol:'ARB',name:'Arbitrum',sector:'Layer2',setupType:'BREAKOUT',signal:'BUY',currentPrice:'1.05',entry:'1.00-1.10',target1:'1.40',target2:'1.80',stoploss:'0.85',upside:'71%',rsi:'52',volume:'Above avg',confidence:'67%',reason:'Leading L2 by TVL with gaming and DeFi activity growing. Stylus update enabling new developer use cases.'},
-      {rank:8,symbol:'INJ',name:'Injective',sector:'DeFi',setupType:'REVERSAL',signal:'BUY',currentPrice:'28',entry:'26-29',target1:'36',target2:'46',stoploss:'22',upside:'64%',rsi:'48',volume:'Avg',confidence:'65%',reason:'High-performance DeFi chain with derivatives focus. Strong developer activity and token burn mechanism.'},
-      {rank:9,symbol:'OP',name:'Optimism',sector:'Layer2',setupType:'REVERSAL',signal:'BUY',currentPrice:'2.20',entry:'2.10-2.30',target1:'2.80',target2:'3.50',stoploss:'1.80',upside:'59%',rsi:'45',volume:'Avg',confidence:'64%',reason:'Superchain ecosystem growing with Base adding huge TVL. Retroactive public goods funding model attracting developers.'},
-      {rank:10,symbol:'SUI',name:'Sui Network',sector:'Layer1',setupType:'BREAKOUT',signal:'BUY',currentPrice:'1.95',entry:'1.85-2.00',target1:'2.50',target2:'3.20',stoploss:'1.60',upside:'64%',rsi:'60',volume:'High',confidence:'63%',reason:'Newest L1 with growing gaming and DeFi ecosystem. Move language providing security advantages attracting developers.'},
-    ],
-  };
-  // Default fallback for markets not in table
-  return FALLBACKS[market] || FALLBACKS['NSE'];
-}
+  document.getElementById('mSym').textContent=sym;
+  document.getElementById('mName').textContent=name||sym;
+  document.getElementById('mPrice').textContent=m.cur+(price||'—');
+  document.getElementById('mChange').textContent='';
+  document.getElementById('mOHLC').textContent='';
+  document.getElementById('mTime').textContent='📅 Analysis started: '+nowStr();
 
-// ── Run dispatcher ──
-async function smRun(tool) {
-  const resId = tool + '_res';
-  const el = document.getElementById(resId);
-  // Find the nearest button before the result box
-  let btn = el.previousElementSibling;
-  while (btn && btn.tagName !== 'BUTTON') btn = btn.previousElementSibling;
-  try {
-    el.className = 'result-box show loading';
-    el.textContent = '⏳ Analyzing… trying available Gemini models…';
-    if (btn) btn.disabled = true;
-    const prompt = PROMPTS[tool]();
-    const result = await callGemini(prompt);
-    showResult(resId, result, false);
-  } catch(err) {
-    const isQuota = err.message?.toLowerCase().includes('quota') || err.message?.toLowerCase().includes('rate');
-    const msg = isQuota
-      ? `⚠️ All Gemini models are over quota right now.\n\nThis happens on free-tier API keys with heavy usage. Please:\n  1. Wait 1–2 minutes and try again\n  2. Check your quota: https://ai.dev/rate-limit\n  3. Get a new key: https://aistudio.google.com/app/apikey\n\nOriginal error: ${err.message}`
-      : `❌ ${err.message}`;
-    showResult(resId, msg, true);
-  } finally {
-    if (btn) btn.disabled = false;
+  modal.classList.add('open');
+  document.body.style.overflow='hidden';
+  loading.style.display='block';
+  body.classList.remove('show');
+  errEl.style.display='none';
+  prog.style.transition='none'; prog.style.width='0%';
+  setTimeout(()=>{ prog.style.transition='width 22s linear'; prog.style.width='88%'; },50);
+
+  if(!getKey()){
+    // No key: still show live price in header, but tell user AI is needed for analysis
+    fetchLivePrices([sym], currentMarket).then(liveMap=>{
+      const liveData = liveMap?.[sym] || null;
+      loading.style.display='none';
+      if(liveData?.price){
+        document.getElementById('mPrice').textContent = fmtPrice(liveData.price, m.cur);
+        const chgPct=liveData.change_pct;
+        const chgEl=document.getElementById('mChange');
+        chgEl.textContent=(chgPct>0?'+':'')+chgPct+'%';
+        chgEl.className='modal-price-change '+(chgPct>=0?'pos':'neg');
+        document.getElementById('mOHLC').innerHTML=
+          `<span>O: <strong>${m.cur}${liveData.open}</strong></span>`+
+          `<span>H: <strong>${m.cur}${liveData.high}</strong></span>`+
+          `<span>L: <strong>${m.cur}${liveData.low}</strong></span>`+
+          `<span>Vol: <strong>${Number(liveData.volume||0).toLocaleString()}</strong></span>`+
+          `<span>Prev: <strong>${m.cur}${liveData.prev_close}</strong></span>`;
+      }
+      errEl.innerHTML=`🔑 <strong>Gemini API key required for deep analysis.</strong><br>
+        <small style="color:#aaa">Live price data is shown above. To unlock 8-dimension AI analysis (Technical, Fundamental, Smart Money, etc.), 
+        enter your free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#00d4ff">aistudio.google.com</a>.</small>`;
+      errEl.style.display='block';
+    }).catch(()=>{
+      loading.style.display='none';
+      errEl.textContent='🔑 Enter your Gemini API key above to run deep analysis.';
+      errEl.style.display='block';
+    });
+    return;
   }
+
+  // Fetch live price for this single stock, then run analysis
+  fetchLivePrices([sym], currentMarket).then(liveMap=>{
+    const liveData = liveMap?.[sym] || null;
+
+    // Update header with live price
+    if(liveData?.price){
+      document.getElementById('mPrice').textContent = fmtPrice(liveData.price, m.cur);
+      document.getElementById('mPrice').className = 'modal-price-live';
+      const chgPct=liveData.change_pct;
+      const chgEl=document.getElementById('mChange');
+      chgEl.textContent=(chgPct>0?'+':'')+chgPct+'%';
+      chgEl.className='modal-price-change '+(chgPct>=0?'pos':'neg');
+      document.getElementById('mOHLC').innerHTML=
+        `<span>O: <strong>${m.cur}${liveData.open}</strong></span>`+
+        `<span>H: <strong>${m.cur}${liveData.high}</strong></span>`+
+        `<span>L: <strong>${m.cur}${liveData.low}</strong></span>`+
+        `<span>Vol: <strong>${Number(liveData.volume||0).toLocaleString()}</strong></span>`+
+        `<span>Prev: <strong>${m.cur}${liveData.prev_close}</strong></span>`;
+    }
+
+    return callGemini(buildAnalysisPrompt(sym, liveData, style));
+  }).then(raw=>{
+    const match=raw.match(/\{[\s\S]*\}/);
+    if(!match) throw new Error('Could not parse analysis JSON.');
+    const data=JSON.parse(match[0]);
+    renderModal(data);
+    loading.style.display='none';
+    body.classList.add('show');
+    prog.style.width='100%';
+  }).catch(e=>{
+    loading.style.display='none';
+    errEl.textContent=`❌ Analysis failed: ${e.message}`;
+    errEl.style.display='block';
+  });
 }
+
+// ── Render modal ──────────────────────────────────────
+function renderModal(data){
+  const cur=mkt().cur||'$';
+  const score=parseInt(data.compositeScore)||0;
+  const sig=(data.finalSignal||'HOLD').toUpperCase();
+
+  // Score circle
+  const cirCls=score>=75?'sb':score>=60?'b':score>=45?'h':'s';
+  const sc=document.getElementById('mScoreCircle'); sc.className='score-circle '+cirCls;
+  document.getElementById('mScoreNum').textContent=score;
+  const sigEmoji={'STRONG BUY':'🚀','BUY':'🟢','HOLD':'🟡','SELL':'🔴','STRONG SELL':'⛔'}[sig]||'🟡';
+  const sigCol=score>=70?'#00ff88':score>=55?'#00d4ff':score>=40?'#ffc800':'#ff6060';
+  document.getElementById('mSignal').textContent=sigEmoji+' '+sig;
+  document.getElementById('mSignal').style.color=sigCol;
+  document.getElementById('mConf').textContent='🎰 Confidence: '+(data.confidence||'—');
+  document.getElementById('mRec').textContent=data.recommendation||'—';
+
+  // 8 dims
+  const DI={technical:'📊',priceAction:'📈',fundamental:'🏦',news:'📰',socialSentiment:'📱',marketContext:'🌐',smartMoney:'🏛️',risk:'⚠️'};
+  const DL={technical:'Technical',priceAction:'Price Action',fundamental:'Fundamental',news:'News',socialSentiment:'Social Sentiment',marketContext:'Market Context',smartMoney:'Smart Money',risk:'Risk Analysis'};
+  const ORDER=['technical','priceAction','fundamental','news','socialSentiment','marketContext','smartMoney','risk'];
+  const dims=data.dimensions||{};
+
+  document.getElementById('mDims').innerHTML=ORDER.map(k=>{
+    const d=dims[k]||{}; const sc2=parseInt(d.score)||0;
+    const sig2=(d.signal||'NEUTRAL').toUpperCase();
+    const sigCls2=['BULLISH','STRONG BUY'].includes(sig2)?'bullish':['BEARISH','STRONG SELL'].includes(sig2)?'bearish':sig2==='MODERATE'?'moderate':'neutral';
+    const barClr=sc2>=7?'linear-gradient(90deg,#00d4ff,#00ff88)':sc2>=5?'linear-gradient(90deg,#ffc800,#ff9500)':'linear-gradient(90deg,#ff4444,#ff8888)';
+    return `<div class="dim-card">
+  <div class="dim-hdr"><span class="dim-icon">${DI[k]||'•'}</span><span class="dim-ttl">${DL[k]||k}</span><span class="dim-sig ${sigCls2}">${sig2}</span></div>
+  <div class="dim-score-lbl">Score: <strong style="color:#e0e0e0">${sc2}/10</strong></div>
+  <div class="dim-bar"><div class="dim-fill" style="width:${sc2*10}%;background:${barClr}"></div></div>
+  <div class="dim-sum">${d.summary||'—'}</div>
+  <div class="dim-det">${d.detail||''}</div>
+</div>`;
+  }).join('');
+
+  // Trading plan
+  const p=data.tradingPlan||{};
+  document.getElementById('mPlan').innerHTML=[
+    {l:'📥 Entry Zone', v:p.entry||'—',     c:''},
+    {l:'🎯 Target 1',  v:p.target1||'—',   c:''},
+    {l:'🎯 Target 2',  v:p.target2||'—',   c:''},
+    {l:'🎯 Target 3',  v:p.target3||'—',   c:''},
+    {l:'🛡 Stop-Loss', v:p.stoploss||'—',  c:'r'},
+    {l:'⏱ Horizon',   v:p.horizon||'—',   c:'c'},
+    {l:'📐 R:R Ratio', v:p.riskReward||'—',c:'c'},
+    {l:'💰 Sizing',    v:p.positionSizing||'—',c:''},
+  ].map(i=>`<div class="plan-item"><span class="plan-lbl">${i.l}</span><span class="plan-val ${i.c}">${i.v}</span></div>`).join('');
+
+  // Reasons & Risks
+  const reasons=Array.isArray(data.keyReasons)?data.keyReasons:['Strong technical setup','Positive momentum','Favorable conditions'];
+  const risks  =Array.isArray(data.keyRisks)?data.keyRisks:['Market volatility','Execution risk','Sector headwinds'];
+  document.getElementById('mReasons').innerHTML=reasons.map(r=>`<li>${r}</li>`).join('');
+  document.getElementById('mRisks').innerHTML  =risks.map(r=>`<li>${r}</li>`).join('');
+}
+
+// ── Modal close ───────────────────────────────────────
+function closeModal(){ document.getElementById('analysisModal').classList.remove('open'); document.body.style.overflow=''; }
+function overlayClick(e){ if(e.target===document.getElementById('analysisModal')) closeModal(); }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
 </script>
 </body>
 </html>
