@@ -8366,6 +8366,17 @@ const MEME_NEPAL_TOPICS_FALLBACK = [
 /* Emojis to assign dynamically to live headline chips */
 const _LIVE_TOPIC_EMOJIS = ['🔥','📰','💥','🎭','🗞️','⚡','📢','🏛️','😮','🌐'];
 
+/* ── Creator Studio dropdown close helper ── */
+function csCloseMenu() {
+  const m = document.getElementById('csMenu');
+  if (m) m.classList.remove('open');
+}
+// Close menu when clicking anywhere outside it
+document.addEventListener('click', function(e) {
+  const dropdown = document.getElementById('csDropdown');
+  if (dropdown && !dropdown.contains(e.target)) csCloseMenu();
+});
+
 /* ── News Studio / Meme Studio tab switching ── */
 function openNewsStudio() {
   /* Close Meme Studio, show the main News Explorer container */

@@ -69,8 +69,7 @@
     /* Creator Studio dropdown */
     .creator-studio-dropdown{position:relative;display:inline-block}
     .creator-studio-menu{display:none;position:absolute;top:calc(100% + 6px);right:0;background:#1e1b2e;border:1px solid rgba(139,92,246,.35);border-radius:12px;padding:8px;min-width:220px;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.55);backdrop-filter:blur(14px)}
-    .creator-studio-dropdown:hover .creator-studio-menu,
-    .creator-studio-dropdown:focus-within .creator-studio-menu{display:flex;flex-direction:column;gap:5px}
+    .creator-studio-menu.open{display:flex;flex-direction:column;gap:5px}
     .cs-menu-item{display:flex;align-items:center;gap:8px;padding:9px 13px;border-radius:8px;border:none;background:transparent;color:#e2e8f0;font-size:.82rem;font-family:inherit;cursor:pointer;text-align:left;transition:background .2s,transform .15s;white-space:nowrap;width:100%}
     .cs-menu-item:hover{background:rgba(139,92,246,.25);transform:translateX(3px)}
     .cs-menu-sep{height:1px;background:rgba(139,92,246,.2);margin:4px 2px}
@@ -93,20 +92,20 @@
   </div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap">
     <!-- ✦ Creator Studio dropdown -->
-    <div class="creator-studio-dropdown">
-      <button class="btn top-nav-btn creator-studio-btn" title="Creator Studio — all content tools">🎨 Creator Studio ▾</button>
-      <div class="creator-studio-menu">
+    <div class="creator-studio-dropdown" id="csDropdown">
+      <button class="btn top-nav-btn creator-studio-btn" title="Creator Studio — all content tools" onclick="event.stopPropagation();document.getElementById('csMenu').classList.toggle('open')">🎨 Creator Studio ▾</button>
+      <div class="creator-studio-menu" id="csMenu">
         <div class="cs-menu-label">In-Page Tools</div>
-        <button class="cs-menu-item" id="newsStudioBtn" onclick="openNewsStudio()">🗞️ News Studio</button>
-        <button class="cs-menu-item" id="memeStudioBtn" onclick="openMemeStudio()">😂 Meme Studio</button>
-        <button class="cs-menu-item" id="puzzleStudioBtn" onclick="openPuzzleStudio()">🧩 Puzzle Studio</button>
-        <button class="cs-menu-item" id="contentStudioBtn" onclick="openContentStudio()">🎭 Content Studio</button>
-        <button class="cs-menu-item" id="videoStudioBtn" onclick="openVideoStudio()">🎬 Video Studio</button>
-        <button class="cs-menu-item" id="aiVideoStudioBtn" onclick="openAIVideoStudio()">🤖 AI Video</button>
-        <button class="cs-menu-item" id="faceSwapBtn" onclick="openFaceSwapStudio()">🎭 Face Swap</button>
+        <button class="cs-menu-item" id="newsStudioBtn"    onclick="csCloseMenu();openNewsStudio()">🗞️ News Studio</button>
+        <button class="cs-menu-item" id="memeStudioBtn"    onclick="csCloseMenu();openMemeStudio()">😂 Meme Studio</button>
+        <button class="cs-menu-item" id="puzzleStudioBtn"  onclick="csCloseMenu();openPuzzleStudio()">🧩 Puzzle Studio</button>
+        <button class="cs-menu-item" id="contentStudioBtn" onclick="csCloseMenu();openContentStudio()">🎭 Content Studio</button>
+        <button class="cs-menu-item" id="videoStudioBtn"   onclick="csCloseMenu();openVideoStudio()">🎬 Video Studio</button>
+        <button class="cs-menu-item" id="aiVideoStudioBtn" onclick="csCloseMenu();openAIVideoStudio()">🤖 AI Video</button>
+        <button class="cs-menu-item" id="faceSwapBtn"      onclick="csCloseMenu();openFaceSwapStudio()">🎭 Face Swap</button>
         <div class="cs-menu-sep"></div>
         <div class="cs-menu-label">Creator Growth</div>
-        <button class="cs-menu-item" onclick="window.open('viral-growth.html','_blank')">🚀 Viral Growth Suite</button>
+        <button class="cs-menu-item" onclick="csCloseMenu();window.open('viral-growth.html','_blank')">🚀 Viral Growth Suite</button>
       </div>
     </div>
     <!-- ✦ Top-level tools -->
