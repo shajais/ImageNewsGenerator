@@ -8316,7 +8316,7 @@ let _memeImgObj     = null;   // kept for legacy compat (single bg)
 let _memeSlots      = [];     // [{type:'img'|'color', img:Image|null, color:string|null, panX:0, panY:0}]  up to 4
 let _memeSelSlotIdx = -1;     // index of currently selected slot panel for panning
 let _memeTextColor  = '#ffffff';
-let _memeFontFamily = 'Impact';
+let _memeFontFamily = 'Arial Black';
 let _memeCanvasW    = 600;
 let _memeCanvasH    = 600;
 
@@ -9553,6 +9553,13 @@ Return ONLY valid JSON, no markdown, no code fences:
       if (mid1El) mid1El.value = result.middle1 || '';
       if (mid2El) mid2El.value = result.middle2 || '';
       if (botEl)  botEl.value  = result.bottom  || '';
+      // Auto-show middle text fields if AI populated them
+      if (result.middle1 || result.middle2) {
+        const mw = document.getElementById('memeMiddleTextsWrap');
+        const mb = document.getElementById('memeAddTextBtn');
+        if (mw) { mw.style.display = 'flex'; }
+        if (mb) mb.textContent = '－ Hide middle text';
+      }
       if (result.caption) {
         const capEl = document.getElementById('memeCaptionText');
         if (capEl) capEl.value = result.caption;

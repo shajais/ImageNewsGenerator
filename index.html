@@ -987,8 +987,11 @@
           <div id="memeTextSelLabel" style="font-size:.73rem;color:#f59e0b;min-height:14px;margin-bottom:4px"></div>
           <div style="display:flex;flex-direction:column;gap:6px">
             <input id="memeTopText" class="meme-input" placeholder="Top text…" oninput="renderMemeCanvas()">
-            <input id="memeMiddleText1" class="meme-input" placeholder="Middle text 1 (optional)…" oninput="renderMemeCanvas()">
-            <input id="memeMiddleText2" class="meme-input" placeholder="Middle text 2 (optional)…" oninput="renderMemeCanvas()">
+            <div id="memeMiddleTextsWrap" style="display:none;flex-direction:column;gap:6px">
+              <input id="memeMiddleText1" class="meme-input" placeholder="Middle text 1 (optional)…" oninput="renderMemeCanvas()">
+              <input id="memeMiddleText2" class="meme-input" placeholder="Middle text 2 (optional)…" oninput="renderMemeCanvas()">
+            </div>
+            <button id="memeAddTextBtn" class="btn btn-ghost" style="font-size:.74rem;padding:4px 10px;align-self:flex-start" onclick="(function(){var w=document.getElementById('memeMiddleTextsWrap'),b=document.getElementById('memeAddTextBtn');var open=w.style.display==='flex';w.style.display=open?'none':'flex';b.textContent=open?'＋ Add middle text':'－ Hide middle text';})()">＋ Add middle text</button>
             <input id="memeBottomText" class="meme-input" placeholder="Bottom text…" oninput="renderMemeCanvas()">
           </div>
 
@@ -1023,8 +1026,8 @@
           <div style="margin-top:8px">
             <label class="meme-label">Font</label>
             <div style="display:flex;gap:5px;flex-wrap:wrap">
-              <button class="meme-font-btn active" data-font="Impact" onclick="setMemeFont('Impact',this)">Impact</button>
-              <button class="meme-font-btn" data-font="Arial Black" onclick="setMemeFont('Arial Black',this)">Arial Black</button>
+              <button class="meme-font-btn" data-font="Impact" onclick="setMemeFont('Impact',this)">Impact</button>
+              <button class="meme-font-btn active" data-font="Arial Black" onclick="setMemeFont('Arial Black',this)">Arial Black</button>
               <button class="meme-font-btn" data-font="Bangers" onclick="setMemeFont('Bangers',this)" style="font-family:'Bangers',cursive">Bangers</button>
               <button class="meme-font-btn" data-font="Bebas Neue" onclick="setMemeFont('Bebas Neue',this)" style="font-family:'Bebas Neue',cursive">Bebas</button>
               <button class="meme-font-btn" data-font="Permanent Marker" onclick="setMemeFont('Permanent Marker',this)" style="font-family:'Permanent Marker',cursive">Marker</button>
