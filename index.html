@@ -1060,15 +1060,19 @@
           </div>
         </div>
 
-        <!-- ── Step 6: Topic / Prompt ── -->
-        <div class="meme-section" style="background:rgba(124,58,237,.07);border:1px solid rgba(124,58,237,.25);border-radius:8px;padding:10px 12px">
-          <div class="meme-section-title" style="color:#a78bfa">✍️ Topic / Prompt <span style="font-size:.7rem;color:var(--muted);font-weight:400">(required for AI — be specific!)</span></div>
-          <textarea id="memeTopicInput" class="meme-textarea" rows="2"
-            placeholder="e.g. Balen Shah not speaking in parliament 😂 | KP Oli र traffic jam | Nepal budget 2081 | Deuba को वाचा"></textarea>
-          <div style="font-size:.7rem;color:var(--muted);margin:4px 0 8px">💡 AI will generate Top, Middle &amp; Bottom text specific to your topic + auto-search a matching image</div>
-          <div style="display:flex;gap:8px;margin-top:4px">
-            <button class="btn btn-primary" style="flex:1;font-size:.8rem;padding:8px" onclick="memeGenerateAI()">🤖 AI Generate</button>
-            <button class="btn btn-ghost" style="font-size:.8rem;padding:8px 14px" onclick="memeGenerateTemplate()">⚡ Template</button>
+        <!-- ── Step 6: Topic / Prompt — collapsible (collapsed by default) ── -->
+        <div class="meme-section meme-accordion collapsed" style="background:rgba(124,58,237,.07);border:1px solid rgba(124,58,237,.25);border-radius:8px;padding:0">
+          <div class="meme-accordion-header" onclick="toggleMemeAccordion(this)" style="padding:10px 12px;border-radius:8px">
+            <span class="meme-section-title" style="margin:0;color:#a78bfa">✍️ Topic / Prompt</span>
+            <span class="meme-accordion-arrow">▾</span>
+          </div>
+          <div class="meme-accordion-body" style="padding:0 12px 10px">
+            <div style="font-size:.7rem;color:var(--muted);margin:0 0 6px">💡 AI will generate meme text + auto-search a matching image. Be specific!</div>
+            <textarea id="memeTopicInput" class="meme-textarea" rows="2"
+              placeholder="e.g. Balen Shah not speaking in parliament 😂 | KP Oli र traffic jam | Nepal budget 2081 | Deuba को वाचा"></textarea>
+            <div style="margin-top:8px">
+              <button class="btn btn-primary" style="width:100%;font-size:.85rem;padding:9px" onclick="memeGenerateAI()">🚀 Generate</button>
+            </div>
           </div>
         </div>
 
