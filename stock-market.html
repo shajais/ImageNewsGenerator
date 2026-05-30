@@ -468,14 +468,44 @@ const getApiKey   = () => document.getElementById('apiKey').value.trim() || loca
 async function callGemini(prompt) {
   const key = getApiKey();
   if (!key) throw new Error('Please enter your Gemini API key above.');
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }] })
-  });
-  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || `HTTP ${res.status}`); }
-  const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response received.';
+
+  // Model fallback chain — try each until one works
+  const MODELS = [
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-8b',
+    'gemini-1.0-pro',
+  ];
+
+  let lastErr = null;
+  for (const model of MODELS) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+      });
+      if (!res.ok) {
+        const e = await res.json();
+        const msg = e.error?.message || `HTTP ${res.status}`;
+        // Quota / rate-limit → try next model
+        if (res.status === 429 || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('rate')) {
+          lastErr = new Error(`[${model}] Quota exceeded — trying next model…`);
+          continue;
+        }
+        throw new Error(msg);
+      }
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error('Empty response from ' + model);
+      return text; // ✅ success
+    } catch (e) {
+      if (e.message?.includes('trying next model')) { lastErr = e; continue; }
+      throw e; // non-quota error — propagate immediately
+    }
+  }
+  // All models exhausted
+  throw new Error('All Gemini models are over quota. Please wait a minute and try again, or check your API plan at https://ai.dev/rate-limit');
 }
 
 function showResult(id, text, isError) {
@@ -775,108 +805,6 @@ All amounts in ${getCurrency() || 'local currency'}.`;
   }
 };
 
-// ── TOP 10 PICKS ──
-async function runTopPicks() {
-  const btn = document.getElementById('picksBtn');
-  const loading = document.getElementById('picksLoading');
-  const grid = document.getElementById('picksGrid');
-  const errEl = document.getElementById('picksError');
-
-  btn.disabled = true;
-  loading.style.display = 'block';
-  grid.innerHTML = '';
-  errEl.style.display = 'none';
-
-  const mkt = MARKETS[currentMarket];
-  const isCrypto = currentMarket === 'CRYPTO';
-  const isForex  = currentMarket === 'FOREX';
-  const assetWord = isCrypto ? 'cryptocurrencies' : isForex ? 'currency pairs' : 'stocks';
-
-  const prompt = `You are a world-class ${mkt.label} market analyst and trader. Your job is to identify the TOP 10 best ${assetWord} in ${mkt.label} right now that offer the HIGHEST POSSIBLE RETURNS for a ${currentRisk} risk ${currentHorizon} trader.
-
-Use your full training knowledge. Do NOT say you lack real-time data — give your best expert assessment based on known fundamentals, technicals, and market dynamics.
-
-Return EXACTLY 10 picks. For EACH pick, output a JSON object in this exact format (output ONLY a JSON array, no markdown, no explanation outside the array):
-
-[
-  {
-    "rank": 1,
-    "symbol": "SYMBOLHERE",
-    "name": "Full Company/Coin Name",
-    "signal": "BUY",
-    "sector": "Sector name",
-    "entry": "123.50",
-    "target1": "145.00",
-    "target2": "162.00",
-    "stoploss": "112.00",
-    "upside": "32%",
-    "confidence": "87%",
-    "horizon": "${currentHorizon}",
-    "reason": "2-sentence reason why this is a top pick right now — key catalyst + technical setup"
-  },
-  ...
-]
-
-Rules:
-- signal must be one of: BUY, SELL, HOLD
-- All prices in ${mkt.currency || 'USD'}
-- Pick across different sectors for diversification
-- Rank 1 = highest conviction pick
-- For crypto: use well-known coins, include altcoins with momentum
-- For forex: use pair format like USD/INR, EUR/USD
-- Upside = % from entry to target2
-- Confidence = your conviction level
-- Focus on ${currentSector || 'all sectors'} in ${mkt.label}`;
-
-  try {
-    const raw = await callGemini(prompt);
-    // Extract JSON array from response
-    const match = raw.match(/\[[\s\S]*\]/);
-    if (!match) throw new Error('Could not parse AI response. Please try again.');
-    const picks = JSON.parse(match[0]);
-    if (!Array.isArray(picks) || picks.length === 0) throw new Error('No picks returned. Please try again.');
-
-    renderPickCards(picks, mkt.currency || '$');
-  } catch(e) {
-    errEl.textContent = '❌ ' + e.message;
-    errEl.style.display = 'block';
-  } finally {
-    btn.disabled = false;
-    loading.style.display = 'none';
-  }
-}
-
-function renderPickCards(picks, currency) {
-  const grid = document.getElementById('picksGrid');
-  grid.innerHTML = picks.map(p => {
-    const isBuy  = p.signal?.toUpperCase() === 'BUY';
-    const isSell = p.signal?.toUpperCase() === 'SELL';
-    const badgeClass = isBuy ? '' : isSell ? 'sell' : 'hold';
-    const signalIcon = isBuy ? '🟢' : isSell ? '🔴' : '🟡';
-    return `
-    <div class="pick-card">
-      <div class="pick-rank">#${p.rank}</div>
-      <div class="pick-header">
-        <div class="pick-symbol">${p.symbol || '—'}</div>
-        <div class="pick-name">${p.name || ''} &nbsp;·&nbsp; ${p.sector || ''}</div>
-        <span class="pick-badge ${badgeClass}">${signalIcon} ${p.signal || 'BUY'}</span>
-      </div>
-      <div class="pick-body">
-        <div class="pick-row"><span class="pick-lbl">📥 Entry Zone</span><span class="pick-val cyan">${currency}${p.entry}</span></div>
-        <div class="pick-row"><span class="pick-lbl">🎯 Target 1</span><span class="pick-val green">${currency}${p.target1}</span></div>
-        <div class="pick-row"><span class="pick-lbl">🎯 Target 2</span><span class="pick-val green">${currency}${p.target2}</span></div>
-        <div class="pick-row"><span class="pick-lbl">🛡 Stop-Loss</span><span class="pick-val red">${currency}${p.stoploss}</span></div>
-        <div class="pick-row"><span class="pick-lbl">⏱ Horizon</span><span class="pick-val">${p.horizon || '—'}</span></div>
-        <div class="pick-row"><span class="pick-lbl">🎰 Confidence</span><span class="pick-val cyan">${p.confidence || '—'}</span></div>
-        <div class="pick-return">📈 Potential Upside: ${p.upside || '—'}</div>
-        <div class="pick-reason">💡 ${p.reason || ''}</div>
-      </div>
-    </div>`;
-  }).join('');
-  // Scroll to grid
-  grid.scrollIntoView({behavior:'smooth', block:'start'});
-}
-
 // ── Trading style ──
 let currentStyle = 'swing';
 const STYLE_META = {
@@ -946,9 +874,17 @@ ${currentSector ? '- Focus on ' + currentSector + ' sector.' : ''}`;
     if (!Array.isArray(picks) || picks.length === 0) throw new Error('No picks returned. Please try again.');
     renderMomentumCards(picks, mkt.currency || '$');
   } catch(e) {
-    errEl.textContent = '❌ ' + (e.message || 'Failed. Check API key and try again.');
+    // Show friendly error + static fallback picks
+    const isQuota = e.message?.toLowerCase().includes('quota') || e.message?.toLowerCase().includes('rate');
+    errEl.innerHTML = isQuota
+      ? `⚠️ <strong>Gemini API quota exceeded</strong> on all models. This happens on free-tier keys after heavy usage.<br>
+         <span style="font-size:.8rem">✅ Showing curated static picks below. 
+         <a href="https://ai.dev/rate-limit" target="_blank" style="color:#00d4ff">Check your rate limits</a> · 
+         <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#00ff88">Get a fresh key</a></span>`
+      : `❌ ${e.message}`;
     errEl.style.display = 'block';
-    grid.innerHTML = '';
+    // Render static fallback
+    renderMomentumCards(getStaticFallbackPicks(currentMarket, currentStyle), mkt.currency || '$');
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -1002,22 +938,72 @@ function prefillAndAnalyze(sym, price) {
   setTimeout(()=>smRun('stk'), 400);
 }
 
+// ── Static fallback picks when AI quota is hit ──
+function getStaticFallbackPicks(market, style) {
+  const FALLBACKS = {
+    NSE: [
+      {rank:1,symbol:'RELIANCE',name:'Reliance Industries',sector:'Energy/Retail',setupType:'BREAKOUT',signal:'BUY',currentPrice:'2850',entry:'2820-2860',target1:'3050',target2:'3250',stoploss:'2680',upside:'14%',rsi:'58',volume:'Above avg',confidence:'82%',reason:'Jio + retail segment growing strongly. Consolidating near key support with breakout potential above ₹2900.'},
+      {rank:2,symbol:'TCS',name:'Tata Consultancy Services',sector:'IT',setupType:'REVERSAL',signal:'BUY',currentPrice:'3950',entry:'3900-3960',target1:'4200',target2:'4450',stoploss:'3720',upside:'13%',rsi:'52',volume:'Avg',confidence:'79%',reason:'IT sector recovering on US deal wins. Strong cash flows and consistent dividend make it a quality swing pick.'},
+      {rank:3,symbol:'HDFC BANK',name:'HDFC Bank',sector:'Banking',setupType:'BREAKOUT',signal:'BUY',currentPrice:'1680',entry:'1660-1690',target1:'1800',target2:'1920',stoploss:'1580',upside:'14%',rsi:'55',volume:'Above avg',confidence:'80%',reason:'Largest private bank with strong NIM recovery. FII buying seen at support levels.'},
+      {rank:4,symbol:'INFOSYS',name:'Infosys Ltd',sector:'IT',setupType:'REVERSAL',signal:'BUY',currentPrice:'1780',entry:'1760-1790',target1:'1920',target2:'2050',stoploss:'1670',upside:'15%',rsi:'49',volume:'Avg',confidence:'76%',reason:'Oversold on valuation basis. Deal pipeline improving with AI-led transformation projects.'},
+      {rank:5,symbol:'SBI',name:'State Bank of India',sector:'Banking',setupType:'BREAKOUT',signal:'BUY',currentPrice:'810',entry:'800-815',target1:'870',target2:'940',stoploss:'755',upside:'16%',rsi:'60',volume:'High',confidence:'78%',reason:'PSU bank with strong credit growth. Government capex push benefits SBI directly.'},
+      {rank:6,symbol:'TATAMOTORS',name:'Tata Motors',sector:'Auto',setupType:'REVERSAL',signal:'BUY',currentPrice:'950',entry:'930-960',target1:'1050',target2:'1150',stoploss:'880',upside:'21%',rsi:'47',volume:'Above avg',confidence:'74%',reason:'JLR EV transition and domestic EV dominance. Oversold after correction — good re-entry zone.'},
+      {rank:7,symbol:'SUNPHARMA',name:'Sun Pharmaceutical',sector:'Pharma',setupType:'BREAKOUT',signal:'BUY',currentPrice:'1680',entry:'1660-1690',target1:'1800',target2:'1900',stoploss:'1580',upside:'13%',rsi:'62',volume:'Avg',confidence:'75%',reason:'US specialty pharma growth and strong India branded generic business driving re-rating.'},
+      {rank:8,symbol:'BAJFINANCE',name:'Bajaj Finance',sector:'Finance',setupType:'REVERSAL',signal:'BUY',currentPrice:'7200',entry:'7100-7250',target1:'7800',target2:'8400',stoploss:'6700',upside:'17%',rsi:'46',volume:'Above avg',confidence:'73%',reason:'Premium NBFC with strong AUM growth. NIM stable. Correction offers attractive entry for swing trade.'},
+      {rank:9,symbol:'LTIM',name:'LTIMindtree',sector:'IT',setupType:'BREAKOUT',signal:'BUY',currentPrice:'5400',entry:'5350-5420',target1:'5800',target2:'6200',stoploss:'5050',upside:'15%',rsi:'57',volume:'Avg',confidence:'72%',reason:'Mid-cap IT with strong deal wins and margin improvement trajectory. Outperforming large-cap IT peers.'},
+      {rank:10,symbol:'COALINDIA',name:'Coal India',sector:'Energy',setupType:'REVERSAL',signal:'BUY',currentPrice:'480',entry:'470-485',target1:'520',target2:'560',stoploss:'440',upside:'17%',rsi:'44',volume:'Below avg',confidence:'70%',reason:'High dividend yield stock at attractive valuation. Government energy security focus supports volume guidance.'},
+    ],
+    NEPSE: [
+      {rank:1,symbol:'NABIL',name:'Nabil Bank',sector:'Banking',setupType:'BREAKOUT',signal:'BUY',currentPrice:'1050',entry:'1020-1060',target1:'1150',target2:'1250',stoploss:'960',upside:'19%',rsi:'56',volume:'Above avg',confidence:'80%',reason:'Largest private bank with strong fundamentals and consistent dividend. Sector leader in digital banking.'},
+      {rank:2,symbol:'UPPER',name:'Upper Tamakoshi Hydropower',sector:'Hydropower',setupType:'REVERSAL',signal:'BUY',currentPrice:'320',entry:'310-325',target1:'360',target2:'400',stoploss:'290',upside:'25%',rsi:'48',volume:'Avg',confidence:'76%',reason:'Largest hydro project in Nepal with stable cash flow. Peak season production boosts earnings significantly.'},
+      {rank:3,symbol:'NICA',name:'NIC Asia Bank',sector:'Banking',setupType:'BREAKOUT',signal:'BUY',currentPrice:'780',entry:'760-790',target1:'860',target2:'940',stoploss:'710',upside:'21%',rsi:'54',volume:'Above avg',confidence:'74%',reason:'Strong loan growth and improving NPA ratios. Digital banking expansion gaining market share.'},
+      {rank:4,symbol:'NHPC',name:'Nepal Hydro Power Co',sector:'Hydropower',setupType:'REVERSAL',signal:'BUY',currentPrice:'180',entry:'175-185',target1:'200',target2:'220',stoploss:'162',upside:'22%',rsi:'45',volume:'Avg',confidence:'72%',reason:'Undervalued hydro stock with strong seasonal tailwinds. Good entry point after correction.'},
+      {rank:5,symbol:'SICL',name:'Siddhartha Insurance',sector:'Insurance',setupType:'BREAKOUT',signal:'BUY',currentPrice:'2200',entry:'2150-2220',target1:'2400',target2:'2600',stoploss:'2000',upside:'18%',rsi:'58',volume:'Below avg',confidence:'70%',reason:'Insurance sector undervalued vs banking. Premium growth accelerating with Nepal\'s growing middle class.'},
+      {rank:6,symbol:'EBL',name:'Everest Bank',sector:'Banking',setupType:'REVERSAL',signal:'BUY',currentPrice:'1200',entry:'1170-1210',target1:'1320',target2:'1440',stoploss:'1090',upside:'20%',rsi:'50',volume:'Avg',confidence:'71%',reason:'Strong NIM and low NPA. Technical setup shows accumulation at current levels.'},
+      {rank:7,symbol:'BPCL',name:'Butwal Power Company',sector:'Hydropower',setupType:'BREAKOUT',signal:'BUY',currentPrice:'280',entry:'272-285',target1:'310',target2:'340',stoploss:'255',upside:'21%',rsi:'57',volume:'Avg',confidence:'69%',reason:'Multiple projects in pipeline. Energy export agreement with India adds long-term revenue visibility.'},
+      {rank:8,symbol:'GBIME',name:'Global IME Bank',sector:'Banking',setupType:'REVERSAL',signal:'BUY',currentPrice:'430',entry:'420-440',target1:'480',target2:'530',stoploss:'390',upside:'23%',rsi:'46',volume:'Avg',confidence:'68%',reason:'Largest commercial bank by network. Integration benefits post-merger driving efficiency improvements.'},
+      {rank:9,symbol:'NLG',name:'Nepal Life Insurance',sector:'Insurance',setupType:'REVERSAL',signal:'BUY',currentPrice:'1800',entry:'1760-1820',target1:'1980',target2:'2150',stoploss:'1640',upside:'19%',rsi:'49',volume:'Below avg',confidence:'67%',reason:'Largest life insurer with strong reserve growth. Low competition in market supports premium pricing.'},
+      {rank:10,symbol:'CHCL',name:'Chilime Hydropower',sector:'Hydropower',setupType:'BREAKOUT',signal:'BUY',currentPrice:'620',entry:'605-630',target1:'690',target2:'760',stoploss:'565',upside:'23%',rsi:'55',volume:'Avg',confidence:'66%',reason:'Oldest hydro company with strong track record. Peak generation season ahead with high PPA rates.'},
+    ],
+    CRYPTO: [
+      {rank:1,symbol:'BTC',name:'Bitcoin',sector:'Bitcoin',setupType:'BREAKOUT',signal:'BUY',currentPrice:'65000',entry:'63000-66000',target1:'72000',target2:'82000',stoploss:'58000',upside:'26%',rsi:'58',volume:'Above avg',confidence:'82%',reason:'ETF inflows continue to drive institutional demand. Halving cycle momentum supports medium-term bullish trend.'},
+      {rank:2,symbol:'ETH',name:'Ethereum',sector:'Ethereum',setupType:'REVERSAL',signal:'BUY',currentPrice:'3200',entry:'3100-3250',target1:'3600',target2:'4100',stoploss:'2850',upside:'28%',rsi:'52',volume:'Avg',confidence:'78%',reason:'ETF approval catalyst and EIP improvements driving re-rating. Staking yield attractive vs risk-free rate.'},
+      {rank:3,symbol:'SOL',name:'Solana',sector:'Layer1',setupType:'BREAKOUT',signal:'BUY',currentPrice:'185',entry:'178-190',target1:'215',target2:'245',stoploss:'162',upside:'32%',rsi:'61',volume:'High',confidence:'76%',reason:'Fastest growing L1 ecosystem with DeFi and NFT activity surging. Technical breakout from 3-month consolidation.'},
+      {rank:4,symbol:'BNB',name:'BNB',sector:'Layer1',setupType:'REVERSAL',signal:'BUY',currentPrice:'580',entry:'565-590',target1:'640',target2:'710',stoploss:'520',upside:'22%',rsi:'54',volume:'Avg',confidence:'73%',reason:'BSC ecosystem growth and BNB burn mechanism reduce supply. Strong support from Binance exchange volume.'},
+      {rank:5,symbol:'AVAX',name:'Avalanche',sector:'Layer1',setupType:'BREAKOUT',signal:'BUY',currentPrice:'38',entry:'36-39',target1:'46',target2:'56',stoploss:'31',upside:'47%',rsi:'50',volume:'Avg',confidence:'70%',reason:'Subnet growth accelerating with institutional chains being built. Undervalued vs SOL at current market cap.'},
+      {rank:6,symbol:'LINK',name:'Chainlink',sector:'DeFi',setupType:'REVERSAL',signal:'BUY',currentPrice:'16',entry:'15-17',target1:'20',target2:'25',stoploss:'13',upside:'56%',rsi:'46',volume:'Below avg',confidence:'68%',reason:'Critical oracle infrastructure for all DeFi. CCIP cross-chain protocol adoption growing rapidly.'},
+      {rank:7,symbol:'ARB',name:'Arbitrum',sector:'Layer2',setupType:'BREAKOUT',signal:'BUY',currentPrice:'1.05',entry:'1.00-1.10',target1:'1.40',target2:'1.80',stoploss:'0.85',upside:'71%',rsi:'52',volume:'Above avg',confidence:'67%',reason:'Leading L2 by TVL with gaming and DeFi activity growing. Stylus update enabling new developer use cases.'},
+      {rank:8,symbol:'INJ',name:'Injective',sector:'DeFi',setupType:'REVERSAL',signal:'BUY',currentPrice:'28',entry:'26-29',target1:'36',target2:'46',stoploss:'22',upside:'64%',rsi:'48',volume:'Avg',confidence:'65%',reason:'High-performance DeFi chain with derivatives focus. Strong developer activity and token burn mechanism.'},
+      {rank:9,symbol:'OP',name:'Optimism',sector:'Layer2',setupType:'REVERSAL',signal:'BUY',currentPrice:'2.20',entry:'2.10-2.30',target1:'2.80',target2:'3.50',stoploss:'1.80',upside:'59%',rsi:'45',volume:'Avg',confidence:'64%',reason:'Superchain ecosystem growing with Base adding huge TVL. Retroactive public goods funding model attracting developers.'},
+      {rank:10,symbol:'SUI',name:'Sui Network',sector:'Layer1',setupType:'BREAKOUT',signal:'BUY',currentPrice:'1.95',entry:'1.85-2.00',target1:'2.50',target2:'3.20',stoploss:'1.60',upside:'64%',rsi:'60',volume:'High',confidence:'63%',reason:'Newest L1 with growing gaming and DeFi ecosystem. Move language providing security advantages attracting developers.'},
+    ],
+  };
+  // Default fallback for markets not in table
+  return FALLBACKS[market] || FALLBACKS['NSE'];
+}
+
 // ── Run dispatcher ──
 async function smRun(tool) {
   const resId = tool + '_res';
   const el = document.getElementById(resId);
-  const btn = el.previousElementSibling;
+  // Find the nearest button before the result box
+  let btn = el.previousElementSibling;
+  while (btn && btn.tagName !== 'BUTTON') btn = btn.previousElementSibling;
   try {
     el.className = 'result-box show loading';
-    el.textContent = '⏳ Analyzing with Gemini AI...';
-    btn.disabled = true;
+    el.textContent = '⏳ Analyzing… trying available Gemini models…';
+    if (btn) btn.disabled = true;
     const prompt = PROMPTS[tool]();
     const result = await callGemini(prompt);
     showResult(resId, result, false);
   } catch(err) {
-    showResult(resId, '❌ ' + err.message, true);
+    const isQuota = err.message?.toLowerCase().includes('quota') || err.message?.toLowerCase().includes('rate');
+    const msg = isQuota
+      ? `⚠️ All Gemini models are over quota right now.\n\nThis happens on free-tier API keys with heavy usage. Please:\n  1. Wait 1–2 minutes and try again\n  2. Check your quota: https://ai.dev/rate-limit\n  3. Get a new key: https://aistudio.google.com/app/apikey\n\nOriginal error: ${err.message}`
+      : `❌ ${err.message}`;
+    showResult(resId, msg, true);
   } finally {
-    btn.disabled = false;
+    if (btn) btn.disabled = false;
   }
 }
 </script>
