@@ -281,39 +281,33 @@ async function queryPandit(userMessage) {
     return extractGeminiText(data);
   }
 
-  // 1. Try server-side key (local server running with .env key)
+  // 1. Get user-supplied key first (takes priority over server-side key)
+  const keyEl = $('pandit-gemini-key');
+  const userKey = (keyEl ? keyEl.value.trim() : '') ||
+                  localStorage.getItem('pandit_gemini_key') || '';
+
+  // 2. If user key exists → call Gemini directly (CORS-enabled, works from any origin)
+  if (userKey) {
+    const GEMINI_DIRECT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(userKey)}`;
+    return await callProxy(GEMINI_DIRECT);
+  }
+
+  // 3. No user key → try server-side proxy (requires Python/Node server with .env key)
   const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   if (isLocal) {
     try {
       return await callProxy(`${PANDIT_CONFIG.server}/proxy/gemini`);
-    } catch (e) { /* fall through to direct API */ }
+    } catch (e) {
+      // Server key not configured — fall through to ask user for key
+    }
   }
 
-  // 2. Direct Gemini API call — works on GitHub Pages and any static host
-  const keyEl = $('pandit-gemini-key');
-  const key = (keyEl ? keyEl.value.trim() : '') ||
-              localStorage.getItem('pandit_gemini_key') || '';
-  if (!key) {
-    throw new Error(
-      'Gemini API key नहीं मिली।\n' +
-      'कृपया ⚙️ Settings खोलें और अपनी Gemini API key डालें।\n' +
-      'मुफ़्त key यहाँ मिलेगी: https://aistudio.google.com/app/apikey'
-    );
-  }
-
-  // Try server proxy with browser key first (local), then direct API (GitHub Pages)
-  if (isLocal) {
-    try {
-      return await callProxy(
-        `${PANDIT_CONFIG.server}/proxy/gemini-withkey`,
-        { 'X-Gemini-Key': key }
-      );
-    } catch (e) { /* fall through to direct */ }
-  }
-
-  // Direct call to Gemini API (CORS-enabled — works from any origin)
-  const GEMINI_DIRECT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`;
-  return await callProxy(GEMINI_DIRECT);
+  // 4. No key available at all
+  throw new Error(
+    'Gemini API key नहीं मिली।\n' +
+    'कृपया ⚙️ Settings खोलें और अपनी Gemini API key डालें।\n' +
+    'मुफ़्त key यहाँ मिलेगी: https://aistudio.google.com/app/apikey'
+  );
 }
 
 function extractGeminiText(data) {
