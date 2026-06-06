@@ -35,7 +35,111 @@ RULES:
 6. If a devotee mentions a problem (illness, debt, marriage delay, enemy trouble), suggest the appropriate pooja/vrat/mantra with reason.
 7. Mantras must be written in Devanagari. Also provide transliteration when asked.
 8. Keep responses warm, encouraging, and practical — a pandit at home, not a textbook.
-9. Always end ritual instructions with a reminder to seek a qualified human pandit for complex ceremonies.`;
+9. Always end ritual instructions with a reminder to seek a qualified human pandit for complex ceremonies.
+10. When giving a Sankalpa, use the devotee's actual naam and gotra from their profile.
+11. For any new problem or ailment, ask one clarifying question before giving advice (like a real pandit would).
+12. Reference today's panchang naturally in your advice ("आज शुक्रवार है, लक्ष्मी पूजा के लिए उत्तम दिन है...")`;
+
+// ══════════════════════════════════════════════════════════════
+//  DEVOTEE PROFILE  (persisted in localStorage)
+// ══════════════════════════════════════════════════════════════
+function loadDevoteeProfile() {
+  try {
+    const raw = localStorage.getItem('pandit_devotee_profile');
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function showProfileModal() {
+  const modal = $('profile-modal');
+  if (!modal) return;
+  const profile = loadDevoteeProfile();
+  if (profile) {
+    if ($('profile-naam'))  $('profile-naam').value  = profile.naam  || '';
+    if ($('profile-gotra')) $('profile-gotra').value = profile.gotra || '';
+    if ($('profile-rashi')) $('profile-rashi').value = profile.rashi || '';
+    document.querySelectorAll('.sampradaya-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.val === (profile.sampradaya || 'स्मार्त'));
+    });
+  }
+  modal.classList.add('open');
+}
+
+function closeProfileModal() {
+  const modal = $('profile-modal');
+  if (modal) modal.classList.remove('open');
+}
+
+function selectSampradaya(btn) {
+  document.querySelectorAll('.sampradaya-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function saveProfile() {
+  const naam      = ($('profile-naam')?.value  || '').trim();
+  const gotra     = ($('profile-gotra')?.value || '').trim();
+  const rashi     = $('profile-rashi')?.value  || '';
+  const sampBtn   = document.querySelector('.sampradaya-btn.active');
+  const sampradaya = sampBtn ? sampBtn.dataset.val : 'स्मार्त';
+  const profile = { naam, gotra, rashi, sampradaya };
+  localStorage.setItem('pandit_devotee_profile', JSON.stringify(profile));
+  closeProfileModal();
+  // Reset history so next query gets the updated profile in system prompt
+  panditState.history = [];
+  updateSankalpCard();
+  if (naam) {
+    const parts = [];
+    if (gotra)     parts.push(`आपका गोत्र ${gotra} है`);
+    if (rashi)     parts.push(`राशि ${rashi} है`);
+    if (sampradaya) parts.push(`परंपरा ${sampradaya} है`);
+    const detail = parts.length ? ' ' + parts.join(', ') + '.' : '.';
+    const greet = `🙏 ${naam} जी, नमस्ते!\n\nआपका परिचय मिला।${detail}\n\nमैं अब आपकी परंपरा और राशि के अनुसार व्यक्तिगत मार्गदर्शन दे सकता हूँ। संकल्प में आपका नाम और गोत्र स्वतः आएगा। कोई भी पूजा, व्रत या समस्या पूछें।`;
+    addMsg('ai', greet);
+    if (panditState.voiceEnabled) panditSpeak(greet);
+  }
+  // Update header button label
+  const hBtn = $('profile-header-btn');
+  if (hBtn && naam) hBtn.textContent = `👤 ${naam.split(' ')[0]}`;
+}
+
+function updateSankalpCard() {
+  const profile = loadDevoteeProfile();
+  const el = $('sankalpa-devotee-text');
+  const promptEl = $('sankalpa-profile-prompt');
+  if (!el) return;
+  if (profile && profile.naam) {
+    const gotraText = profile.gotra ? `, ${profile.gotra} गोत्रोत्पन्न` : '';
+    const rashiText = profile.rashi ? `, ${profile.rashi} राशि` : '';
+    el.innerHTML = `<strong>${profile.naam}</strong>${gotraText}${rashiText}`;
+    if (promptEl) promptEl.style.display = 'none';
+  } else {
+    el.innerHTML = '(नाम)';
+    if (promptEl) promptEl.style.display = 'block';
+  }
+}
+
+function buildSankalpText() {
+  const profile = loadDevoteeProfile();
+  const naam  = profile?.naam  || 'नाम लें';
+  const gotra = profile?.gotra || 'अपना गोत्र';
+  return `ओम विष्णुर्विष्णुर्विष्णुः। अद्य, अहं ${naam}, ${gotra} गोत्रोत्पन्नः, इदं पूजां करिष्ये। भगवान मेरी मनोकामना पूर्ण करें।`;
+}
+
+// Build context-aware system prompt with devotee profile + today's panchang
+function buildSystemPrompt() {
+  const profile = loadDevoteeProfile();
+  const p = window.PANDIT_DB ? window.PANDIT_DB.getPanchang(new Date()) : null;
+
+  const profileSection = (profile && profile.naam)
+    ? `\n\nDEVOTEE PROFILE:\n- नाम: ${profile.naam}\n- गोत्र: ${profile.gotra || 'अज्ञात'}\n- राशि: ${profile.rashi || 'अज्ञात'}\n- संप्रदाय: ${profile.sampradaya || 'स्मार्त'}\nAlways address this devotee as "${profile.naam} जी". In any Sankalpa, use naam="${profile.naam}" and gotra="${profile.gotra || 'कश्यप'}".`
+    : `\n\nDEVOTEE PROFILE: Not yet provided. For any ritual or pooja request, kindly ask: "आपका शुभ नाम और गोत्र क्या है?" before giving a personalised vidhi.`;
+
+  const panchangSection = p
+    ? `\n\nTODAY'S PANCHANG:\n- वार: ${p.varar}\n- तिथि: ${p.paksha} ${p.tithi}\n- नक्षत्र: ${p.nakshatra}\nUse this naturally when giving muhurat or timing advice ("आज ${p.varar} है, ${p.tithi} तिथि है, इसलिए...").`
+    : '';
+
+  return PANDIT_SYSTEM_PROMPT + profileSection + panchangSection;
+}
 
 // ══════════════════════════════════════════════════════════════
 //  STATE
@@ -250,7 +354,7 @@ async function queryPandit(userMessage) {
   }
   // If no prior history, prepend the system persona to the user message
   const fullMsg = recent.length === 0
-    ? PANDIT_SYSTEM_PROMPT + '\n\n---\nDevotee: ' + userMessage
+    ? buildSystemPrompt() + '\n\n---\nDevotee: ' + userMessage
     : userMessage;
   contents.push({ role: 'user', parts: [{ text: fullMsg }] });
 
@@ -701,14 +805,20 @@ function toggleVoice() {
 function panditGreet() {
   const db = window.PANDIT_DB;
   const p = db.getPanchang(new Date());
+  const profile = loadDevoteeProfile();
   const upcoming = db.getUpcomingFestivals(3);
   const festMsg = upcoming.length
     ? `\n\nआगामी पर्व: ${upcoming.map(f => f.name).join(', ')}`
     : '';
-  const greet = `🙏 नमस्ते! AI पंडित जी की सेवा में आपका स्वागत है।\n\nआज ${p.varar} है। ${p.paksha} ${p.tithi} तिथि, ${p.nakshatra} नक्षत्र।${festMsg}\n\nआप मुझसे कोई भी पूजा, मंत्र, व्रत, या आध्यात्मिक समस्या के बारे में पूछ सकते हैं। या नीचे "पूजा शुरू करें" पर क्लिक करके गृह पूजा शुरू करें।`;
+
+  let greet;
+  if (profile && profile.naam) {
+    greet = `🙏 ${profile.naam} जी, नमस्ते! AI पंडित जी की सेवा में पुनः स्वागत है।\n\nआज ${p.varar} है। ${p.paksha} ${p.tithi} तिथि, ${p.nakshatra} नक्षत्र।${festMsg}\n\nआप मुझसे कोई भी पूजा, मंत्र, व्रत, या आध्यात्मिक समस्या के बारे में पूछ सकते हैं।`;
+  } else {
+    greet = `🙏 नमस्ते! AI पंडित जी की सेवा में आपका स्वागत है।\n\nआज ${p.varar} है। ${p.paksha} ${p.tithi} तिथि, ${p.nakshatra} नक्षत्र।${festMsg}\n\n👤 व्यक्तिगत संकल्प और मार्गदर्शन के लिए ऊपर "👤 परिचय" बटन दबाकर अपना नाम और गोत्र बताएं।\n\nया सीधे कोई भी पूजा, मंत्र या प्रश्न पूछें।`;
+  }
   addMsg('ai', greet);
   if (panditState.voiceEnabled) {
-    // Slight delay so voices load
     setTimeout(() => panditSpeak(greet), 800);
   }
 }
@@ -753,7 +863,18 @@ function initPandit() {
   loadCalendar();
   renderPoojaMenu();
   renderQuickPrompts();
+  updateSankalpCard();
   panditGreet();
+
+  // Update header profile button label if naam already saved
+  const profile = loadDevoteeProfile();
+  const hBtn = $('profile-header-btn');
+  if (hBtn && profile?.naam) hBtn.textContent = `👤 ${profile.naam.split(' ')[0]}`;
+
+  // Show profile modal on first visit (after greeting settles)
+  if (!profile) {
+    setTimeout(() => showProfileModal(), 2200);
+  }
 
   // Auto-load voices
   if (window.speechSynthesis) {

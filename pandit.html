@@ -482,6 +482,41 @@ body{background:var(--bg);color:var(--cream);font-family:'Segoe UI',system-ui,sa
 .settings-btn.cancel{border-color:var(--border);background:var(--bg3);color:var(--cream2)}
 
 /* ══════════════════════════════════════════════════════════
+   PROFILE MODAL
+══════════════════════════════════════════════════════════ */
+.pandit-profile-modal{
+  display:none;position:fixed;inset:0;z-index:200;
+  background:rgba(0,0,0,.75);backdrop-filter:blur(6px);
+  align-items:center;justify-content:center;
+}
+.pandit-profile-modal.open{display:flex}
+.profile-card{
+  background:var(--bg2);border:1px solid var(--border2);border-radius:16px;
+  padding:24px;max-width:400px;width:92%;
+  box-shadow:0 0 50px rgba(232,97,10,.25);
+}
+.profile-card h3{color:var(--gold);font-size:1.05rem;margin-bottom:4px;text-align:center}
+.profile-sub{font-size:.68rem;color:var(--muted);text-align:center;margin-bottom:16px;line-height:1.5}
+.profile-field{margin-bottom:12px}
+.profile-field label{font-size:.7rem;color:var(--muted);display:block;margin-bottom:4px;font-weight:600}
+.profile-field input,.profile-field select{
+  width:100%;padding:8px 11px;border-radius:8px;
+  border:1px solid var(--border);background:var(--bg3);color:var(--cream);
+  font-size:.82rem;outline:none;
+}
+.profile-field input:focus,.profile-field select:focus{border-color:var(--saffron)}
+.profile-field select option{background:var(--bg3);color:var(--cream)}
+.profile-sampradaya{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.sampradaya-btn{
+  padding:5px 13px;border-radius:20px;font-size:.72rem;cursor:pointer;
+  border:1px solid var(--border);background:var(--bg3);color:var(--cream2);transition:.15s;
+}
+.sampradaya-btn.active{border-color:var(--saffron);background:rgba(232,97,10,.15);color:var(--saffron)}
+.sampradaya-btn:hover:not(.active){background:var(--bg4)}
+.profile-actions{display:flex;gap:8px;margin-top:16px}
+.profile-hint{font-size:.65rem;color:var(--muted);margin-top:10px;text-align:center;line-height:1.5}
+
+/* ══════════════════════════════════════════════════════════
    UTILITY BUTTONS
 ══════════════════════════════════════════════════════════ */
 .action-btn{
@@ -513,6 +548,8 @@ body{background:var(--bg);color:var(--cream);font-family:'Segoe UI',system-ui,sa
     <button class="lang-btn" data-lang="en" onclick="setLanguage('en')">English</button>
     <!-- Voice -->
     <button id="voice-toggle-btn" onclick="toggleVoice()">🔊 आवाज़ चालू</button>
+    <!-- Profile -->
+    <button class="ph-back" onclick="showProfileModal()" title="अपना परिचय / Devotee Profile" id="profile-header-btn">👤 परिचय</button>
     <!-- Settings -->
     <button class="ph-back" onclick="document.querySelector('.pandit-settings').classList.add('open')" title="Settings">⚙️</button>
     <!-- Back -->
@@ -616,11 +653,15 @@ body{background:var(--bg);color:var(--cream);font-family:'Segoe UI',system-ui,sa
           <p>बाएं हाथ में जल लें, दाएं हाथ से ढकें। अपना नाम, गोत्र और पूजा का उद्देश्य मन में बोलें। फिर जल छोड़ें।</p>
           <div class="sankalpa-mantra">
             ॐ विष्णुर्विष्णुर्विष्णुः।<br>
-            अद्य... अहं (नाम) ... पूजां करिष्ये।<br>
-            <em style="font-size:.68rem;color:var(--muted)">— अपना नाम लेकर मन में बोलें</em>
+            अद्य... अहं <span id="sankalpa-devotee-text" style="color:var(--gold);font-weight:700">(नाम)</span> ... पूजां करिष्ये।<br>
+            <em style="font-size:.68rem;color:var(--muted)">— बाएं हाथ में जल लें, मन में संकल्प बोलें</em>
+          </div>
+          <div id="sankalpa-profile-prompt" style="font-size:.68rem;color:var(--muted);margin:6px 0 10px;display:none">
+            👤 <a href="#" onclick="showProfileModal();return false" style="color:var(--saffron)">नाम/गोत्र डालें</a> — संकल्प में आपका नाम आएगा
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="action-btn" onclick="startSteps()">✅ संकल्प हो गया — पूजा शुरू करें</button>
+            <button class="action-btn muted" onclick="panditSpeak(buildSankalpText())">🔊 संकल्प सुनें</button>
           </div>
         </div>
       </div>
@@ -762,6 +803,54 @@ body{background:var(--bg);color:var(--cream);font-family:'Segoe UI',system-ui,sa
     </div>
 
   </aside>
+</div>
+
+<!-- DEVOTEE PROFILE MODAL -->
+<div class="pandit-profile-modal" id="profile-modal">
+  <div class="profile-card">
+    <h3>🙏 अपना परिचय दें — Parichay</h3>
+    <p class="profile-sub">पंडित जी आपका नाम और गोत्र जानकर व्यक्तिगत संकल्प और मार्गदर्शन देंगे।<br>यह जानकारी केवल आपके ब्राउज़र में सुरक्षित रहती है।</p>
+    <div class="profile-field">
+      <label>आपका नाम * (Your Name)</label>
+      <input type="text" id="profile-naam" placeholder="जैसे: राम शर्मा, सीता देवी..." autocomplete="name"/>
+    </div>
+    <div class="profile-field">
+      <label>गोत्र (Gotra) — वैकल्पिक</label>
+      <input type="text" id="profile-gotra" placeholder="जैसे: कश्यप, भारद्वाज, वशिष्ठ, अत्रि..."/>
+    </div>
+    <div class="profile-field">
+      <label>जन्म राशि (Birth Rashi) — वैकल्पिक</label>
+      <select id="profile-rashi">
+        <option value="">— राशि चुनें —</option>
+        <option>मेष (Aries)</option>
+        <option>वृषभ (Taurus)</option>
+        <option>मिथुन (Gemini)</option>
+        <option>कर्क (Cancer)</option>
+        <option>सिंह (Leo)</option>
+        <option>कन्या (Virgo)</option>
+        <option>तुला (Libra)</option>
+        <option>वृश्चिक (Scorpio)</option>
+        <option>धनु (Sagittarius)</option>
+        <option>मकर (Capricorn)</option>
+        <option>कुम्भ (Aquarius)</option>
+        <option>मीन (Pisces)</option>
+      </select>
+    </div>
+    <div class="profile-field">
+      <label>संप्रदाय / परम्परा (Tradition)</label>
+      <div class="profile-sampradaya">
+        <button class="sampradaya-btn active" data-val="स्मार्त" onclick="selectSampradaya(this)">स्मार्त</button>
+        <button class="sampradaya-btn" data-val="वैष्णव" onclick="selectSampradaya(this)">वैष्णव</button>
+        <button class="sampradaya-btn" data-val="शैव" onclick="selectSampradaya(this)">शैव</button>
+        <button class="sampradaya-btn" data-val="शाक्त" onclick="selectSampradaya(this)">शाक्त</button>
+      </div>
+    </div>
+    <div class="profile-actions">
+      <button class="settings-btn save" style="flex:2" onclick="saveProfile()">🙏 पंडित जी से मिलें</button>
+      <button class="settings-btn cancel" onclick="closeProfileModal()">बाद में</button>
+    </div>
+    <p class="profile-hint">गोत्र न पता हो तो "कश्यप" लिखें — यह सर्व-सामान्य गोत्र है।</p>
+  </div>
 </div>
 
 <!-- SETTINGS MODAL -->
