@@ -281,25 +281,39 @@ async function queryPandit(userMessage) {
     return extractGeminiText(data);
   }
 
-  // 1. Try server-side key (from .env)
-  try {
-    return await callProxy(`${PANDIT_CONFIG.server}/proxy/gemini`);
-  } catch (e) {
-    // 2. Fallback: browser-supplied key from Settings modal
-    const keyEl = $('pandit-gemini-key');
-    const key = keyEl ? keyEl.value.trim() : '';
-    if (!key) {
-      throw new Error(
-        'Gemini API key नहीं मिली।\n' +
-        'कृपया ⚙️ Settings खोलें और अपनी Gemini API key डालें।\n' +
-        '(https://aistudio.google.com/app/apikey से मुफ़्त मिलती है)'
-      );
-    }
-    return await callProxy(
-      `${PANDIT_CONFIG.server}/proxy/gemini-withkey`,
-      { 'X-Gemini-Key': key }
+  // 1. Try server-side key (local server running with .env key)
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  if (isLocal) {
+    try {
+      return await callProxy(`${PANDIT_CONFIG.server}/proxy/gemini`);
+    } catch (e) { /* fall through to direct API */ }
+  }
+
+  // 2. Direct Gemini API call — works on GitHub Pages and any static host
+  const keyEl = $('pandit-gemini-key');
+  const key = (keyEl ? keyEl.value.trim() : '') ||
+              localStorage.getItem('pandit_gemini_key') || '';
+  if (!key) {
+    throw new Error(
+      'Gemini API key नहीं मिली।\n' +
+      'कृपया ⚙️ Settings खोलें और अपनी Gemini API key डालें।\n' +
+      'मुफ़्त key यहाँ मिलेगी: https://aistudio.google.com/app/apikey'
     );
   }
+
+  // Try server proxy with browser key first (local), then direct API (GitHub Pages)
+  if (isLocal) {
+    try {
+      return await callProxy(
+        `${PANDIT_CONFIG.server}/proxy/gemini-withkey`,
+        { 'X-Gemini-Key': key }
+      );
+    } catch (e) { /* fall through to direct */ }
+  }
+
+  // Direct call to Gemini API (CORS-enabled — works from any origin)
+  const GEMINI_DIRECT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`;
+  return await callProxy(GEMINI_DIRECT);
 }
 
 function extractGeminiText(data) {
@@ -363,7 +377,12 @@ function startRitual(poojaId) {
   renderRitualPanel(pooja);
   showPhase('samagri');
 
-  const greeting = `🙏 ${pooja.name} के लिए आपका स्वागत है।\n\nयह पूजा ${pooja.deity} की उपासना है। अवधि: ${pooja.duration}। सर्वश्रेष्ठ दिन: ${pooja.bestDay}।\n\nपहले सामग्री की सूची देखें, फिर "तैयार हूँ" बटन दबाएं।`;
+  // Auto-switch to the Ritual tab so the user can see the samagri list + button
+  if (typeof switchTab === 'function') {
+    switchTab('tab-ritual', 'view-ritual');
+  }
+
+  const greeting = `${pooja.name} के लिए आपका स्वागत है।\n\nयह पूजा ${pooja.deity} की उपासना है। अवधि: ${pooja.duration}। सर्वश्रेष्ठ दिन: ${pooja.bestDay}।\n\nपहले "पूजा मार्गदर्शन" टैब में सामग्री की सूची देखें, सभी वस्तुएं एकत्र करें और चेकबॉक्स टिक करें। फिर "सामग्री तैयार है — आगे बढ़ें" बटन दबाएं।`;
   addMsg('ai', greeting);
   if (panditState.voiceEnabled) panditSpeak(greeting);
 }

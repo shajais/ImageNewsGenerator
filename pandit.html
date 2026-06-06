@@ -768,8 +768,14 @@ body{background:var(--bg);color:var(--cream);font-family:'Segoe UI',system-ui,sa
 <div class="pandit-settings" id="settings-modal">
   <div class="settings-card">
     <h3>⚙️ AI Pandit सेटिंग्स</h3>
-    <label class="settings-label">Gemini API Key (यदि server key नहीं है)</label>
-    <input type="password" id="pandit-gemini-key" class="settings-input" placeholder="AIza..." autocomplete="off"/>
+    <div style="font-size:.7rem;color:var(--gold);background:rgba(245,197,24,.08);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.6">
+      GitHub Pages पर चलाने के लिए नीचे Gemini API key डालें।<br>
+      मुफ़्त key यहाँ मिलेगी:
+      <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--saffron)">aistudio.google.com/app/apikey</a>
+    </div>
+    <label class="settings-label">Gemini API Key</label>
+    <input type="password" id="pandit-gemini-key" class="settings-input" placeholder="AIza..." autocomplete="off"
+      oninput="localStorage.setItem('pandit_gemini_key', this.value)"/>
     <label class="settings-label">TTS दर (आवाज़ की गति)</label>
     <input type="range" min="0.5" max="1.3" step="0.05" value="0.82" id="tts-rate-slider"
       oninput="PANDIT_CONFIG.ttsRate=parseFloat(this.value);document.getElementById('tts-rate-val').textContent=this.value"
@@ -781,7 +787,7 @@ body{background:var(--bg);color:var(--cream);font-family:'Segoe UI',system-ui,sa
       style="width:100%;accent-color:var(--saffron);margin-bottom:6px"/>
     <span id="tts-pitch-val" class="settings-label">0.6</span>
     <div class="settings-row">
-      <button class="settings-btn save" onclick="document.getElementById('settings-modal').classList.remove('open')">✅ सहेजें</button>
+      <button class="settings-btn save" onclick="saveSettings()">✅ सहेजें</button>
       <button class="settings-btn cancel" onclick="document.getElementById('settings-modal').classList.remove('open')">रद्द</button>
     </div>
   </div>
@@ -803,6 +809,21 @@ function switchTab(tabId, viewId) {
   view.style.display = 'flex';
   view.classList.add('active');
 }
+
+// Save settings and restore key from localStorage
+function saveSettings() {
+  const keyEl = document.getElementById('pandit-gemini-key');
+  if (keyEl && keyEl.value.trim()) {
+    localStorage.setItem('pandit_gemini_key', keyEl.value.trim());
+  }
+  document.getElementById('settings-modal').classList.remove('open');
+}
+function loadSavedKey() {
+  const saved = localStorage.getItem('pandit_gemini_key');
+  const keyEl = document.getElementById('pandit-gemini-key');
+  if (saved && keyEl) keyEl.value = saved;
+}
+document.addEventListener('DOMContentLoaded', loadSavedKey);
 
 // Populate pooja menu in ritual idle phase too
 document.addEventListener('DOMContentLoaded', () => {
