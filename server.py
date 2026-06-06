@@ -154,6 +154,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pathname = parsed.path
         qs = urllib.parse.parse_qs(parsed.query)
 
+        # ── AI Pandit: /api/pandit/panchang?date=YYYY-MM-DD ──
+        if pathname == '/api/pandit/panchang':
+            self._pandit_panchang(qs)
+            return
+
         # ── Live prices: /api/live-prices?symbols=RELIANCE.NS,TCS.NS&market=NSE ──
         if pathname == '/api/live-prices':
             if not _yfinance_available:
@@ -599,6 +604,89 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         self.send_response(404)
         self.end_headers()
+
+    # ══════════════════════════════════════════════════════════════
+    #  AI PANDIT  —  Hindu calendar / panchang helper
+    # ══════════════════════════════════════════════════════════════
+
+    def _pandit_panchang(self, qs):
+        """Compute approximate Panchang for a given date (YYYY-MM-DD).
+        Uses lunar-phase math; no external library required."""
+        import datetime, math
+        date_str = qs.get('date', [''])[0]
+        try:
+            if date_str:
+                date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+            else:
+                date = datetime.date.today()
+        except ValueError:
+            date = datetime.date.today()
+
+        # Julian Day Number
+        Y, M, D = date.year, date.month, date.day
+        A = (14 - M) // 12
+        y = Y + 4800 - A
+        m = M + 12 * A - 3
+        jd = D + (153 * m + 2) // 5 + 365 * y + y // 4 - y // 100 + y // 400 - 32045
+
+        # Lunar cycle  (reference new moon: JD 2451551.259 = Jan 6 2000)
+        synodic = 29.530588853
+        elapsed = jd - 2451551.259
+        cycle_pos = elapsed % synodic
+        if cycle_pos < 0:
+            cycle_pos += synodic
+
+        tithi_index = int(cycle_pos * 30 / synodic)   # 0-29
+        paksha = 'शुक्ल पक्ष' if tithi_index < 15 else 'कृष्ण पक्ष'
+        tithi_in_paksha = tithi_index if tithi_index < 15 else tithi_index - 15
+        tithis = ['प्रतिपदा','द्वितीया','तृतीया','चतुर्थी','पंचमी','षष्ठी',
+                  'सप्तमी','अष्टमी','नवमी','दशमी','एकादशी','द्वादशी',
+                  'त्रयोदशी','चतुर्दशी']
+        if tithi_index == 14:
+            tithi_name = 'पूर्णिमा'
+        elif tithi_index == 29:
+            tithi_name = 'अमावस्या'
+        else:
+            tithi_name = tithis[min(tithi_in_paksha, 13)]
+
+        moon_lon = ((jd - 2451545.0) * 13.176396 + 231.67) % 360
+        sun_lon  = ((jd - 2451545.0) * 0.9856473 + 280.46) % 360
+        nakshatras = ['अश्विनी','भरणी','कृत्तिका','रोहिणी','मृगशिरा','आर्द्रा',
+                      'पुनर्वसु','पुष्य','आश्लेषा','मघा','पूर्व फाल्गुनी',
+                      'उत्तर फाल्गुनी','हस्त','चित्रा','स्वाती','विशाखा',
+                      'अनुराधा','ज्येष्ठा','मूल','पूर्वाषाढ़ा','उत्तराषाढ़ा',
+                      'श्रवण','धनिष्ठा','शतभिषा','पूर्व भाद्रपदा',
+                      'उत्तर भाद्रपदा','रेवती']
+        yogas = ['विष्कम्भ','प्रीति','आयुष्मान','सौभाग्य','शोभन','अतिगण्ड',
+                 'सुकर्मा','धृति','शूल','गण्ड','वृद्धि','ध्रुव','व्याघात',
+                 'हर्षण','वज्र','सिद्धि','व्यतीपात','वरीयान','परिघ','शिव',
+                 'सिद्ध','साध्य','शुभ','शुक्ल','ब्रह्म','ऐन्द्र','वैधृति']
+        varars = ['रविवार','सोमवार','मंगलवार','बुधवार','गुरुवार','शुक्रवार','शनिवार']
+
+        nak_idx   = int(moon_lon / (360/27)) % 27
+        yoga_idx  = int(((sun_lon + moon_lon) % 360) / (360/27)) % 27
+        varar_idx = date.weekday()  # 0=Mon, 6=Sun in Python
+        # Convert Python weekday (Mon=0) to Hindu varar (Sun=0)
+        varar_idx = (date.weekday() + 1) % 7
+
+        result = {
+            'date':       date.isoformat(),
+            'tithi':      tithi_name,
+            'paksha':     paksha,
+            'nakshatra':  nakshatras[nak_idx],
+            'yoga':       yogas[yoga_idx],
+            'varar':      varars[varar_idx],
+            'cycle_pos':  round(cycle_pos, 3),
+            'tithi_index': tithi_index,
+        }
+        payload = json.dumps(result, ensure_ascii=False).encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(payload)))
+        self.send_cors()
+        self.end_headers()
+        self.wfile.write(payload)
+        print(f'  [pandit/panchang] {date} → {tithi_name}, {nakshatras[nak_idx]}')
 
     # ══════════════════════════════════════════════════════════════
     #  AI VIDEO STUDIO  —  local AI pipeline helpers

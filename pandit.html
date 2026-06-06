@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>🕉️ AI Pandit — Vedic Pooja Assistant</title>
+<meta name="description" content="AI Pandit Ji — Full pooja vidhi guidance, mantras, Hindu calendar, astrology and spiritual Q&A in Hindi">
+<style>
+/* ══════════════════════════════════════════════════════════
+   ROOT & RESET
+══════════════════════════════════════════════════════════ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0500;
+  --bg2:#1a0802;
+  --bg3:#2a1005;
+  --bg4:#381408;
+  --saffron:#e8610a;
+  --gold:#f5c518;
+  --maroon:#7b1e1e;
+  --cream:#fde8b0;
+  --cream2:#f5c880;
+  --muted:#b07840;
+  --border:rgba(232,97,10,.25);
+  --border2:rgba(245,197,24,.2);
+  --glow:rgba(232,97,10,.15);
+  --glow2:rgba(245,197,24,.12);
+  --red-dim:#dc2626;
+  --green:#16a34a;
+}
+body{background:var(--bg);color:var(--cream);font-family:'Segoe UI',system-ui,sans-serif;height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ══════════════════════════════════════════════════════════
+   HEADER
+══════════════════════════════════════════════════════════ */
+.pandit-header{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 20px;
+  background:linear-gradient(135deg,#1a0802,#2a0e03);
+  border-bottom:2px solid var(--border);
+  box-shadow:0 2px 20px rgba(232,97,10,.2);
+  flex-shrink:0;position:relative;z-index:10;
+}
+.ph-logo{font-size:1.5rem;flex-shrink:0}
+.ph-title{
+  font-size:1.15rem;font-weight:900;letter-spacing:.03em;
+  background:linear-gradient(90deg,var(--saffron),var(--gold));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.ph-subtitle{font-size:.7rem;color:var(--muted);margin-top:2px}
+.ph-spacer{flex:1}
+.ph-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+/* Language buttons */
+.lang-btn{
+  padding:5px 11px;border-radius:20px;font-size:.72rem;font-weight:700;cursor:pointer;
+  border:1px solid var(--border);background:var(--bg3);color:var(--cream2);transition:.15s;
+}
+.lang-btn.active{background:var(--saffron);border-color:var(--saffron);color:#fff}
+.lang-btn:hover:not(.active){background:var(--bg4)}
+/* Voice toggle */
+#voice-toggle-btn{
+  padding:5px 12px;border-radius:20px;font-size:.72rem;font-weight:700;cursor:pointer;
+  border:1px solid var(--border2);background:rgba(245,197,24,.08);color:var(--gold);transition:.15s;
+}
+#voice-toggle-btn.muted{background:rgba(100,116,139,.12);color:#94a3b8;border-color:rgba(100,116,139,.25)}
+#voice-toggle-btn:hover{filter:brightness(1.15)}
+/* Back button */
+.ph-back{
+  padding:6px 14px;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;
+  border:1px solid var(--border);background:var(--bg3);color:var(--cream2);text-decoration:none;
+  transition:.15s;
+}
+.ph-back:hover{background:var(--bg4);color:var(--cream)}
+/* Status bar */
+.ph-status{font-size:.68rem;padding:3px 10px;border-radius:20px;background:var(--bg3);min-width:80px;text-align:center;color:var(--muted)}
+.ph-status[data-type="thinking"]{color:var(--gold);animation:status-pulse 1s ease-in-out infinite}
+.ph-status[data-type="listening"]{color:#4ade80;animation:status-pulse 1s ease-in-out infinite}
+.ph-status[data-type="error"]{color:#f87171}
+@keyframes status-pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* ══════════════════════════════════════════════════════════
+   MAIN GRID
+══════════════════════════════════════════════════════════ */
+.pandit-body{
+  display:grid;
+  grid-template-columns:240px 1fr 270px;
+  flex:1;min-height:0;overflow:hidden;
+}
+@media(max-width:1024px){
+  .pandit-body{grid-template-columns:220px 1fr}
+  .pandit-right{display:none}
+}
+@media(max-width:700px){
+  body{overflow:auto}
+  .pandit-body{grid-template-columns:1fr;overflow:visible}
+  .pandit-left,.pandit-right{display:none}
+  .pandit-center{height:calc(100dvh - 110px)}
+}
+
+/* ══════════════════════════════════════════════════════════
+   LEFT PANEL — Avatar + Poojas + Daily
+══════════════════════════════════════════════════════════ */
+.pandit-left{
+  display:flex;flex-direction:column;
+  background:var(--bg2);
+  border-right:1px solid var(--border);
+  overflow-y:auto;overflow-x:hidden;
+}
+
+/* Avatar */
+.avatar-area{
+  display:flex;flex-direction:column;align-items:center;
+  padding:16px 12px 10px;
+  background:linear-gradient(180deg,var(--bg4),var(--bg2));
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+#pandit-avatar-img{
+  font-size:3.5rem;width:80px;height:80px;
+  display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle,rgba(232,97,10,.3),transparent);
+  border-radius:50%;border:2px solid var(--saffron);
+  box-shadow:0 0 20px rgba(232,97,10,.3);
+  transition:transform .3s ease;
+  cursor:default;
+}
+#pandit-avatar-img[data-mood="chanting"]{animation:avatar-sway 1.5s ease-in-out infinite}
+#pandit-avatar-img[data-mood="listening"]{animation:avatar-pulse 0.8s ease-in-out infinite}
+@keyframes avatar-sway{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
+@keyframes avatar-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+
+.avatar-name{font-size:.9rem;font-weight:800;margin-top:8px;color:var(--gold)}
+.avatar-title{font-size:.65rem;color:var(--muted);text-align:center;line-height:1.4}
+#pandit-status{font-size:.65rem;margin-top:6px;color:var(--saffron);min-height:14px}
+
+/* Panchang mini */
+.panchang-mini{padding:10px 12px;border-bottom:1px solid var(--border)}
+.panchang-mini-title{font-size:.65rem;font-weight:800;color:var(--saffron);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.panchang-row{display:flex;justify-content:space-between;align-items:baseline;padding:2px 0;font-size:.68rem}
+.panchang-row span{color:var(--muted)}
+.panchang-row strong{color:var(--cream2);font-size:.72rem}
+.panchang-festival-block{margin-top:5px}
+.panchang-festival{font-size:.7rem;color:var(--gold);background:rgba(245,197,24,.08);padding:3px 8px;border-radius:6px;margin:2px 0;border:1px solid var(--border2)}
+
+/* Pooja menu */
+.pooja-menu-section{padding:10px 10px 6px;border-bottom:1px solid var(--border)}
+.section-label{font-size:.65rem;font-weight:800;color:var(--saffron);letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px}
+#pooja-menu{display:flex;flex-direction:column;gap:4px}
+.pooja-btn{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 9px;border-radius:8px;
+  border:1px solid var(--border);background:var(--bg3);
+  color:var(--cream);font-size:.74rem;cursor:pointer;text-align:left;
+  transition:.15s;
+}
+.pooja-btn:hover{background:rgba(232,97,10,.15);border-color:var(--saffron);transform:translateX(2px)}
+.pooja-icon{font-size:1rem;flex-shrink:0}
+.pooja-name{flex:1;font-weight:600}
+.pooja-day{font-size:.6rem;color:var(--muted);flex-shrink:0}
+
+/* Quick problem link */
+.left-bottom-btns{padding:10px;display:flex;flex-direction:column;gap:6px}
+.left-action-btn{
+  padding:7px 12px;border-radius:8px;font-size:.73rem;font-weight:700;cursor:pointer;
+  border:1px solid;text-align:center;transition:.15s;
+}
+.left-action-btn.problem{border-color:rgba(245,197,24,.3);background:rgba(245,197,24,.05);color:var(--gold)}
+.left-action-btn.problem:hover{background:rgba(245,197,24,.12)}
+.left-action-btn.mantra{border-color:var(--border);background:var(--bg3);color:var(--cream2)}
+.left-action-btn.mantra:hover{background:var(--bg4)}
+
+/* ══════════════════════════════════════════════════════════
+   CENTER PANEL — Chat + Ritual Guide
+══════════════════════════════════════════════════════════ */
+.pandit-center{
+  display:flex;flex-direction:column;
+  overflow:hidden;min-height:0;
+}
+
+/* Center header tabs */
+.pc-tabs{
+  display:flex;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.pc-tab{
+  padding:9px 18px;font-size:.75rem;font-weight:700;color:var(--muted);cursor:pointer;
+  border-bottom:2px solid transparent;transition:.15s;
+}
+.pc-tab.active{color:var(--saffron);border-bottom-color:var(--saffron)}
+.pc-tab:hover:not(.active){color:var(--cream2)}
+
+/* Chat feed */
+.pc-view{display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0}
+.pc-view.active{display:flex}
+
+#pandit-chat-feed{
+  flex:1;min-height:0;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px;
+  scroll-behavior:smooth;
+}
+#pandit-chat-feed::-webkit-scrollbar{width:4px}
+#pandit-chat-feed::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+
+/* Messages */
+.pc-msg{display:flex;align-items:flex-start;gap:8px;max-width:100%}
+.pc-msg-ai{align-self:flex-start}
+.pc-msg-user{align-self:flex-end;flex-direction:row-reverse}
+.pc-msg-avatar{
+  width:28px;height:28px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:.9rem;
+  background:rgba(232,97,10,.2);border:1px solid var(--border);flex-shrink:0;
+}
+.pc-msg-avatar-user{background:rgba(245,197,24,.15);border-color:var(--border2)}
+.pc-msg-body{max-width:88%;min-width:60px}
+.pc-msg-text{
+  padding:10px 13px;border-radius:12px;font-size:.8rem;line-height:1.7;
+  white-space:pre-wrap;word-break:break-word;
+}
+.pc-msg-ai .pc-msg-text{
+  background:linear-gradient(135deg,rgba(26,8,2,.95),rgba(42,16,5,.9));
+  border:1px solid var(--border);color:var(--cream);
+  border-radius:3px 12px 12px 12px;
+}
+.pc-msg-user .pc-msg-text{
+  background:linear-gradient(135deg,rgba(56,20,8,.9),rgba(42,16,5,.9));
+  border:1px solid rgba(232,97,10,.35);color:var(--cream2);
+  border-radius:12px 3px 12px 12px;
+}
+.pc-msg-step .pc-msg-text{
+  border-color:rgba(245,197,24,.35);
+  background:linear-gradient(135deg,rgba(20,10,0,.95),rgba(35,15,3,.9));
+}
+.pc-msg-time{font-size:.6rem;color:var(--muted);margin-top:3px;padding-left:4px}
+.pc-thinking{color:var(--gold);animation:status-pulse .9s ease-in-out infinite}
+
+/* Quick prompts */
+.quick-prompts-bar{
+  display:flex;gap:5px;padding:7px 12px;
+  background:var(--bg2);border-top:1px solid var(--border);
+  overflow-x:auto;flex-shrink:0;
+}
+.quick-prompts-bar::-webkit-scrollbar{height:2px}
+.quick-prompt-btn{
+  flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:.67rem;font-weight:600;
+  border:1px solid var(--border);background:var(--bg3);color:var(--cream2);cursor:pointer;
+  white-space:nowrap;transition:.15s;
+}
+.quick-prompt-btn:hover{background:rgba(232,97,10,.15);border-color:var(--saffron);color:var(--cream)}
+
+/* Input row */
+.pc-input-row{
+  display:flex;gap:7px;padding:10px 12px;
+  background:var(--bg2);border-top:1px solid var(--border);flex-shrink:0;
+}
+#pandit-input{
+  flex:1;padding:10px 13px;border-radius:10px;
+  border:1px solid var(--border);background:var(--bg3);
+  color:var(--cream);font-size:.82rem;outline:none;resize:none;
+  min-height:40px;max-height:90px;font-family:inherit;
+}
+#pandit-input:focus{border-color:var(--saffron)}
+#pandit-input::placeholder{color:var(--muted)}
+#pandit-mic-btn,#pandit-send-btn{
+  padding:0 13px;border-radius:10px;font-size:.9rem;cursor:pointer;
+  border:none;transition:.15s;flex-shrink:0;height:40px;
+}
+#pandit-mic-btn{background:var(--bg3);border:1px solid var(--border);color:var(--cream)}
+#pandit-mic-btn.active{background:rgba(220,38,38,.2);border-color:#dc2626;animation:mic-ring 1s linear infinite}
+@keyframes mic-ring{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.4)}70%{box-shadow:0 0 0 6px rgba(220,38,38,0)}}
+#pandit-send-btn{background:linear-gradient(135deg,var(--saffron),#c44a00);color:#fff;font-weight:700;font-size:.82rem;padding:0 16px}
+#pandit-send-btn:hover{filter:brightness(1.12)}
+
+/* ── RITUAL VIEW ── */
+#view-ritual{padding:0;overflow:hidden}
+.ritual-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;
+}
+#ritual-title{font-size:.9rem;font-weight:800;color:var(--gold)}
+.ritual-close-btn{
+  padding:4px 11px;border-radius:8px;border:1px solid var(--border);
+  background:var(--bg3);color:var(--muted);font-size:.72rem;cursor:pointer;
+}
+.ritual-close-btn:hover{background:rgba(220,38,38,.15);color:#f87171;border-color:#dc2626}
+
+/* Progress bar */
+.ritual-progress{padding:8px 14px;background:var(--bg3);border-bottom:1px solid var(--border)}
+.ritual-progress-track{height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}
+#ritual-progress-bar{height:100%;background:linear-gradient(90deg,var(--saffron),var(--gold));transition:width .5s ease;border-radius:3px;width:0%}
+#ritual-progress-label{font-size:.65rem;color:var(--muted);margin-top:4px}
+
+/* Phase panels */
+.pc-phase{display:none;flex:1;flex-direction:column;overflow:auto}
+.pc-phase.active{display:flex}
+
+/* Idle phase */
+#pc-phase-idle{align-items:center;justify-content:center;padding:24px;text-align:center}
+.idle-prompt{max-width:320px}
+.idle-prompt h2{font-size:1.1rem;color:var(--gold);margin-bottom:8px}
+.idle-prompt p{font-size:.78rem;color:var(--muted);line-height:1.7;margin-bottom:16px}
+
+/* Samagri phase */
+.samagri-body{flex:1;overflow-y:auto;padding:12px 14px}
+#samagri-header{font-size:.85rem;font-weight:800;color:var(--gold);margin-bottom:10px}
+.samagri-item{
+  display:flex;align-items:flex-start;gap:9px;
+  padding:7px 9px;border-radius:8px;margin-bottom:4px;
+  background:var(--bg3);border:1px solid var(--border);font-size:.76rem;line-height:1.5;
+  transition:.15s;
+}
+.samagri-item.checked{background:rgba(22,163,74,.08);border-color:rgba(22,163,74,.25)}
+.samagri-item input{margin-top:2px;accent-color:var(--saffron);flex-shrink:0}
+.samagri-item label{cursor:pointer;flex:1}
+.samagri-item label strong{color:var(--cream);display:block}
+.samagri-item label em{color:var(--muted);font-style:normal;font-size:.68rem}
+.sub-note{display:block;font-size:.65rem;color:rgba(245,197,24,.7);margin-top:1px}
+.samagri-action-row{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--border);flex-shrink:0;background:var(--bg2)}
+
+/* Sankalpa phase */
+#pc-phase-sankalpa{padding:16px;justify-content:center}
+.sankalpa-card{background:var(--bg3);border:1px solid var(--border2);border-radius:12px;padding:16px;max-width:480px;width:100%}
+.sankalpa-card h3{color:var(--gold);font-size:.95rem;margin-bottom:8px}
+.sankalpa-card p{font-size:.78rem;color:var(--cream);line-height:1.8}
+.sankalpa-mantra{margin:12px 0;padding:10px;background:rgba(232,97,10,.08);border-left:3px solid var(--saffron);border-radius:0 8px 8px 0;font-size:.8rem;color:var(--cream);line-height:1.8}
+
+/* Steps phase */
+#pc-phase-steps{display:flex;flex-direction:column}
+.steps-layout{display:flex;flex:1;overflow:hidden}
+.step-sidebar{
+  width:160px;flex-shrink:0;overflow-y:auto;
+  background:var(--bg2);border-right:1px solid var(--border);
+}
+.ritual-step-item{
+  display:flex;align-items:center;gap:6px;padding:8px 10px;font-size:.7rem;cursor:pointer;
+  border-bottom:1px solid rgba(255,255,255,.04);transition:.15s;color:var(--muted);
+}
+.ritual-step-item:hover{background:rgba(232,97,10,.08)}
+.ritual-step-item.current{background:rgba(232,97,10,.15);color:var(--cream);border-left:2px solid var(--saffron)}
+.ritual-step-item.done{color:rgba(22,163,74,.8)}
+.step-num{
+  width:20px;height:20px;border-radius:50%;font-size:.6rem;font-weight:700;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  background:var(--bg3);border:1px solid var(--border);
+}
+.ritual-step-item.current .step-num{background:var(--saffron);border-color:var(--saffron);color:#fff}
+.step-title{flex:1;line-height:1.3}
+.step-check{font-size:.75rem}
+
+.step-main{flex:1;overflow-y:auto;padding:14px}
+#current-step-display{background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:14px;min-height:160px}
+.step-n{font-size:.65rem;color:var(--muted);margin-bottom:4px}
+.step-t{font-size:1rem;font-weight:800;color:var(--gold);margin-bottom:10px}
+.step-inst{font-size:.8rem;color:var(--cream);line-height:1.8;margin-bottom:10px}
+.step-mantra{
+  background:rgba(232,97,10,.08);border-left:3px solid var(--saffron);
+  padding:10px 12px;border-radius:0 8px 8px 0;
+  font-size:.82rem;color:var(--cream);line-height:1.9;margin-bottom:8px;
+}
+.step-dur{font-size:.68rem;color:var(--muted)}
+.step-controls{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.step-btn{
+  padding:7px 14px;border-radius:8px;font-size:.76rem;font-weight:700;cursor:pointer;
+  border:1px solid;transition:.15s;
+}
+.step-btn.prev{border-color:var(--border);background:var(--bg3);color:var(--cream2)}
+.step-btn.next{border-color:var(--saffron);background:rgba(232,97,10,.15);color:var(--saffron)}
+.step-btn.next:hover{background:var(--saffron);color:#fff}
+.step-btn.repeat{border-color:var(--border2);background:rgba(245,197,24,.08);color:var(--gold)}
+.step-btn.prev:hover,.step-btn.repeat:hover{background:var(--bg4)}
+
+/* Samapan phase */
+#pc-phase-samapan{align-items:center;justify-content:center;padding:24px;text-align:center}
+.samapan-card{max-width:360px}
+.samapan-card h2{font-size:1.3rem;color:var(--gold);margin-bottom:8px}
+.samapan-card p{font-size:.8rem;color:var(--cream);line-height:1.7;margin-bottom:16px}
+
+/* Mantra view */
+#view-mantras{overflow-y:auto;padding:14px;gap:10px;display:none;flex-direction:column}
+#view-mantras.active{display:flex}
+.mantra-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:13px}
+.mantra-card h3{color:var(--gold);font-size:.85rem;margin-bottom:6px}
+.mantra-card .mantra-text{font-size:.9rem;color:var(--cream);line-height:1.9;margin-bottom:8px}
+.mantra-card .mantra-meaning{font-size:.72rem;color:var(--muted);line-height:1.6;border-top:1px solid var(--border);padding-top:7px}
+.mantra-card .mantra-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.mantra-action-btn{
+  padding:4px 11px;border-radius:20px;font-size:.68rem;font-weight:700;cursor:pointer;
+  border:1px solid var(--border);background:var(--bg2);color:var(--cream2);transition:.15s;
+}
+.mantra-action-btn:hover{background:rgba(232,97,10,.15);border-color:var(--saffron);color:var(--cream)}
+
+/* ══════════════════════════════════════════════════════════
+   RIGHT PANEL — Calendar + Problems
+══════════════════════════════════════════════════════════ */
+.pandit-right{
+  display:flex;flex-direction:column;
+  background:var(--bg2);border-left:1px solid var(--border);
+  overflow-y:auto;
+}
+.right-section{border-bottom:1px solid var(--border)}
+.right-section-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 12px;background:var(--bg3);
+}
+.rs-label{font-size:.67rem;font-weight:800;color:var(--saffron);letter-spacing:.08em;text-transform:uppercase}
+.rs-count{font-size:.62rem;color:var(--muted);background:var(--bg4);padding:1px 7px;border-radius:20px}
+
+/* Calendar */
+#calendar-list{max-height:280px;overflow-y:auto}
+.cal-item{
+  padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;
+  transition:background .15s;
+}
+.cal-item:hover{background:rgba(232,97,10,.08)}
+.cal-date{font-size:.65rem;color:var(--muted);margin-bottom:2px}
+.cal-name{font-size:.74rem;font-weight:600;color:var(--cream);line-height:1.3}
+.cal-badge{font-size:.62rem;margin-top:2px;color:var(--gold)}
+.cal-item.cal-major .cal-name{color:var(--gold)}
+.cal-item.cal-ekadashi .cal-name{color:var(--cream2)}
+
+/* Problems */
+#problems-list{max-height:240px;overflow-y:auto}
+.problem-item{
+  padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;
+  transition:.15s;
+}
+.problem-item:hover{background:rgba(245,197,24,.06)}
+.problem-q{font-size:.73rem;color:var(--cream);line-height:1.4}
+.problem-q:hover{color:var(--gold)}
+
+/* Remedy start button */
+#remedy-start-btn{
+  display:none;margin:8px 12px;
+  padding:7px 14px;border-radius:8px;font-size:.74rem;font-weight:700;cursor:pointer;
+  border:1px solid var(--saffron);background:rgba(232,97,10,.15);color:var(--saffron);
+  transition:.15s;
+}
+#remedy-start-btn:hover{background:var(--saffron);color:#fff}
+
+/* Mantra quick buttons */
+.mantra-quick-list{padding:8px 10px;display:flex;flex-direction:column;gap:5px}
+.mantra-quick-btn{
+  padding:7px 10px;border-radius:7px;font-size:.72rem;cursor:pointer;
+  border:1px solid var(--border);background:var(--bg3);color:var(--cream2);text-align:left;
+  transition:.15s;
+}
+.mantra-quick-btn:hover{background:rgba(232,97,10,.12);border-color:var(--saffron);color:var(--cream)}
+.mantra-quick-btn b{color:var(--saffron);display:block;font-size:.7rem;margin-bottom:1px}
+
+/* ══════════════════════════════════════════════════════════
+   DECORATIVE DIVIDER
+══════════════════════════════════════════════════════════ */
+.om-divider{
+  text-align:center;font-size:.7rem;color:var(--border);
+  padding:5px 0;letter-spacing:8px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   SETTINGS MODAL
+══════════════════════════════════════════════════════════ */
+.pandit-settings{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;
+  align-items:center;justify-content:center;
+}
+.pandit-settings.open{display:flex}
+.settings-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:14px;
+  padding:20px;max-width:380px;width:90%;
+}
+.settings-card h3{color:var(--gold);font-size:.95rem;margin-bottom:12px}
+.settings-label{font-size:.7rem;color:var(--muted);margin-bottom:4px;display:block}
+.settings-input{
+  width:100%;padding:8px 11px;border-radius:8px;
+  border:1px solid var(--border);background:var(--bg3);color:var(--cream);
+  font-size:.8rem;outline:none;margin-bottom:12px;
+}
+.settings-input:focus{border-color:var(--saffron)}
+.settings-row{display:flex;gap:8px;margin-top:6px}
+.settings-btn{
+  flex:1;padding:8px;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;
+  border:1px solid;transition:.15s;
+}
+.settings-btn.save{border-color:var(--saffron);background:rgba(232,97,10,.15);color:var(--saffron)}
+.settings-btn.save:hover{background:var(--saffron);color:#fff}
+.settings-btn.cancel{border-color:var(--border);background:var(--bg3);color:var(--cream2)}
+
+/* ══════════════════════════════════════════════════════════
+   UTILITY BUTTONS
+══════════════════════════════════════════════════════════ */
+.action-btn{
+  padding:8px 16px;border-radius:9px;font-size:.76rem;font-weight:700;cursor:pointer;
+  border:1px solid var(--saffron);background:rgba(232,97,10,.12);color:var(--saffron);
+  transition:.15s;
+}
+.action-btn:hover{background:var(--saffron);color:#fff}
+.action-btn.gold{border-color:var(--border2);background:rgba(245,197,24,.08);color:var(--gold)}
+.action-btn.gold:hover{background:var(--gold);color:#000}
+.action-btn.muted{border-color:var(--border);background:var(--bg3);color:var(--cream2)}
+.action-btn.muted:hover{background:var(--bg4)}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="pandit-header">
+  <div class="ph-logo">🕉️</div>
+  <div>
+    <div class="ph-title">AI Pandit Ji</div>
+    <div class="ph-subtitle">वैदिक पूजा सहायक — Vedic Pooja Assistant</div>
+  </div>
+  <div class="ph-spacer"></div>
+  <div class="ph-controls">
+    <span id="pandit-status" class="ph-status" style="min-width:80px;text-align:center"></span>
+    <!-- Language -->
+    <button class="lang-btn active" data-lang="hi" onclick="setLanguage('hi')">हिंदी</button>
+    <button class="lang-btn" data-lang="en" onclick="setLanguage('en')">English</button>
+    <!-- Voice -->
+    <button id="voice-toggle-btn" onclick="toggleVoice()">🔊 आवाज़ चालू</button>
+    <!-- Settings -->
+    <button class="ph-back" onclick="document.querySelector('.pandit-settings').classList.add('open')" title="Settings">⚙️</button>
+    <!-- Back -->
+    <a href="/" class="ph-back">← वापस</a>
+  </div>
+</header>
+
+<!-- BODY -->
+<div class="pandit-body">
+
+  <!-- ═══════════════ LEFT ═══════════════ -->
+  <aside class="pandit-left">
+
+    <!-- Avatar -->
+    <div class="avatar-area">
+      <div id="pandit-avatar-img" data-mood="namaste">🙏</div>
+      <div class="avatar-name">पंडित जी</div>
+      <div class="avatar-title">वैदिक विद्वान · स्मार्त परम्परा<br>सर्व देवता आराधक</div>
+      <div id="avatar-status"></div>
+    </div>
+
+    <!-- Today's Panchang -->
+    <div class="panchang-mini">
+      <div class="panchang-mini-title">📅 आज का पंचांग</div>
+      <div id="panchang-display">लोड हो रहा है...</div>
+    </div>
+
+    <!-- Pooja Menu -->
+    <div class="pooja-menu-section">
+      <div class="section-label">🪔 पूजा शुरू करें</div>
+      <div id="pooja-menu"><!-- filled by JS --></div>
+    </div>
+
+    <!-- Bottom actions -->
+    <div class="left-bottom-btns">
+      <button class="left-action-btn problem" onclick="showProblemSolver()">🔸 समस्या समाधान</button>
+      <button class="left-action-btn mantra" onclick="switchTab('tab-mantras','view-mantras')">📿 मंत्र सूची</button>
+    </div>
+  </aside>
+
+  <!-- ═══════════════ CENTER ═══════════════ -->
+  <main class="pandit-center">
+
+    <!-- Tabs -->
+    <div class="pc-tabs">
+      <div class="pc-tab active" id="tab-chat" onclick="switchTab('tab-chat','view-chat')">💬 पंडित जी से पूछें</div>
+      <div class="pc-tab" id="tab-ritual" onclick="switchTab('tab-ritual','view-ritual')">🛕 पूजा मार्गदर्शन</div>
+      <div class="pc-tab" id="tab-mantras" onclick="switchTab('tab-mantras','view-mantras')">📿 मंत्र</div>
+    </div>
+
+    <!-- ── VIEW: CHAT ── -->
+    <div class="pc-view active" id="view-chat" style="display:flex;flex-direction:column;overflow:hidden;min-height:0;flex:1">
+      <div id="pandit-chat-feed"></div>
+      <div class="quick-prompts-bar" id="quick-prompts"></div>
+      <div class="pc-input-row" id="chat-input-row">
+        <textarea id="pandit-input" placeholder="पंडित जी से कुछ भी पूछें... (Enter से भेजें)" rows="1"
+          onkeydown="handleInputKey(event)" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+        <button id="pandit-mic-btn" onclick="toggleMic()" title="बोलकर पूछें">🎤</button>
+        <button id="pandit-send-btn" onclick="sendMessage()">पूछें ▶</button>
+      </div>
+    </div>
+
+    <!-- ── VIEW: RITUAL GUIDE ── -->
+    <div class="pc-view" id="view-ritual" style="display:none;flex-direction:column;overflow:hidden">
+      <div class="ritual-header">
+        <div id="ritual-title">पूजा मार्गदर्शन</div>
+        <button class="ritual-close-btn" onclick="endRitual()">✕ सत्र समाप्त</button>
+      </div>
+      <div class="ritual-progress">
+        <div class="ritual-progress-track"><div id="ritual-progress-bar"></div></div>
+        <div id="ritual-progress-label">पूजा चुनें</div>
+      </div>
+
+      <!-- Phase: Idle -->
+      <div class="pc-phase active" id="pc-phase-idle">
+        <div class="idle-prompt">
+          <h2>🛕 पूजा मार्गदर्शन में आपका स्वागत</h2>
+          <p>बाईं ओर से कोई भी पूजा चुनें। पंडित जी आपको चरण-दर-चरण पूजा करवाएंगे — सामग्री से लेकर मंत्र जाप और आरती तक।</p>
+          <div style="display:flex;flex-direction:column;gap:8px;align-items:center">
+            <div id="pooja-menu-center" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase: Samagri -->
+      <div class="pc-phase" id="pc-phase-samagri" style="display:none;flex-direction:column">
+        <div class="samagri-body">
+          <div id="samagri-header">सामग्री सूची</div>
+          <div id="samagri-list"></div>
+        </div>
+        <div class="samagri-action-row">
+          <button class="action-btn" onclick="proceedToSankalpa()">✅ सामग्री तैयार है — आगे बढ़ें</button>
+          <button class="action-btn muted" onclick="sendMessage('इस पूजा में कोई सामग्री घर पर नहीं है तो क्या विकल्प है?')">पंडित जी से विकल्प पूछें</button>
+        </div>
+      </div>
+
+      <!-- Phase: Sankalpa -->
+      <div class="pc-phase" id="pc-phase-sankalpa" style="display:none">
+        <div class="sankalpa-card">
+          <h3>🙏 संकल्प (Sankalpa)</h3>
+          <p>बाएं हाथ में जल लें, दाएं हाथ से ढकें। अपना नाम, गोत्र और पूजा का उद्देश्य मन में बोलें। फिर जल छोड़ें।</p>
+          <div class="sankalpa-mantra">
+            ॐ विष्णुर्विष्णुर्विष्णुः।<br>
+            अद्य... अहं (नाम) ... पूजां करिष्ये।<br>
+            <em style="font-size:.68rem;color:var(--muted)">— अपना नाम लेकर मन में बोलें</em>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="action-btn" onclick="startSteps()">✅ संकल्प हो गया — पूजा शुरू करें</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase: Steps -->
+      <div class="pc-phase" id="pc-phase-steps" style="display:none">
+        <div class="steps-layout">
+          <div class="step-sidebar">
+            <div id="ritual-steps-list"></div>
+          </div>
+          <div class="step-main">
+            <div id="current-step-display">
+              <div style="color:var(--muted);font-size:.78rem">पहले बाईं ओर से पूजा चुनें।</div>
+            </div>
+            <div class="step-controls">
+              <button class="step-btn prev" onclick="prevStep()">◀ पिछला</button>
+              <button class="step-btn repeat" onclick="repeatCurrentMantra()">🔁 मंत्र दोहराएं</button>
+              <button class="step-btn next" onclick="nextStep()">अगला ▶</button>
+            </div>
+            <div style="margin-top:10px">
+              <button class="action-btn muted" onclick="sendMessage('इस चरण के बारे में और समझाएं')">❓ इस चरण में शंका है</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase: Samapan -->
+      <div class="pc-phase" id="pc-phase-samapan" style="display:none">
+        <div class="samapan-card">
+          <h2>🎊 पूजा सम्पन्न!</h2>
+          <p>भगवान आपकी मनोकामना पूर्ण करें। प्रसाद सभी को बांटें।</p>
+          <button class="action-btn" onclick="showPhase('idle')">नई पूजा शुरू करें</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW: MANTRAS ── -->
+    <div class="pc-view" id="view-mantras" style="display:none;flex-direction:column;overflow-y:auto;padding:14px;gap:10px">
+      <div class="mantra-card">
+        <h3>🕉️ महामृत्युंजय मंत्र</h3>
+        <div class="mantra-text">ॐ त्र्यम्बकं यजामहे सुगन्धिं पुष्टिवर्धनम्।<br>उर्वारुकमिव बन्धनान् मृत्योर्मुक्षीय मामृतात्।।</div>
+        <div class="mantra-meaning">अर्थ: त्रिनेत्र शिव की उपासना। जैसे खीरा बेल से अलग होता है वैसे मृत्यु से मुक्ति। उपयोग: रोग, भय, दीर्घायु हेतु।</div>
+        <div class="mantra-actions">
+          <button class="mantra-action-btn" onclick="panditSpeak('ॐ त्र्यम्बकं यजामहे सुगन्धिं पुष्टिवर्धनम्। उर्वारुकमिव बन्धनान् मृत्योर्मुक्षीय मामृतात्।।')">▶ सुनें</button>
+          <button class="mantra-action-btn" onclick="sendMessage('महामृत्युंजय मंत्र का विस्तार से अर्थ और जाप विधि बताएं')">📖 विस्तार से जानें</button>
+        </div>
+      </div>
+      <div class="mantra-card">
+        <h3>🌞 गायत्री मंत्र</h3>
+        <div class="mantra-text">ॐ भूर्भुवः स्वः।<br>तत्सवितुर्वरेण्यं भर्गो देवस्य धीमहि।<br>धियो यो नः प्रचोदयात्।।</div>
+        <div class="mantra-meaning">अर्थ: सूर्य देव के तेज का ध्यान — बुद्धि को प्रेरित करें। उपयोग: प्रातः संध्याकाल, बुद्धि-शांति हेतु।</div>
+        <div class="mantra-actions">
+          <button class="mantra-action-btn" onclick="speakMantra('gayatri')">▶ सुनें</button>
+          <button class="mantra-action-btn" onclick="sendMessage('गायत्री मंत्र का अर्थ, महत्व और जाप विधि बताएं')">📖 विस्तार से जानें</button>
+        </div>
+      </div>
+      <div class="mantra-card">
+        <h3>🕉️ पंचाक्षर मंत्र — ॐ नमः शिवाय</h3>
+        <div class="mantra-text">ॐ नमः शिवाय</div>
+        <div class="mantra-meaning">पंच तत्व (न=भूमि, म=जल, शि=अग्नि, वा=वायु, य=आकाश) का प्रतीक। शिव को समर्पित, मन की शांति हेतु।</div>
+        <div class="mantra-actions">
+          <button class="mantra-action-btn" onclick="speakMantra('panchakshara')">▶ सुनें</button>
+          <button class="mantra-action-btn" onclick="sendMessage('ॐ नमः शिवाय मंत्र के पांच अक्षरों का अर्थ विस्तार से बताएं')">📖 विस्तार से जानें</button>
+        </div>
+      </div>
+      <div class="mantra-card">
+        <h3>🐘 गणेश वंदन</h3>
+        <div class="mantra-text">वक्रतुण्ड महाकाय सूर्यकोटि समप्रभ।<br>निर्विघ्नं कुरु मे देव सर्वकार्येषु सर्वदा।।<br><br>ॐ गं गणपतये नमः।</div>
+        <div class="mantra-meaning">अर्थ: विशाल शरीर और करोड़ सूर्यों जैसे तेजस्वी गणेश को, सभी कार्यों में विघ्न दूर करें।</div>
+        <div class="mantra-actions">
+          <button class="mantra-action-btn" onclick="speakMantra('ganesh')">▶ सुनें</button>
+          <button class="mantra-action-btn" onclick="sendMessage('गणेश वंदन का अर्थ और महत्व बताएं')">📖 जानें</button>
+        </div>
+      </div>
+      <div class="mantra-card">
+        <h3>🙏 हनुमान चालीसा — प्रारंभ</h3>
+        <div class="mantra-text">श्रीगुरु चरण सरोज रज, निज मन मुकुर सुधारि।<br>बरनउँ रघुबर बिमल जस, जो दायक फल चारि।।<br><br>जय हनुमान ज्ञान गुण सागर।<br>जय कपीस तिहुं लोक उजागर।।</div>
+        <div class="mantra-meaning">भय, शत्रु और बाधा निवारण। मंगलवार/शनिवार पाठ अत्यंत फलदायी।</div>
+        <div class="mantra-actions">
+          <button class="mantra-action-btn" onclick="panditSpeak(window.PANDIT_DB.mantras.hanuman_chalisa_first.hi)">▶ सुनें</button>
+          <button class="mantra-action-btn" onclick="sendMessage('हनुमान चालीसा की संपूर्ण विधि और महत्व बताएं')">📖 पूरी चालीसा</button>
+        </div>
+      </div>
+      <div class="mantra-card">
+        <h3>🌸 श्री सूक्त (लक्ष्मी)</h3>
+        <div class="mantra-text">हिरण्यवर्णां हरिणीं सुवर्णरजतस्रजाम्।<br>चन्द्रां हिरण्मयीं लक्ष्मीं जातवेदो म आ वह।।</div>
+        <div class="mantra-meaning">ऋग्वेद का श्री सूक्त — धन, सौभाग्य और समृद्धि हेतु। शुक्रवार को पाठ अत्यंत फलदायी।</div>
+        <div class="mantra-actions">
+          <button class="mantra-action-btn" onclick="panditSpeak('हिरण्यवर्णां हरिणीं सुवर्णरजतस्रजाम्। चन्द्रां हिरण्मयीं लक्ष्मीं जातवेदो म आ वह।।')">▶ सुनें</button>
+          <button class="mantra-action-btn" onclick="sendMessage('श्री सूक्त के 16 श्लोकों का अर्थ और पाठ विधि बताएं')">📖 विस्तार से</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ═══════════════ RIGHT ═══════════════ -->
+  <aside class="pandit-right">
+
+    <!-- Upcoming Festivals -->
+    <div class="right-section">
+      <div class="right-section-head">
+        <span class="rs-label">📅 आगामी पर्व</span>
+        <span class="rs-count">45 दिन</span>
+      </div>
+      <div id="calendar-list">लोड हो रहा है...</div>
+    </div>
+
+    <!-- Problem Solver -->
+    <div class="right-section">
+      <div class="right-section-head">
+        <span class="rs-label">🔸 समस्या समाधान</span>
+      </div>
+      <div id="problems-list"><!-- filled by JS --></div>
+      <button id="remedy-start-btn" onclick="startRecommendedPooja()"></button>
+    </div>
+
+    <!-- Quick Mantras -->
+    <div class="right-section">
+      <div class="right-section-head"><span class="rs-label">📿 शीघ्र मंत्र</span></div>
+      <div class="mantra-quick-list">
+        <button class="mantra-quick-btn" onclick="speakMantra('mahamrityunjaya')"><b>महामृत्युंजय</b>रोग · भय · दीर्घायु</button>
+        <button class="mantra-quick-btn" onclick="speakMantra('gayatri')"><b>गायत्री</b>बुद्धि · शांति · प्रातः</button>
+        <button class="mantra-quick-btn" onclick="speakMantra('panchakshara')"><b>ॐ नमः शिवाय</b>मन की शांति</button>
+        <button class="mantra-quick-btn" onclick="speakMantra('ganesh')"><b>गणेश वंदन</b>कार्य आरंभ से पहले</button>
+      </div>
+    </div>
+
+    <!-- Deity Quick Info -->
+    <div class="right-section">
+      <div class="right-section-head"><span class="rs-label">🏛️ देवता जानकारी</span></div>
+      <div class="mantra-quick-list">
+        <button class="mantra-quick-btn" onclick="sendMessage('भगवान शिव के बारे में बताएं — दिन, मंत्र, पूजा विधि')"><b>भगवान शिव</b>सोमवार · बेलपत्र</button>
+        <button class="mantra-quick-btn" onclick="sendMessage('देवी लक्ष्मी के बारे में बताएं — दिन, मंत्र, पूजा विधि')"><b>देवी लक्ष्मी</b>शुक्रवार · कमल</button>
+        <button class="mantra-quick-btn" onclick="sendMessage('देवी दुर्गा के बारे में बताएं — शक्ति, मंत्र, नवरात्रि')"><b>देवी दुर्गा</b>मंगल/शुक्र · नवरात्रि</button>
+        <button class="mantra-quick-btn" onclick="sendMessage('भगवान गणेश के बारे में बताएं — दिन, मंत्र, भोग')"><b>गणेश जी</b>बुधवार · मोदक</button>
+        <button class="mantra-quick-btn" onclick="sendMessage('हनुमान जी के बारे में बताएं — मंगलवार व्रत, शनि उपाय')"><b>हनुमान जी</b>मंगल/शनि · चोला</button>
+      </div>
+    </div>
+
+  </aside>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="pandit-settings" id="settings-modal">
+  <div class="settings-card">
+    <h3>⚙️ AI Pandit सेटिंग्स</h3>
+    <label class="settings-label">Gemini API Key (यदि server key नहीं है)</label>
+    <input type="password" id="pandit-gemini-key" class="settings-input" placeholder="AIza..." autocomplete="off"/>
+    <label class="settings-label">TTS दर (आवाज़ की गति)</label>
+    <input type="range" min="0.5" max="1.3" step="0.05" value="0.82" id="tts-rate-slider"
+      oninput="PANDIT_CONFIG.ttsRate=parseFloat(this.value);document.getElementById('tts-rate-val').textContent=this.value"
+      style="width:100%;accent-color:var(--saffron);margin-bottom:6px"/>
+    <span id="tts-rate-val" class="settings-label">0.82</span>
+    <label class="settings-label" style="margin-top:6px">आवाज़ गहराई / Pitch (कम = पुरुष आवाज़)</label>
+    <input type="range" min="0.1" max="2.0" step="0.05" value="0.6" id="tts-pitch-slider"
+      oninput="PANDIT_CONFIG.ttsPitch=parseFloat(this.value);document.getElementById('tts-pitch-val').textContent=this.value"
+      style="width:100%;accent-color:var(--saffron);margin-bottom:6px"/>
+    <span id="tts-pitch-val" class="settings-label">0.6</span>
+    <div class="settings-row">
+      <button class="settings-btn save" onclick="document.getElementById('settings-modal').classList.remove('open')">✅ सहेजें</button>
+      <button class="settings-btn cancel" onclick="document.getElementById('settings-modal').classList.remove('open')">रद्द</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCRIPTS -->
+<script src="pandit-db.js"></script>
+<script src="pandit.js"></script>
+<script>
+// Tab switching
+function switchTab(tabId, viewId) {
+  document.querySelectorAll('.pc-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  document.querySelectorAll('.pc-view').forEach(v => {
+    v.style.display = 'none';
+    v.classList.remove('active');
+  });
+  const view = document.getElementById(viewId);
+  view.style.display = 'flex';
+  view.classList.add('active');
+}
+
+// Populate pooja menu in ritual idle phase too
+document.addEventListener('DOMContentLoaded', () => {
+  const center = document.getElementById('pooja-menu-center');
+  if (center && window.PANDIT_DB) {
+    center.innerHTML = window.PANDIT_DB.poojas.map(p =>
+      `<button class="action-btn" onclick="startRitual('${p.id}');switchTab('tab-ritual','view-ritual')">
+        ${p.icon} ${p.name}
+      </button>`
+    ).join('');
+  }
+  // Populate problems in right panel
+  const pl = document.getElementById('problems-list');
+  if (pl && window.PANDIT_DB) {
+    pl.innerHTML = window.PANDIT_DB.problems.slice(0, 10).map((p, i) =>
+      `<div class="problem-item" onclick="showRemedy(${i});switchTab('tab-chat','view-chat')">
+        <div class="problem-q">🔸 ${p.problem}</div>
+      </div>`
+    ).join('');
+  }
+});
+</script>
+</body>
+</html>
