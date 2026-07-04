@@ -95,30 +95,19 @@ let _mainImgSelected = false;
    5. Time-of-day peak — stories published 6am-9pm Nepal time score higher
    ───────────────────────────────────────────────────────────────── */
 const RSS_FEEDS = [
-  /* ── Google News RSS — Nepal trending (no rate limit, real-time) ── */
+  /* ── Google News RSS — Nepal trending (Nepali language only) ── */
   { url: 'https://news.google.com/rss/search?q=nepal&hl=ne&gl=NP&ceid=NP:ne',
                                                     name: 'Google News NP (Nepali)', lang: 'ne' },
-  { url: 'https://news.google.com/rss/search?q=nepal&hl=en&gl=NP&ceid=NP:en',
-                                                    name: 'Google News NP (English)', lang: 'en' },
-  { url: 'https://news.google.com/rss/headlines/section/geo/NP?hl=en&gl=NP&ceid=NP:en',
-                                                    name: 'Google Top Stories Nepal', lang: 'en' },
   { url: 'https://news.google.com/rss/search?q=%E0%A4%A8%E0%A5%87%E0%A4%AA%E0%A4%BE%E0%A4%B2+%E0%A4%AC%E0%A5%8D%E0%A4%B0%E0%A5%87%E0%A4%95%E0%A4%BF%E0%A4%99&hl=ne&gl=NP&ceid=NP:ne',
                                                     name: 'Google ब्रेकिङ Nepal',    lang: 'ne' },
-
-  /* ── Google Trends RSS — what Nepal is SEARCHING right now ──
-     These feeds tell us what topics people are actively searching/engaging with.
-     Higher search volume = higher trending signal. */
-  { url: 'https://trends.google.com/trending/rss?geo=NP',
-                                                    name: 'Google Trends Nepal',      lang: 'en', isTrendsSource: true },
+  { url: 'https://news.google.com/rss/headlines/section/geo/NP?hl=ne&gl=NP&ceid=NP:ne',
+                                                    name: 'Google Top Stories Nepal', lang: 'ne' },
 
   /* ── Direct Nepali outlet RSS feeds ── */
   { url: 'https://www.onlinekhabar.com/feed',       name: 'Online Khabar',           lang: 'ne' },
   { url: 'https://www.setopati.com/feed',            name: 'Setopati',                lang: 'ne' },
   { url: 'https://ratopati.com/feed',                name: 'Ratopati',                lang: 'ne' },
   { url: 'https://www.ekantipur.com/rss/',           name: 'eKantipur',               lang: 'ne' },
-  { url: 'https://thehimalayantimes.com/feed/',      name: 'Himalayan Times',         lang: 'en' },
-  { url: 'https://kathmandupost.com/rss',            name: 'Kathmandu Post',          lang: 'en' },
-  { url: 'https://www.nepalnews.com/feed/',          name: 'Nepal News',              lang: 'en' },
   { url: 'https://nepalpress.com/feed/',             name: 'Nepal Press',             lang: 'ne' },
   { url: 'https://annapurnapost.com/rss/',           name: 'Annapurna Post',          lang: 'ne' },
   { url: 'https://nagariknews.nagariknetwork.com/feed/', name: 'Nagarik News',        lang: 'ne' },
@@ -164,20 +153,29 @@ const RSS_NEPALI_ENT = [
                                                     name: 'OnlineKhabar Ent',         lang: 'ne', cat: 'nepali-ent' },
 ];
 
-/* Bhojpuri Movies & Entertainment */
+/* Bhojpuri / Bihar — regional states news + Bhojpuri film industry */
 const RSS_BHOJPURI = [
-  /* Devanagari Hindi searches for Bhojpuri content */
+  /* Bihar & Bhojpuri-speaking states news (Hindi only) */
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%AC%E0%A4%BF%E0%A4%B9%E0%A4%BE%E0%A4%B0+%E0%A4%B8%E0%A4%AE%E0%A4%BE%E0%A4%9A%E0%A4%BE%E0%A4%B0&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google बिहार समाचार',       lang: 'hi', cat: 'bhojpuri' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%AA%E0%A4%9F%E0%A4%A8%E0%A4%BE+%E0%A4%B8%E0%A4%AE%E0%A4%BE%E0%A4%9A%E0%A4%BE%E0%A4%B0&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google पटना समाचार',        lang: 'hi', cat: 'bhojpuri' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%9D%E0%A4%BE%E0%A4%B0%E0%A4%96%E0%A4%82%E0%A4%A1+%E0%A4%B8%E0%A4%AE%E0%A4%BE%E0%A4%9A%E0%A4%BE%E0%A4%B0&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google झारखंड समाचार',      lang: 'hi', cat: 'bhojpuri' },
+  /* Bhojpuri film industry */
   { url: 'https://news.google.com/rss/search?q=%E0%A4%AD%E0%A5%8B%E0%A4%9C%E0%A4%AA%E0%A5%81%E0%A4%B0%E0%A5%80+%E0%A4%AB%E0%A4%BF%E0%A4%B2%E0%A5%8D%E0%A4%AE&hl=hi&gl=IN&ceid=IN:hi',
-                                                    name: 'Google भोजपुरी फिल्म',     lang: 'hi', cat: 'bhojpuri' },
+                                                    name: 'Google भोजपुरी फिल्म',      lang: 'hi', cat: 'bhojpuri' },
   { url: 'https://news.google.com/rss/search?q=%E0%A4%AD%E0%A5%8B%E0%A4%9C%E0%A4%AA%E0%A5%81%E0%A4%B0%E0%A5%80+%E0%A4%97%E0%A4%BE%E0%A4%A8%E0%A4%BE+%E0%A4%B8%E0%A5%8D%E0%A4%9F%E0%A4%BE%E0%A4%B0&hl=hi&gl=IN&ceid=IN:hi',
-                                                    name: 'Google भोजपुरी गाना स्टार', lang: 'hi', cat: 'bhojpuri' },
+                                                    name: 'Google भोजपुरी गाना स्टार',  lang: 'hi', cat: 'bhojpuri' },
   { url: 'https://news.google.com/rss/search?q=pawan+singh+khesari+bhojpuri&hl=hi&gl=IN&ceid=IN:hi',
-                                                    name: 'Google Pawan-Khesari (HI)',lang: 'hi', cat: 'bhojpuri' },
-  /* English searches */
-  { url: 'https://news.google.com/rss/search?q=bhojpuri+movie+song+actor+actress+2025&hl=en&gl=IN&ceid=IN:en',
-                                                    name: 'Google Bhojpuri (EN)',     lang: 'en', cat: 'bhojpuri' },
-  { url: 'https://news.google.com/rss/search?q=bhojpuri+film+industry+trending+viral&hl=en&gl=IN&ceid=IN:en',
-                                                    name: 'Google Bhojpuri Viral',    lang: 'en', cat: 'bhojpuri' },
+                                                    name: 'Google Pawan-Khesari (HI)', lang: 'hi', cat: 'bhojpuri' },
+  /* Direct outlet RSS for Bihar — include native images */
+  { url: 'https://feeds.bbci.co.uk/hindi/india/rss.xml',
+                                                    name: 'BBC Hindi India',          lang: 'hi', cat: 'bhojpuri' },
+  { url: 'https://www.ndtv.com/rss/india',
+                                                    name: 'NDTV India (Bihar)',       lang: 'hi', cat: 'bhojpuri' },
+  { url: 'https://timesofindia.indiatimes.com/rssfeeds/913168846.cms',
+                                                    name: 'Times of India Bihar',     lang: 'en', cat: 'bhojpuri' },
 ];
 
 /* Hindi / Bollywood Movies & Entertainment */
@@ -194,9 +192,18 @@ const RSS_HINDI_ENT = [
                                                     name: 'Google Bollywood (EN)',    lang: 'en', cat: 'hindi-ent' },
   { url: 'https://news.google.com/rss/search?q=bollywood+film+box+office+trending+viral&hl=en&gl=IN&ceid=IN:en',
                                                     name: 'Google Bollywood Viral',   lang: 'en', cat: 'hindi-ent' },
-  /* Entertainment Google topic */
+  /* Entertainment Google topic feed — includes media thumbnails */
   { url: 'https://news.google.com/rss/topics/CAAqIQgKIhtDQkFTRGdvSUwyMHZNRFp1YnpJU0FtaHBLQUFQAQ?hl=en&gl=IN&ceid=IN:en',
                                                     name: 'Google Entertainment IN',  lang: 'en', cat: 'hindi-ent' },
+  /* Direct outlet RSS — include native images */
+  { url: 'https://www.filmfare.com/feeds/news/rss.xml',
+                                                    name: 'Filmfare',                 lang: 'en', cat: 'hindi-ent' },
+  { url: 'https://www.pinkvilla.com/rss/all.xml',
+                                                    name: 'Pinkvilla',                lang: 'en', cat: 'hindi-ent' },
+  { url: 'https://www.ndtv.com/rss/entertainment',
+                                                    name: 'NDTV Entertainment',       lang: 'en', cat: 'hindi-ent' },
+  { url: 'https://timesofindia.indiatimes.com/rssfeeds/1081479906.cms',
+                                                    name: 'TOI Entertainment',        lang: 'en', cat: 'hindi-ent' },
 ];
 
 /* World Top Trending */
@@ -213,12 +220,69 @@ const RSS_WORLD = [
                                                     name: 'Google Trends US',         lang: 'en', cat: 'world', isTrendsSource: true },
 ];
 
+/* India News — Hindi */
+const RSS_INDIA_HI = [
+  { url: 'https://news.google.com/rss/headlines/section/geo/IN?hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google India (हिंदी)',      lang: 'hi', cat: 'india-hi' },
+  { url: 'https://feeds.bbci.co.uk/hindi/rss.xml',
+                                                    name: 'BBC हिंदी',                 lang: 'hi', cat: 'india-hi' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%AD%E0%A4%BE%E0%A4%B0%E0%A4%A4+%E0%A4%B8%E0%A4%AE%E0%A4%BE%E0%A4%9A%E0%A4%BE%E0%A4%B0&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google भारत समाचार',        lang: 'hi', cat: 'india-hi' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%B0%E0%A4%BE%E0%A4%9C%E0%A4%A8%E0%A5%80%E0%A4%A4%E0%A4%BF+%E0%A4%AD%E0%A4%BE%E0%A4%B0%E0%A4%A4&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google राजनीति भारत',        lang: 'hi', cat: 'india-hi' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%85%E0%A4%B0%E0%A5%8D%E0%A4%A5%E0%A4%B5%E0%A5%8D%E0%A4%AF%E0%A4%B5%E0%A4%B8%E0%A5%8D%E0%A4%A5%E0%A4%BE+%E0%A4%AD%E0%A4%BE%E0%A4%B0%E0%A4%A4&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google अर्थव्यवस्था',         lang: 'hi', cat: 'india-hi' },
+];
+
+/* India News — English */
+const RSS_INDIA_EN = [
+  { url: 'https://news.google.com/rss/headlines/section/geo/IN?hl=en&gl=IN&ceid=IN:en',
+                                                    name: 'Google India News (EN)',   lang: 'en', cat: 'india-en' },
+  { url: 'https://feeds.bbci.co.uk/news/world/asia/india/rss.xml',
+                                                    name: 'BBC India',                lang: 'en', cat: 'india-en' },
+  { url: 'https://www.thehindu.com/news/national/feeder/default.rss',
+                                                    name: 'The Hindu',                lang: 'en', cat: 'india-en' },
+  { url: 'https://timesofindia.indiatimes.com/rssfeeds/296589292.cms',
+                                                    name: 'Times of India',           lang: 'en', cat: 'india-en' },
+  { url: 'https://news.google.com/rss/search?q=india+politics+economy+news&hl=en&gl=IN&ceid=IN:en',
+                                                    name: 'Google India Trending',    lang: 'en', cat: 'india-en' },
+];
+
+/* ── Breaking Tweets — top news influencer accounts via RSSHub / Nitter ── */
+const RSS_TWITTER = [
+  /* ── RSSHub public instance (primary) ── */
+  { url: 'https://rsshub.app/twitter/user/ANI',          name: '🐦 ANI (@ANI)',             lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/ndtv',         name: '🐦 NDTV (@ndtv)',           lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/BBCBreaking',  name: '🐦 BBC Breaking',           lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/Reuters',      name: '🐦 Reuters (@Reuters)',      lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/AajTak',       name: '🐦 Aaj Tak (@AajTak)',      lang: 'hi', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/IndiaToday',   name: '🐦 India Today',            lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/TimesNow',     name: '🐦 Times Now',              lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/ABPNews_',     name: '🐦 ABP News',               lang: 'hi', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/PTINews',      name: '🐦 PTI News (@PTINews)',    lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/OnlineKhabar', name: '🐦 Online Khabar',          lang: 'ne', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/setopati',     name: '🐦 Setopati',               lang: 'ne', cat: 'twitter', isTwitter: true },
+  /* ── Nitter fallback instances ── */
+  { url: 'https://nitter.poast.org/ANI/rss',             name: '🐦 ANI [nitter]',           lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://nitter.poast.org/BBCBreaking/rss',     name: '🐦 BBC Breaking [nitter]',  lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://nitter.poast.org/ndtv/rss',            name: '🐦 NDTV [nitter]',          lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://nitter.poast.org/Reuters/rss',         name: '🐦 Reuters [nitter]',       lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://nitter.poast.org/AajTak/rss',          name: '🐦 Aaj Tak [nitter]',       lang: 'hi', cat: 'twitter', isTwitter: true },
+  /* ── Reliable wire/agency RSS (always-on fallbacks with images) ── */
+  { url: 'https://aninews.in/rss/national.rss',          name: '📡 ANI Wire',               lang: 'en', cat: 'twitter' },
+  { url: 'https://www.ndtv.com/rss/india',               name: '📡 NDTV Breaking',          lang: 'en', cat: 'twitter' },
+  { url: 'https://feeds.bbci.co.uk/news/rss.xml',        name: '📡 BBC News',               lang: 'en', cat: 'twitter' },
+  { url: 'https://timesofindia.indiatimes.com/rssfeeds/296589292.cms',
+                                                          name: '📡 Times of India',         lang: 'en', cat: 'twitter' },
+  { url: 'https://www.onlinekhabar.com/feed',            name: '📡 Online Khabar',          lang: 'ne', cat: 'twitter' },
+];
+
 /* ── Active news tab ─────────────────────────────────────────────────────── */
-let _activeNewsTab = 'nepal';   /* 'nepal' | 'science' | 'nepali-ent' | 'bhojpuri' | 'hindi-ent' | 'locations' | 'world' */
+let _activeNewsTab = 'nepal';   /* 'nepal' | 'science' | 'nepali-ent' | 'bhojpuri' | 'hindi-ent' | 'india-hi' | 'india-en' | 'twitter' | 'locations' | 'world' */
 
 /* Per-category article caches (populated on first tab open) */
-const _catArticles = { 'nepal': [], 'science': [], 'nepali-ent': [], 'bhojpuri': [], 'hindi-ent': [], 'world': [] };
-const _catLoaded   = { 'nepal': false, 'science': false, 'nepali-ent': false, 'bhojpuri': false, 'hindi-ent': false, 'world': false };
+const _catArticles = { 'nepal': [], 'science': [], 'nepali-ent': [], 'bhojpuri': [], 'hindi-ent': [], 'india-hi': [], 'india-en': [], 'twitter': [], 'world': [] };
+const _catLoaded   = { 'nepal': false, 'science': false, 'nepali-ent': false, 'bhojpuri': false, 'hindi-ent': false, 'india-hi': false, 'india-en': false, 'twitter': false, 'world': false };
 
 /* ── Location-based news ─────────────────────────────────────────────────── */
 let _locationFeeds = [];    /* [{ label, countryCode, articles, loaded }] */
@@ -660,7 +724,8 @@ async function fetchSingleFeed(feed) {
       const fullText  = (tempDiv.textContent || tempDiv.innerText || '').replace(/\s+/g, ' ').trim();
       return {
         title, description: fullText.slice(0, 1500), rawHtml: item.description || '', imageUrl,
-        pubDate, link, source: feed.name, sourceLang: feed.lang, fullArticleText: null,
+        pubDate, link, source: feed.name, sourceLang: feed.lang,
+        isTwitter: !!feed.isTwitter, fullArticleText: null,
       };
     });
   } catch {
@@ -742,6 +807,18 @@ function parseRssXml(xml, feed) {
         const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
         if (imgMatch) imageUrl = imgMatch[1];
       }
+      /* Fallback: parse as HTML DOM (catches entity-encoded descriptions) */
+      if (!imageUrl) {
+        const imgEl = tempDiv.querySelector('img');
+        if (imgEl) imageUrl = imgEl.getAttribute('src') || imgEl.src || '';
+      }
+      /* For Google News: strip lh3.googleusercontent.com/proxy/ wrapper to get the real image URL */
+      if (imageUrl && imageUrl.includes('googleusercontent.com/proxy/')) {
+        try {
+          const inner = decodeURIComponent(imageUrl.split('/proxy/')[1].split('=')[0]);
+          if (inner.startsWith('http')) imageUrl = inner;
+        } catch {/* keep original */}
+      }
 
       /* For Google News, extract the real publisher name from <source> */
       const publisher = isGoogleNews
@@ -750,7 +827,8 @@ function parseRssXml(xml, feed) {
 
       return {
         title, description: plainText.slice(0, 1500), rawHtml, imageUrl,
-        pubDate, link, source: publisher, sourceLang: feed.lang, fullArticleText: null,
+        pubDate, link, source: publisher, sourceLang: feed.lang,
+        isTwitter: !!feed.isTwitter, fullArticleText: null,
       };
     });
   } catch (e) {
@@ -836,8 +914,19 @@ async function fetchCategoryFeeds(feedList, catKey) {
 
   allItems = [...top10_2, ...theRest2];
   if (catKey) {
-    /* Tag each article with its category so AI prompts can adapt */
+    /* Tag each article with its category and source feed metadata */
     allItems.forEach(a => { a._category = catKey; });
+    /* For twitter tab, mark items sourced from actual Twitter RSS feeds with isTwitter flag */
+    if (catKey === 'twitter') {
+      allItems.forEach(a => {
+        if (!a.isTwitter) {
+          const feed = feedList.find(f => f.isTwitter && a.source && a.source.includes(f.name.replace('🐦 ','').split(' ')[0]));
+          if (feed) a.isTwitter = true;
+          /* Also mark by source name containing '🐦' */
+          if (a.source && a.source.startsWith('🐦')) a.isTwitter = true;
+        }
+      });
+    }
     _catArticles[catKey] = allItems;
     _catLoaded[catKey]   = true;
   }
@@ -1454,7 +1543,7 @@ function switchNewsTab(tab) {
   }
   /* Category tabs — lazy-load on first visit */
   if (!_catLoaded[tab]) {
-    const feedMap = { science: RSS_SCIENCE, 'nepali-ent': RSS_NEPALI_ENT, bhojpuri: RSS_BHOJPURI, 'hindi-ent': RSS_HINDI_ENT, world: RSS_WORLD };
+    const feedMap = { science: RSS_SCIENCE, 'nepali-ent': RSS_NEPALI_ENT, bhojpuri: RSS_BHOJPURI, 'hindi-ent': RSS_HINDI_ENT, 'india-hi': RSS_INDIA_HI, 'india-en': RSS_INDIA_EN, twitter: RSS_TWITTER, world: RSS_WORLD };
     const list = document.getElementById('newsList');
     list.innerHTML = Array(6).fill(0).map(() => `
       <div class="news-item">
@@ -1559,6 +1648,7 @@ function renderCategoryList(tab, filterText) {
     const viralBadge  = a.isTrending ? '<span class="viral-badge trending-badge">🔥 TRENDING</span>'
                       : a.isViral    ? '<span class="viral-badge">⚡ VIRAL</span>' : '';
     const latestBadge = a._isLatestTop ? '<span class="viral-badge latest-badge">🆕 LATEST</span>' : '';
+    const tweetBadge  = a.isTwitter ? '<span class="viral-badge" style="background:rgba(29,161,242,.18);color:#1da1f2;border:1px solid rgba(29,161,242,.4)">🐦 TWEET</span>' : '';
     const locBadge    = a._locationLabel ? `<span class="source-badge" style="background:rgba(16,185,129,.15);color:#34d399;border-color:rgba(16,185,129,.3)">📍 ${escHtml(a._locationLabel)}</span>` : '';
     const sourceBadge = a.source ? `<span class="source-badge">${escHtml(a.source)}</span>` : '';
     const openBtn     = a.link ? `<button class="news-open-btn" onclick="event.stopPropagation();window.open('${escHtml(a.link)}','_blank','noopener')">🔗 Open</button>` : '';
@@ -1567,7 +1657,7 @@ function renderCategoryList(tab, filterText) {
       <div class="news-item${a.isTrending ? ' trending' : ''}" id="cat-item-${idx}" onclick="selectArticle(${idx})">
         ${thumbHtml}
         <div class="news-item-body">
-          <div class="news-item-badges">${latestBadge}${viralBadge}${locBadge}${sourceBadge}</div>
+          <div class="news-item-badges">${latestBadge}${viralBadge}${tweetBadge}${locBadge}${sourceBadge}</div>
           <div class="news-item-title">${escHtml(a.title)}</div>
           <div class="news-item-footer">
             ${dateStr ? `<div class="news-item-date">🕐 ${dateStr}</div>` : ''}
@@ -1917,32 +2007,60 @@ async function _lazyLoadCatThumbnails(items) {
     const batch = missing.slice(i, i + BATCH);
     await Promise.all(batch.map(async (a) => {
       try {
-        const html = await fetchRawHtml(a.link);
+        /* For Google News redirect links, try to get the canonical real article URL first */
+        let targetUrl = a.link;
+        if (targetUrl.includes('news.google.com')) {
+          try {
+            const proxyData = await fetch(
+              `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
+              { signal: AbortSignal.timeout(8000) }
+            ).then(r => r.ok ? r.json() : null).catch(() => null);
+            const html0 = proxyData?.contents || '';
+            const canonical = html0.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i)?.[1]
+                           || html0.match(/<meta[^>]+property=["']og:url["'][^>]+content=["']([^"']+)["']/i)?.[1]
+                           || html0.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:url["']/i)?.[1];
+            if (canonical && !canonical.includes('google.com')) {
+              targetUrl = canonical;
+              /* Also check if og:image is already in this response */
+              const ogImgEarly = extractOgImage(html0);
+              if (ogImgEarly) {
+                a.imageUrl = ogImgEarly;
+                _updateCatThumb(a, ogImgEarly);
+                return;
+              }
+            }
+          } catch { /* fall through with original URL */ }
+        }
+
+        const html = await fetchRawHtml(targetUrl);
         if (!html) return;
         const ogImg = extractOgImage(html);
         if (!ogImg) return;
-        a.imageUrl = ogImg;  // cache for future renders
-        /* Resolve the pool index to find the DOM element */
-        const poolIdx = _catPool.indexOf(a);
-        if (poolIdx < 0) return;
-        const domId = 'cat-item-' + (poolIdx + 1000000);
-        const itemEl = document.getElementById(domId);
-        if (!itemEl) return;
-        const placeholder = itemEl.querySelector('.news-item-thumb-placeholder');
-        const proxiedSrc = `https://images.weserv.nl/?url=${encodeURIComponent(ogImg)}&w=120&h=90&fit=cover&output=jpg`;
-        const img = document.createElement('img');
-        img.className = 'news-item-thumb';
-        img.alt = 'news thumbnail';
-        img.loading = 'lazy';
-        img.onerror = () => { img.style.display = 'none'; };
-        img.src = proxiedSrc;
-        if (placeholder) {
-          placeholder.replaceWith(img);
-        } else {
-          itemEl.insertBefore(img, itemEl.firstChild);
-        }
+        a.imageUrl = ogImg;
+        _updateCatThumb(a, ogImg);
       } catch { /* silently skip */ }
     }));
+  }
+}
+
+function _updateCatThumb(a, imgUrl) {
+  const poolIdx = _catPool.indexOf(a);
+  if (poolIdx < 0) return;
+  const domId = 'cat-item-' + (poolIdx + 1000000);
+  const itemEl = document.getElementById(domId);
+  if (!itemEl) return;
+  const placeholder = itemEl.querySelector('.news-item-thumb-placeholder');
+  const proxiedSrc = `https://images.weserv.nl/?url=${encodeURIComponent(imgUrl)}&w=120&h=90&fit=cover&output=jpg`;
+  const img = document.createElement('img');
+  img.className = 'news-item-thumb';
+  img.alt = 'news thumbnail';
+  img.loading = 'lazy';
+  img.onerror = () => { img.style.display = 'none'; };
+  img.src = proxiedSrc;
+  if (placeholder) {
+    placeholder.replaceWith(img);
+  } else if (!itemEl.querySelector('.news-item-thumb')) {
+    itemEl.insertBefore(img, itemEl.firstChild);
   }
 }
 
@@ -3155,44 +3273,74 @@ async function rewriteWithAI(rawTitle, articleBody, sourceLang, category) {
       langInstruction: 'All hook, title, description MUST be written in Nepali (नेपाली) Devanagari script. Translate/adapt from source language to Nepali.',
     },
     'bhojpuri': {
-      persona:    'expert Bhojpuri film and music industry journalist who covers Bhojpuri cinema, songs and celebrity news for Hindi-speaking audiences',
-      audience:   'Bhojpuri film fans across UP, Bihar, Jharkhand, Nepal Terai and the global Bhojpuri diaspora',
-      hookEmojis: '🎬 (film), 🎵 (gana/song), ⭐ (star), 🔥 (viral/trending), 💃 (dance/item number), 🏆 (hit/superhit), 😱 (shocking), 💔 (drama)',
-      hookTip:    'Start with a dramatic, fan-engaging hook that Bhojpuri cinema fans will instantly react to and share',
-      titleTip:   'Write a detailed Bhojpuri entertainment headline with REAL actor/film/song names (e.g. Pawan Singh, Khesari Lal, Akshara Singh) from the article',
-      descTip:    'Write in engaging Hindi entertainment journalism style. Focus on the film/song/celebrity story with box office numbers, release details, or fan reactions. Use energetic language Bhojpuri fans love.',
-      hashtagSeed:'#भोजपुरी_फिल्म, #BhojpuriSong, #BhojpuriCinema, #भोजपुरी_गाना, #PawanSingh',
-      langInstruction: 'All hook, title, description MUST be written in Nepali (नेपाली) Devanagari script, regardless of the source language of the article. Translate/adapt everything to Nepali.',
+      persona:    'expert regional journalist covering Bihar, Jharkhand and Bhojpuri-speaking states with deep knowledge of local politics, society, culture and the Bhojpuri film and music industry',
+      audience:   'residents of Bihar, Jharkhand, eastern UP and the global Bhojpuri diaspora who follow local news, politics and Bhojpuri cinema',
+      hookEmojis: '🗞️ (news), 📢 (announcement), 🎬 (film), 🎵 (song), 🏛️ (politics), 🌾 (agriculture/rural), 🔥 (viral/trending), ⭐ (celebrity)',
+      hookTip:    'Start with a punchy, engaging hook that resonates with Bihar/Bhojpuri audiences — whether it is local politics, a big film release, or a viral moment',
+      titleTip:   'Write a detailed headline with REAL names — politicians, actors, places in Bihar/Jharkhand (e.g. Pawan Singh, Nitish Kumar, Patna, Ranchi)',
+      descTip:    'Write in engaging Hindi journalism style covering Bihar/Bhojpuri states. If about film/music use Bhojpuri entertainment style; if about politics/society use regional news style. Include key details — location, people involved, and why it matters to the region.',
+      hashtagSeed:'#बिहार, #Bihar, #भोजपुरी_फिल्म, #BhojpuriCinema, #पटना, #Patna, #झारखंड',
+      langInstruction: 'All hook, title, description MUST be written in Hindi (हिंदी) Devanagari script. Translate/adapt from source language to Hindi.',
     },
     'hindi-ent': {
       persona:    'expert Bollywood entertainment journalist and viral social media content creator who covers Hindi films, celebrities and music',
-      audience:   'Bollywood fans across India, Nepal and the South Asian diaspora worldwide',
+      audience:   'Bollywood fans across India and the South Asian diaspora worldwide',
       hookEmojis: '🎬 (film/movie), 🌟 (Bollywood star), 🎵 (music/song), 🏆 (box office hit), 💔 (celebrity drama), 🔥 (viral/trending), 😱 (shocking news), 💫 (glamour)',
       hookTip:    'Start with a punchy Bollywood fan-page style hook that makes fans immediately want to comment and share',
       titleTip:   'Write a detailed Bollywood headline with REAL actor/film/director names from the article (e.g. Shah Rukh Khan, Deepika Padukone, etc.)',
-      descTip:    'Write in energetic Bollywood entertainment journalism style (like Pinkvilla or Filmfare). Include box office numbers, OTT release info, celebrity quotes or fan reactions. Make it feel like an exciting fan page post.',
+      descTip:    'Write in energetic Bollywood entertainment journalism style (like Pinkvilla or Filmfare). Include box office numbers, OTT release info, celebrity quotes or fan reactions.',
       hashtagSeed:'#बॉलीवुड, #Bollywood, #HindiFilm, #BollywoodNews, #BollywoodMovies',
-      langInstruction: 'All hook, title, description MUST be written in Nepali (नेपाली) Devanagari script, regardless of the source language of the article. Translate/adapt everything to Nepali.',
+      langInstruction: 'All hook, title, description MUST match the source article language.',
     },
     'science': {
-      persona:    'expert science and technology journalist who makes complex innovations understandable and viral for a Nepali social media audience',
-      audience:   'tech-savvy Nepali youth, students, professionals and science enthusiasts',
+      persona:    'expert science and technology journalist who makes complex innovations clear, accurate and viral for social media audiences',
+      audience:   'tech-savvy readers, students, professionals and science enthusiasts',
       hookEmojis: '🔬 (science/research), 🚀 (space/future), 💡 (innovation/idea), 🤖 (AI/robots), 🌍 (environment/climate), ⚡ (breakthrough), 🧬 (biology/health), 🔭 (discovery)',
       hookTip:    'Start with a mind-blowing fact or discovery that makes the reader say "Wow, I had no idea!" — make it feel like the future is here',
-      titleTip:   'Write a detailed science/tech headline that clearly states the breakthrough or innovation and WHY it matters to Nepali readers',
-      descTip:    'Write in clear, exciting science journalism style. Explain WHAT the discovery/invention is, HOW it works in simple terms, and WHY it matters for Nepal or the world. Use analogies where helpful.',
-      hashtagSeed:'#विज्ञान, #प्रविधि, #Science, #Technology, #Innovation',
-      langInstruction: 'All hook, title, description MUST be in Nepali Devanagari script.',
+      titleTip:   'Write a detailed science/tech headline that clearly states the breakthrough or innovation and WHY it matters',
+      descTip:    'Write in clear, exciting science journalism style. Explain WHAT the discovery/invention is, HOW it works in simple terms, and WHY it matters. Use analogies where helpful.',
+      hashtagSeed:'#Science, #Technology, #Innovation, #विज्ञान, #प्रविधि',
+      langInstruction: 'All hook, title, description MUST match the source article language.',
     },
     'world': {
-      persona:    'expert international news journalist and viral social media content strategist covering global affairs for Nepali audiences',
-      audience:   'globally-aware Nepali readers who follow international politics, conflicts and world events',
+      persona:    'expert international news journalist and viral social media content strategist covering global affairs',
+      audience:   'globally-aware readers who follow international politics, conflicts and world events',
       hookEmojis: '🌍 (world/global), 🚨 (breaking/urgent), ⚡ (crisis), 💔 (tragedy), 🏆 (victory/milestone), 🗳️ (election/politics), 💰 (economy), 🌊 (disaster)',
-      hookTip:    'Start with an urgent, impactful hook that makes Nepali readers feel this world event directly affects them or is unmissable',
+      hookTip:    'Start with an urgent, impactful hook that makes readers feel this world event is unmissable',
       titleTip:   'Write a detailed international news headline with REAL country names, leader names, and specific consequences',
-      descTip:    'Write in Nepali international news journalism style. Explain WHAT happened, WHERE, WHO is involved, and WHY Nepali readers should care about this global event.',
-      hashtagSeed:'#विश्व_समाचार, #WorldNews, #BreakingNews, #अन्तर्राष्ट्रिय, #Global',
-      langInstruction: 'All hook, title, description MUST be in Nepali Devanagari script.',
+      descTip:    'Write in international news journalism style. Explain WHAT happened, WHERE, WHO is involved, WHY it matters, and what happens next.',
+      hashtagSeed:'#WorldNews, #BreakingNews, #International, #Global, #विश्व_समाचार',
+      langInstruction: 'All hook, title, description MUST match the source article language.',
+    },
+    'india-hi': {
+      persona:    'expert Indian news journalist and viral Hindi social media content creator covering national politics, economy, society, sports and culture for Hindi-speaking audiences across India',
+      audience:   'Hindi-speaking Indians across all states who follow national news, politics, business and social issues',
+      hookEmojis: '🇮🇳 (India), 🏛️ (politics/parliament), 💰 (economy/finance), 🚨 (breaking news), ⚡ (urgent), 🌾 (agriculture), 🏏 (cricket/sports), 🔥 (viral/trending)',
+      hookTip:    'Start with a strong, emotionally engaging hook in Hindi that makes Indian readers immediately want to read and share',
+      titleTip:   'Write a detailed Hindi headline with REAL names — politicians, cities, events (e.g. Modi, Delhi, Lok Sabha, Supreme Court)',
+      descTip:    'Write in engaging Hindi news journalism style (like Aaj Tak or BBC Hindi). Explain WHO, WHAT, WHERE, WHEN, WHY clearly. Focus on impact on common Indian citizens. Include key facts, numbers and quotes.',
+      hashtagSeed:'#भारत, #India, #BreakingNews, #भारत_समाचार, #IndiaNews, #हिंदी_समाचार',
+      langInstruction: 'All hook, title, description MUST be written in Hindi (हिंदी) Devanagari script. Translate/adapt from source language to Hindi.',
+    },
+    'india-en': {
+      persona:    'expert Indian English-language journalist and viral social media content creator covering national politics, economy, technology, sports and society for English-speaking Indian audiences',
+      audience:   'English-speaking Indians, NRIs and global readers interested in India — professionals, students, policymakers and diaspora',
+      hookEmojis: '🇮🇳 (India), 🏛️ (politics/democracy), 💰 (economy/markets), 🚨 (breaking), ⚡ (urgent), 🏏 (cricket/sports), 🤖 (technology/AI), 🔥 (viral/trending)',
+      hookTip:    'Start with a sharp, punchy English hook that makes English-speaking Indian readers instantly engage and share on LinkedIn, X or Instagram',
+      titleTip:   'Write a detailed English headline with REAL names — politicians, institutions, cities (e.g. PM Modi, Supreme Court, Mumbai, RBI, ISRO)',
+      descTip:    'Write in crisp English news journalism style (like The Hindu or Times of India). Cover WHO, WHAT, WHERE, WHEN, WHY. Include specific numbers, quotes, and the direct impact on India and its citizens.',
+      hashtagSeed:'#India, #IndiaNews, #BreakingIndia, #IndianPolitics, #IndiaEconomy, #BJP, #Congress',
+      langInstruction: 'All hook, title, description MUST be written in English.',
+    },
+    'twitter': {
+      persona:    'expert breaking news journalist and viral social media editor who curates and rewrites the most impactful latest tweets and wire reports from top news influencers into compelling social media posts',
+      audience:   'fast-news followers on Twitter/X, Facebook and Instagram who want instant, accurate breaking news in an engaging format',
+      hookEmojis: '🚨 (breaking), ⚡ (urgent), 🔴 (live), 📢 (announcement), 🗞️ (news wire), 🌐 (global), 🏛️ (political), 💣 (shocking)',
+      hookTip:    'Start with a BREAKING-NEWS style hook like a tweet would — ultra short, high-impact, creates immediate urgency',
+      titleTip:   'Write a punchy breaking-news headline like a tweet — short, direct, with REAL names, numbers and outcomes. Max 12 words.',
+      descTip:    'Write in fast-paced breaking news wire style. Give WHO, WHAT, WHERE, WHEN in the first sentence. Expand with context in subsequent paragraphs. Include the source/handle where relevant.',
+      hashtagSeed:'#BreakingNews, #Breaking, #NewsAlert, #LiveUpdates, #viral, #trending',
+      langInstruction: 'Match the source article language — write in English if the tweet/article is in English, in Hindi if it is in Hindi, in Nepali if it is in Nepali.',
     },
   };
 
@@ -3208,7 +3356,25 @@ async function rewriteWithAI(rawTitle, articleBody, sourceLang, category) {
     langInstruction: 'All hook, title, description MUST be in Nepali Devanagari script.',
   };
 
+  /* ── Dynamic language: always generate in the same language as the article ── */
+  if (sourceLang === 'hi') {
+    cfg.langInstruction = 'All hook, title, description MUST be written in Hindi (हिंदी) Devanagari script. Use natural, engaging Hindi journalism style matching the category tone.';
+    cfg.audience = cfg.audience.replace(/\bNepali\b/gi, 'Hindi-speaking').replace(/नेपाली/g, 'हिंदी भाषी');
+    cfg.descTip  = cfg.descTip.replace(/\bNepali\b/gi, 'Hindi').replace(/नेपाली/g, 'हिंदी');
+  } else if (sourceLang === 'en') {
+    cfg.langInstruction = 'All hook, title, description MUST be written in English. Use clear, engaging English journalism style.';
+    cfg.audience = cfg.audience.replace(/\bNepali\b/gi, 'English-speaking').replace(/नेपाली/g, 'English-speaking');
+    cfg.descTip  = cfg.descTip.replace(/\bNepali\b/gi, 'English').replace(/नेपाली/g, 'English');
+  } else {
+    cfg.langInstruction = 'All hook, title, description MUST be written in Nepali (नेपाली) Devanagari script. Use natural, accurate Nepali journalism style.';
+  }
+
+  /* Target language name for prompt copy */
+  const targetLangName = sourceLang === 'hi' ? 'Hindi' : sourceLang === 'en' ? 'English' : 'Nepali';
+
   const prompt = `You are an ${cfg.persona}.
+
+⚠️ LANGUAGE (HIGHEST PRIORITY — overrides everything): Write ALL output — hook, title, description, hashtags — in ${targetLangName} ONLY. This is NON-NEGOTIABLE. Do NOT produce any other language.
 
 Your target audience: ${cfg.audience}
 
@@ -3221,7 +3387,7 @@ ${researchContext ? `\nADDITIONAL CONTEXT (from Google Search):\n${researchConte
 
 🚨 ACCURACY IS YOUR #1 PRIORITY — READ THIS FIRST 🚨
 You are a TRANSLATOR and FORMATTER, not a creative writer. Your job is to:
-1. ACCURATELY translate/rewrite the above article into Nepali
+1. ACCURATELY translate/rewrite the above article into ${targetLangName}
 2. Format it nicely for Facebook
 
 ABSOLUTE RULES — violating any of these makes the output WRONG:
@@ -3231,128 +3397,121 @@ ABSOLUTE RULES — violating any of these makes the output WRONG:
 • NEVER remove key facts from the article
 • NEVER change names, places, scores, dates, numbers — copy them EXACTLY
 • If you are unsure of a fact, write what the article says — do NOT guess or "improve" it
-• The article is the SINGLE SOURCE OF TRUTH — your output must be a faithful Nepali rendering of it
+• The article is the SINGLE SOURCE OF TRUTH — your output must be a faithful ${targetLangName} rendering of it
 
 ━━━ OUTPUT FORMAT (strict JSON, no markdown) ━━━
 
 {
-  "hook": "<ONE opening line in Nepali — accurate, engaging>",
-  "title": "<Nepali headline — 1 to 2 lines, based 100% on the article>",
-  "description": "<Full Nepali news post — accurate, proper grammar, Facebook-ready>",
+  "hook": "<ONE opening line in ${targetLangName} — accurate, engaging>",
+  "title": "<${targetLangName} headline — 1 to 2 lines, based 100% on the article>",
+  "description": "<Structured bullet-point post in ${targetLangName} — 🔴 summary → 📌 Background bullets → ⚡ Key Facts bullets → 👥 Reactions bullets → 🔮 What's Next bullets → 👉 call-to-action. NO paragraphs. ONLY bullets.>",
   "hashtags": ["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#tag9","#tag10","#ShashiNewsGen"]
 }
 
 ━━━ RULES FOR EACH FIELD ━━━
 
-HOOK (max 15 words — opening line in Nepali):
+HOOK (max 15 words — opening line in ${targetLangName}):
 • Start with ONE emoji matching the mood — choose from: ${cfg.hookEmojis}
 • ${cfg.hookTip}
 • The hook creates curiosity — it hints at the news but does NOT restate the title
 • NEVER use generic phrases like "एउटा ठूलो खबर" or "महत्त्वपूर्ण समाचार"
 • MUST be 100% factually accurate — do NOT add drama that changes the meaning
 
-TITLE (1 to 2 LINES MAX — the Nepali headline):
+TITLE (1 to 2 LINES MAX — the ${targetLangName} headline):
 • MAX 10 words per line — SHORT, PUNCHY, DIRECT
 • Based STRICTLY on the article — reflect the ACTUAL outcome/event
 • MUST copy real names, places, results from the article exactly
 • Use \\n to separate lines. Do NOT write 3 lines.
 • ${cfg.titleTip}
 
-DESCRIPTION (Facebook news post in proper Nepali — the full accurate story):
+DESCRIPTION (structured bullet-point post in ${targetLangName} — accurate, Facebook-ready):
 • This is an ACCURATE TRANSLATION/REWRITE of the article — not a creative piece
-• Every sentence must reflect what is stated in the article
+• Every bullet must reflect what is stated in the article
 • NEVER repeat the hook or title — the description EXPANDS with more detail
-• Blank line between each paragraph
-• Use emojis inline (🔴, 📌, ⚡, 👉, ✅, ❗, 🔥, 💥) — 1-2 per paragraph
-• Paragraph 1 🔴: के भयो, को थियो — घटनाको सारांश (article को मुख्य तथ्य) — 3-4 वाक्य
-• Paragraph 2 📌: पृष्ठभूमि र कारण (किन र कसरी — article मा भएको विवरण) — 3-4 वाक्य
-• Paragraph 3 ⚡: मुख्य तथ्य — संख्या, स्थान, मिति, उद्धरण (सटीक article को डेटा) — 3-4 वाक्य
-• Paragraph 4 👥: प्रतिक्रिया वा परिणाम (article मा उल्लेख भएको) — 3 वाक्य
-• Paragraph 5 🔮: प्रभाव र अगाडि के हुन्छ (article मा भएको वा logical conclusion) — 3 वाक्य
-• End with: 👉 यो खबर share गर्नुस् र आफ्नो विचार comment मा लेख्नुस्! 💬
-• ${cfg.descTip}
-• 300-450 words total — write a FULL, detailed news article. Do NOT cut short.
+• Use a blank line between each section
+• Write ALL content in ${targetLangName} only — NO mixing of languages
+• Use this EXACT bullet structure:
 
-━━━ NEPALI GRAMMAR RULES (MANDATORY — apply to every sentence) ━━━
+🔴 [1-2 sentence summary — WHO did WHAT, WHERE, key result]
+
+📌 Background:
+• [Key context point 1]
+• [Key context point 2]
+• [Key context point 3]
+
+⚡ Key Facts:
+• [Specific number / date / stat from article]
+• [Specific quote or statement from article]
+• [Location / timeline detail from article]
+• [Any other key data point from article]
+
+👥 Reactions & Impact:
+• [Who responded and how]
+• [Consequence or effect mentioned in article]
+• [Affected people / communities]
+
+🔮 What's Next:
+• [Next expected development]
+• [Implication or ongoing situation]
+
+👉 [Call to action — ask readers to share and comment, written in ${targetLangName}] 💬
+
+• ${cfg.descTip}
+• Each bullet = 1 concise sentence. Do NOT write long paragraphs. ONLY bullet points.
+• 15–25 bullets total across all sections.
+
+━━━ GRAMMAR & LANGUAGE RULES ━━━
+${sourceLang === 'ne' ? `
+NEPALI GRAMMAR RULES (MANDATORY — apply to every sentence):
 
 VERB FORMS — use the CORRECT Nepali perfective/progressive forms:
 ✅ CORRECT → ❌ WRONG
-• "गएको छ" → ❌ "गयो छ" / "गयो छन्" / "गयेको छ"
+• "गएको छ" → ❌ "गयो छ" / "गयेको छ"
 • "भएको छ" → ❌ "भयो छ" / "भयेको छ"
 • "गरेको छ" → ❌ "गरेयो छ" / "गरयो"
 • "गरेका छन्" → ❌ "गरेछन्" / "गर्छन् छन्"
-• "भनेका छन्" → ❌ "भनेछन्" / "भन्छन् छन्"
-• "आएको छ" → ❌ "आयो छ" / "आएयो छ"
-• "देखिएको छ" → ❌ "देखियो छ"
+• "भनेका छन्" → ❌ "भनेछन्"
+• "आएको छ" → ❌ "आयो छ"
 • "गरिएको छ" → ❌ "गरियो छ"
-• "बताएका छन्" → ❌ "बताएछन्"
-• "पुगेको छ" → ❌ "पुग्यो छ" (use "पुग्यो" for simple past)
-• Simple past: "गयो", "भयो", "आयो", "गर्‍यो", "बोल्यो", "बसे", "गरे", "भने"
+• Simple past: "गयो", "भयो", "आयो", "गर्‍यो", "बसे", "गरे", "भने"
 • Present perfect: "गएको छ", "भएको छ", "गरेको छ", "आएको छ"
-• Habitual present: "गर्छ", "हुन्छ", "आउँछ", "बोल्छ"
 • Future: "गर्नेछ", "हुनेछ", "आउनेछ"
-• Respectful past: "गर्नुभयो", "आउनुभयो", "भन्नुभयो", "बस्नुभयो"
+• Respectful past: "गर्नुभयो", "आउनुभयो", "भन्नुभयो"
 
-SENTENCE CONNECTORS — use natural Nepali, NOT Hindi translations:
-✅ "त्यसैले" (therefore) → ❌ NOT "इसलिए"
-✅ "किनभने" (because) → ❌ NOT "क्योंकि"  
-✅ "तर" (but) → ❌ NOT "लेकिन"
-✅ "यसका साथै" (additionally) → ❌ NOT "इसके साथ"
-✅ "अर्कोतिर" (on the other hand) → ❌ NOT "दूसरी तरफ"
-✅ "अनुसार" (according to) → ❌ NOT "के अनुसार" written as "के मुताबिक"
-✅ "भने" (as for / said that) — natural Nepali discourse marker
-✅ "जसले गर्दा" (which caused)
-✅ "यसबाट" (from this)
-✅ "उनीहरूका अनुसार" (according to them)
-
-BANNED HINDI/MIXED WORDS — NEVER use these in Nepali text:
-❌ हो गया, हो गई, कर दिया, कर दी, बन गया, आ गया
-❌ के लिए, के साथ (use "का लागि", "सँग" instead)
-❌ नहीं (use "छैन", "होइन", "भएन")
-❌ करना, होना, जाना (Hindi infinitives — use Nepali forms)
-❌ बहुत (use "धेरै"), अच्छा (use "राम्रो"), पहले (use "पहिले")
-❌ तो (Hindi discourse filler — use "त" sparingly and correctly in Nepali)
-❌ भी (use "पनि"), और (use "र"), या (use "वा")
-❌ लेकिन, मगर (use "तर")
-❌ जब, तब (use "जब", "त्यसबेला" — but sparingly)
-
-WORD CHOICE — use correct Nepali words:
-✅ "धेरै" for "many/much" → ❌ NOT "बहुत"
-✅ "राम्रो" for "good" → ❌ NOT "अच्छा/अच्छो"
-✅ "ठूलो" for "big" → ❌ NOT "बडो/बड्डो"
-✅ "सानो" for "small" → ❌ NOT "साना/छोटो"
-✅ "मान्छे/व्यक्ति" for "person" → ❌ NOT "आदमी/इन्सान"
-✅ "काम" for "work" — ✅ already Nepali
-✅ "भन्नुभयो" for respectful "said" → ❌ NOT "बोले/कहे"
-✅ "पुलिस" or "प्रहरी" → ❌ NOT "पुलीस/पोलिस" (inconsistent spelling)
-✅ Use "नेपाल प्रहरी" for Nepal Police (not "नेपाल पुलिस")
-✅ "अस्पताल" for hospital, "विद्यालय" for school, "सरकार" for government
-
-NATURAL SENTENCE PATTERNS (copy these patterns):
-• "[Subject]ले [object] [verb]गर्‍यो।" — simple past active
-• "[Subject]लाई [verb]गरियो।" — simple past passive  
-• "[Subject] [place]मा [verb]एको छ।" — present perfect
-• "[Subject]का अनुसार, [clause]।" — attribution
-• "यो घटनापछि [consequence] भएको छ।" — consequence
-• "[Number] जनाको [event] भएको छ।" — count + event
-• "[Time]मा [event] घट्यो।" — time + event
+BANNED HINDI/MIXED WORDS — NEVER use in Nepali text:
+❌ हो गया, हो गई, कर दिया, बन गया, आ गया
+❌ के लिए (use "को लागि"), के साथ (use "सँग"), नहीं (use "छैन")
+❌ बहुत (use "धेरै"), लेकिन (use "तर"), और (use "र"), भी (use "पनि"), या (use "वा")
+❌ क्योंकि (use "किनभने"), इसलिए (use "त्यसैले")
+` : ''}${sourceLang === 'hi' ? `
+HINDI GRAMMAR RULES (for Hindi output):
+• Use correct Hindi verb forms: "हो गया", "किया है", "किया गया", "हो रहा है"
+• Natural Hindi connectors: क्योंकि, इसलिए, लेकिन, हालांकि, जिससे, जबकि
+• Respectful forms: ने कहा, ने बताया, ने किया
+• NO Nepali or English words mixed into Hindi text
+` : ''}${sourceLang === 'en' ? `
+ENGLISH WRITING RULES (for English output):
+• Use clear, journalistic English — active voice where possible
+• Natural connectors: because, therefore, however, meanwhile, as a result
+• Attribution: "said", "stated", "confirmed", "announced"
+• NO Nepali or Hindi words mixed into English text
+` : ''}
 
 QUALITY CHECK before outputting (mentally verify each):
-✓ FACT CHECK: Does the title match the article exactly? (e.g., if Nepal lost, does it say हार्‍यो? If they won, does it say जित्यो?)
+✓ FACT CHECK: Does the title match the article exactly? (correct outcome, correct names, no inverted results)
 ✓ Are ALL names, places, scores, dates, outcomes copied EXACTLY from the article?
 ✓ Have you added ANY fact not in the article? If yes, REMOVE it.
 ✓ Does the hook create curiosity WITHOUT changing or exaggerating the facts?
-✓ Does each description paragraph cover a DIFFERENT aspect?
-✓ Are there duplicate sentences? If yes, DELETE one.
-✓ Every verb form is correct Nepali (गएको छ, NOT गयो छ)?
-✓ Zero Hindi words in the text?
-✓ All sentences are complete and grammatically correct standard Nepali?
+✓ Does each bullet section cover a DIFFERENT aspect (no repetition)?
+✓ Are there duplicate bullets? If yes, DELETE one.
+✓ Is the ENTIRE output written in ${targetLangName} only? (NO mixing languages)
+✓ All bullets are concise single sentences? (no paragraph prose inside bullet fields)
+✓ Is the description using the correct bullet structure (🔴 / 📌 / ⚡ / 👥 / 🔮 / 👉)?
 
 HASHTAGS (exactly 11 — the last MUST be #ShashiNewsGen — for viral Facebook SEO):
-• Tags 1-3: STORY-SPECIFIC in Devanagari — real name/film/place/event keyword from THIS article
-• Tags 4-6: STORY-SPECIFIC in English — transliterated or translated key terms
-• Tags 7-9: Viral trending tags — from: ${cfg.hashtagSeed}, #viral, #trending, #FacebookNepal
-• Tag 10: ONE super-broad reach tag: #viral OR #trending OR #news
+• Tags 1-5: STORY-SPECIFIC keywords from THIS article (in the article's language — real names, places, events, people)
+• Tags 6-9: Viral reach tags — from: ${cfg.hashtagSeed}, #viral, #trending, #BreakingNews
+• Tag 10: ONE broad reach tag: #viral OR #trending OR #breaking OR #news
 • Tag 11: MUST be exactly #ShashiNewsGen
 • No spaces within any hashtag — Facebook-compatible
 
@@ -3368,32 +3527,39 @@ OUTPUT: Raw JSON only — no \`\`\`json, no explanation, nothing else.`;
 
   /* For Groq (LLaMA3), use a shorter, more direct prompt to avoid token issues */
   const usingGroqModel = !(_geminiKey || _browserGeminiKey) && !!_browserGroqKey;
-  const finalPrompt = usingGroqModel ? `You are a Nepali news translator and journalist. Accurately translate and rewrite this article into proper Nepali for Facebook.
+  const groqLangInstruction = sourceLang === 'en'
+    ? 'Write everything in ENGLISH.'
+    : sourceLang === 'hi'
+    ? 'Write everything in HINDI (\u0939\u093f\u0902\u0926\u0940) Devanagari script. Use natural Hindi journalism style.'
+    : 'Write everything in NEPALI (\u0928\u0947\u092a\u093e\u0932\u0940) Devanagari script. Use correct Nepali verb forms (\u0917\u090f\u0915\u094b \u091b, NOT \u0917\u092f\u094b \u091b; \u092d\u090f\u0915\u094b \u091b, NOT \u092d\u092f\u094b \u091b).';
+  const finalPrompt = usingGroqModel ? `You are a ${targetLangName} news translator and journalist. Accurately translate and rewrite this article into ${targetLangName} for Facebook.
 
 HEADLINE: ${rawTitle}
 ${bodySnippet ? `ARTICLE BODY: ${bodySnippet.slice(0, 1000)}` : ''}
 
-🚨 ACCURACY FIRST — MOST IMPORTANT RULE:
+\ud83d\udea8 ACCURACY FIRST — MOST IMPORTANT RULE:
 - NEVER change who won/lost, who died, who was arrested, the result, the outcome
 - NEVER invert facts (if article says "Nepal lost the toss" write "नेपालले टस हार्‍यो" — NEVER "जित्यो")
 - NEVER add facts not in the article
 - Copy names, scores, dates, numbers EXACTLY from the article
 - The article is the SINGLE SOURCE OF TRUTH
 
-NEPALI GRAMMAR — MANDATORY:
-1. Correct verb forms: "गएको छ" NOT "गयो छ"; "भएको छ" NOT "भयो छ"; "गरेको छ" NOT "गरेयो"; "भनेका छन्" NOT "भनेछन्"
-2. Simple past: गयो, भयो, आयो, गर्‍यो, भने, गरे
-3. Respectful past: गर्नुभयो, आउनुभयो, भन्नुभयो
-4. BANNED Hindi words — use Nepali: के लिए→को लागि, नहीं→छैन, बहुत→धेरै, लेकिन→तर, और→र, भी→पनि, या→वा
-5. Natural Nepali connectors: त्यसैले, किनभने, तर, यसका साथै, भने, जसले गर्दा
+LANGUAGE: ${groqLangInstruction}
 
 FORMAT RULES:
 - hook = teaser (1 sentence, max 15 words, one emoji, creates curiosity without changing facts)
-- title = accurate Nepali headline (1-2 lines, max 10 words/line, real names/places/results)
-- description = accurate full story (5 paragraphs, blank lines between, 300-450 words, correct Nepali grammar, zero Hindi words). Do NOT write short — write a full detailed article. End: 👉 यो खबर share गर्नुस् र आफ्नो विचार comment मा लेख्नुस्! 💬
+- title = accurate headline in ${targetLangName} (1-2 lines, max 10 words/line, real names/places/results)
+- description = bullet-point structured post in ${targetLangName}. Use this format:
+  🔴 [1-2 sentence summary]
+  📌 Background: • [point 1] • [point 2] • [point 3]
+  ⚡ Key Facts: • [fact 1] • [fact 2] • [fact 3] • [fact 4]
+  👥 Reactions & Impact: • [point 1] • [point 2] • [point 3]
+  🔮 What's Next: • [point 1] • [point 2]
+  👉 [Call to action in ${targetLangName}] 💬
+  Each bullet = 1 concise sentence. 15-20 bullets total. NO paragraph prose.
 
 Return ONLY this JSON (no markdown):
-{"hook":"<accurate tease, 1 Nepali sentence, max 15 words>","title":"<accurate 1-2 line Nepali headline, real names/results/numbers from article>","description":"<accurate full story — 5 paragraphs, blank lines, correct Nepali verb forms, zero Hindi words>","hashtags":["#नेपाल","#BreakingNews","#Nepal","#viral","#trending","#नेपाल_समाचार","#NepaliNews","#ShashiNewsGen"]}` : prompt;
+{"hook":"<accurate tease, 1 sentence, max 15 words>","title":"<accurate 1-2 line headline, real names/results/numbers from article>","description":"<bullet-point post: 🔴 summary \\n\\n📌 Background:\\n• point1\\n• point2\\n\\n⚡ Key Facts:\\n• fact1\\n• fact2\\n\\n👥 Reactions:\\n• point1\\n\\n🔮 What's Next:\\n• point1\\n\\n👉 call-to-action>","hashtags":["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#ShashiNewsGen"]}` : prompt;
 
   let result;
   let _aiFailReason = null;
@@ -3424,15 +3590,13 @@ Return ONLY this JSON (no markdown):
     return { _error: `⚠️ AI responded but output was incomplete (missing: ${missing}). Try again.` };
   }
 
-  /* Validate Devanagari content — use the actual model that ran (callAI._lastModel),
-     NOT just whether keys exist. Gemini always writes Nepali; Groq sometimes uses English.
-     We only require Devanagari in the description (which is long-form prose).
-     Titles often have English proper nouns (names, places) — so we relax that check. */
+  /* Validate Devanagari content — only required when output language uses Devanagari script (Nepali/Hindi).
+     Skip check entirely for English output (india-en tab or any English-language article). */
   const actualModel = callAI._lastModel || ((_geminiKey || _browserGeminiKey) ? 'gemini' : 'groq');
-  if (actualModel === 'gemini') {
+  if (actualModel === 'gemini' && sourceLang !== 'en') {
     if (!hasDevanagari(description)) {
       console.warn('[AI Rewrite] Gemini description missing Devanagari — desc:', (description||'').slice(0,80));
-      return { _error: '⚠️ Gemini responded in English instead of Nepali. Try again — or try a different article.' };
+      return { _error: `⚠️ Gemini responded in wrong language. Try again — or try a different article.` };
     }
   }
   /* For Groq: accept any non-empty response — it may write partly in English */
@@ -3574,8 +3738,12 @@ async function selectArticle(idx) {
     nepaliTitle = await buildTitle(rawTitle, sourceLang);
     /* Step 3b: Hook from topic-aware template bank */
     hook = buildHook(nepaliTitle + ' ' + rawTitle, bestBody);
-    /* Step 3c: Build description (translates + extracts key facts) */
-    desc = await buildDescription(nepaliTitle, rawTitle, bestBody, sourceLang);
+    /* Step 3c: Use raw article text directly; fall back to template only if no body */
+    if (fullArticleText && fullArticleText.trim().length > 150) {
+      desc = stripArticleMetadata(fullArticleText);
+    } else {
+      desc = await buildDescription(nepaliTitle, rawTitle, bestBody, sourceLang);
+    }
     /* Step 3d: Hashtags */
     hashtags = buildHashtags(nepaliTitle + ' ' + rawTitle, bestBody);
 
@@ -3635,11 +3803,30 @@ async function selectArticle(idx) {
 
 /* ================================================================
    FULL ARTICLE FETCHER
-   Fetches the actual article page via CORS proxy chain, strips HTML,
-   returns the clean article body text (up to 5000 chars).
+   1st try: server-side /api/article endpoint (no CORS, clean text)
+   Fallback: CORS proxy chain + client-side HTML extraction
 ================================================================ */
 async function fetchFullArticle(url) {
   if (!url) return '';
+
+  /* ── Priority: server-side extraction (works even when sites block CORS proxies) ── */
+  if (_fetchProxyBase) {
+    try {
+      const apiUrl = _fetchProxyBase.replace(/\/proxy\/fetch$/, '/api/article');
+      const ctrl   = new AbortController();
+      const tid    = setTimeout(() => ctrl.abort(), 18000);
+      const res    = await fetch(`${apiUrl}?url=${encodeURIComponent(url)}`, { signal: ctrl.signal });
+      clearTimeout(tid);
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.ok && data.text && data.text.length > 100) {
+          return data.text;
+        }
+      }
+    } catch { /* fall through */ }
+  }
+
+  /* ── Fallback: CORS proxy + client-side extraction ── */
   const html = await fetchRawHtml(url);
   if (!html || html.length < 200) return '';
   return extractArticleText(html, url) || '';
@@ -4179,6 +4366,16 @@ const DESC_IMPACT = {
   fire       : 'पीडितहरूलाई तत्काल राहत उपलब्ध गराउन स्थानीय प्रशासन र सामाजिक संस्थाहरू सक्रिय भएका छन्।',
   road       : 'सम्बन्धित अधिकारीहरूले छानबिन गरी जिम्मेवारहरूविरुद्ध कारबाही गर्ने बताएका छन्।',
   tourism    : 'सरकारले पर्यटन क्षेत्रको विस्तारका लागि थप नीतिगत सहयोग उपलब्ध गराउने प्रतिबद्धता जनाएको छ।',
+  environment : 'स्थानीय प्रशासन, युवा क्लब र विद्यालयका विद्यार्थीहरू यस सफाई अभियानमा जोश र उत्साहका साथ सहभागी भएका छन्।',
+  campaign    : 'यो अभियानले समाजमा सकारात्मक परिवर्तन ल्याउने र नागरिक सहभागिता अभिवृद्धि गर्ने अपेक्षा गरिएको छ।',
+  infrastructure : 'यो परियोजना पूरा भएपछि स्थानीय जनजीवन सहज बन्ने र क्षेत्रको विकासमा महत्त्वपूर्ण टेवा पुग्नेछ।',
+  agriculture : 'उन्नत कृषि प्रविधिको प्रयोगले किसानको आय बढ्ने र खाद्य सुरक्षित हुने अपेक्षा छ।',
+  water       : 'शुद्ध पिउने पानीको उपलब्धताले सार्वजनिक स्वास्थ्य सुधारमा प्रत्यक्ष योगदान पुग्नेछ।',
+  energy      : 'विद्युत् आपूर्ति सुनिश्चित भएपछि उद्योग र व्यापारको विकासमा सकारात्मक असर पर्नेछ।',
+  business    : 'लगानी अनुकूल वातावरण तयार गर्न सरकार र निजी क्षेत्र मिलेर काम गर्ने प्रतिबद्धता जनाएका छन्।',
+  meeting     : 'बैठकमा भएका निर्णयहरू लागू गर्न सम्बन्धित निकायहरूलाई कडा निर्देशन दिइएको छ।',
+  award       : 'यस सफलताबाट प्रेरणा लिँदै नेपाली युवा पुस्ताले आ-आफ्नो क्षेत्रमा उत्कृष्टता हासिल गर्ने उत्साह देखाएका छन्।',
+  culture     : 'यो पहलले नेपालको पर्यटन र सांस्कृतिक पहिचानलाई अन्तर्राष्ट्रिय मञ्चमा झनै माथि उठाउने अपेक्षा छ।',
 };
 
 const DESC_GENERIC_CONTEXT = [
@@ -4329,13 +4526,14 @@ function _cleanArticleText(text, rawTitle) {
 
   /* ── 1. Strip the article's own title if it appears at the start of the body ──
      Nepali news sites often repeat the headline as the first line of the body.
-     Compare first 120 chars of body with the raw title (normalised). */
+     Only strip if there is meaningful content remaining after removal. */
   if (rawTitle) {
     const normTitle = rawTitle.replace(/\s+/g, '').toLowerCase().slice(0, 60);
     const normBody  = t.replace(/\s+/g, '').toLowerCase().slice(0, 80);
     if (normBody.startsWith(normTitle.slice(0, 30)) || normTitle.slice(0, 30) && normBody.includes(normTitle.slice(0, 30))) {
-      /* Remove the first sentence/line that matches the title */
-      t = t.replace(/^[^\n।]{0,200}[।\n]/, '');
+      const stripped = t.replace(/^[^\n।]{0,200}[।\n]/, '');
+      /* Only discard the title line if substantial content remains */
+      if (stripped.trim().length > 60) t = stripped;
     }
   }
 
@@ -4408,49 +4606,110 @@ function _cleanArticleText(text, rawTitle) {
   return t;
 }
 
+/**
+ * Strip author bylines, date/place prefixes, source credits, and navigation
+ * noise from raw article text — leaving only the actual news content.
+ */
+function stripArticleMetadata(text) {
+  if (!text) return '';
+  let t = text.trim();
+
+  // ── Remove leading place + date line (e.g. "काठमाडौं, माघ १५ गते।") ──
+  t = t.replace(/^[\u0900-\u097F\w ]{1,40}[,।|]\s*(?:[\u0900-\u097F\w ]{1,60})?(?:गते|साल|सन्|\d{4}|जनवरी|फेब्रुअरी|मार्च|अप्रिल|मे|जुन|जुलाई|अगस्ट|सेप्टेम्बर|अक्टोबर|नोभेम्बर|डिसेम्बर)[^\n]{0,120}\n?/i, '');
+
+  // ── Remove author / reporter / source lines ──
+  t = t.replace(/^(संवाददाता|रिपोर्टर|लेखक|स्रोत|सम्पादक|By|Author|Reporter|Source|Staff|Agency)[^\n]{0,200}\n?/gim, '');
+  t = t.replace(/\b(संवाददाता|रिपोर्टर|स्रोत|Source|Author|Reporter):\s*[^\n,।]{1,80}/gi, '');
+
+  // ── Remove "Published:", "Updated:", "प्रकाशित:", "अपडेट:" ──
+  t = t.replace(/^(प्रकाशित|अपडेट|Published|Updated)[^\n]{0,100}\n?/gim, '');
+
+  // ── Remove standalone news agency names on their own line ──
+  t = t.replace(/^\s*(रासस|एजेन्सी|PTI|ANI|AFP|Reuters|AP)\s*\n/gim, '');
+
+  // ── Remove copyright / subscribe / comment noise lines ──
+  t = t.replace(/^.{0,80}(?:copyright|©|सर्वाधिकार|सदस्यता|subscribe|टिप्पणी|comment here).{0,80}$/gim, '');
+
+  // ── Remove ISO dates and Nepali date stamps ──
+  t = t.replace(/\b\d{4}[-\/]\d{1,2}[-\/]\d{1,2}(?:T[\d:Z.]+)?\b/g, '');
+
+  // ── Collapse extra blank lines ──
+  t = t.replace(/\n{3,}/g, '\n\n').trim();
+
+  return t;
+}
+
 async function buildDescription(nepaliTitle, rawTitle, articleBody, sourceLang = 'ne') {
   /* ── STEP 0: Strip author, date, bylines, nav noise from body ── */
   const cleanedBody = _cleanArticleText(articleBody || '', rawTitle);
+  /* If cleaning stripped everything (e.g. RSS description was just the title),
+     fall back to the raw uncleaned body so we still have something to work with */
+  const effectiveBody = cleanedBody.trim().length > 40 ? cleanedBody : (articleBody || '').trim();
 
   const combinedLower = (nepaliTitle + ' ' + rawTitle).toLowerCase();
   const topic = detectTopic(combinedLower) || detectNepaliTopic(nepaliTitle);
-  const bodyIsNepali = /[\u0900-\u097F]{10,}/.test(cleanedBody);
+  const bodyIsNepali = /[\u0900-\u097F]{10,}/.test(effectiveBody);
 
   /* ── STEP 1: Translate body to Nepali if it's in another language ── */
-  let nepaliBody = cleanedBody;
+  let nepaliBody = effectiveBody;
   if (!bodyIsNepali && nepaliBody.trim().length > 50) {
     nepaliBody = await translateBodyToNepali(nepaliBody, sourceLang);
   }
 
-  /* ── STEP 2: Use the full cleaned body directly — no scoring filter ── */
-  /* Split into sentences, strip pure noise lines, rejoin naturally */
+  /* ── STEP 2: Split body into clean sentences ── */
   const allSentences = (nepaliBody.replace(/\n+/g, ' ').replace(/\s+/g, ' ').match(/[^.!?।]+[.!?।]+/g) || [])
     .map(s => s.trim())
     .filter(s => {
-      if (s.length < 25) return false;
+      if (s.length < 20) return false;
       if (/(?:read more|click here|share this|follow us|subscribe|यो खबर|सम्बन्धित|प्रतिक्रिया दिनुहोस्)/i.test(s)) return false;
       return true;
     });
 
-  /* If sentence splitting worked, join them; else use body directly */
-  let descText = allSentences.length >= 2
-    ? allSentences.join(' ')
-    : nepaliBody.trim();
+  /* ── STEP 3: Build a structured, multi-section description ── */
+  const sections = [];
+  let usedTemplateContext = false;
 
-  /* ── STEP 3: Fallback if still empty ── */
-  if (!descText || descText.length < 40) {
-    const extractedFacts = extractKeyFacts(rawTitle, cleanedBody);
-    if (extractedFacts.length) {
-      descText = extractedFacts.join(' ');
-    } else {
-      descText = topic
-        ? (DESC_CONTEXT[topic] + ' ' + DESC_IMPACT[topic])
-        : DESC_GENERIC_CONTEXT[Math.floor(Math.random() * DESC_GENERIC_CONTEXT.length)];
+  /* 3a. Summary — first 3 sentences, or full body line, or nepali title as absolute fallback */
+  const summarySentences = allSentences.length >= 1
+    ? allSentences.slice(0, 3)
+    : (nepaliBody.trim() ? [nepaliBody.trim()] : []);
+
+  if (summarySentences.length > 0) {
+    sections.push('🔴 ' + summarySentences.join(' '));
+  } else {
+    /* Use the Nepali headline itself — it IS the news in condensed form */
+    sections.push('🔴 ' + nepaliTitle);
+    if (topic && DESC_CONTEXT[topic]) {
+      sections.push('📌 विवरण:\n• ' + DESC_CONTEXT[topic]);
+      usedTemplateContext = true;
     }
   }
 
-  /* ── STEP 4: Trim to max 300 words — keep as much as possible, cut at sentence boundary ── */
-  return trimToWordTarget(descText.trim(), 80, 300);
+  /* 3b. Key details — remaining sentences as bullet points */
+  const detailSentences = allSentences.slice(3, 10);
+  if (detailSentences.length > 0) {
+    sections.push('📌 विवरण:\n' + detailSentences.map(s => '• ' + s).join('\n'));
+  }
+
+  /* 3c. Extracted numeric / named facts from title + body */
+  const facts = extractKeyFacts(rawTitle, effectiveBody);
+  if (facts.length > 0) {
+    sections.push('⚡ मुख्य तथ्यहरू:\n' + facts.map(f => '• ' + f).join('\n'));
+  }
+
+  /* 3d. Topic context — skip if already shown in summary fallback */
+  if (!usedTemplateContext && topic && DESC_CONTEXT[topic]) {
+    sections.push('📋 पृष्ठभूमि:\n• ' + DESC_CONTEXT[topic]);
+  }
+
+  /* 3e. Impact */
+  if (topic && DESC_IMPACT[topic]) {
+    sections.push('🔮 प्रभाव र अपेक्षा:\n• ' + DESC_IMPACT[topic]);
+  } else {
+    sections.push('👉 थप जानकारीका लागि सम्बन्धित समाचार स्रोत अनुगमन गर्नुहोस्। 💬');
+  }
+
+  return sections.join('\n\n');
 }
 
 /** Count words in a string (Nepali-aware: split on whitespace) */
@@ -4601,19 +4860,30 @@ function extractBestSentences(text, nepaliTitle, rawTitle, isNepali, maxSents) {
 
 function detectNepaliTopic(text) {
   const t = text;
-  if (t.includes('बाढी') || t.includes('पहिरो') || t.includes('वर्षा')) return 'flood';
-  if (t.includes('भूकम्प'))          return 'earthquake';
-  if (t.includes('निर्वाचन') || t.includes('मतदान')) return 'election';
-  if (t.includes('सरकार') || t.includes('प्रधानमन्त्री') || t.includes('मन्त्री')) return 'government';
-  if (t.includes('स्वास्थ्य') || t.includes('अस्पताल'))  return 'health';
-  if (t.includes('दुर्घटना') || t.includes('सडक'))       return 'accident';
-  if (t.includes('शिक्षा') || t.includes('विद्यार्थी')) return 'education';
-  if (t.includes('प्रहरी') || t.includes('अपराध'))       return 'police';
-  if (t.includes('क्रिकेट'))         return 'cricket';
-  if (t.includes('फुटबल'))           return 'football';
-  if (t.includes('आगलागी'))          return 'fire';
-  if (t.includes('पर्यटन'))          return 'tourism';
-  if (t.includes('मूल्य') || t.includes('रुपैयाँ') || t.includes('अर्थ')) return 'economy';
+  if (t.includes('बाढी') || t.includes('पहिरो') || t.includes('वर्षा') || t.includes('मनसुन')) return 'flood';
+  if (t.includes('भूकम्प')) return 'earthquake';
+  if (t.includes('निर्वाचन') || t.includes('मतदान') || t.includes('चुनाव')) return 'election';
+  if (t.includes('सरकार') || t.includes('प्रधानमन्त्री') || t.includes('मन्त्री') || t.includes('बजेट') || t.includes('संसद')) return 'government';
+  if (t.includes('राजनीति') || t.includes('दल') || t.includes('पार्टी') || t.includes('कांग्रेस') || t.includes('एमाले') || t.includes('माओवादी')) return 'politics';
+  if (t.includes('स्वास्थ्य') || t.includes('अस्पताल') || t.includes('रोग') || t.includes('उपचार') || t.includes('औषधि')) return 'health';
+  if (t.includes('दुर्घटना') || t.includes('ट्राफिक')) return 'accident';
+  if (t.includes('सडक') || t.includes('पुल') || t.includes('निर्माण')) return 'road';
+  if (t.includes('शिक्षा') || t.includes('विद्यार्थी') || t.includes('विद्यालय') || t.includes('विश्वविद्यालय')) return 'education';
+  if (t.includes('प्रहरी') || t.includes('अपराध') || t.includes('गिरफ्तार') || t.includes('हत्या')) return 'police';
+  if (t.includes('क्रिकेट')) return 'cricket';
+  if (t.includes('फुटबल') || t.includes('खेल') || t.includes('टूर्नामेन्ट')) return 'football';
+  if (t.includes('आगलागी') || t.includes('आगो')) return 'fire';
+  if (t.includes('पर्यटन') || t.includes('पर्यटक') || t.includes('होटल')) return 'tourism';
+  if (t.includes('मूल्य') || t.includes('रुपैयाँ') || t.includes('अर्थ') || t.includes('बैंक') || t.includes('व्यापार') || t.includes('आयात') || t.includes('निर्यात')) return 'economy';
+  if (t.includes('वातावरण') || t.includes('पर्यावरण') || t.includes('हरियो') || t.includes('सफाइ') || t.includes('सफाई') || t.includes('ग्रीन') || t.includes('क्लीन') || t.includes('प्रदूषण')) return 'environment';
+  if (t.includes('अभियान') || t.includes('कार्यक्रम') || t.includes('पहल') || t.includes('लन्च') || t.includes('सुरु')) return 'campaign';
+  if (t.includes('कृषि') || t.includes('किसान') || t.includes('खेती') || t.includes('धान') || t.includes('मल') || t.includes('बीउ')) return 'agriculture';
+  if (t.includes('खानेपानी') || t.includes('सिंचाइ') || t.includes('पानी आपूर्ति')) return 'water';
+  if (t.includes('विद्युत्') || t.includes('सौर्य') || t.includes('जलविद्युत्') || t.includes('ऊर्जा')) return 'energy';
+  if (t.includes('उद्योग') || t.includes('व्यवसाय') || t.includes('कम्पनी') || t.includes('लगानी')) return 'business';
+  if (t.includes('बैठक') || t.includes('सम्मेलन') || t.includes('सम्झौता') || t.includes('छलफल')) return 'meeting';
+  if (t.includes('पुरस्कार') || t.includes('सम्मान') || t.includes('उपाधि') || t.includes('विजय')) return 'award';
+  if (t.includes('संस्कृति') || t.includes('चाड') || t.includes('पर्व') || t.includes('जात्रा') || t.includes('उत्सव')) return 'culture';
   return null;
 }
 

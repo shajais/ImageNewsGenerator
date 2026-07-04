@@ -280,6 +280,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._proxy_fetch(target_url)
             return
 
+        # ── Article extractor: /api/article?url=... → fetch page + extract body text ──
+        if pathname == '/api/article':
+            target_url = qs.get('url', [''])[0]
+            if not target_url:
+                self.send_response(400); self.end_headers()
+                self.wfile.write(b'Missing ?url= parameter')
+                return
+            self._fetch_article_text(target_url)
+            return
+
         # ── Status: /api/key-status → tells browser which keys are configured ──
         if pathname == '/api/key-status':
             payload = json.dumps({
@@ -1106,6 +1116,102 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_cors()
             self.end_headers()
             self.wfile.write(msg)
+
+    def _fetch_article_text(self, url):
+        """Fetch a news article page and extract its clean body text.
+        Returns JSON: { ok: bool, text: str }  — always HTTP 200 so client can read the body.
+        Strategy: only remove <script>/<style>, then harvest every <p> that looks like
+        real article content (≥60 chars, contains Devanagari or ends with sentence punctuation).
+        """
+        import re, gzip as _gzip, html as _html_mod
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'ne-NP,ne;q=0.9,en-US;q=0.8,en;q=0.7',
+                    'Accept-Encoding': 'gzip, deflate',
+                    'Connection': 'keep-alive',
+                    'Referer': 'https://www.google.com/',
+                    'Cache-Control': 'no-cache',
+                },
+                method='GET'
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                raw = resp.read()
+                ct  = resp.headers.get('Content-Type', '')
+                enc = resp.headers.get('Content-Encoding', '')
+
+            # Decompress gzip
+            if enc == 'gzip' or (len(raw) > 2 and raw[:2] == b'\x1f\x8b'):
+                try:
+                    raw = _gzip.decompress(raw)
+                except Exception:
+                    pass
+
+            # Detect charset
+            charset = 'utf-8'
+            m = re.search(r'charset=([^\s;"\'>]+)', ct, re.I)
+            if not m:
+                m = re.search(r'charset=([^\s;"\'>]+)', raw[:2000].decode('latin-1', errors='replace'), re.I)
+            if m:
+                charset = m.group(1).strip()
+
+            html_str = raw.decode(charset, errors='replace')
+
+            # ── Step 1: Remove only <script> and <style> (safe, never contain article text) ──
+            html_str = re.sub(r'<!--.*?-->', ' ', html_str, flags=re.S)
+            html_str = re.sub(r'<script[^>]*>.*?</script>', ' ', html_str, flags=re.S | re.I)
+            html_str = re.sub(r'<style[^>]*>.*?</style>',  ' ', html_str, flags=re.S | re.I)
+
+            # ── Step 2: Harvest <p> tags — filter for article content ──
+            paras = re.findall(r'<p[^>]*>(.*?)</p>', html_str, re.S | re.I)
+            collected = []
+            for p in paras:
+                # Strip inner tags
+                txt = re.sub(r'<[^>]+>', ' ', p)
+                txt = _html_mod.unescape(txt)
+                txt = re.sub(r'\s+', ' ', txt).strip()
+                # Must be ≥60 chars
+                if len(txt) < 60:
+                    continue
+                # Must contain Devanagari script
+                if not re.search(r'[\u0900-\u097F]{5,}', txt):
+                    continue
+                # Skip navigation-style content (slash-delimited category lists, breadcrumbs)
+                slash_count = txt.count('/')
+                danda_count = txt.count('।')
+                if slash_count >= 3 and slash_count > danda_count:
+                    continue
+                # Skip paragraphs that look like tag clouds or category dumps (many short words)
+                words = txt.split()
+                avg_word_len = sum(len(w) for w in words) / max(len(words), 1)
+                if avg_word_len < 3 and len(words) > 20:
+                    continue
+                collected.append(txt)
+
+            if collected:
+                text = '\n\n'.join(collected)
+            else:
+                # Fallback: strip all tags, keep lines ≥80 chars with Devanagari
+                raw_text = re.sub(r'<[^>]+>', ' ', html_str)
+                raw_text = _html_mod.unescape(raw_text)
+                lines = [ln.strip() for ln in raw_text.splitlines()
+                         if len(ln.strip()) >= 80 and re.search(r'[\u0900-\u097F]{5,}', ln)]
+                text = '\n'.join(lines[:60])
+
+            text = text.strip()[:5000]
+            payload = json.dumps({'ok': True, 'text': text}).encode('utf-8')
+        except Exception as e:
+            payload = json.dumps({'ok': False, 'text': '', 'error': str(e)}).encode('utf-8')
+
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(payload)))
+        self.send_cors()
+        self.end_headers()
+        self.wfile.write(payload)
 
     def _forward(self, url, body, headers):
         """Forward a POST request to url and stream the response back."""

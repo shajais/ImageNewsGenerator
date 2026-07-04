@@ -551,6 +551,7 @@ header p { color: var(--muted); font-size: .85rem; margin-top: 2px; }
   flex-wrap: nowrap;
 }
 .content-block-text { font-size: .9rem; line-height: 1.7; color: var(--text); }
+#outDesc { white-space: pre-line; }
 
 .hashtags { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 4px; }
 .hashtag {
