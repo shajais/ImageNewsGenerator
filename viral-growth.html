@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>🚀 Viral Growth Suite — Shashi Creator Studio</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#06060f;color:#e2e8f0;font-family:'Segoe UI',sans-serif;min-height:100vh;display:flex;flex-direction:column}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:#0a0a18}::-webkit-scrollbar-thumb{background:#7c3aed;border-radius:3px}
+
+.vg-header{display:flex;align-items:center;justify-content:space-between;padding:13px 22px;background:#0d0d1f;border-bottom:1px solid rgba(236,72,153,.25);flex-shrink:0}
+.vg-title{font-size:1.15rem;font-weight:900;background:linear-gradient(90deg,#ec4899,#f97316,#facc15,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.vg-back{padding:6px 14px;border-radius:8px;border:1px solid rgba(236,72,153,.3);background:rgba(236,72,153,.08);color:#f9a8d4;cursor:pointer;font-size:.8rem;font-weight:700;text-decoration:none}
+.vg-back:hover{background:rgba(236,72,153,.2)}
+
+.vg-body{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:20px}
+.vg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px}
+
+/* Cards */
+.vg-card{background:#0d0d1f;border:1px solid rgba(255,255,255,.07);border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+.vg-card-head{padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.05)}
+.vg-card-icon{font-size:1.4rem}
+.vg-card-title{font-size:.88rem;font-weight:800;color:#f1f5f9}
+.vg-card-sub{font-size:.68rem;color:#64748b;margin-top:1px}
+.vg-card-body{padding:14px 16px;flex:1;display:flex;flex-direction:column;gap:10px}
+
+/* Form elements */
+.vg-label{font-size:.7rem;color:#94a3b8;font-weight:600;margin-bottom:3px;display:block}
+.vg-input{width:100%;padding:8px 11px;border-radius:9px;border:1px solid rgba(255,255,255,.1);background:#07070f;color:#e2e8f0;font-size:.82rem;outline:none;transition:.2s}
+.vg-input:focus{border-color:#ec4899;background:rgba(236,72,153,.04)}
+.vg-select{width:100%;padding:7px 10px;border-radius:9px;border:1px solid rgba(255,255,255,.1);background:#07070f;color:#e2e8f0;font-size:.8rem;outline:none}
+.vg-textarea{width:100%;padding:9px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.1);background:#07070f;color:#e2e8f0;font-size:.78rem;resize:vertical;min-height:80px;outline:none;font-family:inherit}
+.vg-textarea:focus{border-color:#ec4899}
+.vg-btn{padding:9px 16px;border-radius:10px;border:none;cursor:pointer;font-weight:700;font-size:.82rem;transition:.2s;display:flex;align-items:center;justify-content:center;gap:6px}
+.vg-btn.pri{background:linear-gradient(135deg,#be185d,#ec4899);color:#fff}
+.vg-btn.pri:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.vg-btn.sec{background:rgba(236,72,153,.1);border:1px solid rgba(236,72,153,.25);color:#f9a8d4}
+.vg-btn.sec:hover{background:rgba(236,72,153,.2)}
+.vg-btn:disabled{opacity:.45;cursor:not-allowed;transform:none!important}
+.vg-btn.full{width:100%}
+
+/* Results */
+.vg-result{background:#07070f;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px;font-size:.78rem;line-height:1.8;color:#cbd5e1;min-height:80px;white-space:pre-wrap;word-break:break-word}
+.vg-result.empty{color:#334155;font-style:italic}
+
+/* Tags */
+.tag-cloud{display:flex;flex-wrap:wrap;gap:5px}
+.tag{padding:4px 10px;border-radius:20px;font-size:.7rem;font-weight:700;cursor:pointer;transition:.15s}
+.tag:hover{filter:brightness(1.2)}
+.tag.pink{background:rgba(236,72,153,.15);border:1px solid rgba(236,72,153,.3);color:#f9a8d4}
+.tag.blue{background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);color:#93c5fd}
+.tag.green{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#86efac}
+.tag.orange{background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);color:#fdba74}
+.tag.yellow{background:rgba(234,179,8,.15);border:1px solid rgba(234,179,8,.3);color:#fde047}
+.tag.purple{background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);color:#c4b5fd}
+
+/* Stat bar */
+.stat-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.stat-row:last-child{border-bottom:none}
+.stat-label{font-size:.72rem;color:#94a3b8;flex:1}
+.stat-val{font-size:.82rem;font-weight:800;color:#f1f5f9}
+.stat-bar{height:5px;background:#0f0f1f;border-radius:3px;width:80px;overflow:hidden}
+.stat-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#ec4899,#f97316)}
+
+/* Platform selector */
+.plat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.plat{padding:7px 4px;border-radius:8px;border:1px solid rgba(255,255,255,.08);background:#07070f;text-align:center;cursor:pointer;font-size:.65rem;color:#64748b;transition:.15s}
+.plat:hover{border-color:#ec4899;color:#f9a8d4;background:rgba(236,72,153,.06)}
+.plat.on{border-color:#ec4899;color:#fff;background:rgba(236,72,153,.12)}
+.plat span{display:block;font-size:1.2rem;margin-bottom:2px}
+
+/* Spinning loader */
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.15);border-top-color:#ec4899;border-radius:50%;animation:vgspin .7s linear infinite;vertical-align:middle}
+@keyframes vgspin{to{transform:rotate(360deg)}}
+
+/* Viral score */
+.vscore{display:flex;align-items:center;gap:10px;padding:10px;background:rgba(236,72,153,.06);border:1px solid rgba(236,72,153,.2);border-radius:10px}
+.vscore-num{font-size:2rem;font-weight:900;color:#ec4899;line-height:1}
+.vscore-label{font-size:.72rem;color:#94a3b8}
+.vscore-verdict{font-size:.78rem;font-weight:700}
+
+/* Section heading */
+.vg-section-title{font-size:.7rem;font-weight:900;color:#ec4899;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
+
+/* Copy btn */
+.copy-btn{background:none;border:none;cursor:pointer;font-size:.68rem;color:#64748b;padding:2px 6px;border-radius:5px}
+.copy-btn:hover{background:rgba(255,255,255,.06);color:#e2e8f0}
+</style>
+</head>
+<body>
+
+<div class="vg-header">
+  <div>
+    <div class="vg-title">🚀 Viral Growth Suite</div>
+    <div style="font-size:.65rem;color:#64748b;margin-top:2px">AI-powered tools to make every post go viral · Trends · Hooks · Hashtags · Timing · Monetization</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <a href="stock-market.html" target="_blank" class="vg-back" style="background:rgba(34,197,94,.07);border-color:rgba(34,197,94,.25);color:#86efac">📈 Markets</a>
+    <a href="index.html" class="vg-back">← Studio</a>
+  </div>
+</div>
+
+<div class="vg-body">
+
+  <!-- Gemini key row -->
+  <div style="background:#0d0d1f;border:1px solid rgba(236,72,153,.15);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <span style="font-size:.78rem;color:#94a3b8;font-weight:700;flex-shrink:0">🧠 Gemini AI Key</span>
+    <input id="vgKey" type="password" class="vg-input" style="max-width:320px" placeholder="AIzaSy… (from aistudio.google.com/apikey)"/>
+    <span id="vgKeyStatus" style="font-size:.72rem;color:#475569">Enter key to enable all AI features</span>
+    <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+      <select class="vg-select" id="vgNiche" style="max-width:160px" title="Your content niche">
+        <option value="general">🌐 General</option>
+        <option value="nepal">🇳🇵 Nepal / Nepali</option>
+        <option value="tech">💻 Tech & Gadgets</option>
+        <option value="finance">💰 Finance & Crypto</option>
+        <option value="lifestyle">✨ Lifestyle & Beauty</option>
+        <option value="food">🍜 Food & Recipes</option>
+        <option value="politics">🏛 Politics & News</option>
+        <option value="fitness">💪 Fitness & Health</option>
+        <option value="entertainment">🎬 Entertainment</option>
+        <option value="business">🏢 Business</option>
+      </select>
+      <select class="vg-select" id="vgLang" style="max-width:130px">
+        <option value="English">English</option>
+        <option value="Nepali">नेपाली</option>
+        <option value="Hindi">हिंदी</option>
+        <option value="mixed">Mixed (NP+EN)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Platform selector -->
+  <div style="background:#0d0d1f;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:14px 16px">
+    <div class="vg-section-title">📱 Target Platforms</div>
+    <div class="plat-grid" id="platGrid">
+      <div class="plat on" data-p="Instagram"><span>📸</span>Instagram</div>
+      <div class="plat on" data-p="YouTube"><span>▶️</span>YouTube</div>
+      <div class="plat on" data-p="TikTok"><span>🎵</span>TikTok</div>
+      <div class="plat on" data-p="Facebook"><span>👥</span>Facebook</div>
+      <div class="plat" data-p="Twitter/X"><span>𝕏</span>Twitter/X</div>
+      <div class="plat" data-p="LinkedIn"><span>💼</span>LinkedIn</div>
+      <div class="plat" data-p="Shorts"><span>📱</span>YT Shorts</div>
+      <div class="plat" data-p="Reels"><span>🎞</span>Reels</div>
+    </div>
+  </div>
+
+  <div class="vg-grid">
+
+    <!-- ── VIRAL SCORE ANALYZER ── -->
+    <div class="vg-card">
+      <div class="vg-card-head">
+        <div class="vg-card-icon">🔥</div>
+        <div><div class="vg-card-title">Viral Score Analyzer</div><div class="vg-card-sub">Predict how viral your content will be + improvement tips</div></div>
+      </div>
+      <div class="vg-card-body">
+        <label class="vg-label">Paste your caption / title / script</label>
+        <textarea class="vg-textarea" id="vsaText" placeholder="e.g. 'नेपालको सबैभन्दा ठूलो रहस्य — यो भिडियो हेरेपछि तपाईंलाई आश्चर्य लाग्नेछ!'"></textarea>
+        <select class="vg-select" id="vsaType">
+          <option value="short-video">Short Video (Reels/Shorts/TikTok)</option>
+          <option value="long-video">Long YouTube Video</option>
+          <option value="post">Social Media Post</option>
+          <option value="thumbnail">Thumbnail + Title</option>
+          <option value="story">Story / Status</option>
+        </select>
+        <button class="vg-btn pri full" id="vsaBtn" onclick="vgRun('vsa')">🔥 Analyze Viral Potential</button>
+        <div class="vg-result empty" id="vsaResult">Paste your caption/title above and click Analyze.</div>
+      </div>
+    </div>
+
+    <!-- ── HOOK GENERATOR ── -->
+    <div class="vg-card">
+      <div class="vg-card-head">
+        <div class="vg-card-icon">🎣</div>
+        <div><div class="vg-card-title">Hook Generator</div><div class="vg-card-sub">5–10 scroll-stopping openers that force viewers to watch</div></div>
+      </div>
+      <div class="vg-card-body">
+        <label class="vg-label">What is your content about?</label>
+        <textarea class="vg-textarea" id="hookTopic" placeholder="e.g. How I made Rs 1 lakh/month from YouTube in Nepal"></textarea>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div>
+            <label class="vg-label">Hook style</label>
+            <select class="vg-select" id="hookStyle">
+              <option value="curiosity">🤔 Curiosity gap</option>
+              <option value="shock">😱 Shock/Surprise</option>
+              <option value="promise">💎 Value promise</option>
+              <option value="question">❓ Question</option>
+              <option value="controversy">🔥 Controversy</option>
+              <option value="story">📖 Story/Relatable</option>
+              <option value="fear">😨 Fear/FOMO</option>
+              <option value="challenge">⚡ Challenge</option>
+            </select>
+          </div>
+          <div>
+            <label class="vg-label">Duration</label>
+            <select class="vg-select" id="hookDur">
+              <option value="3sec">3-second hook</option>
+              <option value="10sec">10-second opener</option>
+              <option value="30sec">30-second intro</option>
+            </select>
+          </div>
+        </div>
+        <button class="vg-btn pri full" id="hookBtn" onclick="vgRun('hook')">🎣 Generate Hooks</button>
+        <div class="vg-result empty" id="hookResult">Your power hooks will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── HASHTAG ENGINE ── -->
+    <div class="vg-card">
+      <div class="vg-card-head">
+        <div class="vg-card-icon">🏷</div>
+        <div><div class="vg-card-title">Hashtag & Keyword Engine</div><div class="vg-card-sub">Platform-specific hashtag strategy with reach estimates</div></div>
+      </div>
+      <div class="vg-card-body">
+        <label class="vg-label">Content topic / niche</label>
+        <input class="vg-input" id="hashTopic" placeholder="e.g. Nepali street food tour Kathmandu"/>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div>
+            <label class="vg-label">Strategy</label>
+            <select class="vg-select" id="hashStrat">
+              <option value="mixed">Mixed (small+big)</option>
+              <option value="niche">Niche only</option>
+              <option value="trending">Trending boost</option>
+              <option value="local">Local/Regional</option>
+            </select>
+          </div>
+          <div>
+            <label class="vg-label">Count</label>
+            <select class="vg-select" id="hashCount">
+              <option value="30">30 hashtags</option>
+              <option value="15">15 hashtags</option>
+              <option value="50">50 hashtags</option>
+            </select>
+          </div>
+        </div>
+        <button class="vg-btn pri full" id="hashBtn" onclick="vgRun('hash')">🏷 Generate Hashtags</button>
+        <div class="vg-result empty" id="hashResult">Hashtag sets will appear here — ready to copy.</div>
+      </div>
+    </div>
+
+    <!-- ── TITLE & THUMBNAIL OPTIMIZER ── -->
+    <div class="vg-card">
+      <div class="vg-card-head">
+        <div class="vg-card-icon">🖼</div>
+        <div><div class="vg-card-title">Title & Thumbnail Optimizer</div><div class="vg-card-sub">High-CTR titles + thumbnail concept with color psychology</div></div>
+      </div>
+      <div class="vg-card-body">
+        <label class="vg-label">Your current title (or topic)</label>
+        <input class="vg-input" id="titleCurrent" placeholder="e.g. How to make money online Nepal"/>
+        <label class="vg-label" style="margin-top:4px">Content type</label>
+        <select class="vg-select" id="titleType">
+          <option value="youtube">YouTube</option>
+          <option value="shorts">YT Shorts / Reels</option>
+          <option value="blog">Blog / Article</option>
+          <option value="thumbnail">Thumbnail text only</option>
+        </select>
+        <button class="vg-btn pri full" id="titleBtn" onclick="vgRun('title')">🖼 Optimize Title + Thumbnail</button>
+        <div class="vg-result empty" id="titleResult">Optimized titles and thumbnail concept will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── BEST POSTING TIME ── -->
+    <div class="vg-card">
+      <div class="vg-card-head">
+        <div class="vg-card-icon">⏰</div>
+        <div><div class="vg-card-title">Best Posting Time Planner</div><div class="vg-card-sub">When to post for maximum reach on each platform</div></div>
+      </div>
+      <div class="vg-card-body">
+        <label class="vg-label">Your audience location / timezone</label>
+        <input class="vg-input" id="timeTz" value="Nepal (NPT UTC+5:45)" placeholder="e.g. Nepal, India, USA-EST"/>
+        <label class="vg-label" style="margin-top:4px">Your audience type</label>
+        <select class="vg-select" id="timeAud">
+          <option value="general">General public</option>
+          <option value="students">Students / Youth (16–24)</option>
+          <option value="professionals">Working professionals</option>
+          <option value="homemakers">Homemakers</option>
+          <option value="business">Business owners</option>
+          <option value="global">Global / Mixed</option>
+        </select>
+        <button class="vg-btn pri full" id="timeBtn" onclick="vgRun('time')">⏰ Get Best Posting Schedule</button>
+        <div class="vg-result empty" id="timeResult">Optimal posting times will appear here per platform.</div>
+      </div>
+    </div>
+
+    <!-- ── TREND DETECTOR ── -->
+    <div class="vg-card">
+      <div class="vg-card-head">
+        <div class="vg-card-icon">📡</div>
+        <div><div class="vg-card-title">Trend Content Ideas</div><div class="vg-card-sub">What's trending right now + content angle for your niche</div></div>
+      </div>
+      <div class="vg-card-body">
+        <label class="vg-label">Your niche + region (auto-filled from settings)</label>
+        <input class="vg-input" id="trendNiche" placeholder="e.g. Nepal finance, Bollywood, crypto India"/>
+        <label class="vg-label" style="margin-top:4px">Content format to ride the trend</label>
+        <select class="vg-select" id="trendFormat">
+          <option value="short">Short video (15–60s)</option>
+          <option value="long">Long-form video (5–20min)</option>
+          <option value="post">Social post + carousel</option>
+          <option value="series">Content series (7 parts)</option>
+          <option value="live">Live stream angle</option>
+        </select>
+        <button class="vg-btn pri full" id="trendBtn" onclick="vgRun('trend')">📡 Detect Trends + Content Ideas</button>
+        <div class="vg-result empty" id="trendResult">Trending content ideas will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── CAPTION WRITER ── -->
+    <div class="vg-card">
+      <div class="vg-card-head">
+        <div class="vg-card-icon">✍️</div>
+        <div><div class="vg-card-title">Caption & Description Writer</div><div class="vg-card-sub">Engagement-optimized captions with CTA for every platform</div></div>
+      </div>
+      <div class="vg-card-body">
+        <label class="vg-label">Content topic / what happened</label>
+        <textarea class="vg-textarea" id="capTopic" placeholder="e.g. I visited the oldest temple in Kathmandu and found something shocking inside"></textarea>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div>
+            <label class="vg-label">Tone</label>
+            <select class="vg-select" id="capTone">
+              <option value="emotional">😢 Emotional</option>
+              <option value="funny">😂 Funny</option>
+              <option value="informative">📚 Informative</option>
+              <option value="inspirational">💪 Inspirational</option>
+              <option value="controversial">🔥 Controversial</option>
+              <option value="storytelling">📖 Storytelling</option>
+            </select>
+          </div>
+          <div>
+            <label class="vg-label">Length</label>
+            <select class="vg-select" id="capLen">
+              <option value="short">Short (1–3 lines)</option>
+              <option value="medium">Medium (1 para)</option>
+              <option value="long">Long (full desc)</option>
+            </select>
+          </div>
+        </div>
+        <button class="vg-btn pri full" id="capBtn" onclick="vgRun('cap')">✍️ Write Caption</button>
+        <div class="vg-result empty" id="capResult">Your caption will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── MONETIZATION ROADMAP ── -->
+    <div class="vg-card">
+      <div class="vg-card-head">
+        <div class="vg-card-icon">💰</div>
+        <div><div class="vg-card-title">Monetization Roadmap</div><div class="vg-card-sub">How to earn from your content — step-by-step revenue plan</div></div>
+      </div>
+      <div class="vg-card-body">
+        <label class="vg-label">Your current stats (subscribers / followers / monthly views)</label>
+        <input class="vg-input" id="monoStats" placeholder="e.g. 5000 YT subs, 2000 IG followers, 50k monthly views"/>
+        <label class="vg-label" style="margin-top:4px">Content niche / category</label>
+        <input class="vg-input" id="monoNiche" placeholder="e.g. Nepali travel vlogs, tech reviews, cooking"/>
+        <label class="vg-label" style="margin-top:4px">Target monthly income</label>
+        <select class="vg-select" id="monoTarget">
+          <option value="10k-50k NPR">Rs 10,000–50,000/month</option>
+          <option value="50k-1L NPR">Rs 50,000–1 Lakh/month</option>
+          <option value="1L-5L NPR">Rs 1–5 Lakh/month</option>
+          <option value="5L+ NPR">Rs 5 Lakh+/month</option>
+          <option value="$100-500 USD">$100–500/month</option>
+          <option value="$500-2000 USD">$500–2000/month</option>
+          <option value="$2000+ USD">$2000+/month</option>
+        </select>
+        <button class="vg-btn pri full" id="monoBtn" onclick="vgRun('mono')">💰 Build My Monetization Plan</button>
+        <div class="vg-result empty" id="monoResult">Your personalized monetization roadmap will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── CONTENT CALENDAR ── -->
+    <div class="vg-card">
+      <div class="vg-card-head">
+        <div class="vg-card-icon">📅</div>
+        <div><div class="vg-card-title">30-Day Content Calendar</div><div class="vg-card-sub">Day-by-day content plan optimized for growth and virality</div></div>
+      </div>
+      <div class="vg-card-body">
+        <label class="vg-label">Your content niche</label>
+        <input class="vg-input" id="calNiche" placeholder="e.g. Nepali food vlogger"/>
+        <label class="vg-label" style="margin-top:4px">Posting frequency</label>
+        <select class="vg-select" id="calFreq">
+          <option value="daily">Daily (7/week)</option>
+          <option value="5x">5 times/week</option>
+          <option value="3x">3 times/week</option>
+          <option value="2x">2 times/week</option>
+          <option value="1x">1 per week</option>
+        </select>
+        <label class="vg-label" style="margin-top:4px">Any upcoming events / festivals to leverage</label>
+        <input class="vg-input" id="calEvents" placeholder="e.g. Dashain, Tihar, New Year, elections"/>
+        <button class="vg-btn pri full" id="calBtn" onclick="vgRun('cal')">📅 Generate Content Calendar</button>
+        <div class="vg-result empty" id="calResult">Your 30-day content calendar will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── COMPETITOR ANALYSIS ── -->
+    <div class="vg-card">
+      <div class="vg-card-head">
+        <div class="vg-card-icon">🔍</div>
+        <div><div class="vg-card-title">Competitor Gap Analyzer</div><div class="vg-card-sub">What successful creators in your niche do — find your edge</div></div>
+      </div>
+      <div class="vg-card-body">
+        <label class="vg-label">Your niche / competitors</label>
+        <textarea class="vg-textarea" id="compNiche" placeholder="e.g. I make Nepali tech review videos. Competitors: TechGurubhai, Sajilo Niti, etc." style="min-height:60px"></textarea>
+        <label class="vg-label" style="margin-top:4px">What you want to find</label>
+        <select class="vg-select" id="compGoal">
+          <option value="gaps">Content gaps they miss</option>
+          <option value="strategy">Their growth strategy</option>
+          <option value="differentiate">How to differentiate</option>
+          <option value="collab">Collaboration opportunities</option>
+        </select>
+        <button class="vg-btn pri full" id="compBtn" onclick="vgRun('comp')">🔍 Analyze Competitors</button>
+        <div class="vg-result empty" id="compResult">Competitor insights will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── COLLAB PITCH WRITER ── -->
+    <div class="vg-card">
+      <div class="vg-card-head">
+        <div class="vg-card-icon">🤝</div>
+        <div><div class="vg-card-title">Brand Collab Pitch Writer</div><div class="vg-card-sub">Professional sponsorship pitch emails & DMs that get replies</div></div>
+      </div>
+      <div class="vg-card-body">
+        <label class="vg-label">Your channel / profile details</label>
+        <input class="vg-input" id="pitchMe" placeholder="e.g. 10k YT subs, travel + food niche Nepal, avg 5k views"/>
+        <label class="vg-label" style="margin-top:4px">Brand / company you're pitching</label>
+        <input class="vg-input" id="pitchBrand" placeholder="e.g. Wai Wai, Ncell, local restaurant"/>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div>
+            <label class="vg-label">Pitch type</label>
+            <select class="vg-select" id="pitchType">
+              <option value="email">Email</option>
+              <option value="dm">Instagram DM</option>
+              <option value="linkedin">LinkedIn</option>
+            </select>
+          </div>
+          <div>
+            <label class="vg-label">Rate range</label>
+            <input class="vg-input" id="pitchRate" placeholder="e.g. Rs 5,000–15,000"/>
+          </div>
+        </div>
+        <button class="vg-btn pri full" id="pitchBtn" onclick="vgRun('pitch')">🤝 Write My Pitch</button>
+        <div class="vg-result empty" id="pitchResult">Your brand pitch will appear here.</div>
+      </div>
+    </div>
+
+    <!-- ── A/B TEST IDEAS ── -->
+    <div class="vg-card">
+      <div class="vg-card-head">
+        <div class="vg-card-icon">🧪</div>
+        <div><div class="vg-card-title">A/B Test Ideas Generator</div><div class="vg-card-sub">What to test to 2–5x your views, CTR, and watch time</div></div>
+      </div>
+      <div class="vg-card-body">
+        <label class="vg-label">What's currently underperforming?</label>
+        <textarea class="vg-textarea" id="abProblem" placeholder="e.g. My videos get good views but low watch time. CTR is only 2%. Shorts perform better than long videos." style="min-height:60px"></textarea>
+        <button class="vg-btn pri full" id="abBtn" onclick="vgRun('ab')">🧪 Generate A/B Test Plan</button>
+        <div class="vg-result empty" id="abResult">Your A/B testing strategy will appear here.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+const GEMINI='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=';
+const $=id=>document.getElementById(id);
+
+// Init key
+const saved=localStorage.getItem('ghp_gemini_key')||'';
+if(saved){$('vgKey').value=saved;$('vgKeyStatus').textContent='🟢 Key loaded';$('vgKeyStatus').style.color='#22c55e';}
+
+$('vgKey').addEventListener('input',function(){
+  const k=this.value.trim();
+  localStorage.setItem('ghp_gemini_key',k);
+  $('vgKeyStatus').textContent=k.length>10?'🟢 Key ready':'Enter valid key';
+  $('vgKeyStatus').style.color=k.length>10?'#22c55e':'#ef4444';
+});
+
+// Platform toggle
+document.querySelectorAll('.plat').forEach(p=>p.addEventListener('click',()=>p.classList.toggle('on')));
+
+function getKey(){ return ($('vgKey').value||localStorage.getItem('ghp_gemini_key')||'').trim(); }
+function getPlatforms(){ return [...document.querySelectorAll('.plat.on')].map(p=>p.dataset.p).join(', ')||'Instagram, YouTube'; }
+function getNiche(){ return $('vgNiche').options[$('vgNiche').selectedIndex].text; }
+function getLang(){ return $('vgLang').value; }
+
+async function callGemini(prompt){
+  const key=getKey();
+  if(!key) throw new Error('No Gemini API key — add yours above');
+  const r=await fetch(GEMINI+key,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:.8,maxOutputTokens:2048}})
+  });
+  if(!r.ok){const e=await r.text();throw new Error('Gemini '+r.status+': '+e.substring(0,150));}
+  const d=await r.json();
+  return d?.candidates?.[0]?.content?.parts?.[0]?.text||'No response';
+}
+
+function setResult(id,text){
+  const el=$(id);
+  el.classList.remove('empty');
+  el.textContent=text;
+}
+function setLoading(btnId,resultId,msg){
+  $(btnId).disabled=true;
+  $(btnId).innerHTML=`<span class="spin"></span> ${msg}`;
+  $(resultId).textContent='Analyzing…';
+  $(resultId).classList.remove('empty');
+}
+function resetBtn(btnId,label){
+  $(btnId).disabled=false;
+  $(btnId).innerHTML=label;
+}
+
+const prompts={
+  vsa:()=>{
+    const text=$('vsaText').value||'(no content provided)';
+    const type=$('vsaType').value;
+    return `You are a viral content strategist. Analyze this ${type} content for virality potential.
+
+Content: "${text}"
+
+Platforms: ${getPlatforms()}
+Niche: ${getNiche()}
+Language: ${getLang()}
+
+Provide:
+1. 🔥 VIRAL SCORE: X/100 with verdict (Low/Medium/High/Explosive)
+2. 💪 STRENGTHS: What works well (3 points)
+3. ⚠️ WEAKNESSES: What will hurt virality (3 points)
+4. 🚀 QUICK FIXES: 5 specific edits to boost the score by 20+ points
+5. 🎯 BEST PLATFORM FIT: Which platform will perform best and why
+6. 📈 PREDICTED REACH: Estimate views/reach in first 24h and 7 days for a mid-sized creator
+
+Be specific, data-driven, and actionable. Use emojis.`;
+  },
+  hook:()=>{
+    const topic=$('hookTopic').value||'viral content';
+    const style=$('hookStyle').value;
+    const dur=$('hookDur').value;
+    return `You are the world's best viral content hook writer. Write 8 different ${style}-style ${dur} hooks for this content:
+
+Topic: "${topic}"
+Platform: ${getPlatforms()}
+Language: ${getLang()}
+Niche: ${getNiche()}
+
+Each hook must:
+- Stop the scroll in the first second
+- Create immediate curiosity or emotion
+- Be specific to the topic
+- Be native to ${getLang()} audience
+
+Format: Number each hook 1–8. Add a brief note on WHY it works.
+Include hooks in both English and ${getLang()} if mixed language is selected.`;
+  },
+  hash:()=>{
+    const topic=$('hashTopic').value||getNiche();
+    const strat=$('hashStrat').value;
+    const count=$('hashCount').value;
+    return `You are a hashtag strategy expert for social media growth. Generate ${count} hashtags for:
+
+Topic: "${topic}"
+Strategy: ${strat}
+Platforms: ${getPlatforms()}
+Region/Niche: ${getNiche()} — ${getLang()}
+
+Provide:
+1. 🔴 5 BIG hashtags (10M+ posts) — for discovery
+2. 🟡 10 MEDIUM hashtags (100K–10M posts) — for competition balance
+3. 🟢 15 NICHE hashtags (<100K posts) — for ranking
+4. 🇳🇵 LOCAL hashtags (region-specific if Nepal/South Asia)
+5. 📈 TRENDING NOW hashtags (currently viral)
+
+Also give: Copy-paste ready sets for Instagram, YouTube, TikTok, Facebook separately.
+Explain strategy briefly.`;
+  },
+  title:()=>{
+    const cur=$('titleCurrent').value||'video title';
+    const type=$('titleType').value;
+    return `You are a YouTube SEO and CTR optimization expert. Optimize this title and create thumbnail concept:
+
+Original: "${cur}"
+Type: ${type}
+Niche: ${getNiche()}
+Language: ${getLang()}
+
+Provide:
+1. 🏆 TOP 5 OPTIMIZED TITLES (ranked by predicted CTR)
+   - Include numbers, power words, curiosity gaps
+   - One title per line with predicted CTR score
+   
+2. 🖼 THUMBNAIL CONCEPT for the top title:
+   - Main text overlay (5 words max, high contrast)
+   - Background: describe visuals
+   - Color scheme with psychology reason
+   - Facial expression (if person featured)
+   - Design elements to include
+   - What NOT to do
+   
+3. 📱 SHORTS/REELS VERSION title (if different platform)
+
+4. 🔑 SEO KEYWORDS to include in description`;
+  },
+  time:()=>{
+    const tz=$('timeTz').value||'Nepal';
+    const aud=$('timeAud').value;
+    return `You are a social media algorithm and posting time expert. Create an optimal posting schedule.
+
+Timezone/Region: ${tz}
+Audience type: ${aud}
+Platforms: ${getPlatforms()}
+Niche: ${getNiche()}
+
+Provide for each selected platform:
+1. 📅 BEST DAYS of the week (ranked)
+2. ⏰ BEST TIMES (top 3 time windows with timezone)
+3. 📊 WORST times to post
+4. 🔄 OPTIMAL POSTING FREQUENCY per week
+5. ⚡ ALGORITHM TIPS specific to that platform
+6. 📱 STORIES/SHORTS timing (if applicable)
+
+Add a WEEKLY CONTENT CALENDAR template showing what to post when.
+Include specific tips for ${tz} audience behavior.`;
+  },
+  trend:()=>{
+    const niche=$('trendNiche').value||getNiche();
+    const format=$('trendFormat').value;
+    return `You are a viral trend analyst for content creators. Today is ${new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'})}.
+
+Find trending content opportunities for:
+Niche: ${niche}
+Region: ${getNiche()} audience
+Format: ${format}
+Language: ${getLang()}
+
+Provide:
+1. 🔥 TOP 10 TRENDING TOPICS right now in this niche
+   For each: Topic name | Why it's trending | Content angle | Estimated viral potential (1-10)
+
+2. 🎯 3 CONTENT IDEAS with full concept:
+   - Title / Hook
+   - Structure outline
+   - Why it will go viral
+   - Best time to post
+
+3. 📈 EVERGREEN + TREND COMBO: Topics that are both trending AND searchable long-term
+
+4. ⚡ GAPS: Topics getting searches but no good content exists yet
+
+5. 🏷 Trending hashtags and audio/sounds to use right now`;
+  },
+  cap:()=>{
+    const topic=$('capTopic').value||'my latest video';
+    const tone=$('capTone').value;
+    const len=$('capLen').value;
+    return `You are a viral social media copywriter. Write engaging captions.
+
+Topic: "${topic}"
+Tone: ${tone}
+Length: ${len}
+Platforms: ${getPlatforms()}
+Language: ${getLang()}
+Niche: ${getNiche()}
+
+Write 3 different caption versions:
+
+VERSION 1 — High engagement caption:
+- Powerful opening line (hook)
+- Story/value in the middle
+- Strong CTA at the end
+- Emojis used strategically
+- ${getPlatforms().split(',')[0]} optimized
+
+VERSION 2 — Shorter punchy version:
+- 2–4 lines max
+- Memorable one-liner opener
+- Direct CTA
+
+VERSION 3 — ${getLang()} native version (if applicable):
+- Feels authentic, not translated
+- Uses local expressions/references
+
+Also provide: 5 CTA variations to test (like, save, comment, share, click)`;
+  },
+  mono:()=>{
+    const stats=$('monoStats').value||'new creator';
+    const niche=$('monoNiche').value||getNiche();
+    const target=$('monoTarget').value;
+    return `You are a content monetization expert specializing in South Asian/Nepali creator economy.
+
+Creator profile:
+- Current stats: ${stats}
+- Niche: ${niche}
+- Target income: ${target}/month
+- Platforms: ${getPlatforms()}
+
+Create a complete MONETIZATION ROADMAP:
+
+1. 💰 INCOME STREAMS (ranked by ease + potential):
+   For each stream: What it is | How to start | Estimated earnings | Timeline to first income
+
+2. 🎯 30-60-90 DAY PLAN:
+   - Month 1: Foundation building tasks
+   - Month 2: First monetization steps
+   - Month 3: Scaling and optimization
+
+3. 📈 MILESTONES needed for each revenue stream (subscribers, views, followers)
+
+4. 🇳🇵 NEPAL/LOCAL SPECIFIC opportunities:
+   - Local brands to approach
+   - Local affiliate programs
+   - Local events to cover for paid content
+   - Digital products ideas in Nepali market
+
+5. ⚠️ COMMON MISTAKES to avoid
+
+6. 🛠 TOOLS & PLATFORMS to set up (payment, affiliate, merchandise)
+
+7. 💡 QUICK WIN: One thing to do THIS WEEK to start earning
+
+Be very specific with rupee/dollar amounts based on Nepal market rates.`;
+  },
+  cal:()=>{
+    const niche=$('calNiche').value||getNiche();
+    const freq=$('calFreq').value;
+    const events=$('calEvents').value||'none';
+    return `You are a content strategy expert. Create a 30-day viral content calendar.
+
+Creator: ${niche}
+Language: ${getLang()}
+Posting frequency: ${freq}
+Upcoming events to leverage: ${events}
+Platforms: ${getPlatforms()}
+Today's date context: ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}
+
+Create a COMPLETE 30-DAY CONTENT CALENDAR:
+
+For each post/video include:
+📅 Day & Date | 🎯 Content Topic | 📱 Platform | 🔥 Hook (first line) | 🏷 3 hashtags | 📊 Goal (views/engagement/subscribers)
+
+Format as a clean table or numbered list.
+
+Include:
+- Mix of content types (tutorial, story, reaction, challenge, collab, trending)
+- Festival/event tie-ins on relevant dates
+- Planned "viral attempt" posts (1/week)
+- Evergreen content mixed with trending
+- Content series that builds audience anticipation
+
+End with: MONTHLY CONTENT THEMES and TOP 3 POSTS most likely to go viral`;
+  },
+  comp:()=>{
+    const niche=$('compNiche').value||getNiche();
+    const goal=$('compGoal').value;
+    return `You are a competitive intelligence analyst for content creators.
+
+Analyze the competitive landscape for:
+Niche: "${niche}"
+Goal: ${goal}
+Language: ${getLang()}
+Platforms: ${getPlatforms()}
+
+Provide:
+1. 🏆 TOP CREATORS in this niche (describe their typical strategy)
+2. 📊 WHAT'S WORKING for them (content formats, posting patterns, hooks)
+3. 🕳 CONTENT GAPS they're not covering (your opportunity)
+4. 🎯 YOUR DIFFERENTIATION STRATEGY:
+   - Unique angle no one else has
+   - Underserved audience segment
+   - Format innovation
+5. 📈 GROWTH HACKS they use that you can replicate
+6. 🤝 COLLABORATION opportunities in this niche
+7. ⚡ YOUR 3-MONTH BATTLE PLAN to overtake them in one sub-niche`;
+  },
+  pitch:()=>{
+    const me=$('pitchMe').value||'content creator';
+    const brand=$('pitchBrand').value||'brand';
+    const type=$('pitchType').value;
+    const rate=$('pitchRate').value||'negotiable';
+    return `You are a top influencer marketing expert. Write a professional brand collaboration pitch.
+
+Creator: ${me}
+Brand to pitch: ${brand}
+Pitch format: ${type}
+Proposed rate: ${rate}
+Niche: ${getNiche()}
+Platforms: ${getPlatforms()}
+Language: ${getLang()}
+
+Write a COMPLETE, READY-TO-SEND ${type.toUpperCase()} pitch that includes:
+1. Subject line (if email) / Opening (if DM)
+2. Personal introduction (2 lines max — impactful)
+3. Why YOU are perfect for THEIR brand (specific, researched-sounding)
+4. Content collaboration idea (1–2 specific concepts)
+5. What you offer: reach, demographics, engagement rate
+6. Proposed package/deliverables
+7. Rate / negotiation mention
+8. Clear call to action
+9. Professional sign-off
+
+Also write: A SHORT 3-LINE DM version for Instagram/WhatsApp
+And: Follow-up message if no reply in 3 days`;
+  },
+  ab:()=>{
+    const problem=$('abProblem').value||'low views and engagement';
+    return `You are a data-driven content optimization expert who specializes in A/B testing for creators.
+
+Problem: "${problem}"
+Platforms: ${getPlatforms()}
+Niche: ${getNiche()}
+Language: ${getLang()}
+
+Create a complete A/B TESTING STRATEGY:
+
+1. 📊 ROOT CAUSE ANALYSIS: What's likely causing the problem
+2. 🧪 A/B TESTS TO RUN (prioritized list):
+   For each test:
+   - What to test (Variable A vs Variable B)
+   - How to run it
+   - What metric to measure
+   - How long to run the test
+   - Expected improvement if B wins
+
+3. 🎯 QUICK WINS (changes that almost always improve metrics):
+   - Thumbnail changes
+   - Title formula changes
+   - Hook changes
+   - Description changes
+   - Posting time changes
+
+4. 📈 MEASUREMENT FRAMEWORK: Which metrics matter most and target values
+5. ⚡ IMMEDIATE ACTION: Top 3 changes to make today`;
+  }
+};
+
+const btnLabels={
+  vsa:'🔥 Analyze Viral Potential',hook:'🎣 Generate Hooks',hash:'🏷 Generate Hashtags',
+  title:'🖼 Optimize Title + Thumbnail',time:'⏰ Get Best Posting Schedule',trend:'📡 Detect Trends + Content Ideas',
+  cap:'✍️ Write Caption',mono:'💰 Build My Monetization Plan',cal:'📅 Generate Content Calendar',
+  comp:'🔍 Analyze Competitors',pitch:'🤝 Write My Pitch',ab:'🧪 Generate A/B Test Plan'
+};
+
+window.vgRun=async function(type){
+  const btnId=type+'Btn', resultId=type+'Result';
+  const loadMsgs={vsa:'Analyzing…',hook:'Generating hooks…',hash:'Building hashtags…',title:'Optimizing…',
+    time:'Calculating schedule…',trend:'Detecting trends…',cap:'Writing caption…',mono:'Building roadmap…',
+    cal:'Building calendar…',comp:'Analyzing competitors…',pitch:'Writing pitch…',ab:'Building test plan…'};
+  try{
+    setLoading(btnId,resultId,loadMsgs[type]||'Thinking…');
+    const result=await callGemini(prompts[type]());
+    setResult(resultId,result);
+  }catch(e){
+    setResult(resultId,'❌ Error: '+e.message+'\n\nMake sure your Gemini API key is set correctly above.');
+    $(resultId).style.color='#fca5a5';
+  }finally{
+    resetBtn(btnId,btnLabels[type]||'Run');
+  }
+};
+
+// Sync niche to trend field
+$('vgNiche').addEventListener('change',function(){
+  if(!$('trendNiche').value) $('trendNiche').value=this.options[this.selectedIndex].text;
+  if(!$('monoNiche').value) $('monoNiche').value=this.options[this.selectedIndex].text;
+  if(!$('calNiche').value) $('calNiche').value=this.options[this.selectedIndex].text;
+});
+})();
+</script>
+</body>
+</html>

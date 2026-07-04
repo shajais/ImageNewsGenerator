@@ -1,0 +1,39 @@
+name: Sync HF Space
+
+# Runs every time you push to new-improved-version
+# and the hf_space/ folder has changed.
+on:
+  push:
+    branches: [new-improved-version]
+    paths:
+      - "hf_space/**"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push hf_space/ subfolder to HuggingFace Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # Configure git
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+
+          # Clone the HF Space repo
+          git clone https://shajais:${HF_TOKEN}@huggingface.co/spaces/shajais/FaceSwap hf_clone
+
+          # Copy contents of hf_space/ into the cloned HF repo
+          cp -r hf_space/. hf_clone/
+
+          # Commit and push
+          cd hf_clone
+          git add -A
+          git diff --cached --quiet || git commit -m "Sync from GitHub: ${{ github.sha }}"
+          git push

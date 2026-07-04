@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="en" id="htmlRoot">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Nepal Digital Sewa | नेपाल डिजिटल सेवा</title>
+<meta name="description" content="Nepal's one-stop digital platform for government services, tax payments, exams, utility bills, insurance, travel booking and more.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%23003893'/><text y='72' x='50' text-anchor='middle' font-size='58'>🇳🇵</text></svg>">
+<style>
+/* ══════════════════════════════════════════════════════════════
+   RESET & TOKENS
+══════════════════════════════════════════════════════════════ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --pri:#003893;
+  --pri-dark:#00296b;
+  --pri-light:#e8eef8;
+  --sec:#DC143C;
+  --sec-dark:#a50e2d;
+  --sec-light:#fff0f3;
+  --bg:#f0f4fb;
+  --bg2:#e8edf8;
+  --card:#ffffff;
+  --border:#dce4f0;
+  --text:#1a2340;
+  --muted:#64748b;
+  --muted2:#94a3b8;
+  --green:#059669;
+  --green-bg:#ecfdf5;
+  --orange:#d97706;
+  --orange-bg:#fffbeb;
+  --radius:14px;
+  --radius-sm:8px;
+  --shadow:0 2px 12px rgba(0,56,147,.08);
+  --shadow-md:0 4px 24px rgba(0,56,147,.14);
+  --shadow-lg:0 8px 40px rgba(0,56,147,.18);
+  --font-ne:'Noto Sans Devanagari',sans-serif;
+  --font-en:'Inter',system-ui,sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font-en);min-height:100vh}
+html[data-lang="ne"] body{font-family:var(--font-ne)}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:inherit;border:none;outline:none}
+input,select,textarea{font-family:inherit;outline:none}
+img{max-width:100%}
+
+/* ══════════════════════════════════════════════════════════════
+   NAVBAR
+══════════════════════════════════════════════════════════ */
+.navbar{
+  position:sticky;top:0;z-index:1000;
+  background:#fff;border-bottom:2px solid var(--border);
+  box-shadow:0 2px 16px rgba(0,56,147,.1);
+  padding:0 24px;
+  display:flex;align-items:center;gap:16px;height:64px;
+}
+.nav-logo{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.nav-logo-icon{font-size:1.8rem;line-height:1}
+.nav-logo-text{display:flex;flex-direction:column;gap:1px}
+.nav-logo-title{font-size:1rem;font-weight:900;color:var(--pri);letter-spacing:-.01em;line-height:1.1}
+.nav-logo-sub{font-size:.65rem;color:var(--muted);font-family:var(--font-ne);letter-spacing:.02em}
+.nav-divider{width:1px;height:32px;background:var(--border);flex-shrink:0}
+.nav-search{
+  flex:1;max-width:380px;
+  display:flex;align-items:center;gap:8px;
+  background:var(--bg);border:1.5px solid var(--border);border-radius:24px;
+  padding:8px 14px;transition:.2s;
+}
+.nav-search:focus-within{border-color:var(--pri);background:#fff;box-shadow:0 0 0 3px rgba(0,56,147,.1)}
+.nav-search input{flex:1;border:none;background:transparent;font-size:.85rem;color:var(--text)}
+.nav-search input::placeholder{color:var(--muted2)}
+.nav-spacer{flex:1}
+.lang-toggle{display:flex;background:var(--bg2);border-radius:20px;padding:3px;gap:2px;flex-shrink:0}
+.lang-btn{
+  padding:5px 13px;border-radius:16px;font-size:.75rem;font-weight:700;
+  background:transparent;color:var(--muted);transition:.2s;
+}
+.lang-btn.active{background:#fff;color:var(--pri);box-shadow:0 1px 4px rgba(0,56,147,.15)}
+.nav-login-btn{
+  padding:8px 18px;border-radius:20px;font-size:.8rem;font-weight:700;
+  background:var(--pri);color:#fff;transition:.2s;flex-shrink:0;
+}
+.nav-login-btn:hover{background:var(--pri-dark);box-shadow:0 4px 12px rgba(0,56,147,.3)}
+.nav-back-btn{
+  display:none;align-items:center;gap:6px;
+  padding:7px 14px;border-radius:20px;font-size:.8rem;font-weight:600;
+  background:var(--bg2);color:var(--text);transition:.2s;
+}
+.nav-back-btn:hover{background:var(--border)}
+.nav-back-btn.visible{display:flex}
+
+/* ══════════════════════════════════════════════════════════════
+   HERO
+══════════════════════════════════════════════════════════ */
+.hero{
+  background:linear-gradient(135deg,var(--pri-dark) 0%,var(--pri) 40%,#1565c0 100%);
+  color:#fff;padding:48px 24px 56px;text-align:center;
+  position:relative;overflow:hidden;
+}
+.hero::before{
+  content:'';position:absolute;inset:0;
+  background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);
+  padding:5px 14px;border-radius:20px;font-size:.75rem;font-weight:600;margin-bottom:18px;
+  backdrop-filter:blur(8px);
+}
+.hero h1{font-size:clamp(1.6rem,4vw,2.4rem);font-weight:900;line-height:1.2;margin-bottom:8px}
+.hero h1 span{color:#ffd166}
+.hero-sub{font-size:.95rem;opacity:.85;margin-bottom:28px;max-width:540px;margin-left:auto;margin-right:auto}
+.hero-sub-ne{font-family:var(--font-ne);font-size:.9rem;opacity:.75;display:block;margin-top:4px}
+.hero-search{
+  max-width:520px;margin:0 auto;
+  display:flex;gap:0;background:#fff;border-radius:12px;
+  box-shadow:0 4px 24px rgba(0,0,0,.2);overflow:hidden;
+}
+.hero-search input{
+  flex:1;padding:14px 18px;font-size:.9rem;border:none;color:var(--text);
+}
+.hero-search input::placeholder{color:var(--muted2)}
+.hero-search button{
+  padding:14px 24px;background:var(--sec);color:#fff;font-size:.85rem;font-weight:700;
+  transition:.2s;flex-shrink:0;
+}
+.hero-search button:hover{background:var(--sec-dark)}
+.hero-stats{
+  display:flex;justify-content:center;gap:32px;margin-top:32px;flex-wrap:wrap;
+}
+.hero-stat{text-align:center;opacity:.9}
+.hero-stat-num{font-size:1.4rem;font-weight:900;color:#ffd166}
+.hero-stat-label{font-size:.7rem;opacity:.75;margin-top:2px}
+
+/* ══════════════════════════════════════════════════════════════
+   MAIN CONTAINER
+══════════════════════════════════════════════════════════════ */
+.main-wrap{max-width:1200px;margin:0 auto;padding:32px 20px}
+
+/* ══════════════════════════════════════════════════════════════
+   SECTION HEADINGS
+══════════════════════════════════════════════════════════════ */
+.section-header{
+  display:flex;align-items:flex-end;justify-content:space-between;
+  margin-bottom:20px;gap:12px;
+}
+.section-title{font-size:1.2rem;font-weight:800;color:var(--text)}
+.section-title span{display:block;font-family:var(--font-ne);font-size:.8rem;font-weight:600;color:var(--muted);margin-top:2px}
+.section-link{font-size:.8rem;color:var(--pri);font-weight:600;white-space:nowrap}
+.section-link:hover{color:var(--pri-dark)}
+
+/* ══════════════════════════════════════════════════════════════
+   CATEGORY GRID (HOME)
+══════════════════════════════════════════════════════════════ */
+.cat-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+  gap:16px;
+}
+.cat-card{
+  background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);
+  padding:24px 20px;text-align:center;cursor:pointer;
+  transition:transform .2s,box-shadow .2s,border-color .2s;
+  position:relative;overflow:hidden;
+}
+.cat-card::before{
+  content:'';position:absolute;inset:0;opacity:0;transition:.2s;
+  background:linear-gradient(135deg,var(--pri-light),transparent);
+}
+.cat-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);border-color:var(--pri)}
+.cat-card:hover::before{opacity:1}
+.cat-card:active{transform:translateY(-1px)}
+.cat-icon{font-size:2.4rem;margin-bottom:12px;display:block;position:relative;z-index:1}
+.cat-name{font-size:.9rem;font-weight:800;color:var(--text);position:relative;z-index:1}
+.cat-name-ne{font-family:var(--font-ne);font-size:.8rem;color:var(--muted);margin-top:4px;display:block;position:relative;z-index:1}
+.cat-count{
+  display:inline-block;margin-top:10px;
+  background:var(--pri-light);color:var(--pri);
+  font-size:.68rem;font-weight:700;padding:3px 9px;border-radius:10px;
+  position:relative;z-index:1;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SERVICE LIST VIEW
+══════════════════════════════════════════════════════════════ */
+#categoryView{display:none}
+.breadcrumb{
+  display:flex;align-items:center;gap:8px;
+  font-size:.8rem;color:var(--muted);margin-bottom:20px;
+}
+.breadcrumb .bc-link{color:var(--pri);font-weight:600;cursor:pointer}
+.breadcrumb .bc-link:hover{text-decoration:underline}
+.breadcrumb .bc-sep{color:var(--muted2)}
+.breadcrumb .bc-current{color:var(--text);font-weight:700}
+.service-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:16px;
+}
+.svc-card{
+  background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);
+  padding:20px;display:flex;flex-direction:column;gap:12px;
+  transition:box-shadow .2s,border-color .2s;
+}
+.svc-card:hover{box-shadow:var(--shadow-md);border-color:var(--pri)}
+.svc-header{display:flex;align-items:flex-start;gap:12px}
+.svc-icon{
+  font-size:1.8rem;width:48px;height:48px;border-radius:12px;
+  background:var(--pri-light);display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.svc-title-wrap{flex:1}
+.svc-title{font-size:.95rem;font-weight:800;color:var(--text)}
+.svc-title-ne{font-family:var(--font-ne);font-size:.8rem;color:var(--muted);margin-top:2px}
+.svc-desc{font-size:.8rem;color:var(--muted);line-height:1.5}
+.svc-desc-ne{font-family:var(--font-ne);font-size:.78rem}
+.svc-footer{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:8px;border-top:1px solid var(--bg2)}
+.svc-fee{
+  display:flex;flex-direction:column;gap:2px;
+}
+.svc-fee-label{font-size:.65rem;color:var(--muted2);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.svc-fee-amount{font-size:.85rem;font-weight:800}
+.svc-fee-amount.fixed{color:var(--green)}
+.svc-fee-amount.commission{color:var(--orange)}
+.svc-apply-btn{
+  padding:8px 18px;border-radius:20px;font-size:.8rem;font-weight:700;
+  background:var(--pri);color:#fff;transition:.2s;
+}
+.svc-apply-btn:hover{background:var(--pri-dark);box-shadow:0 4px 12px rgba(0,56,147,.3);transform:translateY(-1px)}
+
+/* ══════════════════════════════════════════════════════════════
+   MODALS (shared base)
+══════════════════════════════════════════════════════════════ */
+.modal-overlay{
+  display:none;position:fixed;inset:0;z-index:5000;
+  background:rgba(0,0,0,.5);backdrop-filter:blur(4px);
+  align-items:center;justify-content:center;padding:16px;
+}
+.modal-overlay.open{display:flex}
+.modal-box{
+  background:#fff;border-radius:20px;width:100%;max-width:560px;
+  box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;
+  display:flex;flex-direction:column;max-height:90vh;
+}
+.modal-header{
+  padding:20px 24px 16px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;flex-shrink:0;
+}
+.modal-header-icon{font-size:1.6rem}
+.modal-header-text{flex:1}
+.modal-header-title{font-size:1rem;font-weight:800;color:var(--text)}
+.modal-header-sub{font-size:.75rem;color:var(--muted);font-family:var(--font-ne);margin-top:2px}
+.modal-close{
+  width:32px;height:32px;border-radius:50%;background:var(--bg2);
+  color:var(--muted);font-size:1.1rem;font-weight:700;
+  display:flex;align-items:center;justify-content:center;transition:.15s;
+}
+.modal-close:hover{background:var(--border);color:var(--text)}
+.modal-body{padding:20px 24px;overflow-y:auto;flex:1}
+.modal-footer{
+  padding:14px 24px;border-top:1px solid var(--border);
+  display:flex;gap:10px;justify-content:flex-end;flex-shrink:0;
+}
+
+/* Progress steps */
+.steps-bar{
+  display:flex;align-items:center;margin-bottom:20px;
+}
+.step-item{
+  display:flex;align-items:center;gap:6px;flex:1;
+}
+.step-item:last-child{flex:none}
+.step-dot{
+  width:28px;height:28px;border-radius:50%;border:2px solid var(--border);
+  background:#fff;color:var(--muted2);font-size:.72rem;font-weight:700;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.3s;
+}
+.step-dot.active{border-color:var(--pri);background:var(--pri);color:#fff}
+.step-dot.done{border-color:var(--green);background:var(--green);color:#fff}
+.step-label{font-size:.7rem;color:var(--muted2);white-space:nowrap;font-weight:600}
+.step-label.active{color:var(--pri);font-weight:700}
+.step-line{flex:1;height:2px;background:var(--border);margin:0 4px;transition:.3s}
+.step-line.done{background:var(--green)}
+
+/* Form elements */
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-row.full{grid-template-columns:1fr}
+@media(max-width:440px){.form-row{grid-template-columns:1fr}}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-label{font-size:.75rem;font-weight:700;color:var(--text)}
+.form-label .ne{font-family:var(--font-ne);font-weight:600;font-size:.7rem;color:var(--muted)}
+.form-input,.form-select,.form-textarea{
+  padding:10px 13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);
+  font-size:.85rem;color:var(--text);background:#fff;transition:.2s;width:100%;
+}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--pri);box-shadow:0 0 0 3px rgba(0,56,147,.1)}
+.form-input::placeholder{color:var(--muted2)}
+.form-textarea{resize:vertical;min-height:70px}
+.form-file{
+  padding:10px 13px;border:1.5px dashed var(--border);border-radius:var(--radius-sm);
+  background:var(--bg);font-size:.8rem;color:var(--muted);cursor:pointer;width:100%;
+}
+.form-file:hover{border-color:var(--pri);background:var(--pri-light)}
+.form-hint{font-size:.68rem;color:var(--muted2);margin-top:2px}
+
+/* Fee summary box */
+.fee-summary{
+  background:var(--bg);border-radius:var(--radius-sm);padding:14px 16px;
+  display:flex;flex-direction:column;gap:8px;margin-top:12px;
+}
+.fee-row{display:flex;justify-content:space-between;align-items:center;font-size:.82rem}
+.fee-row .label{color:var(--muted)}
+.fee-row .val{font-weight:700;color:var(--text)}
+.fee-divider{height:1px;background:var(--border);margin:2px 0}
+.fee-total-row{display:flex;justify-content:space-between;align-items:center}
+.fee-total-label{font-size:.85rem;font-weight:700}
+.fee-total-amount{font-size:1.1rem;font-weight:900;color:var(--pri)}
+
+/* ══════════════════════════════════════════════════════════════
+   PAYMENT GATEWAY MODAL
+══════════════════════════════════════════════════════════════ */
+.pay-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.pay-option{
+  border:2px solid var(--border);border-radius:12px;
+  padding:14px 12px;text-align:center;cursor:pointer;transition:.2s;
+  background:#fff;
+}
+.pay-option:hover{border-color:var(--pri);background:var(--pri-light);transform:translateY(-1px)}
+.pay-option.selected{border-color:var(--pri);background:var(--pri-light)}
+.pay-option-icon{font-size:1.6rem;display:block;margin-bottom:6px}
+.pay-option-name{font-size:.78rem;font-weight:700;color:var(--text)}
+.pay-option-tag{font-size:.65rem;color:var(--muted)}
+.pay-amount-box{
+  background:linear-gradient(135deg,var(--pri),#1565c0);
+  border-radius:12px;padding:16px;color:#fff;text-align:center;margin-bottom:16px;
+}
+.pay-amount-label{font-size:.8rem;opacity:.85;margin-bottom:4px}
+.pay-amount-num{font-size:1.8rem;font-weight:900}
+.pay-amount-svc{font-size:.72rem;opacity:.75;margin-top:4px}
+.pay-btn{
+  width:100%;padding:14px;border-radius:12px;font-size:.9rem;font-weight:800;
+  background:var(--sec);color:#fff;transition:.2s;
+}
+.pay-btn:hover{background:var(--sec-dark);box-shadow:0 4px 16px rgba(220,20,60,.3)}
+.pay-btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ══════════════════════════════════════════════════════════════
+   SUCCESS MODAL
+══════════════════════════════════════════════════════════════ */
+.success-wrap{text-align:center;padding:8px 0}
+.success-icon-anim{
+  width:80px;height:80px;border-radius:50%;
+  background:linear-gradient(135deg,var(--green),#34d399);
+  display:flex;align-items:center;justify-content:center;
+  font-size:2.2rem;margin:0 auto 16px;
+  box-shadow:0 8px 24px rgba(5,150,105,.3);
+  animation:popIn .4s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes popIn{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+.success-title{font-size:1.2rem;font-weight:900;color:var(--text);margin-bottom:6px}
+.success-sub{font-size:.85rem;color:var(--muted);margin-bottom:20px;line-height:1.6}
+.ref-box{
+  background:var(--bg);border:1.5px dashed var(--border);
+  border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:20px;
+  display:flex;flex-direction:column;gap:3px;
+}
+.ref-label{font-size:.7rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.ref-num{font-size:1rem;font-weight:900;color:var(--pri);letter-spacing:.05em}
+.success-btn{
+  padding:12px 32px;border-radius:24px;font-size:.88rem;font-weight:700;
+  background:var(--pri);color:#fff;transition:.2s;
+}
+.success-btn:hover{background:var(--pri-dark)}
+
+/* ══════════════════════════════════════════════════════════════
+   NOTICE BAND & FOOTER
+══════════════════════════════════════════════════════════════ */
+.notice-band{
+  background:linear-gradient(90deg,var(--sec),#e91e63);
+  color:#fff;padding:10px 24px;font-size:.78rem;
+  display:flex;align-items:center;gap:12px;overflow:hidden;
+}
+.notice-tag{background:rgba(255,255,255,.2);padding:2px 8px;border-radius:8px;font-weight:700;flex-shrink:0;font-size:.7rem}
+.notice-scroll{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.info-banner{
+  background:linear-gradient(135deg,#fff7ed,#fffbeb);
+  border:1px solid #fbbf24;border-radius:var(--radius);
+  padding:14px 18px;margin-bottom:24px;
+  display:flex;align-items:flex-start;gap:10px;
+}
+.info-banner-icon{font-size:1.2rem;flex-shrink:0}
+.info-banner-text{font-size:.8rem;color:#92400e;line-height:1.6}
+.info-banner-text strong{font-weight:700}
+.app-footer{
+  background:#fff;border-top:1px solid var(--border);
+  padding:32px 24px 20px;margin-top:48px;
+}
+.footer-inner{max-width:1200px;margin:0 auto}
+.footer-top{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:32px;margin-bottom:24px}
+@media(max-width:768px){.footer-top{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.footer-top{grid-template-columns:1fr}}
+.footer-brand-name{font-size:1rem;font-weight:900;color:var(--pri);margin-bottom:6px}
+.footer-brand-desc{font-size:.78rem;color:var(--muted);line-height:1.6}
+.footer-col-title{font-size:.78rem;font-weight:800;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em}
+.footer-links{display:flex;flex-direction:column;gap:7px}
+.footer-links a{font-size:.78rem;color:var(--muted);transition:.15s}
+.footer-links a:hover{color:var(--pri)}
+.footer-bottom{
+  border-top:1px solid var(--border);padding-top:16px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+}
+.footer-copy{font-size:.73rem;color:var(--muted2)}
+.footer-badges{display:flex;gap:8px;flex-wrap:wrap}
+.footer-badge{
+  padding:4px 10px;border-radius:8px;background:var(--bg2);
+  font-size:.65rem;font-weight:700;color:var(--muted);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   UTILITY HELPERS
+══════════════════════════════════════════════════════════════ */
+.hidden{display:none!important}
+.btn-outline{
+  padding:9px 20px;border-radius:20px;font-size:.82rem;font-weight:700;
+  border:2px solid var(--pri);color:var(--pri);background:transparent;transition:.2s;
+}
+.btn-outline:hover{background:var(--pri);color:#fff}
+.btn-sec{
+  padding:9px 20px;border-radius:20px;font-size:.82rem;font-weight:700;
+  background:var(--sec);color:#fff;transition:.2s;
+}
+.btn-sec:hover{background:var(--sec-dark)}
+.tag{
+  display:inline-block;padding:3px 9px;border-radius:10px;
+  font-size:.68rem;font-weight:700;letter-spacing:.02em;
+}
+.tag-new{background:#dcfce7;color:#166534}
+.tag-pop{background:#fee2e2;color:#991b1b}
+.tag-free{background:#ede9fe;color:#5b21b6}
+.tag-hot{background:#fff7ed;color:#92400e}
+.scroll-top{
+  position:fixed;bottom:24px;right:24px;z-index:900;
+  width:40px;height:40px;border-radius:50%;
+  background:var(--pri);color:#fff;font-size:1rem;
+  box-shadow:var(--shadow-md);transition:.2s;
+  display:flex;align-items:center;justify-content:center;
+}
+.scroll-top:hover{background:var(--pri-dark);transform:translateY(-2px)}
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSIVE
+══════════════════════════════════════════════════════════════ */
+@media(max-width:600px){
+  .navbar{padding:0 14px;gap:10px}
+  .nav-search{display:none}
+  .hero{padding:32px 16px 40px}
+  .hero-stats{gap:20px}
+  .main-wrap{padding:20px 14px}
+  .cat-grid{grid-template-columns:repeat(2,1fr)}
+  .service-grid{grid-template-columns:1fr}
+  .pay-grid{grid-template-columns:1fr}
+  .form-row{grid-template-columns:1fr}
+  .modal-box{max-height:95vh}
+  .modal-body{padding:16px}
+  .modal-footer{padding:12px 16px}
+  .footer-top{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     NOTICE BAND
+═══════════════════════════════════════════════ -->
+<div class="notice-band">
+  <span class="notice-tag">📢 सूचना</span>
+  <span class="notice-scroll" id="noticeTicker">
+    🇳🇵 Nepal Digital Sewa is currently in Beta — All transactions are simulated for testing &nbsp;|&nbsp; नागरिकता र राहदानी सेवा अहिले परीक्षण अवस्थामा छ &nbsp;|&nbsp; Service charges apply per transaction &nbsp;|&nbsp; Support: digitalsewahelp@nepal.gov.np
+  </span>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     NAVBAR
+═══════════════════════════════════════════════ -->
+<nav class="navbar">
+  <button class="nav-back-btn" id="navBackBtn" onclick="goHome()">
+    ← <span data-en="Back" data-ne="फिर्ता">Back</span>
+  </button>
+  <div class="nav-logo">
+    <span class="nav-logo-icon">🇳🇵</span>
+    <div class="nav-logo-text">
+      <span class="nav-logo-title">Nepal Digital Sewa</span>
+      <span class="nav-logo-sub">नेपाल डिजिटल सेवा</span>
+    </div>
+  </div>
+  <div class="nav-divider"></div>
+  <div class="nav-search">
+    <span style="font-size:.9rem">🔍</span>
+    <input type="text" id="navSearchInput" placeholder="Search services... सेवा खोज्नुहोस्" oninput="filterServices(this.value)">
+  </div>
+  <div class="nav-spacer"></div>
+  <div class="lang-toggle">
+    <button class="lang-btn active" id="btnEN" onclick="setLang('en')">EN</button>
+    <button class="lang-btn" id="btnNE" onclick="setLang('ne')">नेपाली</button>
+  </div>
+  <button class="nav-login-btn" onclick="openLoginModal()">
+    👤 <span data-en="Login / Sign Up" data-ne="लगइन">Login</span>
+  </button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════
+     HERO
+═══════════════════════════════════════════════ -->
+<section class="hero" id="heroSection">
+  <div class="hero-badge">🚀 <span data-en="Nepal's First Digital Service Platform" data-ne="नेपालको पहिलो डिजिटल सेवा प्लेटफर्म">Nepal's First Digital Service Platform</span></div>
+  <h1 data-en="All Government &amp; Public Services<br/><span>In One Place</span>" data-ne="सबै सरकारी सेवाहरू<br/><span>एकै ठाउँमा</span>">
+    All Government &amp; Public Services<br/><span>In One Place</span>
+  </h1>
+  <p class="hero-sub">
+    <span data-en="Apply for citizenship, pay bills, book tickets, buy insurance — anytime, anywhere." data-ne="नागरिकता आवेदन, बिल भुक्तानी, टिकट बुकिंग, बीमा — जहाँबाट पनि, जतिबेला पनि।">
+      Apply for citizenship, pay bills, book tickets, buy insurance — anytime, anywhere.
+    </span>
+    <span class="hero-sub-ne" id="heroSubNe" style="display:none">सेवा शुल्क मात्र रु. ५ देखि — कुनै लुकेको शुल्क छैन</span>
+  </p>
+  <div class="hero-search">
+    <input type="text" id="heroSearch" placeholder="🔍  Search services e.g. passport, driving license, electricity bill..." oninput="filterServices(this.value); showCategoryView()">
+    <button onclick="filterServices(document.getElementById('heroSearch').value); showCategoryView()">
+      <span data-en="Search" data-ne="खोज्नुहोस्">Search</span>
+    </button>
+  </div>
+  <div class="hero-stats">
+    <div class="hero-stat"><div class="hero-stat-num">50+</div><div class="hero-stat-label" data-en="Services" data-ne="सेवाहरू">Services</div></div>
+    <div class="hero-stat"><div class="hero-stat-num">24/7</div><div class="hero-stat-label" data-en="Available" data-ne="उपलब्ध">Available</div></div>
+    <div class="hero-stat"><div class="hero-stat-num">₹5</div><div class="hero-stat-label" data-en="Min Service Fee" data-ne="न्यूनतम शुल्क">Min Service Fee</div></div>
+    <div class="hero-stat"><div class="hero-stat-num">100%</div><div class="hero-stat-label" data-en="Secure & Trusted" data-ne="सुरक्षित">Secure & Trusted</div></div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     HOME VIEW
+═══════════════════════════════════════════════ -->
+<div class="main-wrap">
+
+  <div id="homeView">
+    <!-- Info banner -->
+    <div class="info-banner">
+      <span class="info-banner-icon">ℹ️</span>
+      <div class="info-banner-text">
+        <strong data-en="Beta Platform — Testing Mode" data-ne="बिटा प्लेटफर्म — परीक्षण मोड">Beta Platform — Testing Mode.</strong>
+        <span data-en=" This platform is under testing. No real payments will be processed. Service charges range from Rs. 5–10 for government/utility services. Hotel, flight, insurance and booking services are commission-based." data-ne=" यो प्लेटफर्म परीक्षण अवस्थामा छ। कुनै वास्तविक भुक्तानी प्रक्रिया हुँदैन। सेवा शुल्क रु. ५–१० सम्म। होटल, उडान, बीमा कमिशन आधारित छ।">
+          This platform is under testing. Service charges: Rs. 5–10 for gov/utility services. Hotel, flight &amp; booking are commission-based.
+        </span>
+      </div>
+    </div>
+
+    <!-- Categories -->
+    <div class="section-header">
+      <div class="section-title">
+        <span data-en="Our Services" data-ne="हाम्रा सेवाहरू">Our Services</span>
+        <span data-en="Select a category to get started" data-ne="सुरु गर्न एउटा वर्ग छान्नुहोस्">Select a category to get started</span>
+      </div>
+    </div>
+
+    <div class="cat-grid" id="catGrid">
+      <!-- Rendered by JS -->
+    </div>
+
+    <!-- Popular services -->
+    <div class="section-header" style="margin-top:40px">
+      <div class="section-title">
+        <span data-en="🔥 Popular Services" data-ne="🔥 लोकप्रिय सेवाहरू">🔥 Popular Services</span>
+        <span data-en="Most accessed by citizens" data-ne="नागरिकहरूले धेरै प्रयोग गर्ने सेवाहरू">Most accessed by citizens</span>
+      </div>
+    </div>
+    <div class="service-grid" id="popularGrid">
+      <!-- Rendered by JS -->
+    </div>
+  </div><!-- /homeView -->
+
+  <!-- ═══ CATEGORY VIEW ═══ -->
+  <div id="categoryView">
+    <div class="breadcrumb">
+      <span class="bc-link" onclick="goHome()" data-en="Home" data-ne="गृहपृष्ठ">Home</span>
+      <span class="bc-sep">›</span>
+      <span class="bc-current" id="bcCurrent">Government Services</span>
+    </div>
+    <div class="section-header">
+      <div class="section-title">
+        <span id="cvTitle">Government Services</span>
+        <span id="cvSubtitle">Apply for official documents and registrations</span>
+      </div>
+    </div>
+    <div class="service-grid" id="serviceGrid">
+      <!-- Rendered by JS -->
+    </div>
+  </div><!-- /categoryView -->
+
+</div><!-- /main-wrap -->
+
+<!-- ═══════════════════════════════════════════════
+     FOOTER
+═══════════════════════════════════════════════ -->
+<footer class="app-footer">
+  <div class="footer-inner">
+    <div class="footer-top">
+      <div>
+        <div class="footer-brand-name">🇳🇵 Nepal Digital Sewa</div>
+        <div class="footer-brand-desc" data-en="Nepal's one-stop digital platform for all government, financial, and lifestyle services. Bringing convenience to every citizen's fingertips." data-ne="सरकारी, वित्तीय र जीवनशैली सेवाहरूको लागि नेपालको एकीकृत डिजिटल प्लेटफर्म।">
+          Nepal's one-stop digital platform for all government, financial, and lifestyle services. Bringing convenience to every citizen's fingertips.
+        </div>
+      </div>
+      <div>
+        <div class="footer-col-title" data-en="Services" data-ne="सेवाहरू">Services</div>
+        <div class="footer-links">
+          <a href="#" onclick="showCategory('government')">🏛️ Government</a>
+          <a href="#" onclick="showCategory('tax')">💰 Tax Payment</a>
+          <a href="#" onclick="showCategory('utility')">⚡ Utility Bills</a>
+          <a href="#" onclick="showCategory('travel')">✈️ Travel Booking</a>
+        </div>
+      </div>
+      <div>
+        <div class="footer-col-title" data-en="More" data-ne="थप">More</div>
+        <div class="footer-links">
+          <a href="#" onclick="showCategory('insurance')">🛡️ Insurance</a>
+          <a href="#" onclick="showCategory('exam')">🎓 Exams</a>
+          <a href="#" onclick="showCategory('bus')">🚌 Bus Tickets</a>
+          <a href="#" onclick="showCategory('appointment')">🏥 Appointments</a>
+        </div>
+      </div>
+      <div>
+        <div class="footer-col-title" data-en="Support" data-ne="सहायता">Support</div>
+        <div class="footer-links">
+          <a href="#">📞 1600-SEWA</a>
+          <a href="#">📧 help@digitalsewa.np</a>
+          <a href="#">💬 Live Chat</a>
+          <a href="#">📄 FAQs</a>
+          <a href="#">🔒 Privacy Policy</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div class="footer-copy">© 2025 Nepal Digital Sewa. Beta version — for testing only. Not an official government portal.</div>
+      <div class="footer-badges">
+        <span class="footer-badge">🔒 SSL Secured</span>
+        <span class="footer-badge">🇳🇵 Made in Nepal</span>
+        <span class="footer-badge">✅ Beta v1.0</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- Scroll to top -->
+<button class="scroll-top" id="scrollTopBtn" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Back to top" style="display:none">↑</button>
+
+<!-- ═══════════════════════════════════════════════
+     APPLY MODAL
+═══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="applyModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-header-icon" id="applyIcon">🏛️</span>
+      <div class="modal-header-text">
+        <div class="modal-header-title" id="applyTitle">Application Form</div>
+        <div class="modal-header-sub" id="applyTitleNe">आवेदन फाराम</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('applyModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Progress steps -->
+      <div class="steps-bar" id="applySteps">
+        <div class="step-item">
+          <div class="step-dot active" id="sdot1">1</div>
+          <div class="step-label active" id="slbl1" data-en="Details" data-ne="विवरण">Details</div>
+        </div>
+        <div class="step-line" id="sline1"></div>
+        <div class="step-item">
+          <div class="step-dot" id="sdot2">2</div>
+          <div class="step-label" id="slbl2" data-en="Documents" data-ne="कागजात">Documents</div>
+        </div>
+        <div class="step-line" id="sline2"></div>
+        <div class="step-item">
+          <div class="step-dot" id="sdot3">3</div>
+          <div class="step-label" id="slbl3" data-en="Review" data-ne="समीक्षा">Review</div>
+        </div>
+      </div>
+
+      <!-- Step 1: Personal Details -->
+      <div id="applyStep1">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Full Name <span class="ne">पूरा नाम</span></label>
+            <input type="text" class="form-input" id="appName" placeholder="Ram Bahadur Shrestha">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date of Birth <span class="ne">जन्म मिति</span></label>
+            <input type="date" class="form-input" id="appDob">
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:12px">
+          <div class="form-group">
+            <label class="form-label">Mobile Number <span class="ne">मोबाइल नम्बर</span></label>
+            <input type="tel" class="form-input" id="appPhone" placeholder="98XXXXXXXX">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email Address <span class="ne">इमेल</span></label>
+            <input type="email" class="form-input" id="appEmail" placeholder="name@email.com">
+          </div>
+        </div>
+        <div class="form-row full" style="margin-top:12px">
+          <div class="form-group">
+            <label class="form-label">Citizenship / ID Number <span class="ne">नागरिकता / परिचयपत्र नम्बर</span></label>
+            <input type="text" class="form-input" id="appCitizenId" placeholder="e.g. 123-45-67890">
+          </div>
+        </div>
+        <div class="form-row full" style="margin-top:12px">
+          <div class="form-group">
+            <label class="form-label">Permanent Address <span class="ne">स्थायी ठेगाना</span></label>
+            <input type="text" class="form-input" id="appAddress" placeholder="District, Municipality, Ward No.">
+          </div>
+        </div>
+        <!-- Extra fields injected by JS -->
+        <div id="extraFields"></div>
+      </div>
+
+      <!-- Step 2: Documents -->
+      <div id="applyStep2" style="display:none">
+        <div id="docList"></div>
+        <div class="form-hint" style="margin-top:8px">📎 Accepted formats: JPG, PNG, PDF (max 5MB each) &nbsp;|&nbsp; स्वीकृत ढाँचा: JPG, PNG, PDF</div>
+      </div>
+
+      <!-- Step 3: Review + Fee -->
+      <div id="applyStep3" style="display:none">
+        <div style="background:var(--bg);border-radius:12px;padding:14px 16px;margin-bottom:12px">
+          <div style="font-size:.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Application Summary</div>
+          <div id="reviewDetails" style="font-size:.83rem;line-height:1.8;color:var(--text)"></div>
+        </div>
+        <div class="fee-summary">
+          <div class="fee-row"><span class="label" data-en="Service Name" data-ne="सेवाको नाम">Service Name</span><span class="val" id="feeServiceName">—</span></div>
+          <div class="fee-row"><span class="label" data-en="Government Fee" data-ne="सरकारी शुल्क">Government Fee</span><span class="val" id="feeGovt">—</span></div>
+          <div class="fee-row"><span class="label" data-en="Service Charge" data-ne="सेवा शुल्क">Service Charge</span><span class="val" id="feeService" style="color:var(--orange)">—</span></div>
+          <div class="fee-divider"></div>
+          <div class="fee-total-row">
+            <span class="fee-total-label" data-en="Total Payable" data-ne="कुल रकम">Total Payable</span>
+            <span class="fee-total-amount" id="feeTotal">—</span>
+          </div>
+        </div>
+        <div style="font-size:.73rem;color:var(--muted);margin-top:8px;line-height:1.6">
+          ✅ <span data-en="Your application will be submitted digitally. You will receive an SMS/Email confirmation with reference number." data-ne="आपको आवेदन डिजिटल रूपमा पेश हुनेछ। सन्दर्भ नम्बर SMS/Email मा पठाइनेछ।">Your application will be submitted digitally. SMS &amp; email confirmation will be sent.</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline" id="applyPrevBtn" onclick="applyPrevStep()" style="display:none" data-en="← Back" data-ne="← फिर्ता">← Back</button>
+      <button class="btn-sec" id="applyNextBtn" onclick="applyNextStep()" data-en="Continue →" data-ne="अगाडि बढ्नुहोस् →">Continue →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     PAYMENT MODAL
+═══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="paymentModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-header-icon">💳</span>
+      <div class="modal-header-text">
+        <div class="modal-header-title" data-en="Secure Payment" data-ne="सुरक्षित भुक्तानी">Secure Payment</div>
+        <div class="modal-header-sub" data-en="Choose your payment method" data-ne="भुक्तानी विधि छान्नुहोस्">Choose your payment method</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('paymentModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="pay-amount-box">
+        <div class="pay-amount-label" data-en="Total Amount" data-ne="कुल रकम">Total Amount</div>
+        <div class="pay-amount-num" id="payAmountDisplay">Rs. 0</div>
+        <div class="pay-amount-svc" id="payAmountNote">Includes government fee + service charge</div>
+      </div>
+      <div style="font-size:.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px" data-en="Select Payment Method" data-ne="भुक्तानी विधि छान्नुहोस्">Select Payment Method</div>
+      <div class="pay-grid">
+        <div class="pay-option selected" onclick="selectPayment(this,'esewa')">
+          <span class="pay-option-icon">🟢</span>
+          <div class="pay-option-name">eSewa</div>
+          <div class="pay-option-tag">Wallet / Cards</div>
+        </div>
+        <div class="pay-option" onclick="selectPayment(this,'khalti')">
+          <span class="pay-option-icon">🟣</span>
+          <div class="pay-option-name">Khalti</div>
+          <div class="pay-option-tag">Digital Wallet</div>
+        </div>
+        <div class="pay-option" onclick="selectPayment(this,'connectips')">
+          <span class="pay-option-icon">🏦</span>
+          <div class="pay-option-name">ConnectIPS</div>
+          <div class="pay-option-tag">Net Banking</div>
+        </div>
+        <div class="pay-option" onclick="selectPayment(this,'card')">
+          <span class="pay-option-icon">💳</span>
+          <div class="pay-option-name">Debit / Credit</div>
+          <div class="pay-option-tag">Visa · Mastercard</div>
+        </div>
+        <div class="pay-option" onclick="selectPayment(this,'nabilpay')">
+          <span class="pay-option-icon">🔵</span>
+          <div class="pay-option-name">Nabil Pay</div>
+          <div class="pay-option-tag">Nabil Bank</div>
+        </div>
+        <div class="pay-option" onclick="selectPayment(this,'fonepay')">
+          <span class="pay-option-icon">📱</span>
+          <div class="pay-option-name">FonePay</div>
+          <div class="pay-option-tag">QR Scan</div>
+        </div>
+      </div>
+      <!-- Card details (shown only when card selected) -->
+      <div id="cardFields" style="display:none;margin-top:12px">
+        <div class="form-row">
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label">Card Number <span class="ne">कार्ड नम्बर</span></label>
+            <input type="text" class="form-input" placeholder="1234 5678 9012 3456" maxlength="19" id="cardNum" oninput="formatCard(this)">
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:10px">
+          <div class="form-group">
+            <label class="form-label">Expiry <span class="ne">म्याद</span></label>
+            <input type="text" class="form-input" placeholder="MM/YY" maxlength="5" id="cardExp">
+          </div>
+          <div class="form-group">
+            <label class="form-label">CVV</label>
+            <input type="password" class="form-input" placeholder="•••" maxlength="4" id="cardCvv">
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:14px;padding:10px 12px;background:var(--green-bg);border-radius:8px;font-size:.75rem;color:var(--green)">
+        🔒 <span data-en="256-bit SSL encrypted. Your payment details are fully secured." data-ne="२५६-बिट SSL इन्क्रिप्टेड। तपाईंको भुक्तानी विवरण पूर्णतः सुरक्षित।">256-bit SSL encrypted. Your payment details are fully secured.</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline" onclick="closeModal('paymentModal');openModal('applyModal')" data-en="← Back" data-ne="← फिर्ता">← Back</button>
+      <button class="pay-btn" id="payNowBtn" onclick="processPayment()" data-en="Pay Now & Submit" data-ne="अहिले भुक्तानी गर्नुहोस्">Pay Now &amp; Submit</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SUCCESS MODAL
+═══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="successModal">
+  <div class="modal-box" style="max-width:460px">
+    <div class="modal-header" style="border-bottom:none;padding-bottom:8px">
+      <div class="modal-header-text" style="flex:1;text-align:center">
+        <div class="modal-header-title" data-en="Application Submitted!" data-ne="आवेदन पेश भयो!">Application Submitted!</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('successModal')">✕</button>
+    </div>
+    <div class="modal-body" style="text-align:center">
+      <div class="success-wrap">
+        <div class="success-icon-anim">✅</div>
+        <div class="success-title" id="successTitle">Payment Successful!</div>
+        <div class="success-sub" id="successSub">Your application has been submitted. You will receive an SMS &amp; email confirmation shortly.</div>
+        <div class="ref-box">
+          <span class="ref-label" data-en="Reference Number" data-ne="सन्दर्भ नम्बर">Reference Number</span>
+          <span class="ref-num" id="refNumber">NDS-2025-000000</span>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+          <button class="success-btn" onclick="closeModal('successModal')" data-en="🏠 Back to Home" data-ne="🏠 गृहपृष्ठमा">🏠 Back to Home</button>
+          <button class="btn-outline" onclick="printReceipt()" data-en="🖨️ Print Receipt" data-ne="🖨️ रसिद प्रिन्ट">🖨️ Print Receipt</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     LOGIN MODAL
+═══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="loginModal">
+  <div class="modal-box" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-header-icon">🔐</span>
+      <div class="modal-header-text">
+        <div class="modal-header-title" data-en="Login / Sign Up" data-ne="लगइन / साइन अप">Login / Sign Up</div>
+        <div class="modal-header-sub" data-en="Access all services with one account" data-ne="एउटै खाताबाट सबै सेवाहरू">Access all services with one account</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('loginModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:16px;background:var(--bg2);padding:4px;border-radius:10px">
+        <button id="tabLogin" onclick="switchAuthTab('login')" style="flex:1;padding:8px;border-radius:8px;font-size:.82rem;font-weight:700;background:#fff;color:var(--pri);box-shadow:0 1px 4px rgba(0,0,0,.1);transition:.2s">Login</button>
+        <button id="tabSignup" onclick="switchAuthTab('signup')" style="flex:1;padding:8px;border-radius:8px;font-size:.82rem;font-weight:700;background:transparent;color:var(--muted);transition:.2s">Sign Up</button>
+      </div>
+      <div id="loginForm">
+        <div class="form-group" style="margin-bottom:12px">
+          <label class="form-label">Mobile / Email <span class="ne">मोबाइल / इमेल</span></label>
+          <input type="text" class="form-input" placeholder="98XXXXXXXX or email@example.com">
+        </div>
+        <div class="form-group" style="margin-bottom:16px">
+          <label class="form-label">Password <span class="ne">पासवर्ड</span></label>
+          <input type="password" class="form-input" placeholder="••••••••">
+        </div>
+        <button class="pay-btn" onclick="closeModal('loginModal')" data-en="Login →" data-ne="लगइन →" style="padding:12px">Login →</button>
+        <div style="text-align:center;margin-top:12px;font-size:.78rem;color:var(--muted)">
+          <a href="#" style="color:var(--pri);font-weight:600">Forgot Password?</a>
+        </div>
+      </div>
+      <div id="signupForm" style="display:none">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Full Name <span class="ne">पूरा नाम</span></label>
+            <input type="text" class="form-input" placeholder="Ram Bahadur">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Mobile <span class="ne">मोबाइल</span></label>
+            <input type="tel" class="form-input" placeholder="98XXXXXXXX">
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:12px;margin-bottom:12px">
+          <label class="form-label">Email <span class="ne">इमेल</span></label>
+          <input type="email" class="form-input" placeholder="name@email.com">
+        </div>
+        <div class="form-group" style="margin-bottom:16px">
+          <label class="form-label">Password <span class="ne">पासवर्ड</span></label>
+          <input type="password" class="form-input" placeholder="Min 8 characters">
+        </div>
+        <button class="pay-btn" onclick="closeModal('loginModal')" data-en="Create Account →" data-ne="खाता बनाउनुहोस् →" style="padding:12px">Create Account →</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:16px">
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+        <span style="font-size:.72rem;color:var(--muted2)">OR</span>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+      </div>
+      <button onclick="closeModal('loginModal')" style="width:100%;margin-top:12px;padding:11px;border-radius:10px;border:1.5px solid var(--border);background:#fff;font-size:.82rem;font-weight:600;color:var(--text);display:flex;align-items:center;justify-content:center;gap:8px;transition:.2s" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='#fff'">
+        📱 <span data-en="Continue with Mobile OTP" data-ne="मोबाइल OTP बाट जारी राख्नुहोस्">Continue with Mobile OTP</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════ -->
+<script>
+/* ─── DATA ──────────────────────────────────────────────────── */
+const CATEGORIES = [
+  { id:'government', icon:'🏛️', nameEn:'Government Services', nameNe:'सरकारी सेवाहरू', descEn:'Official docs & registrations', descNe:'आधिकारिक कागजात र दर्ता', count:10 },
+  { id:'tax',        icon:'💰', nameEn:'Tax & Revenue',        nameNe:'कर तथा राजस्व',  descEn:'Pay taxes online easily',   descNe:'अनलाइन कर भुक्तानी',        count:6  },
+  { id:'exam',       icon:'🎓', nameEn:'Exams & Scholarships', nameNe:'परीक्षा र छात्रवृत्ति', descEn:'Form fill & admissions', descNe:'फाराम भर्ने र भर्ना', count:8 },
+  { id:'utility',    icon:'⚡', nameEn:'Utility Bills',        nameNe:'उपयोगिता बिल',  descEn:'Electricity, water, telecom', descNe:'विद्युत, पानी, टेलिकम',  count:7  },
+  { id:'insurance',  icon:'🛡️', nameEn:'Insurance',            nameNe:'बीमा',           descEn:'Life, vehicle, health, agri', descNe:'जीवन, सवारी, स्वास्थ्य', count:5  },
+  { id:'travel',     icon:'✈️', nameEn:'Travel & Hotels',      nameNe:'यात्रा र होटल', descEn:'Flights, hotels, homestays', descNe:'उडान, होटल, होमस्टे',   count:4  },
+  { id:'bus',        icon:'🚌', nameEn:'Bus Tickets',          nameNe:'बस टिकट',       descEn:'Book intercity bus seats',  descNe:'अन्तर्शहर बस सिट बुकिंग', count:5  },
+  { id:'appointment',icon:'🏥', nameEn:'Appointments',         nameNe:'अपोइन्टमेन्ट', descEn:'Hospitals, embassy, offices', descNe:'अस्पताल, दूतावास, कार्यालय', count:5 },
+];
+
+const SERVICES = {
+  government: [
+    { id:'citizenship', icon:'🪪', nameEn:'Citizenship Certificate', nameNe:'नागरिकता प्रमाणपत्र', descEn:'Apply for new or renew citizenship certificate (नागरिकता)', descNe:'नयाँ नागरिकता प्रमाणपत्रको लागि आवेदन दिनुहोस् वा नवीकरण गर्नुहोस्', govtFee:0, svcFee:10, feeType:'fixed', docs:['Citizenship/ID Photo','Birth Certificate','Parents Citizenship','Ward Certificate'], popular:true, tag:'pop', extraFields:[{label:'Purpose',labelNe:'उद्देश्य',type:'select',opts:['New Application','Lost/Damaged Renewal','Name Correction']}] },
+    { id:'passport',    icon:'📗', nameEn:'Passport Application',    nameNe:'राहदानी आवेदन',          descEn:'Apply for new passport or renew existing one',          descNe:'नयाँ राहदानीको लागि आवेदन दिनुहोस् वा नवीकरण गर्नुहोस्',            govtFee:5000, svcFee:10, feeType:'fixed', docs:['Citizenship Scan','Biometric Photo','Old Passport (if renewal)','Application Form'], popular:true, tag:'hot', extraFields:[{label:'Passport Type',labelNe:'राहदानी प्रकार',type:'select',opts:['Ordinary (Machine Readable)','Official']}] },
+    { id:'pan',         icon:'🧾', nameEn:'PAN Registration',         nameNe:'प्यान दर्ता',            descEn:'Register for Permanent Account Number (PAN) for tax',   descNe:'कर उद्देश्यका लागि स्थायी खाता नम्बर (प्यान) दर्ता',                govtFee:0,    svcFee:5,  feeType:'fixed', docs:['Citizenship Scan','Recent Photo','Business Registration (if applicable)'], popular:true, tag:'new', extraFields:[{label:'Applicant Type',labelNe:'आवेदक प्रकार',type:'select',opts:['Individual','Business/Company']}] },
+    { id:'driving',     icon:'🚗', nameEn:'Driving License',          nameNe:'सवारी चालक अनुमतिपत्र', descEn:'Apply for new driving license or renew expired one',    descNe:'नयाँ सवारी चालक अनुमतिपत्रको लागि आवेदन वा नवीकरण',                govtFee:1600, svcFee:10, feeType:'fixed', docs:['Citizenship Scan','Medical Certificate','Biometric Photo','Blood Group Certificate'], popular:true, tag:'hot', extraFields:[{label:'License Category',labelNe:'लाइसेन्स श्रेणी',type:'select',opts:['A (Motorcycle)','B (Light Vehicle)','C (Heavy Vehicle)','K (Tractor)']}] },
+    { id:'vehicle_reg', icon:'🚙', nameEn:'Vehicle Registration',     nameNe:'सवारी साधन दर्ता',      descEn:'Register new or transfer ownership of vehicle',        descNe:'नयाँ सवारी साधन दर्ता वा स्वामित्व हस्तान्तरण',                     govtFee:3000, svcFee:10, feeType:'fixed', docs:['Citizenship Scan','Bill of Sale/Invoice','Insurance Certificate','Test Report'], popular:false, tag:'', extraFields:[{label:'Vehicle Type',labelNe:'सवारी प्रकार',type:'select',opts:['Motorcycle','Car/Jeep/Van','Truck/Bus','Electric Vehicle']}] },
+    { id:'biz_reg',     icon:'🏢', nameEn:'Business Registration',    nameNe:'व्यवसाय दर्ता',          descEn:'Register new company, firm or sole proprietorship',   descNe:'नयाँ कम्पनी, फर्म वा एकल स्वामित्व व्यवसाय दर्ता',                  govtFee:1000, svcFee:10, feeType:'fixed', docs:['Citizenship Scan','Rental Agreement','Company Name Approval','MOA/AOA (Company only)'], popular:true, tag:'new', extraFields:[{label:'Business Type',labelNe:'व्यवसाय प्रकार',type:'select',opts:['Sole Proprietorship','Partnership Firm','Private Limited Company','Public Limited Company']}] },
+    { id:'birth_cert',  icon:'👶', nameEn:'Birth Registration',       nameNe:'जन्म दर्ता',             descEn:'Register birth or get certified birth certificate',    descNe:'जन्म दर्ता वा जन्म प्रमाणपत्र प्राप्त गर्नुहोस्',                   govtFee:0,    svcFee:5,  feeType:'fixed', docs:["Hospital Discharge Paper",'Parents Citizenship','Ward Office Letter'], popular:false, tag:'', extraFields:[] },
+    { id:'marriage',    icon:'💍', nameEn:'Marriage Registration',    nameNe:'विवाह दर्ता',            descEn:'Register marriage and obtain marriage certificate',    descNe:'विवाह दर्ता र विवाह प्रमाणपत्र प्राप्त गर्नुहोस्',                  govtFee:0,    svcFee:5,  feeType:'fixed', docs:['Both Citizenships','Witness Citizenships','Ward Certificate','Photos'], popular:false, tag:'', extraFields:[] },
+    { id:'char_cert',   icon:'📋', nameEn:'Character Certificate',    nameNe:'चारित्रिक प्रमाणपत्र', descEn:'Police-issued character/conduct certificate',          descNe:'प्रहरी प्रदत्त चारित्रिक प्रमाणपत्र',                               govtFee:500,  svcFee:5,  feeType:'fixed', docs:['Citizenship Scan','Biometric Photo','Application Form'], popular:false, tag:'', extraFields:[] },
+    { id:'voter_id',    icon:'🗳️', nameEn:'Voter ID / Electoral Roll',nameNe:'मतदाता परिचयपत्र',     descEn:'Register for voter ID card or correct your details',   descNe:'मतदाता परिचयपत्रको लागि दर्ता वा विवरण सच्याउनुहोस्',               govtFee:0,    svcFee:5,  feeType:'fixed', docs:['Citizenship Scan','Recent Photo','Ward Certificate'], popular:false, tag:'', extraFields:[] },
+  ],
+  tax: [
+    { id:'vehicle_tax', icon:'🏍️', nameEn:'Vehicle Tax Payment',   nameNe:'सवारी कर भुक्तानी',  descEn:'Pay annual vehicle road/renewal tax online',         descNe:'वार्षिक सवारी कर अनलाइन भुक्तानी गर्नुहोस्',          govtFee:0, svcFee:10, feeType:'fixed', docs:['Vehicle Blue Book','Insurance'], popular:true, tag:'pop', extraFields:[{label:'Vehicle Number',labelNe:'सवारी नम्बर',type:'text',placeholder:'Ba 1 Pa 1234'},{label:'Fiscal Year',labelNe:'आर्थिक वर्ष',type:'select',opts:['2081/82','2082/83']}] },
+    { id:'prop_tax',    icon:'🏠', nameEn:'Property Tax',           nameNe:'सम्पत्ति कर',        descEn:'Pay house/land property tax to your local municipality', descNe:'घर/जग्गा कर स्थानीय नगरपालिकालाई भुक्तानी',          govtFee:0, svcFee:10, feeType:'fixed', docs:['Land Ownership Certificate','Previous Tax Receipt'], popular:true, tag:'hot', extraFields:[{label:'Property ID / Kitta No.',labelNe:'प्लट नम्बर',type:'text',placeholder:'e.g. 1234-5'},{label:'Municipality',labelNe:'नगरपालिका',type:'text',placeholder:'e.g. Kathmandu Metro'}] },
+    { id:'income_tax',  icon:'💼', nameEn:'Income Tax Filing',      nameNe:'आयकर विवरण',         descEn:'File annual income tax return (ITR) online',           descNe:'वार्षिक आयकर विवरण अनलाइन पेश गर्नुहोस्',             govtFee:0, svcFee:10, feeType:'fixed', docs:['PAN Card','Salary Slips / P&L Account','Bank Statement'], popular:false, tag:'', extraFields:[{label:'Taxpayer Type',labelNe:'करदाता प्रकार',type:'select',opts:['Individual Salaried','Self Employed','Business']}] },
+    { id:'rent_tax',    icon:'🏡', nameEn:'House Rent Tax',         nameNe:'घर भाडा कर',         descEn:'Pay house/land rental income tax',                     descNe:'घर/जग्गा भाडा आयकर भुक्तानी',                        govtFee:0, svcFee:5,  feeType:'fixed', docs:['PAN Card','Rental Agreement'], popular:false, tag:'', extraFields:[] },
+    { id:'tds',         icon:'📊', nameEn:'TDS / Withholding Tax',  nameNe:'कर कट्टी',           descEn:'Submit TDS deducted at source returns',                descNe:'स्रोतमा कट्टी भएको कर जम्मा गर्नुहोस्',               govtFee:0, svcFee:5,  feeType:'fixed', docs:['PAN Card','Salary Details'], popular:false, tag:'', extraFields:[] },
+    { id:'vat',         icon:'📈', nameEn:'VAT Registration / Return',nameNe:'मूल्य अभिवृद्धि कर',descEn:'Register for VAT or file quarterly/annual VAT return',descNe:'मूअकर दर्ता वा त्रैमासिक विवरण',                      govtFee:0, svcFee:10, feeType:'fixed', docs:['PAN Card','Business Registration','Bank Statement'], popular:false, tag:'', extraFields:[] },
+  ],
+  exam: [
+    { id:'loksewa',   icon:'⚖️', nameEn:'Lok Sewa Aayog (PSC)',    nameNe:'लोकसेवा आयोग',          descEn:'Apply for Public Service Commission (Lok Sewa) exams', descNe:'सार्वजनिक सेवा आयोगको परीक्षाका लागि आवेदन',        govtFee:500,  svcFee:10, feeType:'fixed', docs:['Citizenship Scan','Academic Certificates','Recent Photo'], popular:true, tag:'hot', extraFields:[{label:'Post',labelNe:'पद',type:'text',placeholder:'e.g. Kharidar, Section Officer'},{label:'Service Group',labelNe:'सेवा समूह',type:'select',opts:['Nepal Admin Service','Nepal Engineering Service','Nepal Health Service','Nepal Foreign Service','Police Service']}] },
+    { id:'tu_entrance',icon:'🏫',nameEn:'TU / Tribhuvan University',nameNe:'त्रिभुवन विश्वविद्यालय', descEn:'Apply for Tribhuvan University entrance examinations', descNe:'त्रिवि प्रवेश परीक्षाका लागि आवेदन',                govtFee:800,  svcFee:5,  feeType:'fixed', docs:['SLC/SEE Certificate','Grade 11/12 Marksheet','Citizenship/DOB Certificate','Photo'], popular:true, tag:'pop', extraFields:[{label:'Faculty',labelNe:'संकाय',type:'select',opts:['Science & Technology','Management','Humanities','Education','Law','Medicine']}] },
+    { id:'ioe_entrance',icon:'⚙️',nameEn:'IOE / Engineering Entrance',nameNe:'इन्जिनियरिङ प्रवेश', descEn:'Apply for Institute of Engineering (IOE) entrance exam', descNe:'इन्जिनियरिङ प्रवेश परीक्षाका लागि आवेदन',           govtFee:1200, svcFee:5,  feeType:'fixed', docs:['Class 12 Marksheet','Citizenship','Photo'], popular:false, tag:'', extraFields:[] },
+    { id:'neb_form',    icon:'📝', nameEn:'NEB Exam Form Fill-Up',  nameNe:'NEB परीक्षा फाराम',      descEn:'SEE / Grade 11 / Grade 12 NEB exam registration',     descNe:'SEE/ग्रेड ११/ग्रेड १२ परीक्षा दर्ता',               govtFee:650,  svcFee:5,  feeType:'fixed', docs:['School Enrollment Letter','Previous Marksheet','Recent Photo'], popular:true, tag:'new', extraFields:[{label:'Class',labelNe:'कक्षा',type:'select',opts:['Grade 10 (SEE)','Grade 11','Grade 12']}] },
+    { id:'bank_exam',   icon:'🏦', nameEn:'Bank / Finance Exam',    nameNe:'बैंक परीक्षा',           descEn:'Apply for NRB, commercial banks and BFI exams',       descNe:'NRB र बैंकिङ परीक्षाका लागि आवेदन',                 govtFee:500,  svcFee:5,  feeType:'fixed', docs:['Citizenship Scan','Academic Certificates','Photo'], popular:false, tag:'', extraFields:[] },
+    { id:'india_schol', icon:'🇮🇳', nameEn:'ICCR / Indian Scholarship',nameNe:'भारतीय छात्रवृत्ति', descEn:'Apply for ICCR India government scholarship for Nepal', descNe:'ICCR भारत सरकार छात्रवृत्तिका लागि आवेदन',          govtFee:0,    svcFee:10, feeType:'fixed', docs:['Citizenship Scan','Marksheets','English Proficiency','SOP/Recommendation Letters'], popular:false, tag:'', extraFields:[{label:'Course',labelNe:'कोर्स',type:'text',placeholder:'e.g. B.Tech, MBBS, MBA'}] },
+    { id:'china_schol', icon:'🇨🇳', nameEn:'CSC Chinese Scholarship',nameNe:'चिनियाँ छात्रवृत्ति',  descEn:'Chinese Government Scholarship (CSC) for Nepali students', descNe:'नेपाली विद्यार्थीका लागि चिनियाँ सरकार छात्रवृत्ति', govtFee:0,   svcFee:10, feeType:'fixed', docs:['Passport Scan','Academic Transcripts','HSK Certificate (if any)','SOP & Recommendation'], popular:false, tag:'', extraFields:[] },
+    { id:'japan_schol', icon:'🇯🇵', nameEn:'MEXT Japanese Scholarship',nameNe:'जापानी छात्रवृत्ति', descEn:'Japanese Government MEXT Scholarship for Nepal',      descNe:'जापान सरकार MEXT छात्रवृत्ति',                       govtFee:0,    svcFee:10, feeType:'fixed', docs:['Passport Scan','Academic Transcripts','JLPT Score (if any)','SOP'], popular:false, tag:'', extraFields:[] },
+  ],
+  utility: [
+    { id:'nea_bill',    icon:'💡', nameEn:'NEA Electricity Bill',  nameNe:'विद्युत बिल (NEA)',  descEn:'Pay Nepal Electricity Authority (NEA) electricity bill', descNe:'नेपाल विद्युत प्राधिकरण (NEA) को विद्युत बिल भुक्तानी', govtFee:0, svcFee:5, feeType:'fixed', docs:[], popular:true, tag:'pop', extraFields:[{label:'Meter Number / SC No.',labelNe:'मिटर नम्बर',type:'text',placeholder:'e.g. 01-001234'},{label:'Customer Name',labelNe:'ग्राहकको नाम',type:'text',placeholder:'Account holder name'}] },
+    { id:'water_bill',  icon:'💧', nameEn:'KUKL Water Bill',       nameNe:'खानेपानी बिल',       descEn:'Pay Kathmandu Upatyaka Khanepani (KUKL) water bill',  descNe:'काठमाडौं उपत्यका खानेपानी बिल भुक्तानी',               govtFee:0, svcFee:5, feeType:'fixed', docs:[], popular:true, tag:'', extraFields:[{label:'Customer Account No.',labelNe:'खाता नम्बर',type:'text',placeholder:'e.g. KUK-001234'}] },
+    { id:'nt_postpaid', icon:'📞', nameEn:'Nepal Telecom Postpaid', nameNe:'नेपाल टेलिकम बिल',  descEn:'Pay Nepal Telecom landline or postpaid mobile bill',  descNe:'नेपाल टेलिकम ल्यान्डलाइन वा पोस्टपेड बिल',           govtFee:0, svcFee:5, feeType:'fixed', docs:[], popular:true, tag:'', extraFields:[{label:'Phone Number',labelNe:'फोन नम्बर',type:'tel',placeholder:'01-4XXXXXX or 98XXXXXXXX'}] },
+    { id:'ncell',       icon:'📱', nameEn:'Ncell Mobile Recharge',  nameNe:'Ncell रिचार्ज',      descEn:'Recharge Ncell prepaid mobile or pay postpaid bill', descNe:'Ncell प्रिपेड रिचार्ज वा पोस्टपेड बिल',               govtFee:0, svcFee:5, feeType:'fixed', docs:[], popular:true, tag:'pop', extraFields:[{label:'Mobile Number',labelNe:'मोबाइल नम्बर',type:'tel',placeholder:'98XXXXXXXX'},{label:'Amount (Rs.)',labelNe:'रकम (रु.)',type:'text',placeholder:'100'}] },
+    { id:'internet',    icon:'🌐', nameEn:'Internet / ISP Bill',    nameNe:'इन्टरनेट बिल',       descEn:'Pay broadband / fiber internet bill from your ISP',   descNe:'ब्रोडब्यान्ड / फाइबर इन्टरनेट बिल भुक्तानी',         govtFee:0, svcFee:5, feeType:'fixed', docs:[], popular:false, tag:'', extraFields:[{label:'ISP / Provider',labelNe:'इन्टरनेट प्रदायक',type:'select',opts:['WorldLink','Vianet','Subisu','Classic Tech','DishHome','CG Net','Other']},{label:'Customer ID',labelNe:'ग्राहक ID',type:'text',placeholder:'Account or customer number'}] },
+    { id:'cable_tv',    icon:'📺', nameEn:'Cable TV / DTH',         nameNe:'केबल टिभी',          descEn:'Pay cable TV or DTH subscription fees',               descNe:'केबल टिभी वा DTH सदस्यता शुल्क भुक्तानी',             govtFee:0, svcFee:5, feeType:'fixed', docs:[], popular:false, tag:'', extraFields:[{label:'Provider',labelNe:'प्रदायक',type:'select',opts:['DishHome DTH','Simtv','CG Digital','Namaste TV','Other']},{label:'Customer No.',labelNe:'ग्राहक नम्बर',type:'text',placeholder:'Customer account number'}] },
+    { id:'insurance_prem',icon:'🛡️',nameEn:'Insurance Premium',   nameNe:'बीमा किस्ता',         descEn:'Pay life/health/vehicle insurance premium renewal',   descNe:'जीवन/स्वास्थ्य/सवारी बीमा किस्ता नवीकरण',             govtFee:0, svcFee:5, feeType:'fixed', docs:[], popular:false, tag:'', extraFields:[{label:'Insurance Company',labelNe:'बीमा कम्पनी',type:'select',opts:['Nepal Life Insurance','Rastriya Beema Company','National Life Insurance','Asian Life Insurance','Neco Insurance','Nepal Insurance','Other']},{label:'Policy Number',labelNe:'पोलिसी नम्बर',type:'text',placeholder:'Policy number'}] },
+  ],
+  insurance: [
+    { id:'life_ins',    icon:'💚', nameEn:'Life Insurance',         nameNe:'जीवन बीमा',           descEn:'Buy term life, whole life or endowment insurance plan', descNe:'टर्म लाइफ, होल लाइफ वा एन्डोमेन्ट बीमा खरिद',       govtFee:0, svcFee:0, commission:2, feeType:'commission', docs:['Citizenship Scan','Medical Report','Recent Photo','Income Proof'], popular:true, tag:'pop', extraFields:[{label:'Sum Assured (Rs.)',labelNe:'बीमा रकम (रु.)',type:'text',placeholder:'e.g. 500000'},{label:'Policy Term (Years)',labelNe:'अवधि (वर्ष)',type:'select',opts:['10 years','15 years','20 years','25 years','30 years']}] },
+    { id:'vehicle_ins', icon:'🚗', nameEn:'Vehicle Insurance',      nameNe:'सवारी बीमा',          descEn:'Buy or renew third party or comprehensive vehicle insurance', descNe:'सवारी तृतीय पक्ष वा व्यापक बीमा खरिद वा नवीकरण',  govtFee:0, svcFee:0, commission:2, feeType:'commission', docs:['Vehicle Blue Book','Citizenship Scan','Vehicle Photo'], popular:true, tag:'hot', extraFields:[{label:'Vehicle Number',labelNe:'सवारी नम्बर',type:'text',placeholder:'Ba 1 Pa 1234'},{label:'Vehicle Value (Rs.)',labelNe:'सवारी मूल्य (रु.)',type:'text',placeholder:'Market value'}] },
+    { id:'health_ins',  icon:'🏥', nameEn:'Health Insurance',       nameNe:'स्वास्थ्य बीमा',      descEn:'Buy individual or family health insurance coverage',   descNe:'व्यक्तिगत वा पारिवारिक स्वास्थ्य बीमा',               govtFee:0, svcFee:0, commission:2, feeType:'commission', docs:['Citizenship Scan','Medical Report (if required)','Recent Photo'], popular:true, tag:'new', extraFields:[{label:'Coverage Type',labelNe:'कभरेज प्रकार',type:'select',opts:['Individual','Couple','Family (up to 4)','Family Floater (up to 6)']},{label:'Annual Premium Budget (Rs.)',labelNe:'वार्षिक बजेट (रु.)',type:'text',placeholder:'e.g. 15000'}] },
+    { id:'agri_ins',    icon:'🌾', nameEn:'Agricultural Insurance', nameNe:'कृषि बीमा',           descEn:'Crop, livestock and agricultural input insurance',     descNe:'बाली, पशुपंक्षी र कृषि सामग्री बीमा',                govtFee:0, svcFee:0, commission:2, feeType:'commission', docs:['Land Ownership Certificate','Citizenship Scan','Crop Details/Photos'], popular:false, tag:'', extraFields:[{label:'Insurance Type',labelNe:'बीमा प्रकार',type:'select',opts:['Crop Insurance','Livestock Insurance','Beekeeping Insurance','Fishery Insurance']},{label:'Insured Value (Rs.)',labelNe:'बीमित रकम (रु.)',type:'text',placeholder:'Estimated value'}] },
+    { id:'property_ins',icon:'🏘️',nameEn:'Property Insurance',    nameNe:'सम्पत्ति बीमा',       descEn:'Home, building and content insurance against fire/flood', descNe:'घर, भवन र सामग्री बीमा आगो/बाढी विरुद्ध',           govtFee:0, svcFee:0, commission:2, feeType:'commission', docs:['Land Registration/Ownership','Building Valuation Report','Citizenship Scan'], popular:false, tag:'', extraFields:[{label:'Property Value (Rs.)',labelNe:'सम्पत्ति मूल्य (रु.)',type:'text',placeholder:'Market value of property'},{label:'Coverage',labelNe:'कभरेज',type:'select',opts:['Fire only','Fire + Flood','Comprehensive (All Risks)']}] },
+  ],
+  travel: [
+    { id:'domestic_flight',icon:'🛫', nameEn:'Domestic Flight',        nameNe:'आन्तरिक उडान',     descEn:'Book seats on domestic flights across Nepal',           descNe:'नेपाल भित्र घरेलु उडान सिट बुक गर्नुहोस्',            govtFee:0, svcFee:0, commission:1.5, feeType:'commission', docs:['Citizenship ID / Passport'], popular:true, tag:'pop', extraFields:[{label:'From',labelNe:'कहाँबाट',type:'select',opts:['Kathmandu (KTM)','Pokhara (PKR)','Bharatpur (BHR)','Biratnagar (BIR)','Dhangadhi (DHI)']},{label:'To',labelNe:'कहाँ',type:'select',opts:['Lukla (LUA)','Pokhara (PKR)','Kathmandu (KTM)','Jumla (JUM)','Simara (SIF)']},{label:'Travel Date',labelNe:'यात्रा मिति',type:'date',placeholder:''},{label:'Passengers',labelNe:'यात्री',type:'select',opts:['1','2','3','4','5+']}] },
+    { id:'intl_flight',    icon:'✈️', nameEn:'International Flight',   nameNe:'अन्तर्राष्ट्रिय उडान', descEn:'Book international flights from Tribhuvan Airport',  descNe:'त्रिभुवन अन्तर्राष्ट्रिय विमानस्थलबाट उडान बुक',      govtFee:0, svcFee:0, commission:1.5, feeType:'commission', docs:['Passport','Visa (if required)'], popular:true, tag:'hot', extraFields:[{label:'Destination',labelNe:'गन्तव्य',type:'text',placeholder:'e.g. Delhi, Dubai, London'},{label:'Travel Date',labelNe:'यात्रा मिति',type:'date',placeholder:''},{label:'Return Date',labelNe:'फिर्ता मिति',type:'date',placeholder:''},{label:'Class',labelNe:'श्रेणी',type:'select',opts:['Economy','Premium Economy','Business','First Class']}] },
+    { id:'hotel',          icon:'🏨', nameEn:'Hotel Booking',          nameNe:'होटल बुकिंग',        descEn:'Book hotels, resorts and lodges across Nepal',         descNe:'नेपालभर होटल, रिसोर्ट र लज बुक गर्नुहोस्',            govtFee:0, svcFee:0, commission:3, feeType:'commission', docs:['Citizenship / Passport (for records)'], popular:true, tag:'pop', extraFields:[{label:'Destination / City',labelNe:'गन्तव्य / शहर',type:'text',placeholder:'e.g. Pokhara, Chitwan, Kathmandu'},{label:'Check-In Date',labelNe:'चेक-इन मिति',type:'date',placeholder:''},{label:'Check-Out Date',labelNe:'चेक-आउट मिति',type:'date',placeholder:''},{label:'Room Type',labelNe:'कोठाको प्रकार',type:'select',opts:['Single','Double','Twin','Deluxe','Suite']}] },
+    { id:'homestay',       icon:'🏡', nameEn:'Homestay / Trekking',    nameNe:'होमस्टे / ट्रेकिंग', descEn:'Book cultural homestays and trekking lodge packages', descNe:'सांस्कृतिक होमस्टे र ट्रेकिङ लज प्याकेज',             govtFee:0, svcFee:0, commission:3, feeType:'commission', docs:['Citizenship / Passport','TIMS Card (Trekking permit)'], popular:false, tag:'new', extraFields:[{label:'Trek / Destination',labelNe:'ट्रेक / गन्तव्य',type:'text',placeholder:'e.g. EBC, Annapurna, Langtang'},{label:'Start Date',labelNe:'सुरु मिति',type:'date',placeholder:''},{label:'Duration (Days)',labelNe:'अवधि (दिन)',type:'text',placeholder:'e.g. 14'}] },
+  ],
+  bus: [
+    { id:'night_bus',   icon:'🌙', nameEn:'Night Bus (Deluxe/AC)',  nameNe:'राति बस (डिलक्स/AC)',descEn:'Book seats on AC deluxe night buses between major cities',descNe:'प्रमुख शहरहरूबीच AC डिलक्स राति बस सिट',            govtFee:0, svcFee:20, feeType:'fixed', docs:[], popular:true, tag:'hot', extraFields:[{label:'From',labelNe:'कहाँबाट',type:'select',opts:['Kathmandu','Pokhara','Chitwan','Butwal','Nepalgunj','Biratnagar','Dharan']},{label:'To',labelNe:'कहाँ',type:'select',opts:['Kathmandu','Pokhara','Chitwan','Butwal','Nepalgunj','Biratnagar','Dharan']},{label:'Travel Date',labelNe:'यात्रा मिति',type:'date',placeholder:''},{label:'No. of Seats',labelNe:'सिट संख्या',type:'select',opts:['1','2','3','4']}] },
+    { id:'tourist_bus', icon:'🚌', nameEn:'Tourist Bus',            nameNe:'ट्युरिस्ट बस',       descEn:'Book tourist bus tickets for popular tourist routes',  descNe:'लोकप्रिय पर्यटन मार्गका लागि ट्युरिस्ट बस',          govtFee:0, svcFee:20, feeType:'fixed', docs:[], popular:true, tag:'pop', extraFields:[{label:'Route',labelNe:'रूट',type:'select',opts:['KTM → Pokhara','Pokhara → KTM','KTM → Chitwan','KTM → Lumbini','KTM → Nagarkot','Pokhara → Chitwan']},{label:'Travel Date',labelNe:'यात्रा मिति',type:'date',placeholder:''}] },
+    { id:'local_bus',   icon:'🚐', nameEn:'Local / Express Bus',   nameNe:'लोकल बस',            descEn:'Book local and express bus tickets within Nepal',      descNe:'नेपाल भित्र स्थानीय र द्रुत बस टिकट',                govtFee:0, svcFee:5,  feeType:'fixed', docs:[], popular:false, tag:'', extraFields:[{label:'From',labelNe:'कहाँबाट',type:'text',placeholder:'Departure city/town'},{label:'To',labelNe:'कहाँ',type:'text',placeholder:'Destination city/town'},{label:'Travel Date',labelNe:'यात्रा मिति',type:'date',placeholder:''}] },
+    { id:'microbus',    icon:'🚙', nameEn:'Microbus / Hiace',      nameNe:'माइक्रोबस / हाइस',   descEn:'Book microbus and Hiace van inter-city seats',         descNe:'अन्तर्शहर माइक्रोबस र हाइस भ्यान सिट',               govtFee:0, svcFee:10, feeType:'fixed', docs:[], popular:false, tag:'', extraFields:[{label:'From',labelNe:'कहाँबाट',type:'text',placeholder:'Departure location'},{label:'To',labelNe:'कहाँ',type:'text',placeholder:'Destination'},{label:'Travel Date',labelNe:'यात्रा मिति',type:'date',placeholder:''}] },
+    { id:'ticket_cancel',icon:'❌', nameEn:'Ticket Cancellation',  nameNe:'टिकट रद्द',           descEn:'Cancel and refund booked bus or flight tickets',       descNe:'बुक गरिएको बस वा उडान टिकट रद्द र फिर्ता',           govtFee:0, svcFee:10, feeType:'fixed', docs:[], popular:false, tag:'', extraFields:[{label:'Booking Reference',labelNe:'बुकिंग नम्बर',type:'text',placeholder:'e.g. NDS-BUS-2025-XXXXX'}] },
+  ],
+  appointment: [
+    { id:'hospital',    icon:'🏥', nameEn:'Hospital / Doctor Appointment',nameNe:'अस्पताल अपोइन्टमेन्ट', descEn:'Book online OPD appointment at major hospitals in Nepal', descNe:'नेपालका प्रमुख अस्पतालमा OPD अपोइन्टमेन्ट',         govtFee:0, svcFee:10, feeType:'fixed', docs:[], popular:true, tag:'pop', extraFields:[{label:'Hospital',labelNe:'अस्पताल',type:'select',opts:['Bir Hospital','Tribhuvan University Teaching Hospital (TUTH)','Patan Hospital','BPKIHS Dharan','Dhulikhel Hospital','Manipal Teaching Hospital Pokhara','BP Memorial Hospital','National Trauma Center','Other']},{label:'Department / Specialty',labelNe:'विभाग',type:'text',placeholder:'e.g. Orthopedics, Cardiology'},{label:'Preferred Date',labelNe:'मिति',type:'date',placeholder:''}] },
+    { id:'embassy_appt',icon:'🏢', nameEn:'Embassy / Visa Appointment', nameNe:'दूतावास भिसा अपोइन्टमेन्ट',descEn:'Book visa appointment at foreign embassies in Kathmandu', descNe:'काठमाडौंमा विदेशी दूतावासमा भिसा अपोइन्टमेन्ट',     govtFee:0, svcFee:50, feeType:'fixed', docs:['Passport Scan','Appointment Letter (if required)'], popular:true, tag:'hot', extraFields:[{label:'Embassy',labelNe:'दूतावास',type:'select',opts:['Indian Embassy','Chinese Embassy','US Embassy','UK Embassy','Australian Embassy','Japanese Embassy','German Embassy','UAE Embassy','Korean Embassy','Other']},{label:'Visa Type',labelNe:'भिसा प्रकार',type:'select',opts:['Tourist','Student','Work','Business','Transit','Family Reunion']},{label:'Preferred Date',labelNe:'मिति',type:'date',placeholder:''}] },
+    { id:'govt_office', icon:'🏛️', nameEn:'Government Office Queue Token', nameNe:'सरकारी कार्यालय टोकन', descEn:'Book advance queue token at government offices',      descNe:'सरकारी कार्यालयमा अग्रिम टोकन बुक गर्नुहोस्',        govtFee:0, svcFee:10, feeType:'fixed', docs:[], popular:false, tag:'', extraFields:[{label:'Office Name',labelNe:'कार्यालयको नाम',type:'text',placeholder:'e.g. Dept. of Passport, Land Revenue Office'},{label:'Purpose',labelNe:'उद्देश्य',type:'text',placeholder:'e.g. Passport collection, Land registration'},{label:'Date',labelNe:'मिति',type:'date',placeholder:''}] },
+    { id:'bank_appt',   icon:'🏦', nameEn:'Bank Account / Loan Appointment', nameNe:'बैंक अपोइन्टमेन्ट', descEn:'Schedule appointment for bank account opening or loan', descNe:'बैंक खाता खोल्न वा ऋणको लागि अपोइन्टमेन्ट',          govtFee:0, svcFee:10, feeType:'fixed', docs:[], popular:false, tag:'', extraFields:[{label:'Bank',labelNe:'बैंक',type:'select',opts:['Nepal Rastra Bank','Nabil Bank','Standard Chartered','Himalayan Bank','NIC Asia Bank','Everest Bank','Siddhartha Bank','Global IME Bank','Other']},{label:'Purpose',labelNe:'उद्देश्य',type:'select',opts:['Account Opening','Loan Inquiry','Credit Card','Locker','Other']},{label:'Preferred Date',labelNe:'मिति',type:'date',placeholder:''}] },
+    { id:'school_appt', icon:'🏫', nameEn:'School / College Admission Inquiry', nameNe:'स्कूल भर्ना सोधपुछ', descEn:'Book school/college admission inquiry appointment', descNe:'स्कूल/कलेज भर्नाको लागि सोधपुछ अपोइन्टमेन्ट',       govtFee:0, svcFee:10, feeType:'fixed', docs:[], popular:false, tag:'', extraFields:[{label:'Institution',labelNe:'संस्था',type:'text',placeholder:'School or college name'},{label:'Grade / Program',labelNe:'कक्षा / कार्यक्रम',type:'text',placeholder:'e.g. Grade 9, BBA, MBBS'},{label:'Preferred Date',labelNe:'मिति',type:'date',placeholder:''}] },
+  ],
+};
+
+const POPULAR_IDS = ['citizenship','passport','pan','driving','nea_bill','vehicle_tax','loksewa','neb_form','night_bus','hospital','life_ins','tu_entrance'];
+
+/* ─── STATE ─────────────────────────────────────────────────── */
+let lang          = localStorage.getItem('nds_lang') || 'en';
+let currentCat    = null;
+let currentSvc    = null;
+let applyStep     = 1;
+let selectedPayMethod = 'esewa';
+let filteredSvcs  = null;
+
+/* ─── INIT ──────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  applyLang(lang);
+  renderCategories();
+  renderPopular();
+  window.addEventListener('scroll', () => {
+    document.getElementById('scrollTopBtn').style.display = window.scrollY > 300 ? 'flex' : 'none';
+  });
+  // Close dropdown on outside click
+  document.addEventListener('click', () => {});
+});
+
+/* ─── LANGUAGE ──────────────────────────────────────────────── */
+function setLang(l) {
+  lang = l;
+  localStorage.setItem('nds_lang', l);
+  applyLang(l);
+}
+
+function applyLang(l) {
+  document.getElementById('htmlRoot').setAttribute('data-lang', l);
+  document.getElementById('btnEN').classList.toggle('active', l === 'en');
+  document.getElementById('btnNE').classList.toggle('active', l === 'ne');
+
+  // Hero sub text
+  document.getElementById('heroSubNe').style.display = l === 'ne' ? 'block' : 'none';
+
+  // data-en / data-ne attributes
+  document.querySelectorAll('[data-en][data-ne]').forEach(el => {
+    el.innerHTML = el.getAttribute(`data-${l}`) || el.getAttribute('data-en');
+  });
+
+  // Rebuild dynamic content
+  if (currentCat) renderServiceGrid(currentCat, filteredSvcs);
+  else {
+    renderCategories();
+    renderPopular();
+  }
+}
+
+function t(en, ne) { return lang === 'ne' ? ne : en; }
+
+/* ─── NAVIGATION ─────────────────────────────────────────────── */
+function showCategory(catId) {
+  currentCat   = catId;
+  filteredSvcs = null;
+  const cat    = CATEGORIES.find(c => c.id === catId);
+  document.getElementById('homeView').style.display    = 'none';
+  document.getElementById('categoryView').style.display = 'block';
+  document.getElementById('heroSection').style.display  = 'none';
+  document.getElementById('navBackBtn').classList.add('visible');
+  document.getElementById('bcCurrent').textContent = lang === 'ne' ? cat.nameNe : cat.nameEn;
+  document.getElementById('cvTitle').textContent   = lang === 'ne' ? cat.nameNe : cat.nameEn;
+  document.getElementById('cvSubtitle').textContent= lang === 'ne' ? cat.descNe : cat.descEn;
+  renderServiceGrid(catId);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showCategoryView() {
+  if (document.getElementById('homeView').style.display !== 'none') {
+    document.getElementById('homeView').style.display    = 'none';
+    document.getElementById('categoryView').style.display = 'block';
+    document.getElementById('heroSection').style.display  = 'none';
+    document.getElementById('navBackBtn').classList.add('visible');
+    document.getElementById('bcCurrent').textContent = t('Search Results','खोज परिणाम');
+    document.getElementById('cvTitle').textContent   = t('Search Results','खोज परिणाम');
+    document.getElementById('cvSubtitle').textContent= t('Showing all matching services','सबै मिल्ने सेवाहरू देखाइएको');
+    currentCat = null;
+  }
+}
+
+function goHome() {
+  currentCat    = null;
+  filteredSvcs  = null;
+  document.getElementById('homeView').style.display    = 'block';
+  document.getElementById('categoryView').style.display = 'none';
+  document.getElementById('heroSection').style.display  = '';
+  document.getElementById('navBackBtn').classList.remove('visible');
+  document.getElementById('navSearchInput').value = '';
+  document.getElementById('heroSearch').value     = '';
+  renderCategories();
+  renderPopular();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* ─── SEARCH ─────────────────────────────────────────────────── */
+function filterServices(q) {
+  q = q.trim().toLowerCase();
+  if (!q) { filteredSvcs = null; if (currentCat) renderServiceGrid(currentCat); return; }
+  const all = Object.values(SERVICES).flat();
+  filteredSvcs = all.filter(s =>
+    s.nameEn.toLowerCase().includes(q) ||
+    s.nameNe.includes(q) ||
+    s.descEn.toLowerCase().includes(q) ||
+    s.descNe.includes(q)
+  );
+  renderServiceGrid(currentCat, filteredSvcs);
+}
+
+/* ─── RENDER CATEGORIES ──────────────────────────────────────── */
+function renderCategories() {
+  const grid = document.getElementById('catGrid');
+  grid.innerHTML = CATEGORIES.map(cat => `
+    <div class="cat-card" onclick="showCategory('${cat.id}')">
+      <span class="cat-icon">${cat.icon}</span>
+      <div class="cat-name">${lang === 'ne' ? cat.nameNe : cat.nameEn}</div>
+      <span class="cat-name-ne">${lang === 'ne' ? cat.nameEn : cat.nameNe}</span>
+      <span class="cat-count">${cat.count} ${t('Services','सेवाहरू')}</span>
+    </div>
+  `).join('');
+}
+
+/* ─── RENDER POPULAR ─────────────────────────────────────────── */
+function renderPopular() {
+  const all = Object.values(SERVICES).flat();
+  const pop = POPULAR_IDS.map(id => all.find(s => s.id === id)).filter(Boolean).slice(0, 6);
+  document.getElementById('popularGrid').innerHTML = pop.map(s => serviceCard(s)).join('');
+}
+
+/* ─── RENDER SERVICE GRID ────────────────────────────────────── */
+function renderServiceGrid(catId, svcs) {
+  const list = svcs || (catId ? SERVICES[catId] : Object.values(SERVICES).flat());
+  document.getElementById('serviceGrid').innerHTML = (list && list.length)
+    ? list.map(s => serviceCard(s)).join('')
+    : `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted);font-size:.9rem">${t('No services found. Try a different search.','कुनै सेवा फेला परेन। फेरि खोज्नुहोस्।')}</div>`;
+}
+
+function serviceCard(s) {
+  const feeHtml = s.feeType === 'commission'
+    ? `<span class="svc-fee-amount commission">${s.commission}% ${t('Commission','कमिशन')}</span>`
+    : `<span class="svc-fee-amount fixed">Rs. ${s.govtFee > 0 ? s.govtFee + ' + ' : ''}${s.svcFee} ${t('Service Charge','सेवा शुल्क')}</span>`;
+  const tagHtml = s.tag
+    ? `<span class="tag tag-${s.tag}" style="margin-left:6px">${s.tag.toUpperCase()}</span>`
+    : '';
+  return `
+    <div class="svc-card">
+      <div class="svc-header">
+        <div class="svc-icon">${s.icon}</div>
+        <div class="svc-title-wrap">
+          <div class="svc-title">${lang === 'ne' ? s.nameNe : s.nameEn}${tagHtml}</div>
+          <div class="svc-title-ne">${lang === 'ne' ? s.nameEn : s.nameNe}</div>
+        </div>
+      </div>
+      <div class="svc-desc ${lang === 'ne' ? 'svc-desc-ne' : ''}">${lang === 'ne' ? s.descNe : s.descEn}</div>
+      <div class="svc-footer">
+        <div class="svc-fee">
+          <span class="svc-fee-label">${t('Fee','शुल्क')}</span>
+          ${feeHtml}
+        </div>
+        <button class="svc-apply-btn" onclick="openApply('${s.id}')">${t('Apply Now','आवेदन दिनुहोस्')} →</button>
+      </div>
+    </div>`;
+}
+
+/* ─── APPLY MODAL ────────────────────────────────────────────── */
+function findService(id) {
+  return Object.values(SERVICES).flat().find(s => s.id === id);
+}
+
+function openApply(svcId) {
+  currentSvc = findService(svcId);
+  if (!currentSvc) return;
+  applyStep = 1;
+
+  document.getElementById('applyIcon').textContent     = currentSvc.icon;
+  document.getElementById('applyTitle').textContent    = lang === 'ne' ? currentSvc.nameNe : currentSvc.nameEn;
+  document.getElementById('applyTitleNe').textContent  = lang === 'ne' ? currentSvc.nameEn : currentSvc.nameNe;
+
+  // Build extra fields
+  const ef = document.getElementById('extraFields');
+  ef.innerHTML = '';
+  if (currentSvc.extraFields && currentSvc.extraFields.length) {
+    ef.innerHTML = '<div style="margin-top:12px"></div>';
+    currentSvc.extraFields.forEach((f, i) => {
+      const id2 = `ef_${i}`;
+      let inp = '';
+      if (f.type === 'select') {
+        inp = `<select class="form-select" id="${id2}"><option value="">— ${t('Select','छान्नुहोस्')} —</option>${f.opts.map(o=>`<option>${o}</option>`).join('')}</select>`;
+      } else if (f.type === 'date') {
+        inp = `<input type="date" class="form-input" id="${id2}">`;
+      } else {
+        inp = `<input type="${f.type||'text'}" class="form-input" id="${id2}" placeholder="${f.placeholder||''}">`;
+      }
+      ef.innerHTML += `<div class="form-group" style="margin-top:10px"><label class="form-label">${f.label} <span class="ne">${f.labelNe||''}</span></label>${inp}</div>`;
+    });
+  }
+
+  // Build document upload list
+  const dl = document.getElementById('docList');
+  if (currentSvc.docs && currentSvc.docs.length) {
+    dl.innerHTML = currentSvc.docs.map((d, i) => `
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">📎 ${d}</label>
+        <input type="file" class="form-file" accept=".jpg,.jpeg,.png,.pdf" id="doc_${i}">
+      </div>`).join('');
+  } else {
+    dl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--muted);font-size:.85rem">✅ ${t('No documents required for this service.','यस सेवाका लागि कागजात आवश्यक छैन।')}</div>`;
+  }
+
+  updateApplyStepUI();
+  openModal('applyModal');
+}
+
+function updateApplyStepUI() {
+  document.getElementById('applyStep1').style.display = applyStep === 1 ? 'block' : 'none';
+  document.getElementById('applyStep2').style.display = applyStep === 2 ? 'block' : 'none';
+  document.getElementById('applyStep3').style.display = applyStep === 3 ? 'block' : 'none';
+  document.getElementById('applyPrevBtn').style.display = applyStep > 1 ? 'inline-flex' : 'none';
+
+  const nextBtn = document.getElementById('applyNextBtn');
+  if (applyStep === 3) {
+    nextBtn.textContent = t('Proceed to Payment →', 'भुक्तानीमा जानुहोस् →');
+  } else {
+    nextBtn.textContent = t('Continue →', 'अगाडि बढ्नुहोस् →');
+  }
+
+  // Step dots
+  [1,2,3].forEach(n => {
+    const dot = document.getElementById(`sdot${n}`);
+    const lbl = document.getElementById(`slbl${n}`);
+    dot.classList.toggle('active', n === applyStep);
+    dot.classList.toggle('done',   n < applyStep);
+    lbl.classList.toggle('active', n === applyStep);
+  });
+  document.getElementById('sline1').classList.toggle('done', applyStep > 1);
+  document.getElementById('sline2').classList.toggle('done', applyStep > 2);
+
+  // Fill review on step 3
+  if (applyStep === 3) fillReview();
+}
+
+function applyNextStep() {
+  if (applyStep < 3) {
+    applyStep++;
+    updateApplyStepUI();
+  } else {
+    // Proceed to payment
+    const total = (currentSvc.govtFee || 0) + (currentSvc.feeType === 'fixed' ? currentSvc.svcFee : 0);
+    document.getElementById('payAmountDisplay').textContent = `Rs. ${total.toLocaleString()}`;
+    document.getElementById('payAmountNote').textContent    =
+      currentSvc.feeType === 'commission'
+        ? `${t('Govt Fee','सरकारी शुल्क')}: Rs. 0 + ${currentSvc.commission}% ${t('commission on total amount','कमिशन')}`
+        : `${t('Govt Fee','सरकारी शुल्क')}: Rs. ${currentSvc.govtFee} + ${t('Service Charge','सेवा शुल्क')}: Rs. ${currentSvc.svcFee}`;
+    closeModal('applyModal');
+    openModal('paymentModal');
+  }
+}
+
+function applyPrevStep() {
+  if (applyStep > 1) { applyStep--; updateApplyStepUI(); }
+}
+
+function fillReview() {
+  const name   = document.getElementById('appName').value     || '—';
+  const dob    = document.getElementById('appDob').value      || '—';
+  const phone  = document.getElementById('appPhone').value    || '—';
+  const email  = document.getElementById('appEmail').value    || '—';
+  const cid    = document.getElementById('appCitizenId').value|| '—';
+  const addr   = document.getElementById('appAddress').value  || '—';
+
+  document.getElementById('reviewDetails').innerHTML = `
+    <b>${t('Name','नाम')}:</b> ${name}<br>
+    <b>${t('DOB','जन्म मिति')}:</b> ${dob}<br>
+    <b>${t('Phone','फोन')}:</b> ${phone}<br>
+    <b>${t('Email','इमेल')}:</b> ${email}<br>
+    <b>${t('ID No.','परिचयपत्र नम्बर')}:</b> ${cid}<br>
+    <b>${t('Address','ठेगाना')}:</b> ${addr}
+  `;
+
+  const total = (currentSvc.govtFee || 0) + (currentSvc.feeType === 'fixed' ? currentSvc.svcFee : 0);
+  document.getElementById('feeServiceName').textContent = lang === 'ne' ? currentSvc.nameNe : currentSvc.nameEn;
+  document.getElementById('feeGovt').textContent    = `Rs. ${currentSvc.govtFee || 0}`;
+  document.getElementById('feeService').textContent = currentSvc.feeType === 'commission'
+    ? `${currentSvc.commission}% ${t('of total','कुलको')}`
+    : `Rs. ${currentSvc.svcFee}`;
+  document.getElementById('feeTotal').textContent   = `Rs. ${total.toLocaleString()}`;
+}
+
+/* ─── PAYMENT ────────────────────────────────────────────────── */
+function selectPayment(el, method) {
+  selectedPayMethod = method;
+  document.querySelectorAll('.pay-option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('cardFields').style.display = method === 'card' ? 'block' : 'none';
+}
+
+function formatCard(el) {
+  let v = el.value.replace(/\D/g,'');
+  el.value = v.replace(/(.{4})/g,'$1 ').trim();
+}
+
+function processPayment() {
+  const btn = document.getElementById('payNowBtn');
+  btn.disabled = true;
+  btn.textContent = t('Processing…','प्रक्रिया हुँदैछ…');
+  setTimeout(() => {
+    closeModal('paymentModal');
+    showSuccess();
+    btn.disabled = false;
+    btn.textContent = t('Pay Now & Submit','अहिले भुक्तानी गर्नुहोस्');
+  }, 1800);
+}
+
+function showSuccess() {
+  const ref = 'NDS-' + new Date().getFullYear() + '-' + Math.random().toString(36).substr(2,8).toUpperCase();
+  document.getElementById('refNumber').textContent  = ref;
+  document.getElementById('successTitle').textContent = t('✅ Payment Successful!','✅ भुक्तानी सफल भयो!');
+  document.getElementById('successSub').textContent   = t(
+    `Application for "${lang === 'en' ? currentSvc.nameEn : currentSvc.nameNe}" submitted. You'll receive confirmation via SMS & email.`,
+    `"${lang === 'ne' ? currentSvc.nameNe : currentSvc.nameEn}" आवेदन सफलतापूर्वक पेश भयो। SMS र इमेलमा पुष्टि पठाइनेछ।`
+  );
+  openModal('successModal');
+}
+
+function printReceipt() {
+  window.print();
+}
+
+/* ─── MODAL HELPERS ──────────────────────────────────────────── */
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  // Only restore scroll if no other modal open
+  if (!document.querySelector('.modal-overlay.open')) {
+    document.body.style.overflow = '';
+  }
+}
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => {
+    if (e.target === el) closeModal(el.id);
+  });
+});
+
+/* ─── LOGIN TAB ──────────────────────────────────────────────── */
+function openLoginModal() { openModal('loginModal'); }
+function switchAuthTab(tab) {
+  document.getElementById('loginForm').style.display  = tab === 'login'  ? 'block' : 'none';
+  document.getElementById('signupForm').style.display = tab === 'signup' ? 'block' : 'none';
+  document.getElementById('tabLogin').style.cssText   = tab === 'login'
+    ? 'flex:1;padding:8px;border-radius:8px;font-size:.82rem;font-weight:700;background:#fff;color:var(--pri);box-shadow:0 1px 4px rgba(0,0,0,.1);transition:.2s'
+    : 'flex:1;padding:8px;border-radius:8px;font-size:.82rem;font-weight:700;background:transparent;color:var(--muted);transition:.2s';
+  document.getElementById('tabSignup').style.cssText  = tab === 'signup'
+    ? 'flex:1;padding:8px;border-radius:8px;font-size:.82rem;font-weight:700;background:#fff;color:var(--pri);box-shadow:0 1px 4px rgba(0,0,0,.1);transition:.2s'
+    : 'flex:1;padding:8px;border-radius:8px;font-size:.82rem;font-weight:700;background:transparent;color:var(--muted);transition:.2s';
+}
+
+/* ─── KEYBOARD ESC ───────────────────────────────────────────── */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(m => closeModal(m.id));
+  }
+});
+</script>
+</body>
+</html>

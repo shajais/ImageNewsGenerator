@@ -1,0 +1,11 @@
+# Core face-swap dependencies (used by server.py /api/faceswap endpoint)
+insightface>=0.7.3
+onnxruntime>=1.16.3
+opencv-python-headless>=4.8.0.76
+numpy>=1.24.0
+
+# HTTP utility (optional but keeps things clean on cloud)
+requests>=2.31.0
+
+# Live stock/crypto/forex prices for /api/live-prices endpoint
+yfinance>=0.2.40

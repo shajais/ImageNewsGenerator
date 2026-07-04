@@ -33,11 +33,9 @@ loadEnv();
 
 let GEMINI_API_KEY   = process.env.GEMINI_API_KEY   || '';
 let REMOVEBG_API_KEY = process.env.REMOVEBG_API_KEY || '';
-let GROK_API_KEY     = process.env.GROK_API_KEY     || '';
 
 if (!GEMINI_API_KEY)   console.warn('⚠️  GEMINI_API_KEY not set in .env');
 if (!REMOVEBG_API_KEY) console.warn('⚠️  REMOVEBG_API_KEY not set in .env');
-if (!GROK_API_KEY)     console.warn('⚠️  GROK_API_KEY not set in .env');
 
 /** Write or update a KEY=VALUE line in .env, then hot-reload it */
 function saveKeyToEnv(keyName, value) {
@@ -56,7 +54,6 @@ function saveKeyToEnv(keyName, value) {
   process.env[keyName] = value;
   if (keyName === 'GEMINI_API_KEY')   GEMINI_API_KEY   = value;
   if (keyName === 'REMOVEBG_API_KEY') REMOVEBG_API_KEY = value;
-  if (keyName === 'GROK_API_KEY')     GROK_API_KEY     = value;
 }
 
 /* ── MIME types ─────────────────────────────────────── */
@@ -77,7 +74,7 @@ const MIME = {
 function setCORS(res) {
   res.setHeader('Access-Control-Allow-Origin',  '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Api-Key');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Api-Key, X-Gemini-Key');
 }
 
 /* ── Proxy helper ─────────────────────────────────────── */
@@ -135,6 +132,25 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  /* ── PROXY: /proxy/gemini-withkey → Gemini API using browser-supplied key ──
+     Used when GEMINI_API_KEY is not in .env but user has entered key in the UI.
+     The key is passed in the X-Gemini-Key header from the browser.
+     This avoids the CORS block that occurs when calling Gemini directly. */
+  if (pathname === '/proxy/gemini-withkey') {
+    const browserKey = req.headers['x-gemini-key'] || '';
+    const keyToUse   = GEMINI_API_KEY || browserKey;
+    if (!keyToUse) {
+      setCORS(res);
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'No Gemini API key available' }));
+      return;
+    }
+    const target = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(keyToUse)}`;
+    console.log('[proxy] Gemini (browser key) →');
+    proxyRequest(req, res, target);
+    return;
+  }
+
   /* ── PROXY: /proxy/removebg → Remove.bg API (key injected server-side) ── */
   if (pathname === '/proxy/removebg') {
     if (!REMOVEBG_API_KEY) {
@@ -155,7 +171,6 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({
       gemini:   !!GEMINI_API_KEY,
       removebg: !!REMOVEBG_API_KEY,
-      grok:     !!GROK_API_KEY,
     }));
     return;
   }
@@ -168,7 +183,7 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const { service, key } = JSON.parse(body);
-        const VALID = { gemini: 'GEMINI_API_KEY', grok: 'GROK_API_KEY', removebg: 'REMOVEBG_API_KEY' };
+        const VALID = { gemini: 'GEMINI_API_KEY', removebg: 'REMOVEBG_API_KEY' };
         const envKey = VALID[service];
         if (!envKey || !key || typeof key !== 'string' || key.trim().length < 8) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -187,16 +202,19 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  /* ── PROXY: /proxy/grok → Grok (xAI) API (key injected server-side) ── */
-  if (pathname === '/proxy/grok') {
-    if (!GROK_API_KEY) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'GROK_API_KEY not configured on server' }));
+  /* ── PROXY: /proxy/groq → Groq API (browser-supplied key via X-Groq-Key header) ──
+     Used on localhost to avoid CORS blocks when calling api.groq.com directly. */
+  if (pathname === '/proxy/groq') {
+    const groqKey = req.headers['x-groq-key'] || '';
+    if (!groqKey) {
+      setCORS(res);
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'No Groq API key supplied in X-Groq-Key header' }));
       return;
     }
-    const target = 'https://api.x.ai/v1/chat/completions';
-    console.log('[proxy] Grok → (key hidden)');
-    proxyRequest(req, res, target, { 'Authorization': `Bearer ${GROK_API_KEY}` });
+    const target = 'https://api.groq.com/openai/v1/chat/completions';
+    console.log('[proxy] Groq → (key prefix:', groqKey.slice(0, 8) + '…)');
+    proxyRequest(req, res, target, { 'Authorization': `Bearer ${groqKey}` });
     return;
   }
 
@@ -229,7 +247,11 @@ const server = http.createServer((req, res) => {
     }
     const ext  = path.extname(filePath).toLowerCase();
     const mime = MIME[ext] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': mime });
+    /* Prevent caching of JS/HTML/CSS during development */
+    const noCache = ['.js', '.html', '.css'].includes(ext);
+    const headers = { 'Content-Type': mime };
+    if (noCache) headers['Cache-Control'] = 'no-store';
+    res.writeHead(200, headers);
     fs.createReadStream(filePath).pipe(res);
   });
 });

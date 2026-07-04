@@ -9,3 +9,15 @@ node_modules/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local debug/fix scripts
+check_*.py
+fix*.py
+fix*_out.txt
+inspect*.py
+inspect*.txt
+scan_*.py
+non_ascii_report.txt
+
+# Temp HF Space bootstrap clone
+hf_clone/

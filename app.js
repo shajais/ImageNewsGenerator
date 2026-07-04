@@ -18,41 +18,37 @@ const CANVAS_H  = 1080;
 /* ── AI (Gemini) Configuration ──────────────────────────────── */
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
-/* ── AI (Grok / xAI) Configuration ─────────────────────────── */
-const GROK_API_URL   = 'https://api.x.ai/v1/chat/completions';
-const GROK_MODEL     = 'grok-3-mini';   // fast & cost-efficient; swap to 'grok-3' for max quality
-
 /* When running via the local Node server (http://localhost:*) all API calls
    are routed through the built-in proxy endpoints — the browser never sends
    or sees the API keys (they live in .env on the server only).
    When the file is opened directly (file://) direct URLs are used — note
    that file:// origins are blocked by CORS; always use `node server.js`. */
 const _isLocalhost = location.protocol === 'http:' && (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
-const _geminiProxyBase   = _isLocalhost ? '/proxy/gemini'   : null;
-const _removebgProxyBase = _isLocalhost ? '/proxy/removebg' : null;
-const _fetchProxyBase    = _isLocalhost ? '/proxy/fetch'    : null;
-const _grokProxyBase     = _isLocalhost ? '/proxy/grok'     : null;
+/* True only when running via node server.js on port 3000 — the proxy endpoints exist */
+const _isNodeServer = _isLocalhost && (location.port === '3000' || location.port === '');
+const _geminiProxyBase   = _isNodeServer ? '/proxy/gemini'   : null;
+const _removebgProxyBase = _isNodeServer ? '/proxy/removebg' : null;
+const _fetchProxyBase    = _isNodeServer ? '/proxy/fetch'    : null;
 
 /* Key availability flags — populated from /api/key-status on load.
    The actual key strings NEVER exist in the browser when using the local proxy.
    On GitHub Pages (no server), keys are entered by the user and stored in localStorage. */
-let _geminiKey    = false;   // true = server has key configured
-let _removebgKey  = false;   // true = server has key configured
-let _grokKey      = false;   // true = server has Grok (xAI) key configured
+let _geminiKey    = false;   // true = server has Gemini key configured
+let _removebgKey  = false;   // true = server has Remove.bg key configured
 
 /* ── Browser-side keys for GitHub Pages mode (no server proxy) ──
    On localhost these are always empty — the server proxy handles keys.
    On GitHub Pages the user enters them manually and they are saved to localStorage. */
 const _LS_GEMINI   = 'ghp_gemini_key';
 const _LS_REMOVEBG = 'ghp_removebg_key';
-const _LS_GROK     = 'ghp_grok_key';
 let _browserGeminiKey   = localStorage.getItem(_LS_GEMINI)   || '';
 let _browserRemovebgKey = localStorage.getItem(_LS_REMOVEBG) || '';
-let _browserGrokKey     = localStorage.getItem(_LS_GROK)     || '';
 
-/* Active AI provider: 'gemini' | 'grok'
-   Persisted in localStorage so the user's choice survives page refresh. */
-let _aiProvider = localStorage.getItem('aiProvider') || 'gemini';
+/* ── Groq + HuggingFace keys (GitHub Pages / browser mode) ── */
+const _LS_GROQ = 'ghp_groq_key';
+const _LS_HF   = 'ghp_hf_key';
+let _browserGroqKey = localStorage.getItem(_LS_GROQ) || '';
+let _browserHFKey   = localStorage.getItem(_LS_HF)   || '';
 
 /* Background styles for AI image enhancement */
 const BG_STYLES = [
@@ -99,34 +95,197 @@ let _mainImgSelected = false;
    5. Time-of-day peak — stories published 6am-9pm Nepal time score higher
    ───────────────────────────────────────────────────────────────── */
 const RSS_FEEDS = [
-  /* ── Google News RSS — Nepal trending (no rate limit, real-time) ── */
+  /* ── Google News RSS — Nepal trending (Nepali language only) ── */
   { url: 'https://news.google.com/rss/search?q=nepal&hl=ne&gl=NP&ceid=NP:ne',
                                                     name: 'Google News NP (Nepali)', lang: 'ne' },
-  { url: 'https://news.google.com/rss/search?q=nepal&hl=en&gl=NP&ceid=NP:en',
-                                                    name: 'Google News NP (English)', lang: 'en' },
-  { url: 'https://news.google.com/rss/headlines/section/geo/NP?hl=en&gl=NP&ceid=NP:en',
-                                                    name: 'Google Top Stories Nepal', lang: 'en' },
   { url: 'https://news.google.com/rss/search?q=%E0%A4%A8%E0%A5%87%E0%A4%AA%E0%A4%BE%E0%A4%B2+%E0%A4%AC%E0%A5%8D%E0%A4%B0%E0%A5%87%E0%A4%95%E0%A4%BF%E0%A4%99&hl=ne&gl=NP&ceid=NP:ne',
                                                     name: 'Google ब्रेकिङ Nepal',    lang: 'ne' },
-
-  /* ── Google Trends RSS — what Nepal is SEARCHING right now ──
-     These feeds tell us what topics people are actively searching/engaging with.
-     Higher search volume = higher trending signal. */
-  { url: 'https://trends.google.com/trending/rss?geo=NP',
-                                                    name: 'Google Trends Nepal',      lang: 'en', isTrendsSource: true },
+  { url: 'https://news.google.com/rss/headlines/section/geo/NP?hl=ne&gl=NP&ceid=NP:ne',
+                                                    name: 'Google Top Stories Nepal', lang: 'ne' },
 
   /* ── Direct Nepali outlet RSS feeds ── */
   { url: 'https://www.onlinekhabar.com/feed',       name: 'Online Khabar',           lang: 'ne' },
   { url: 'https://www.setopati.com/feed',            name: 'Setopati',                lang: 'ne' },
   { url: 'https://ratopati.com/feed',                name: 'Ratopati',                lang: 'ne' },
   { url: 'https://www.ekantipur.com/rss/',           name: 'eKantipur',               lang: 'ne' },
-  { url: 'https://thehimalayantimes.com/feed/',      name: 'Himalayan Times',         lang: 'en' },
-  { url: 'https://kathmandupost.com/rss',            name: 'Kathmandu Post',          lang: 'en' },
-  { url: 'https://www.nepalnews.com/feed/',          name: 'Nepal News',              lang: 'en' },
   { url: 'https://nepalpress.com/feed/',             name: 'Nepal Press',             lang: 'ne' },
   { url: 'https://annapurnapost.com/rss/',           name: 'Annapurna Post',          lang: 'ne' },
   { url: 'https://nagariknews.nagariknetwork.com/feed/', name: 'Nagarik News',        lang: 'ne' },
 ];
+
+/* ── Category-specific RSS feeds ────────────────────────────────────────── */
+
+/* Science, Innovation & Research */
+const RSS_SCIENCE = [
+  { url: 'https://news.google.com/rss/search?q=science+technology+research&hl=en&gl=US&ceid=US:en',
+                                                    name: 'Google Science (EN)',      lang: 'en', cat: 'science' },
+  { url: 'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRFp0Y1RFU0FtVnVHZ0pWVXlnQVAB?hl=en&gl=US&ceid=US:en',
+                                                    name: 'Google Technology',        lang: 'en', cat: 'science' },
+  { url: 'https://feeds.feedburner.com/TechCrunch',  name: 'TechCrunch',             lang: 'en', cat: 'science' },
+  { url: 'https://www.wired.com/feed/rss',           name: 'Wired',                  lang: 'en', cat: 'science' },
+  { url: 'https://feeds.arstechnica.com/arstechnica/index',
+                                                    name: 'Ars Technica',             lang: 'en', cat: 'science' },
+  { url: 'https://www.sciencedaily.com/rss/all.xml', name: 'Science Daily',          lang: 'en', cat: 'science' },
+  { url: 'https://news.google.com/rss/search?q=nepal+technology+innovation&hl=en&gl=NP&ceid=NP:en',
+                                                    name: 'Nepal Tech News',          lang: 'en', cat: 'science' },
+];
+
+/* Nepali Movies & Entertainment (Nepal-sourced only) */
+const RSS_NEPALI_ENT = [
+  /* Nepali Devanagari searches — highest priority */
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%A8%E0%A5%87%E0%A4%AA%E0%A4%BE%E0%A4%B2%E0%A5%80+%E0%A4%9A%E0%A4%B2%E0%A4%9A%E0%A4%BF%E0%A4%A4%E0%A5%8D%E0%A4%B0&hl=ne&gl=NP&ceid=NP:ne',
+                                                    name: 'Google नेपाली चलचित्र',     lang: 'ne', cat: 'nepali-ent' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%A8%E0%A5%87%E0%A4%AA%E0%A4%BE%E0%A4%B2%E0%A5%80+%E0%A4%AE%E0%A4%A8%E0%A5%8B%E0%A4%B0%E0%A4%9E%E0%A5%8D%E0%A4%9C%E0%A4%A8+%E0%A4%95%E0%A4%B2%E0%A4%BE%E0%A4%95%E0%A4%BE%E0%A4%B0&hl=ne&gl=NP&ceid=NP:ne',
+                                                    name: 'Google नेपाली कलाकार',      lang: 'ne', cat: 'nepali-ent' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%A8%E0%A5%87%E0%A4%AA%E0%A4%BE%E0%A4%B2%E0%A5%80+%E0%A4%97%E0%A4%BE%E0%A4%AF%E0%A4%95+%E0%A4%97%E0%A4%BE%E0%A4%AF%E0%A4%BF%E0%A4%95%E0%A4%BE&hl=ne&gl=NP&ceid=NP:ne',
+                                                    name: 'Google नेपाली गायक',        lang: 'ne', cat: 'nepali-ent' },
+  /* Nepal entertainment English-language searches */
+  { url: 'https://news.google.com/rss/search?q=nepali+movie+film+actor+actress+nepal&hl=en&gl=NP&ceid=NP:en',
+                                                    name: 'Google Nepali Film EN',    lang: 'en', cat: 'nepali-ent' },
+  { url: 'https://news.google.com/rss/search?q=nepal+entertainment+celebrity+music+cinema&hl=en&gl=NP&ceid=NP:en',
+                                                    name: 'Google Nepal Celebrity',   lang: 'en', cat: 'nepali-ent' },
+  /* Nepali news outlets — entertainment sections */
+  { url: 'https://www.ratopati.com/category/entertainment/feed',
+                                                    name: 'Ratopati Ent',             lang: 'ne', cat: 'nepali-ent' },
+  { url: 'https://ekantipur.com/rss/entertainment',
+                                                    name: 'Ekantipur Ent',            lang: 'ne', cat: 'nepali-ent' },
+  { url: 'https://www.onlinekhabar.com/content/entertainment/feed',
+                                                    name: 'OnlineKhabar Ent',         lang: 'ne', cat: 'nepali-ent' },
+];
+
+/* Bhojpuri / Bihar — regional states news + Bhojpuri film industry */
+const RSS_BHOJPURI = [
+  /* Bihar & Bhojpuri-speaking states news (Hindi only) */
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%AC%E0%A4%BF%E0%A4%B9%E0%A4%BE%E0%A4%B0+%E0%A4%B8%E0%A4%AE%E0%A4%BE%E0%A4%9A%E0%A4%BE%E0%A4%B0&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google बिहार समाचार',       lang: 'hi', cat: 'bhojpuri' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%AA%E0%A4%9F%E0%A4%A8%E0%A4%BE+%E0%A4%B8%E0%A4%AE%E0%A4%BE%E0%A4%9A%E0%A4%BE%E0%A4%B0&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google पटना समाचार',        lang: 'hi', cat: 'bhojpuri' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%9D%E0%A4%BE%E0%A4%B0%E0%A4%96%E0%A4%82%E0%A4%A1+%E0%A4%B8%E0%A4%AE%E0%A4%BE%E0%A4%9A%E0%A4%BE%E0%A4%B0&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google झारखंड समाचार',      lang: 'hi', cat: 'bhojpuri' },
+  /* Bhojpuri film industry */
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%AD%E0%A5%8B%E0%A4%9C%E0%A4%AA%E0%A5%81%E0%A4%B0%E0%A5%80+%E0%A4%AB%E0%A4%BF%E0%A4%B2%E0%A5%8D%E0%A4%AE&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google भोजपुरी फिल्म',      lang: 'hi', cat: 'bhojpuri' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%AD%E0%A5%8B%E0%A4%9C%E0%A4%AA%E0%A5%81%E0%A4%B0%E0%A5%80+%E0%A4%97%E0%A4%BE%E0%A4%A8%E0%A4%BE+%E0%A4%B8%E0%A5%8D%E0%A4%9F%E0%A4%BE%E0%A4%B0&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google भोजपुरी गाना स्टार',  lang: 'hi', cat: 'bhojpuri' },
+  { url: 'https://news.google.com/rss/search?q=pawan+singh+khesari+bhojpuri&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google Pawan-Khesari (HI)', lang: 'hi', cat: 'bhojpuri' },
+  /* Direct outlet RSS for Bihar — include native images */
+  { url: 'https://feeds.bbci.co.uk/hindi/india/rss.xml',
+                                                    name: 'BBC Hindi India',          lang: 'hi', cat: 'bhojpuri' },
+  { url: 'https://www.ndtv.com/rss/india',
+                                                    name: 'NDTV India (Bihar)',       lang: 'hi', cat: 'bhojpuri' },
+  { url: 'https://timesofindia.indiatimes.com/rssfeeds/913168846.cms',
+                                                    name: 'Times of India Bihar',     lang: 'en', cat: 'bhojpuri' },
+];
+
+/* Hindi / Bollywood Movies & Entertainment */
+const RSS_HINDI_ENT = [
+  /* Devanagari Hindi searches */
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%AC%E0%A5%89%E0%A4%B2%E0%A5%80%E0%A4%B5%E0%A5%81%E0%A4%A1+%E0%A4%AB%E0%A4%BF%E0%A4%B2%E0%A5%8D%E0%A4%AE&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google बॉलीवुड फिल्म',      lang: 'hi', cat: 'hindi-ent' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%B9%E0%A4%BF%E0%A4%82%E0%A4%A6%E0%A5%80+%E0%A4%B8%E0%A4%BF%E0%A4%A8%E0%A5%87%E0%A4%AE%E0%A4%BE+%E0%A4%85%E0%A4%AD%E0%A4%BF%E0%A4%A8%E0%A5%87%E0%A4%A4%E0%A4%BE&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google हिंदी सिनेमा',       lang: 'hi', cat: 'hindi-ent' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%AC%E0%A5%89%E0%A4%B2%E0%A5%80%E0%A4%B5%E0%A5%81%E0%A4%A1+%E0%A4%B8%E0%A4%AE%E0%A4%BE%E0%A4%9A%E0%A4%BE%E0%A4%B0&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google बॉलीवुड समाचार',     lang: 'hi', cat: 'hindi-ent' },
+  /* English searches */
+  { url: 'https://news.google.com/rss/search?q=bollywood+movie+actor+actress+2025&hl=en&gl=IN&ceid=IN:en',
+                                                    name: 'Google Bollywood (EN)',    lang: 'en', cat: 'hindi-ent' },
+  { url: 'https://news.google.com/rss/search?q=bollywood+film+box+office+trending+viral&hl=en&gl=IN&ceid=IN:en',
+                                                    name: 'Google Bollywood Viral',   lang: 'en', cat: 'hindi-ent' },
+  /* Entertainment Google topic feed — includes media thumbnails */
+  { url: 'https://news.google.com/rss/topics/CAAqIQgKIhtDQkFTRGdvSUwyMHZNRFp1YnpJU0FtaHBLQUFQAQ?hl=en&gl=IN&ceid=IN:en',
+                                                    name: 'Google Entertainment IN',  lang: 'en', cat: 'hindi-ent' },
+  /* Direct outlet RSS — include native images */
+  { url: 'https://www.filmfare.com/feeds/news/rss.xml',
+                                                    name: 'Filmfare',                 lang: 'en', cat: 'hindi-ent' },
+  { url: 'https://www.pinkvilla.com/rss/all.xml',
+                                                    name: 'Pinkvilla',                lang: 'en', cat: 'hindi-ent' },
+  { url: 'https://www.ndtv.com/rss/entertainment',
+                                                    name: 'NDTV Entertainment',       lang: 'en', cat: 'hindi-ent' },
+  { url: 'https://timesofindia.indiatimes.com/rssfeeds/1081479906.cms',
+                                                    name: 'TOI Entertainment',        lang: 'en', cat: 'hindi-ent' },
+];
+
+/* World Top Trending */
+const RSS_WORLD = [
+  { url: 'https://news.google.com/rss/headlines/section/topic/WORLD?hl=en&gl=US&ceid=US:en',
+                                                    name: 'Google World News',        lang: 'en', cat: 'world' },
+  { url: 'https://feeds.bbci.co.uk/news/world/rss.xml',
+                                                    name: 'BBC World',                lang: 'en', cat: 'world' },
+  { url: 'https://www.aljazeera.com/xml/rss/all.xml',
+                                                    name: 'Al Jazeera',               lang: 'en', cat: 'world' },
+  { url: 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
+                                                    name: 'NY Times World',           lang: 'en', cat: 'world' },
+  { url: 'https://trends.google.com/trending/rss?geo=US',
+                                                    name: 'Google Trends US',         lang: 'en', cat: 'world', isTrendsSource: true },
+];
+
+/* India News — Hindi */
+const RSS_INDIA_HI = [
+  { url: 'https://news.google.com/rss/headlines/section/geo/IN?hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google India (हिंदी)',      lang: 'hi', cat: 'india-hi' },
+  { url: 'https://feeds.bbci.co.uk/hindi/rss.xml',
+                                                    name: 'BBC हिंदी',                 lang: 'hi', cat: 'india-hi' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%AD%E0%A4%BE%E0%A4%B0%E0%A4%A4+%E0%A4%B8%E0%A4%AE%E0%A4%BE%E0%A4%9A%E0%A4%BE%E0%A4%B0&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google भारत समाचार',        lang: 'hi', cat: 'india-hi' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%B0%E0%A4%BE%E0%A4%9C%E0%A4%A8%E0%A5%80%E0%A4%A4%E0%A4%BF+%E0%A4%AD%E0%A4%BE%E0%A4%B0%E0%A4%A4&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google राजनीति भारत',        lang: 'hi', cat: 'india-hi' },
+  { url: 'https://news.google.com/rss/search?q=%E0%A4%85%E0%A4%B0%E0%A5%8D%E0%A4%A5%E0%A4%B5%E0%A5%8D%E0%A4%AF%E0%A4%B5%E0%A4%B8%E0%A5%8D%E0%A4%A5%E0%A4%BE+%E0%A4%AD%E0%A4%BE%E0%A4%B0%E0%A4%A4&hl=hi&gl=IN&ceid=IN:hi',
+                                                    name: 'Google अर्थव्यवस्था',         lang: 'hi', cat: 'india-hi' },
+];
+
+/* India News — English */
+const RSS_INDIA_EN = [
+  { url: 'https://news.google.com/rss/headlines/section/geo/IN?hl=en&gl=IN&ceid=IN:en',
+                                                    name: 'Google India News (EN)',   lang: 'en', cat: 'india-en' },
+  { url: 'https://feeds.bbci.co.uk/news/world/asia/india/rss.xml',
+                                                    name: 'BBC India',                lang: 'en', cat: 'india-en' },
+  { url: 'https://www.thehindu.com/news/national/feeder/default.rss',
+                                                    name: 'The Hindu',                lang: 'en', cat: 'india-en' },
+  { url: 'https://timesofindia.indiatimes.com/rssfeeds/296589292.cms',
+                                                    name: 'Times of India',           lang: 'en', cat: 'india-en' },
+  { url: 'https://news.google.com/rss/search?q=india+politics+economy+news&hl=en&gl=IN&ceid=IN:en',
+                                                    name: 'Google India Trending',    lang: 'en', cat: 'india-en' },
+];
+
+/* ── Breaking Tweets — top news influencer accounts via RSSHub / Nitter ── */
+const RSS_TWITTER = [
+  /* ── RSSHub public instance (primary) ── */
+  { url: 'https://rsshub.app/twitter/user/ANI',          name: '🐦 ANI (@ANI)',             lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/ndtv',         name: '🐦 NDTV (@ndtv)',           lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/BBCBreaking',  name: '🐦 BBC Breaking',           lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/Reuters',      name: '🐦 Reuters (@Reuters)',      lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/AajTak',       name: '🐦 Aaj Tak (@AajTak)',      lang: 'hi', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/IndiaToday',   name: '🐦 India Today',            lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/TimesNow',     name: '🐦 Times Now',              lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/ABPNews_',     name: '🐦 ABP News',               lang: 'hi', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/PTINews',      name: '🐦 PTI News (@PTINews)',    lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/OnlineKhabar', name: '🐦 Online Khabar',          lang: 'ne', cat: 'twitter', isTwitter: true },
+  { url: 'https://rsshub.app/twitter/user/setopati',     name: '🐦 Setopati',               lang: 'ne', cat: 'twitter', isTwitter: true },
+  /* ── Nitter fallback instances ── */
+  { url: 'https://nitter.poast.org/ANI/rss',             name: '🐦 ANI [nitter]',           lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://nitter.poast.org/BBCBreaking/rss',     name: '🐦 BBC Breaking [nitter]',  lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://nitter.poast.org/ndtv/rss',            name: '🐦 NDTV [nitter]',          lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://nitter.poast.org/Reuters/rss',         name: '🐦 Reuters [nitter]',       lang: 'en', cat: 'twitter', isTwitter: true },
+  { url: 'https://nitter.poast.org/AajTak/rss',          name: '🐦 Aaj Tak [nitter]',       lang: 'hi', cat: 'twitter', isTwitter: true },
+  /* ── Reliable wire/agency RSS (always-on fallbacks with images) ── */
+  { url: 'https://aninews.in/rss/national.rss',          name: '📡 ANI Wire',               lang: 'en', cat: 'twitter' },
+  { url: 'https://www.ndtv.com/rss/india',               name: '📡 NDTV Breaking',          lang: 'en', cat: 'twitter' },
+  { url: 'https://feeds.bbci.co.uk/news/rss.xml',        name: '📡 BBC News',               lang: 'en', cat: 'twitter' },
+  { url: 'https://timesofindia.indiatimes.com/rssfeeds/296589292.cms',
+                                                          name: '📡 Times of India',         lang: 'en', cat: 'twitter' },
+  { url: 'https://www.onlinekhabar.com/feed',            name: '📡 Online Khabar',          lang: 'ne', cat: 'twitter' },
+];
+
+/* ── Active news tab ─────────────────────────────────────────────────────── */
+let _activeNewsTab = 'nepal';   /* 'nepal' | 'science' | 'nepali-ent' | 'bhojpuri' | 'hindi-ent' | 'india-hi' | 'india-en' | 'twitter' | 'locations' | 'world' */
+
+/* Per-category article caches (populated on first tab open) */
+const _catArticles = { 'nepal': [], 'science': [], 'nepali-ent': [], 'bhojpuri': [], 'hindi-ent': [], 'india-hi': [], 'india-en': [], 'twitter': [], 'world': [] };
+const _catLoaded   = { 'nepal': false, 'science': false, 'nepali-ent': false, 'bhojpuri': false, 'hindi-ent': false, 'india-hi': false, 'india-en': false, 'twitter': false, 'world': false };
+
+/* ── Location-based news ─────────────────────────────────────────────────── */
+let _locationFeeds = [];    /* [{ label, countryCode, articles, loaded }] */
 const RSS2JSON = 'https://api.rss2json.com/v1/api.json?rss_url=';
 
 /* Public CORS proxies tried in order when not on localhost.
@@ -170,7 +329,8 @@ let _cachedNewsImg = null;
    _compositeMode = true when at least one sprite is active.
    ──────────────────────────────────────────────────────────────── */
 let _sideSprites   = [];        // dynamic array of sprite objects
-let _compositeMode = false;     // true when _sideSprites.length > 0
+let _compositeMode  = false;     // true w
+let _circleClipMode = false;     // clip composite sprites to circle shapehen _sideSprites.length > 0
 let _nextSpriteId  = 1;         // auto-increment id
 let _selectedSpriteId = null;   // which sprite has handles shown
 
@@ -226,11 +386,19 @@ let _authorImgPromise = null;
 
 /* Text overlay customisation (editable via the Text Editor modal) */
 let _textOpts = {
-  bannerText:  '🚨  BREAKING NEWS',
+  bannerText:  '',
   bannerColor: '#c0392b',
   titleColor:  '#ffffff',
   titleSize:   62,
 };
+
+/* Cached banner label - picked once per generateImage / reimagineImage call.
+   Plain-text ONLY - emojis render as boxes on HTML Canvas. */
+let _currentBannerLabel = 'BREAKING NEWS';
+const _BANNER_LABELS_POOL = ['BREAKING NEWS', 'LATEST UPDATE', 'UPDATE', 'BREAKING', 'NEWS UPDATE', 'TRENDING NOW', 'JUST IN'];
+function _pickRandomBanner() {
+  _currentBannerLabel = _BANNER_LABELS_POOL[Math.floor(Math.random() * _BANNER_LABELS_POOL.length)];
+}
 
 /* ── Image colour tint / grade settings ─────────────────────────
    preset  = 'cinematic' | 'warm' | 'cool' | 'dramatic' | 'vintage' |
@@ -299,6 +467,8 @@ async function fetchNews() {
     </div>`).join('');
 
   document.getElementById('statusBadge').textContent = `Fetching ${RSS_FEEDS.length} sources…`;
+
+  try {
 
   /* Fetch all feeds in parallel — collect whatever succeeds */
   const results = await Promise.allSettled(
@@ -421,47 +591,74 @@ async function fetchNews() {
   });
 
   /* ── SORT STRATEGY ───────────────────────────────────────────────
-     TOP 2  : The 2 freshest articles that have at least some viral
-              potential (published < 6h AND has ≥1 viral keyword or
-              cross-source match, or published < 1h regardless).
-              If fewer than 2 qualify, fill up with the next-newest.
-              Both top-2 slots are ordered newest-first.
+     TOP 10 : The 10 freshest UNIQUE articles with some viral potential
+              (published < 24h). All unique (strict title dedup).
+              Ordered newest-first.
      REST   : Remaining articles sorted by viralScore (trending /
               popularity / cross-source) descending.
      ─────────────────────────────────────────────────────────────── */
 
-  /* Candidates: articles < 6h old with some viral potential */
-  const freshViralCandidates = allItems
+  /* Candidates: articles < 24h old with some potential */
+  const freshCandidates = allItems
     .filter(a => {
       const ageH = Math.max(0, (now - new Date(a.pubDate).getTime()) / 3600000);
-      const hasPotential = a.viralScore > 0.25 || a._crossCount >= 1 || ageH < 1;
-      return ageH < 6 && hasPotential;
+      const hasPotential = a.viralScore > 0.15 || a._crossCount >= 1 || ageH < 2;
+      return ageH < 24 && hasPotential;
     })
     .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
 
-  /* If we have fewer than 2 fresh-viral candidates, fill with next-newest articles */
+  /* Fill top-10 set with unique articles — strict title similarity check */
   const allByDate = [...allItems].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-  const top2Set = new Set();
-  for (const a of freshViralCandidates) { if (top2Set.size < 2) top2Set.add(a); }
-  if (top2Set.size < 2) {
-    for (const a of allByDate) { if (!top2Set.has(a) && top2Set.size < 2) top2Set.add(a); }
+  const top10Set = new Set();
+  const top10Titles = [];
+  const _isSimilarTitle = (t1, t2) => {
+    const w1 = new Set(t1.toLowerCase().replace(/[^\w\s\u0900-\u097F]/g,'').split(/\s+/).filter(w=>w.length>3));
+    const w2 = new Set(t2.toLowerCase().replace(/[^\w\s\u0900-\u097F]/g,'').split(/\s+/).filter(w=>w.length>3));
+    const common = [...w1].filter(w => w2.has(w)).length;
+    return common >= 3; // 3+ shared significant words = duplicate story
+  };
+  for (const a of freshCandidates) {
+    if (top10Set.size >= 10) break;
+    if (top10Titles.some(t => _isSimilarTitle(t, a.title))) continue; // skip near-duplicate
+    top10Set.add(a);
+    top10Titles.push(a.title);
+  }
+  // If we still have fewer than 10, fill with next-newest unique articles
+  if (top10Set.size < 10) {
+    for (const a of allByDate) {
+      if (top10Set.size >= 10) break;
+      if (top10Set.has(a)) continue;
+      if (top10Titles.some(t => _isSimilarTitle(t, a.title))) continue;
+      top10Set.add(a);
+      top10Titles.push(a.title);
+    }
   }
 
-  /* Mark top-2 articles so UI can badge them */
-  top2Set.forEach(a => { a._isLatestTop = true; });
+  /* Mark top-10 articles so UI can badge them */
+  top10Set.forEach(a => { a._isLatestTop = true; });
 
-  const top2    = [...top2Set].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  const top10   = [...top10Set].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
   const theRest = allItems
-    .filter(a => !top2Set.has(a))
+    .filter(a => !top10Set.has(a))
     .sort((a, b) => b.viralScore - a.viralScore || new Date(b.pubDate) - new Date(a.pubDate));
 
-  allItems = [...top2, ...theRest];
+  allItems = [...top10, ...theRest];
 
   articles = allItems;
+  _catArticles['nepal'] = allItems;
+  _catLoaded['nepal']   = true;
+  /* Switch to Nepal tab if not already there */
+  if (_activeNewsTab !== 'nepal') switchNewsTab('nepal');
   renderNewsList();
   document.getElementById('statusBadge').textContent = `${articles.length} articles · ${successCount} sources`;
   toast(`✅ ${articles.length} articles from ${successCount} sources`, 'success');
   setFetchState(false);
+  } catch (err) {
+    console.error('[fetchNews] CRASH:', err);
+    setFetchState(false);
+    document.getElementById('statusBadge').textContent = 'Error — check console';
+    toast('❌ fetchNews crashed: ' + err.message, 'error', 8000);
+  }
 }
 
 async function fetchSingleFeed(feed) {
@@ -527,7 +724,8 @@ async function fetchSingleFeed(feed) {
       const fullText  = (tempDiv.textContent || tempDiv.innerText || '').replace(/\s+/g, ' ').trim();
       return {
         title, description: fullText.slice(0, 1500), rawHtml: item.description || '', imageUrl,
-        pubDate, link, source: feed.name, sourceLang: feed.lang, fullArticleText: null,
+        pubDate, link, source: feed.name, sourceLang: feed.lang,
+        isTwitter: !!feed.isTwitter, fullArticleText: null,
       };
     });
   } catch {
@@ -609,6 +807,18 @@ function parseRssXml(xml, feed) {
         const imgMatch = rawHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
         if (imgMatch) imageUrl = imgMatch[1];
       }
+      /* Fallback: parse as HTML DOM (catches entity-encoded descriptions) */
+      if (!imageUrl) {
+        const imgEl = tempDiv.querySelector('img');
+        if (imgEl) imageUrl = imgEl.getAttribute('src') || imgEl.src || '';
+      }
+      /* For Google News: strip lh3.googleusercontent.com/proxy/ wrapper to get the real image URL */
+      if (imageUrl && imageUrl.includes('googleusercontent.com/proxy/')) {
+        try {
+          const inner = decodeURIComponent(imageUrl.split('/proxy/')[1].split('=')[0]);
+          if (inner.startsWith('http')) imageUrl = inner;
+        } catch {/* keep original */}
+      }
 
       /* For Google News, extract the real publisher name from <source> */
       const publisher = isGoogleNews
@@ -617,13 +827,858 @@ function parseRssXml(xml, feed) {
 
       return {
         title, description: plainText.slice(0, 1500), rawHtml, imageUrl,
-        pubDate, link, source: publisher, sourceLang: feed.lang, fullArticleText: null,
+        pubDate, link, source: publisher, sourceLang: feed.lang,
+        isTwitter: !!feed.isTwitter, fullArticleText: null,
       };
     });
   } catch (e) {
     console.warn('[parseRssXml] failed:', e.message);
     return [];
   }
+}
+
+/* ================================================================
+   CATEGORY NEWS FETCHING
+   Generic fetcher for any array of RSS_* feed configs.
+   Scores articles by recency + viral keywords (simple version).
+================================================================ */
+
+/**
+ * Fetch & score a list of feed configs; returns sorted article array.
+ * Writes results into _catArticles[catKey] and sets _catLoaded[catKey].
+ */
+async function fetchCategoryFeeds(feedList, catKey) {
+  const results = await Promise.allSettled(feedList.map(f => fetchSingleFeed(f)));
+  let allItems = [];
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value.length) allItems.push(...r.value);
+  }
+  /* De-dupe */
+  const seen = new Set();
+  allItems = allItems.filter(a => {
+    const key = a.title.replace(/\s+/g, '').toLowerCase().slice(0, 40);
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+  /* Simple viral score */
+  const now = Date.now();
+  allItems.forEach(a => {
+    const ageH = Math.max(0, (now - new Date(a.pubDate).getTime()) / 3600000);
+    const recency = ageH < 2 ? 1.0 : ageH < 6 ? 0.85 : Math.max(0, (48 - ageH) / 48);
+    const text = (a.title + ' ' + a.description).toLowerCase();
+    const kw = VIRAL_KEYWORDS.filter(k => text.includes(k.toLowerCase())).length;
+    a.viralScore = recency * 0.60 + Math.min(kw / 3, 1.0) * 0.40;
+    a.isTrending = kw >= 2 && ageH < 6;
+    a.isViral    = a.viralScore > 0.55;
+    a._crossCount = 0; a._trendsMatch = false; a._isLatestTop = false;
+  });
+
+  /* ── Same top-10 unique strategy as fetchNews():
+     TOP 10 : Freshest unique articles (<24h) with some viral potential, newest-first.
+     REST   : Remaining articles sorted by viralScore descending.
+  ── */
+  const freshCandidates2 = allItems
+    .filter(a => {
+      const ageH = Math.max(0, (now - new Date(a.pubDate).getTime()) / 3600000);
+      return ageH < 24 && (a.viralScore > 0.15 || a._crossCount >= 1 || ageH < 2);
+    })
+    .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+
+  const allByDate2 = [...allItems].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  const _simTitle2 = (t1, t2) => {
+    const w1 = new Set(t1.toLowerCase().replace(/[^\w\s\u0900-\u097F]/g,'').split(/\s+/).filter(w=>w.length>3));
+    const w2 = new Set(t2.toLowerCase().replace(/[^\w\s\u0900-\u097F]/g,'').split(/\s+/).filter(w=>w.length>3));
+    return [...w1].filter(w => w2.has(w)).length >= 3;
+  };
+  const top10Set2 = new Set();
+  const top10Titles2 = [];
+  for (const a of freshCandidates2) {
+    if (top10Set2.size >= 10) break;
+    if (top10Titles2.some(t => _simTitle2(t, a.title))) continue;
+    top10Set2.add(a); top10Titles2.push(a.title);
+  }
+  if (top10Set2.size < 10) {
+    for (const a of allByDate2) {
+      if (top10Set2.size >= 10) break;
+      if (top10Set2.has(a)) continue;
+      if (top10Titles2.some(t => _simTitle2(t, a.title))) continue;
+      top10Set2.add(a); top10Titles2.push(a.title);
+    }
+  }
+  top10Set2.forEach(a => { a._isLatestTop = true; });
+
+  const top10_2  = [...top10Set2].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  const theRest2 = allItems
+    .filter(a => !top10Set2.has(a))
+    .sort((a, b) => b.viralScore - a.viralScore || new Date(b.pubDate) - new Date(a.pubDate));
+
+  allItems = [...top10_2, ...theRest2];
+  if (catKey) {
+    /* Tag each article with its category and source feed metadata */
+    allItems.forEach(a => { a._category = catKey; });
+    /* For twitter tab, mark items sourced from actual Twitter RSS feeds with isTwitter flag */
+    if (catKey === 'twitter') {
+      allItems.forEach(a => {
+        if (!a.isTwitter) {
+          const feed = feedList.find(f => f.isTwitter && a.source && a.source.includes(f.name.replace('🐦 ','').split(' ')[0]));
+          if (feed) a.isTwitter = true;
+          /* Also mark by source name containing '🐦' */
+          if (a.source && a.source.startsWith('🐦')) a.isTwitter = true;
+        }
+      });
+    }
+    _catArticles[catKey] = allItems;
+    _catLoaded[catKey]   = true;
+  }
+  return allItems;
+}
+
+/* ── Location-based feeds ────────────────────────────────────────────── */
+
+/**
+ * Known Nepal local/district RSS feeds.
+ * Key = lowercase normalised location name (and common aliases).
+ * Value = array of feed descriptors { url, name, lang }
+ *
+ * Priority order inside each entry:
+ *   1. Local/district-specific RSS outlets
+ *   2. Province/regional outlets
+ *   3. Mainstream Nepali outlets filtered by location keyword
+ */
+const _NEPAL_LOCAL_FEEDS = {
+  /* ── Bara / Kalaiya ───────────────────────────────────────────── */
+  'kalaiya': [
+    /* ── Confirmed working RSS feeds for Kalaiya / Bara / Madhesh ── */
+    { url: 'https://madheshpost.com/feed/', name: 'Madhesh Post', lang: 'ne' },
+    { url: 'https://www.onlinekhabar.com/location/madhesh-pradesh/feed', name: 'OnlineKhabar Madhesh', lang: 'ne' },
+    { url: 'https://ratopati.com/category/madhesh/feed', name: 'Ratopati Madhesh', lang: 'ne' },
+    { url: 'https://setopati.com/category/madhesh/feed', name: 'Setopati Madhesh', lang: 'ne' },
+    { url: 'https://nagariknews.nagariknetwork.com/category/madhesh/feed', name: 'Nagarik Madhesh', lang: 'ne' },
+    { url: 'https://annapurnapost.com/rss/', name: 'Annapurna Post', lang: 'ne' },
+    /* ── Social media (Facebook pages via RSSHub public instance) ── */
+    /* Popular Kalaiya/Bara FB news pages — newest posts first */
+    { url: 'https://rsshub.app/facebook/page/KalaiyaOnlineNews', name: 'FB: Kalaiya Online News', lang: 'ne', _isSocial: true },
+    { url: 'https://rsshub.app/facebook/page/BaraDistrictNews', name: 'FB: Bara District News', lang: 'ne', _isSocial: true },
+    { url: 'https://rsshub.app/facebook/page/MadheshKhabar', name: 'FB: Madhesh Khabar', lang: 'ne', _isSocial: true },
+    { url: 'https://rsshub.app/facebook/page/kalaiyasamachar', name: 'FB: Kalaiya Samachar', lang: 'ne', _isSocial: true },
+    { url: 'https://rsshub.app/facebook/page/BirgunjNews24', name: 'FB: Birgunj News 24', lang: 'ne', _isSocial: true },
+    /* ── Google News — कलैया specific, newest first (when:2d) ── */
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कलैया')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: कलैया', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कलैया समाचार')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: कलैया समाचार', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Kalaiya Nepal')}&hl=en&gl=NP&ceid=NP:en&tbs=sbd:1`, name: 'Google: Kalaiya EN', lang: 'en' },
+    /* ── Google News — बारा district ── */
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बारा')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: बारा', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बारा जिल्ला')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: बारा जिल्ला', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Bara district Nepal')}&hl=en&gl=NP&ceid=NP:en&tbs=sbd:1`, name: 'Google: Bara EN', lang: 'en' },
+    /* ── Google News — Madhesh Pradesh (Province 2) ── */
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('मधेश प्रदेश')}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`, name: 'Google: मधेश प्रदेश', lang: 'ne' },
+  ],
+  'bara': 'kalaiya', /* alias — same feeds */
+  /* ── Kathmandu ─────────────────────────────────────────────────── */
+  'kathmandu': [
+    { url: 'https://kathmandupost.com/rss', name: 'Kathmandu Post', lang: 'en' },
+    { url: 'https://onlinekhabar.com/feed', name: 'OnlineKhabar', lang: 'ne' },
+    { url: 'https://setopati.com/feed', name: 'Setopati', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('काठमाडौं')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: काठमाडौं', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Kathmandu')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Kathmandu', lang: 'en' },
+  ],
+  'ktm': 'kathmandu', /* alias */
+  /* ── Pokhara ───────────────────────────────────────────────────── */
+  'pokhara': [
+    { url: 'https://gandakipost.com/feed/', name: 'Gandaki Post', lang: 'ne' },
+    { url: 'https://pokharanews.com/feed/', name: 'Pokhara News', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('पोखरा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: पोखरा', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Pokhara')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Pokhara', lang: 'en' },
+  ],
+  /* ── Biratnagar / Morang ───────────────────────────────────────── */
+  'biratnagar': [
+    { url: 'https://biratnagarmirror.com/feed/', name: 'Biratnagar Mirror', lang: 'ne' },
+    { url: 'https://koshipost.com/feed/', name: 'Koshi Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('विराटनगर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: विराटनगर', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Biratnagar Morang')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Biratnagar', lang: 'en' },
+  ],
+  'morang': 'biratnagar',
+  /* ── Jhapa / Birtamode ─────────────────────────────────────────── */
+  'jhapa': [
+    { url: 'https://mechi.news/feed/', name: 'Mechi News', lang: 'ne' },
+    { url: 'https://jhapanews.com/feed/', name: 'Jhapa News', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('झापा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: झापा', lang: 'ne' },
+  ],
+  'birtamode': 'jhapa',
+  /* ── Chitwan / Bharatpur ───────────────────────────────────────── */
+  'chitwan': [
+    { url: 'https://chitwanpost.com/feed/', name: 'Chitwan Post', lang: 'ne' },
+    { url: 'https://chitwanchronicle.com/feed/', name: 'Chitwan Chronicle', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('चितवन')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: चितवन', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Chitwan Bharatpur')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Chitwan', lang: 'en' },
+  ],
+  'bharatpur': 'chitwan',
+  /* ── Butwal / Rupandehi ────────────────────────────────────────── */
+  'butwal': [
+    { url: 'https://butwaltoday.com/feed/', name: 'Butwal Today', lang: 'ne' },
+    { url: 'https://rupandehipost.com/feed/', name: 'Rupandehi Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बुटवल')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: बुटवल', lang: 'ne' },
+  ],
+  'rupandehi': 'butwal',
+  /* ── Birgunj / Parsa ───────────────────────────────────────────── */
+  'birgunj': [
+    { url: 'https://birgunjtoday.com/feed/', name: 'Birgunj Today', lang: 'ne' },
+    { url: 'https://parsapost.com/feed/', name: 'Parsa Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('वीरगन्ज')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: वीरगन्ज', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Birgunj Parsa')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Birgunj', lang: 'en' },
+  ],
+  'parsa': 'birgunj',
+  /* ── Dhangadhi / Kailali ───────────────────────────────────────── */
+  'dhangadhi': [
+    { url: 'https://sudurpaschimpost.com/feed/', name: 'Sudurpaschim Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('धनगढी')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: धनगढी', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Dhangadhi Kailali')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Dhangadhi', lang: 'en' },
+  ],
+  'kailali': 'dhangadhi',
+  /* ── Nepalgunj / Banke ─────────────────────────────────────────── */
+  'nepalgunj': [
+    { url: 'https://midwesternherald.com/feed/', name: 'Midwestern Herald', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('नेपालगन्ज')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: नेपालगन्ज', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Nepalgunj Banke')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Nepalgunj', lang: 'en' },
+  ],
+  'banke': 'nepalgunj',
+  /* ── Hetauda / Makwanpur ───────────────────────────────────────── */
+  'hetauda': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('हेटौंडा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: हेटौंडा', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Hetauda Makwanpur')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Hetauda', lang: 'en' },
+  ],
+  'makwanpur': 'hetauda',
+  /* ── Janakpur / Dhanusha ───────────────────────────────────────── */
+  'janakpur': [
+    { url: 'https://janakpurpost.com/feed/', name: 'Janakpur Post', lang: 'ne' },
+    { url: 'https://madheshpost.com/feed/', name: 'Madhesh Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('जनकपुर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: जनकपुर', lang: 'ne' },
+  ],
+  'dhanusha': 'janakpur',
+  /* ── Itahari / Sunsari ─────────────────────────────────────────── */
+  'itahari': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('इटहरी')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: इटहरी', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Itahari Sunsari')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Itahari', lang: 'en' },
+  ],
+  'sunsari': 'itahari',
+  /* ── Damak / Jhapa ─────────────────────────────────────────────── */
+  'damak': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('दमक')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: दमक', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Damak Jhapa')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Damak', lang: 'en' },
+  ],
+  /* ── Lalitpur / Patan ──────────────────────────────────────────── */
+  'lalitpur': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('ललितपुर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: ललितपुर', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Lalitpur Patan Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Lalitpur', lang: 'en' },
+  ],
+  'patan': 'lalitpur',
+  /* ── Bhaktapur ─────────────────────────────────────────────────── */
+  'bhaktapur': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('भक्तपुर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: भक्तपुर', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Bhaktapur')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Bhaktapur', lang: 'en' },
+  ],
+  /* ── Rautahat / Gaur ───────────────────────────────────────────── */
+  'rautahat': [
+    { url: 'https://madheshpost.com/feed/', name: 'Madhesh Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('रौतहट')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: रौतहट', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Rautahat Gaur Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Rautahat', lang: 'en' },
+  ],
+  'gaur': 'rautahat',
+  /* ── Sarlahi ───────────────────────────────────────────────────── */
+  'sarlahi': [
+    { url: 'https://madheshpost.com/feed/', name: 'Madhesh Post', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('सर्लाही')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: सर्लाही', lang: 'ne' },
+  ],
+  /* ── Mahottari / Jaleshwar ─────────────────────────────────────── */
+  'mahottari': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('महोत्तरी')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: महोत्तरी', lang: 'ne' },
+  ],
+  'jaleshwar': 'mahottari',
+  /* ── Siraha ────────────────────────────────────────────────────── */
+  'siraha': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('सिराहा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: सिराहा', lang: 'ne' },
+  ],
+  /* ── Saptari / Rajbiraj ────────────────────────────────────────── */
+  'saptari': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('सप्तरी')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: सप्तरी', lang: 'ne' },
+  ],
+  'rajbiraj': 'saptari',
+  /* ── Udayapur ──────────────────────────────────────────────────── */
+  'udayapur': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('उदयपुर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: उदयपुर', lang: 'ne' },
+  ],
+  /* ── Okhaldhunga ───────────────────────────────────────────────── */
+  'okhaldhunga': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('ओखलढुङ्गा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: ओखलढुङ्गा', lang: 'ne' },
+  ],
+  /* ── Kaski ─────────────────────────────────────────────────────── */
+  'kaski': 'pokhara',
+  /* ── Syangja ───────────────────────────────────────────────────── */
+  'syangja': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('स्याङ्जा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: स्याङ्जा', lang: 'ne' },
+  ],
+  /* ── Tanahun / Damauli ─────────────────────────────────────────── */
+  'tanahun': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('तनहुँ')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: तनहुँ', lang: 'ne' },
+  ],
+  'damauli': 'tanahun',
+  /* ── Gorkha ────────────────────────────────────────────────────── */
+  'gorkha': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('गोरखा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: गोरखा', lang: 'ne' },
+  ],
+  /* ── Lamjung / Besisahar ───────────────────────────────────────── */
+  'lamjung': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('लमजुङ')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: लमजुङ', lang: 'ne' },
+  ],
+  'besisahar': 'lamjung',
+  /* ── Palpa / Tansen ────────────────────────────────────────────── */
+  'palpa': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('पाल्पा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: पाल्पा', lang: 'ne' },
+  ],
+  'tansen': 'palpa',
+  /* ── Nawalpur / Kawasoti ───────────────────────────────────────── */
+  'nawalpur': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('नवलपुर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: नवलपुर', lang: 'ne' },
+  ],
+  /* ── Baglung ───────────────────────────────────────────────────── */
+  'baglung': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बागलुङ')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: बागलुङ', lang: 'ne' },
+  ],
+  /* ── Mustang ───────────────────────────────────────────────────── */
+  'mustang': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('मुस्ताङ')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: मुस्ताङ', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Mustang Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Mustang', lang: 'en' },
+  ],
+  /* ── Solukhumbu / Namche / Everest ─────────────────────────────── */
+  'solukhumbu': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('सोलुखुम्बु')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: सोलुखुम्बु', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Solukhumbu Everest Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Solukhumbu', lang: 'en' },
+  ],
+  'namche': 'solukhumbu',
+  'lukla': 'solukhumbu',
+  /* ── Humla ─────────────────────────────────────────────────────── */
+  'humla': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('हुम्ला')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: हुम्ला', lang: 'ne' },
+  ],
+  /* ── Jumla ─────────────────────────────────────────────────────── */
+  'jumla': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('जुम्ला')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: जुम्ला', lang: 'ne' },
+  ],
+  /* ── Dolpa ─────────────────────────────────────────────────────── */
+  'dolpa': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('डोल्पा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: डोल्पा', lang: 'ne' },
+  ],
+  /* ── Ilam ──────────────────────────────────────────────────────── */
+  'ilam': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('इलाम')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: इलाम', lang: 'ne' },
+  ],
+  /* ── Taplejung ─────────────────────────────────────────────────── */
+  'taplejung': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('ताप्लेजुङ')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: ताप्लेजुङ', lang: 'ne' },
+  ],
+  /* ── Panchthar ─────────────────────────────────────────────────── */
+  'panchthar': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('पाँचथर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: पाँचथर', lang: 'ne' },
+  ],
+  /* ── Dang / Tulsipur ───────────────────────────────────────────── */
+  'dang': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('दाङ')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: दाङ', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Dang Tulsipur Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Dang', lang: 'en' },
+  ],
+  'tulsipur': 'dang',
+  /* ── Surkhet ───────────────────────────────────────────────────── */
+  'surkhet': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('सुर्खेत')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: सुर्खेत', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Surkhet Karnali Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Surkhet', lang: 'en' },
+  ],
+  /* ── Kapilvastu / Taulihawa ────────────────────────────────────── */
+  'kapilvastu': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कपिलवस्तु')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: कपिलवस्तु', lang: 'ne' },
+  ],
+  'taulihawa': 'kapilvastu',
+  /* ── Arghakhanchi ──────────────────────────────────────────────── */
+  'arghakhanchi': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('अर्घाखाँची')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: अर्घाखाँची', lang: 'ne' },
+  ],
+  /* ── Gulmi ─────────────────────────────────────────────────────── */
+  'gulmi': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('गुल्मी')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: गुल्मी', lang: 'ne' },
+  ],
+  /* ── Pyuthan ───────────────────────────────────────────────────── */
+  'pyuthan': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('प्युठान')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: प्युठान', lang: 'ne' },
+  ],
+  /* ── Rolpa ─────────────────────────────────────────────────────── */
+  'rolpa': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('रोल्पा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: रोल्पा', lang: 'ne' },
+  ],
+  /* ── Rukum ─────────────────────────────────────────────────────── */
+  'rukum': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('रुकुम')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: रुकुम', lang: 'ne' },
+  ],
+  /* ── Salyan ────────────────────────────────────────────────────── */
+  'salyan': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('सल्यान')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: सल्यान', lang: 'ne' },
+  ],
+  /* ── Dailekh ───────────────────────────────────────────────────── */
+  'dailekh': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('दैलेख')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: दैलेख', lang: 'ne' },
+  ],
+  /* ── Jajarkot ──────────────────────────────────────────────────── */
+  'jajarkot': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('जाजरकोट')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: जाजरकोट', lang: 'ne' },
+  ],
+  /* ── Kanchanpur / Mahendranagar ────────────────────────────────── */
+  'kanchanpur': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कञ्चनपुर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: कञ्चनपुर', lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('Kanchanpur Mahendranagar Nepal')}&hl=en&gl=NP&ceid=NP:en`, name: 'Google: Kanchanpur', lang: 'en' },
+  ],
+  'mahendranagar': 'kanchanpur',
+  /* ── Dadeldhura ────────────────────────────────────────────────── */
+  'dadeldhura': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('डडेल्धुरा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: डडेल्धुरा', lang: 'ne' },
+  ],
+  /* ── Baitadi ───────────────────────────────────────────────────── */
+  'baitadi': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बैतडी')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: बैतडी', lang: 'ne' },
+  ],
+  /* ── Darchula ──────────────────────────────────────────────────── */
+  'darchula': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('दार्चुला')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: दार्चुला', lang: 'ne' },
+  ],
+  /* ── Achham / Sanfebagar ───────────────────────────────────────── */
+  'achham': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('अछाम')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: अछाम', lang: 'ne' },
+  ],
+  /* ── Bajhang ───────────────────────────────────────────────────── */
+  'bajhang': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बाजहाङ')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: बाजहाङ', lang: 'ne' },
+  ],
+  /* ── Bajura ────────────────────────────────────────────────────── */
+  'bajura': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('बाजुरा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: बाजुरा', lang: 'ne' },
+  ],
+  /* ── Mugu ──────────────────────────────────────────────────────── */
+  'mugu': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('मुगु')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: मुगु', lang: 'ne' },
+  ],
+  /* ── Kalikot ───────────────────────────────────────────────────── */
+  'kalikot': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('कालिकोट')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: कालिकोट', lang: 'ne' },
+  ],
+  /* ── Nuwakot ───────────────────────────────────────────────────── */
+  'nuwakot': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('नुवाकोट')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: नुवाकोट', lang: 'ne' },
+  ],
+  /* ── Rasuwa / Dhunche ──────────────────────────────────────────── */
+  'rasuwa': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('रसुवा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: रसुवा', lang: 'ne' },
+  ],
+  /* ── Sindhupalchok ─────────────────────────────────────────────── */
+  'sindhupalchok': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('सिन्धुपाल्चोक')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: सिन्धुपाल्चोक', lang: 'ne' },
+  ],
+  /* ── Kavrepalanchok / Dhulikhel ────────────────────────────────── */
+  'kavrepalanchok': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('काभ्रेपलान्चोक')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: काभ्रे', lang: 'ne' },
+  ],
+  'dhulikhel': 'kavrepalanchok',
+  /* ── Dolakha / Charikot ────────────────────────────────────────── */
+  'dolakha': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('दोलखा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: दोलखा', lang: 'ne' },
+  ],
+  /* ── Ramechhap ─────────────────────────────────────────────────── */
+  'ramechhap': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('रामेछाप')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: रामेछाप', lang: 'ne' },
+  ],
+  /* ── Sindhuli ──────────────────────────────────────────────────── */
+  'sindhuli': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('सिन्धुली')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: सिन्धुली', lang: 'ne' },
+  ],
+  /* ── Khotang ───────────────────────────────────────────────────── */
+  'khotang': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('खोटाङ')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: खोटाङ', lang: 'ne' },
+  ],
+  /* ── Bhojpur ───────────────────────────────────────────────────── */
+  'bhojpur': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('भोजपुर')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: भोजपुर', lang: 'ne' },
+  ],
+  /* ── Sankhuwasabha / Khandbari ─────────────────────────────────── */
+  'sankhuwasabha': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('संखुवासभा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: संखुवासभा', lang: 'ne' },
+  ],
+  'khandbari': 'sankhuwasabha',
+  /* ── Terhathum ─────────────────────────────────────────────────── */
+  'terhathum': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('तेह्रथुम')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: तेह्रथुम', lang: 'ne' },
+  ],
+  /* ── Dhankuta ──────────────────────────────────────────────────── */
+  'dhankuta': [
+    { url: `https://news.google.com/rss/search?q=${encodeURIComponent('धनकुटा')}&hl=ne&gl=NP&ceid=NP:ne`, name: 'Google: धनकुटा', lang: 'ne' },
+  ],
+};
+
+/**
+ * Resolve alias strings (e.g. 'ktm' → feeds for 'kathmandu').
+ * Returns an array of feed descriptors, never undefined.
+ */
+function _resolveLocalFeeds(key) {
+  let entry = _NEPAL_LOCAL_FEEDS[key];
+  /* Follow single-level alias */
+  if (typeof entry === 'string') entry = _NEPAL_LOCAL_FEEDS[entry];
+  return Array.isArray(entry) ? entry : null;
+}
+
+function _locationFeedsFor(label) {
+  const key = label.trim().toLowerCase()
+    .replace(/\s+/g, '')          // strip spaces
+    .replace(/['']/g, '')         // strip apostrophes
+    .normalize('NFC');
+
+  /* 1. Try exact lookup */
+  let localFeeds = _resolveLocalFeeds(key);
+
+  /* 2. Partial-match: check if any known key is a substring of the input or vice-versa */
+  if (!localFeeds) {
+    for (const k of Object.keys(_NEPAL_LOCAL_FEEDS)) {
+      if (typeof _NEPAL_LOCAL_FEEDS[k] === 'string') continue; // skip aliases at this stage
+      if (key.includes(k) || k.includes(key)) {
+        localFeeds = _resolveLocalFeeds(k);
+        break;
+      }
+    }
+  }
+
+  /* 3. Generic Google News queries — scope to location keyword with recency sorting.
+     &tbs=sbd:1 = sort by date (newest first) in Google News RSS              */
+  const encLabel   = encodeURIComponent(label);
+  const encLabelNe = encodeURIComponent(label + ' समाचार');
+  const genericFeeds = [
+    { url: `https://news.google.com/rss/search?q=${encLabel}+Nepal+when:2d&hl=en&gl=NP&ceid=NP:en&tbs=sbd:1`, name: 'Google (EN): ' + label, lang: 'en' },
+    { url: `https://news.google.com/rss/search?q=${encLabelNe}+when:2d&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`,     name: 'Google (NE): ' + label, lang: 'ne' },
+    { url: `https://news.google.com/rss/search?q=${encLabel}+Nepal&hl=en&gl=NP&ceid=NP:en&tbs=sbd:1`, name: 'Google (EN all): ' + label, lang: 'en' },
+    { url: `https://news.google.com/rss/search?q=${encLabelNe}&hl=ne&gl=NP&ceid=NP:ne&tbs=sbd:1`,     name: 'Google (NE all): ' + label, lang: 'ne' },
+  ];
+
+  /* Combine: local-specific first, then generic — deduplicate by URL */
+  const combined = [...(localFeeds || []), ...genericFeeds];
+  const seenUrls = new Set();
+  return combined.filter(f => {
+    if (seenUrls.has(f.url)) return false;
+    seenUrls.add(f.url);
+    return true;
+  });
+}
+
+async function addLocation() {
+  const input = document.getElementById('locationInput');
+  const raw   = (input?.value || '').trim();
+  if (!raw) { toast('⚠️ Enter a location name', 'error'); return; }
+  if (_locationFeeds.find(f => f.label.toLowerCase() === raw.toLowerCase())) {
+    toast('⚠️ Location already added', 'error'); return;
+  }
+  input.value = '';
+  const loc = { label: raw, articles: [], loaded: false };
+  _locationFeeds.push(loc);
+  _renderLocationList();
+  _loadLocationArticles(loc);
+}
+
+async function _loadLocationArticles(loc) {
+  const feeds = _locationFeedsFor(loc.label);
+  let items   = await fetchCategoryFeeds(feeds, null);
+
+  /* ── 1. Relevance filter: keep only articles that mention the location
+         in title or description.  This is critical for local outlet full-feeds
+         that return ALL their articles regardless of location.
+         Build a set of match tokens: English label + known Devanagari equivalents. ── */
+  const matchTokens = _locationMatchTokens(loc.label);
+
+  /* For location filtering, use STRICT tokens — only the primary city/district name.
+     Broad tokens like "मधेश" or "nepal" are excluded from the strict set to avoid
+     pulling in all-Nepal articles from Madhesh-wide feeds. */
+  const strictTokens = matchTokens.filter(t => {
+    const broad = ['nepal','नेपाल','madhesh','मधेश','madhes','province','pradesh','प्रदेश'];
+    return !broad.some(b => t === b);
+  });
+  const filterTokens = strictTokens.length > 0 ? strictTokens : matchTokens;
+
+  const relevant = items.filter(a => {
+    const haystack = (a.title + ' ' + a.description).toLowerCase();
+    return filterTokens.some(t => haystack.includes(t));
+  });
+  /* Always use the relevance filter — never show unrelated articles.
+     Only skip if it would give 0 results (feeds that ARE location-specific, like direct Google queries) */
+  if (relevant.length > 0) items = relevant;
+
+  /* ── 2. Date filter: max 2 days. Cascade: 24h → 48h → 7d. NEVER show older silently. ── */
+  const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
+  const cutoff48h = Date.now() - 2  * 24 * 60 * 60 * 1000;   // 2 days hard limit
+  const cutoff7d  = Date.now() - 7  * 24 * 60 * 60 * 1000;
+  const fresh24h  = items.filter(a => { const t = new Date(a.pubDate).getTime(); return !isNaN(t) && t >= cutoff24h; });
+  const fresh48h  = items.filter(a => { const t = new Date(a.pubDate).getTime(); return !isNaN(t) && t >= cutoff48h; });
+  const fresh7d   = items.filter(a => { const t = new Date(a.pubDate).getTime(); return !isNaN(t) && t >= cutoff7d; });
+  /* Cascade: prefer 24h ≥3 → 48h ≥2 → 7d ≥1 → empty (show "no fresh news" instead of stale) */
+  let staleWarning = false;
+  if (fresh24h.length >= 3)      { items = fresh24h; }
+  else if (fresh48h.length >= 2) { items = fresh48h; }
+  else if (fresh7d.length >= 1)  { items = fresh7d;  staleWarning = (fresh48h.length === 0); }
+  else                           { items = [];        staleWarning = true; }
+  loc.staleWarning = staleWarning;
+  /* Sort by date newest-first */
+  items.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+
+  /* ── 3. Tag each article with location for the UI badge ── */
+  items.forEach(a => { a._locationLabel = loc.label; });
+
+  loc.articles = items;
+  loc.loaded   = true;
+  if (_activeNewsTab === 'locations') {
+    renderCategoryList('locations');
+    const total = _locationFeeds.reduce((s, f) => s + (f.loaded ? f.articles.length : 0), 0);
+    const badge = document.getElementById('statusBadge');
+    const freshCount = _locationFeeds.reduce((s, f) => {
+      if (!f.loaded) return s;
+      const cut = Date.now() - 2 * 24 * 60 * 60 * 1000;
+      return s + f.articles.filter(a => new Date(a.pubDate).getTime() >= cut).length;
+    }, 0);
+    if (badge) badge.textContent = total ? `${total} articles · ${freshCount} last 2 days` : 'No news found';
+  }
+}
+
+/**
+ * Build a list of lowercase tokens that indicate an article is about `label`.
+ * Includes the English name, Devanagari equivalents from the bilingual dict,
+ * and common alternative spellings.
+ */
+function _locationMatchTokens(label) {
+  const tokens = new Set([label.toLowerCase()]);
+
+  /* Look up the bilingual dict for Devanagari equivalents */
+  const lLow = label.toLowerCase();
+  for (const [engVariants, neVariants] of _BILINGUAL_DICT) {
+    if (engVariants.some(v => v.includes(lLow) || lLow.includes(v))) {
+      neVariants.forEach(v => tokens.add(v.toLowerCase()));
+      engVariants.forEach(v => tokens.add(v.toLowerCase()));
+    }
+  }
+
+  /* Known extra aliases for common locations */
+  const EXTRA_ALIASES = {
+    'kalaiya':   ['कलैया', 'कलाैया', 'kalaiya', 'bara', 'बारा'],
+    'bara':      ['कलैया', 'बारा', 'bara', 'kalaiya'],
+    'kathmandu': ['काठमाडौं', 'काठमाडौँ', 'ktm', 'काठमान्डू'],
+    'pokhara':   ['पोखरा'],
+    'biratnagar':['विराटनगर', 'biratnagar'],
+    'chitwan':   ['चितवन'],
+    'birgunj':   ['वीरगन्ज', 'birgunj'],
+    'dhangadhi': ['धनगढी'],
+    'nepalgunj': ['नेपालगन्ज'],
+    'butwal':    ['बुटवल'],
+    'janakpur':  ['जनकपुर', 'janakpurdham'],
+    'itahari':   ['इटहरी'],
+    'jhapa':     ['झापा'],
+    'surkhet':   ['सुर्खेत'],
+    'hetauda':   ['हेटौंडा'],
+    'lalitpur':  ['ललितपुर', 'patan'],
+    'bhaktapur': ['भक्तपुर'],
+    'rautahat':  ['रौतहट', 'gaur', 'गौर'],
+    'sarlahi':   ['सर्लाही'],
+  };
+  const lKey = label.toLowerCase();
+  for (const [k, extras] of Object.entries(EXTRA_ALIASES)) {
+    if (lKey === k || extras.map(e=>e.toLowerCase()).includes(lKey)) {
+      extras.forEach(e => tokens.add(e.toLowerCase()));
+      tokens.add(k);
+    }
+  }
+
+  return [...tokens];
+}
+
+function removeLocation(label) {
+  _locationFeeds = _locationFeeds.filter(f => f.label !== label);
+  _renderLocationList();
+  if (_activeNewsTab === 'locations') renderCategoryList('locations');
+}
+
+function _renderLocationList() {
+  const c = document.getElementById('locationTagList');
+  if (!c) return;
+  c.innerHTML = _locationFeeds.map(f => `
+    <span class="loc-tag">
+      📍 ${escHtml(f.label)}
+      <button onclick="removeLocation('${escHtml(f.label).replace(/'/g,"\\'")}')">✕</button>
+    </span>`).join('');
+}
+
+/* ── Tab switching ───────────────────────────────────────────────────── */
+
+function switchNewsTab(tab) {
+  _activeNewsTab = tab;
+  /* Update tab button styles */
+  document.querySelectorAll('.news-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  /* Show/hide location input row */
+  const locRow = document.getElementById('locationInputRow');
+  if (locRow) locRow.style.display = tab === 'locations' ? 'flex' : 'none';
+  /* Show/hide main fetch bar (only for nepal tab) */
+  const fetchBar = document.querySelector('.fetch-bar');
+  if (fetchBar) fetchBar.style.display = tab === 'nepal' ? 'flex' : 'none';
+  const searchBar = document.getElementById('newsSearchBar');
+  if (searchBar) {
+    const hasArticles = tab === 'nepal' ? articles.length > 0 : (_catArticles[tab] || []).length > 0;
+    searchBar.style.display = (tab !== 'locations' && hasArticles) ? 'block' : 'none';
+    /* Clear search when switching tabs */
+    const inp = document.getElementById('newsSearchInput');
+    if (inp) inp.value = '';
+  }
+
+  if (tab === 'nepal') {
+    renderNewsList();
+    return;
+  }
+  if (tab === 'locations') {
+    renderCategoryList('locations');
+    return;
+  }
+  /* Category tabs — lazy-load on first visit */
+  if (!_catLoaded[tab]) {
+    const feedMap = { science: RSS_SCIENCE, 'nepali-ent': RSS_NEPALI_ENT, bhojpuri: RSS_BHOJPURI, 'hindi-ent': RSS_HINDI_ENT, 'india-hi': RSS_INDIA_HI, 'india-en': RSS_INDIA_EN, twitter: RSS_TWITTER, world: RSS_WORLD };
+    const list = document.getElementById('newsList');
+    list.innerHTML = Array(6).fill(0).map(() => `
+      <div class="news-item">
+        <div class="news-item-thumb-placeholder skeleton" style="width:58px;height:45px"></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+          <div class="skeleton" style="height:13px;border-radius:4px"></div>
+          <div class="skeleton" style="height:13px;width:70%;border-radius:4px"></div>
+        </div>
+      </div>`).join('');
+    document.getElementById('statusBadge').textContent = 'Loading…';
+    fetchCategoryFeeds(feedMap[tab] || [], tab).then(() => {
+      renderCategoryList(tab);
+      document.getElementById('statusBadge').textContent = `${_catArticles[tab].length} articles`;
+      /* Show search bar now that articles are loaded */
+      const sb = document.getElementById('newsSearchBar');
+      if (sb) sb.style.display = 'block';
+    });
+  } else {
+    renderCategoryList(tab);
+    document.getElementById('statusBadge').textContent = `${_catArticles[tab].length} articles`;
+  }
+}
+
+function renderCategoryList(tab, filterText) {
+  const list = document.getElementById('newsList');
+  let items = [];
+
+  if (tab === 'locations') {
+    if (!_locationFeeds.length) {
+      list.innerHTML = `<div class="empty-state"><div class="icon">📍</div><p>Add a location above to see trending news from there.</p></div>`;
+      return;
+    }
+    /* Check if all locations are still loading */
+    const allLoading = _locationFeeds.every(f => !f.loaded);
+    if (allLoading) {
+      list.innerHTML = `<div class="empty-state"><div class="icon">⏳</div><p>Loading location news…</p></div>`;
+      return;
+    }
+    /* Merge all location articles (already tagged with _locationLabel) */
+    items = [];
+    _locationFeeds.forEach(loc => {
+      if (!loc.loaded) return;
+      /* Show up to 20 articles per location (filtered to 48h in _loadLocationArticles) */
+      const locItems = loc.articles.slice(0, 20);
+      locItems.forEach(a => { a._locationLabel = a._locationLabel || loc.label; });
+      items.push(...locItems);
+    });
+    if (!items.length) {
+      list.innerHTML = `<div class="empty-state"><div class="icon">🕐</div>
+        <p>No articles about <strong>${escHtml(_locationFeeds.map(f=>f.label).join(', '))}</strong> in the last 2 days.</p>
+        <p style="font-size:.78rem;color:var(--muted);margin-top:6px">Try again later — local news is updated periodically.</p>
+        <button class="btn btn-ghost" style="margin-top:10px;font-size:.8rem" onclick="_locationFeeds.forEach(f=>{f.loaded=false;f.articles=[];_loadLocationArticles(f)});renderCategoryList('locations')">🔄 Refresh</button>
+        </div>`;
+      return;
+    }
+    /* Show stale warning banner if any location had to fall back beyond 48h */
+    const hasStale = _locationFeeds.some(f => f.loaded && f.staleWarning);
+    if (hasStale) {
+      const warningBanner = document.createElement('div');
+      warningBanner.style.cssText = 'background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:.82rem;display:flex;align-items:center;gap:8px';
+      warningBanner.innerHTML = '⚠️ No news from the last 2 days was found — showing the most recent available articles instead.';
+      list.prepend(warningBanner);
+    }
+    /* Sort: top-2-fresh first, then by viralScore */
+    items.sort((a, b) => {
+      const aTop = a._isLatestTop ? 1 : 0, bTop = b._isLatestTop ? 1 : 0;
+      if (aTop !== bTop) return bTop - aTop;
+      return (b.viralScore || 0) - (a.viralScore || 0) || new Date(b.pubDate) - new Date(a.pubDate);
+    });
+  } else {
+    items = _catArticles[tab] || [];
+    if (!items.length) {
+      list.innerHTML = `<div class="empty-state"><div class="icon">📭</div><p>No articles found.</p></div>`;
+      return;
+    }
+  }
+
+  /* Apply search filter if provided */
+  const query = (filterText || '').trim().toLowerCase();
+  if (query) {
+    const expansions = _expandSearchQuery(query);
+    items = items.filter(a => _articleMatchesQuery(a, expansions));
+    if (!items.length) {
+      list.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>No articles match "<strong>${escHtml(query)}</strong>".</p></div>`;
+      return;
+    }
+  }
+
+  list.innerHTML = items.map(a => {
+    /* Store in a temporary global pool for selectArticle */
+    const idx = _registerCatArticle(a);
+    const dateStr = a.pubDate
+      ? new Date(a.pubDate).toLocaleString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })
+      : '';
+    let thumbHtml;
+    if (a.imageUrl) {
+      const proxied = `https://images.weserv.nl/?url=${encodeURIComponent(a.imageUrl)}&w=120&h=90&fit=cover&output=jpg`;
+      thumbHtml = `<img class="news-item-thumb" src="${proxied}" alt="" loading="lazy" onerror="this.style.display='none'">`;
+    } else {
+      thumbHtml = `<div class="news-item-thumb-placeholder">🗞️</div>`;
+    }
+    const viralBadge  = a.isTrending ? '<span class="viral-badge trending-badge">🔥 TRENDING</span>'
+                      : a.isViral    ? '<span class="viral-badge">⚡ VIRAL</span>' : '';
+    const latestBadge = a._isLatestTop ? '<span class="viral-badge latest-badge">🆕 LATEST</span>' : '';
+    const tweetBadge  = a.isTwitter ? '<span class="viral-badge" style="background:rgba(29,161,242,.18);color:#1da1f2;border:1px solid rgba(29,161,242,.4)">🐦 TWEET</span>' : '';
+    const locBadge    = a._locationLabel ? `<span class="source-badge" style="background:rgba(16,185,129,.15);color:#34d399;border-color:rgba(16,185,129,.3)">📍 ${escHtml(a._locationLabel)}</span>` : '';
+    const sourceBadge = a.source ? `<span class="source-badge">${escHtml(a.source)}</span>` : '';
+    const openBtn     = a.link ? `<button class="news-open-btn" onclick="event.stopPropagation();window.open('${escHtml(a.link)}','_blank','noopener')">🔗 Open</button>` : '';
+
+    return `
+      <div class="news-item${a.isTrending ? ' trending' : ''}" id="cat-item-${idx}" onclick="selectArticle(${idx})">
+        ${thumbHtml}
+        <div class="news-item-body">
+          <div class="news-item-badges">${latestBadge}${viralBadge}${tweetBadge}${locBadge}${sourceBadge}</div>
+          <div class="news-item-title">${escHtml(a.title)}</div>
+          <div class="news-item-footer">
+            ${dateStr ? `<div class="news-item-date">🕐 ${dateStr}</div>` : ''}
+            ${openBtn}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  /* Lazily fetch og:image for articles that had no thumbnail in the RSS feed */
+  _lazyLoadCatThumbnails(items);
+}
+
+/* Temporary article pool for category articles (so selectArticle still works) */
+const _catPool = [];
+function _registerCatArticle(a) {
+  /* Reuse existing slot if same title */
+  const existing = _catPool.findIndex(x => x.title === a.title);
+  if (existing >= 0) return existing + 1000000;
+  _catPool.push(a);
+  return (_catPool.length - 1) + 1000000;
 }
 
 /* ================================================================
@@ -939,6 +1994,76 @@ async function _lazyLoadListThumbnails() {
   }
 }
 
+/**
+ * Same lazy-thumbnail loader for category list items.
+ * Items are keyed by their pool index (id="cat-item-{idx}").
+ */
+async function _lazyLoadCatThumbnails(items) {
+  const missing = items.filter(a => !a.imageUrl && a.link);
+  if (!missing.length) return;
+
+  const BATCH = 6;
+  for (let i = 0; i < missing.length; i += BATCH) {
+    const batch = missing.slice(i, i + BATCH);
+    await Promise.all(batch.map(async (a) => {
+      try {
+        /* For Google News redirect links, try to get the canonical real article URL first */
+        let targetUrl = a.link;
+        if (targetUrl.includes('news.google.com')) {
+          try {
+            const proxyData = await fetch(
+              `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
+              { signal: AbortSignal.timeout(8000) }
+            ).then(r => r.ok ? r.json() : null).catch(() => null);
+            const html0 = proxyData?.contents || '';
+            const canonical = html0.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i)?.[1]
+                           || html0.match(/<meta[^>]+property=["']og:url["'][^>]+content=["']([^"']+)["']/i)?.[1]
+                           || html0.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:url["']/i)?.[1];
+            if (canonical && !canonical.includes('google.com')) {
+              targetUrl = canonical;
+              /* Also check if og:image is already in this response */
+              const ogImgEarly = extractOgImage(html0);
+              if (ogImgEarly) {
+                a.imageUrl = ogImgEarly;
+                _updateCatThumb(a, ogImgEarly);
+                return;
+              }
+            }
+          } catch { /* fall through with original URL */ }
+        }
+
+        const html = await fetchRawHtml(targetUrl);
+        if (!html) return;
+        const ogImg = extractOgImage(html);
+        if (!ogImg) return;
+        a.imageUrl = ogImg;
+        _updateCatThumb(a, ogImg);
+      } catch { /* silently skip */ }
+    }));
+  }
+}
+
+function _updateCatThumb(a, imgUrl) {
+  const poolIdx = _catPool.indexOf(a);
+  if (poolIdx < 0) return;
+  const domId = 'cat-item-' + (poolIdx + 1000000);
+  const itemEl = document.getElementById(domId);
+  if (!itemEl) return;
+  const placeholder = itemEl.querySelector('.news-item-thumb-placeholder');
+  const proxiedSrc = `https://images.weserv.nl/?url=${encodeURIComponent(imgUrl)}&w=120&h=90&fit=cover&output=jpg`;
+  const img = document.createElement('img');
+  img.className = 'news-item-thumb';
+  img.alt = 'news thumbnail';
+  img.loading = 'lazy';
+  img.onerror = () => { img.style.display = 'none'; };
+  img.src = proxiedSrc;
+  if (placeholder) {
+    placeholder.replaceWith(img);
+  } else if (!itemEl.querySelector('.news-item-thumb')) {
+    itemEl.insertBefore(img, itemEl.firstChild);
+  }
+}
+
 function renderNewsList(filterText) {
   const list = document.getElementById('newsList');
   const searchBar = document.getElementById('newsSearchBar');
@@ -1007,7 +2132,11 @@ function renderNewsList(filterText) {
 
 /** Filter news list by search keyword (called from search input) */
 function filterNewsList(value) {
-  renderNewsList(value);
+  if (_activeNewsTab === 'nepal') {
+    renderNewsList(value);
+  } else {
+    renderCategoryList(_activeNewsTab, value);
+  }
 }
 
 /* ================================================================
@@ -1290,12 +2419,11 @@ function _articleMatchesQuery(a, expansions) {
  * API keys live in .env on the server — the browser never sees them.
  */
 async function loadKeyStatus() {
-  if (!_isLocalhost) {
-    /* ── GitHub Pages / direct file mode ──
-       No server proxy available. Use browser-stored keys from localStorage. */
+  if (!_isNodeServer) {
+    /* ── GitHub Pages / Live Server / direct file mode ──
+       No Node.js proxy available. Use browser-stored keys from localStorage. */
     _geminiKey   = !!_browserGeminiKey;
     _removebgKey = !!_browserRemovebgKey;
-    _grokKey     = !!_browserGrokKey;
     updateAIBadge();
     return;
   }
@@ -1308,7 +2436,6 @@ async function loadKeyStatus() {
       const data = await res.json();
       _geminiKey   = !!data.gemini;
       _removebgKey = !!data.removebg;
-      _grokKey     = !!data.grok;
       _serverOnline = true;
       hideServerDownBanner();
     } else {
@@ -1318,7 +2445,7 @@ async function loadKeyStatus() {
   } catch {
     _geminiKey = _removebgKey = false;
     _serverOnline = false;
-    showServerDownBanner();
+    showServerDownBanner(); // only shown when _isNodeServer is true (see showServerDownBanner guard)
   }
   updateAIBadge();
 }
@@ -1327,6 +2454,9 @@ async function loadKeyStatus() {
 let _serverOnline = true;
 
 function showServerDownBanner() {
+  /* Only show this banner when running via the local Node server.
+     On GitHub Pages there is no local server — users add keys via the browser. */
+  if (!_isNodeServer) return;
   let banner = document.getElementById('serverDownBanner');
   if (!banner) {
     banner = document.createElement('div');
@@ -1338,7 +2468,7 @@ function showServerDownBanner() {
       border:1px solid #dc2626;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.6);
       max-width:90%;cursor:pointer;
     `;
-    banner.innerHTML = `⚠️ <strong>Server not running.</strong> 
+    banner.innerHTML = `⚠️ <strong>Local server not running.</strong> 
       Open a terminal and run: <code style="background:#991b1b;padding:2px 8px;border-radius:4px;margin:0 4px">python server.py</code>
       then refresh this page. <span style="opacity:.7;font-size:.75rem">(click to dismiss)</span>`;
     banner.onclick = () => banner.remove();
@@ -1358,42 +2488,38 @@ function openAISettings() {
   /* ── Update status text for each card ── */
   _refreshAICardStatuses();
 
-  /* ── Pre-fill inputs from localStorage when on GitHub Pages ── */
-  if (!_isLocalhost) {
+  /* ── Pre-fill inputs from localStorage when not on Node server ── */
+  if (!_isNodeServer) {
     const gEl  = document.getElementById('inputGeminiKey');
     const rbEl = document.getElementById('inputRemovebgKey');
-    const grEl = document.getElementById('inputGrokKey');
-    if (gEl  && !gEl.value)  gEl.placeholder  = _browserGeminiKey   ? '(saved — paste to update)' : 'AIzaSy…your-key…';
-    if (rbEl && !rbEl.value) rbEl.placeholder = _browserRemovebgKey ? '(saved — paste to update)' : 'abc123…your-key…';
-    if (grEl && !grEl.value) grEl.placeholder = _browserGrokKey     ? '(saved — paste to update)' : 'xai-…your-key…';
+    const grEl = document.getElementById('inputGroqKey');
+    const hfEl = document.getElementById('inputHFKey');
+    if (gEl)  gEl.placeholder  = _browserGeminiKey   ? '(saved — paste to update)' : 'AIzaSy…your-key…';
+    if (rbEl) rbEl.placeholder = _browserRemovebgKey ? '(saved — paste to update)' : 'abc123…your-key…';
+    if (grEl) grEl.placeholder = _browserGroqKey     ? '(saved — paste to update)' : 'gsk_…your-groq-key…';
+    if (hfEl) hfEl.placeholder = _browserHFKey       ? '(saved — paste to update)' : 'hf_…your-token…';
   }
 
-  /* Sync the provider toggle pills */
-  _syncProviderUI();
   modal.classList.add('open');
 }
 
 /** Refresh all card status texts, dots, and the top banner */
 function _refreshAICardStatuses() {
   const geminiOk   = !!(_geminiKey   || _browserGeminiKey);
-  const grokOk     = !!(_grokKey     || _browserGrokKey);
   const removebgOk = !!(_removebgKey || _browserRemovebgKey);
-
-  /* Status text */
-  const geminiEl   = document.getElementById('geminiKeyStatus');
-  const grokEl     = document.getElementById('grokKeyStatus');
-  const removebgEl = document.getElementById('removebgKeyStatus');
+  const groqOk     = !!_browserGroqKey;
+  const hfOk       = !!_browserHFKey;
 
   function _setStatus(el, ok) {
     if (!el) return;
     el.textContent = ok ? '✅ Active & configured' : '❌ Not configured';
     el.className   = 'ai-card-status ' + (ok ? 'ok' : 'err');
   }
-  _setStatus(geminiEl,   geminiOk);
-  _setStatus(grokEl,     grokOk);
-  _setStatus(removebgEl, removebgOk);
+  _setStatus(document.getElementById('geminiKeyStatus'),   geminiOk);
+  _setStatus(document.getElementById('removebgKeyStatus'), removebgOk);
+  _setStatus(document.getElementById('groqKeyStatus'),     groqOk);
+  _setStatus(document.getElementById('hfKeyStatus'),       hfOk);
 
-  /* Status dots */
   function _setDot(id, ok) {
     const dot = document.getElementById(id);
     if (!dot) return;
@@ -1401,26 +2527,28 @@ function _refreshAICardStatuses() {
     dot.title     = ok ? 'Active' : 'Not configured';
   }
   _setDot('geminiStatusDot',   geminiOk);
-  _setDot('grokStatusDot',     grokOk);
   _setDot('removebgStatusDot', removebgOk);
+  _setDot('groqStatusDot',     groqOk);
+  _setDot('hfStatusDot',       hfOk);
 
   /* Top banner */
   const banner = document.getElementById('aiSetupStatusBanner');
   if (banner) {
     const parts = [];
     if (geminiOk)   parts.push('✨ Gemini');
-    if (grokOk)     parts.push('⚡ Grok');
+    if (groqOk)     parts.push('⚡ Groq');
     if (removebgOk) parts.push('🎨 Remove.bg');
+    if (hfOk)       parts.push('🤗 HuggingFace');
 
-    if (parts.length === 3) {
+    if (parts.length === 4) {
       banner.className   = 'ai-setup-banner active';
-      banner.textContent = `🟢 AI Setup is active for ${parts.join(', ')}`;
+      banner.textContent = '🟢 All AI features active — Gemini + Groq + Remove.bg + HuggingFace';
     } else if (parts.length > 0) {
       banner.className   = 'ai-setup-banner partial';
-      banner.textContent = `🟡 Active: ${parts.join(', ')} · Not configured: ${['✨ Gemini','⚡ Grok','🎨 Remove.bg'].filter(p => !parts.includes(p)).join(', ')}`;
+      banner.textContent = `🟡 Active: ${parts.join(', ')}`;
     } else {
       banner.className   = 'ai-setup-banner none';
-      banner.textContent = '🔴 No API keys configured — add keys to .env or enter them below';
+      banner.textContent = '🔴 No API keys configured — add Gemini or Groq key below';
     }
   }
 }
@@ -1443,15 +2571,19 @@ async function testGeminiKey() {
   if (btn) { btn.textContent = '⏳…'; btn.disabled = true; }
   _setCardFeedback('gemini', '', '⏳ Testing connection…');
 
-  /* If a raw key was typed, test directly against Gemini; otherwise use proxy */
-  const testUrl = (inputVal && !_isLocalhost)
-    ? `${GEMINI_API_URL}?key=${encodeURIComponent(inputVal)}`
-    : (_geminiProxyBase || GEMINI_API_URL);
+  /* If on Node server: route through /proxy/gemini-withkey so server forwards the key without CORS block.
+     If on GitHub Pages: call Gemini directly with the key in URL. */
+  const testUrl = _isNodeServer
+    ? '/proxy/gemini-withkey'
+    : `${GEMINI_API_URL}?key=${encodeURIComponent(inputVal || _browserGeminiKey)}`;
+  const testHeaders = _isNodeServer
+    ? { 'Content-Type': 'application/json', 'X-Gemini-Key': inputVal || _browserGeminiKey || '' }
+    : { 'Content-Type': 'application/json' };
 
   try {
     const res = await fetch(testUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: testHeaders,
       body: JSON.stringify({
         contents: [{ parts: [{ text: 'Reply with exactly: {"ok":true}' }] }],
         generationConfig: { maxOutputTokens: 20 }
@@ -1476,51 +2608,6 @@ async function testGeminiKey() {
   if (btn) { btn.textContent = origText; btn.disabled = false; }
 }
 
-/** Test Grok connectivity via the server proxy */
-async function testGrokKey() {
-  const inputVal = document.getElementById('inputGrokKey')?.value.trim() || '';
-  const hasKey   = _grokKey || _browserGrokKey || inputVal;
-  if (!hasKey) {
-    _setCardFeedback('grok', 'error', '⚠️ Enter a key first, then test');
-    toast('⚠️ Paste a Grok key in the field first.', 'error', 4000);
-    return;
-  }
-  const btn = document.querySelector('#aiCardGrok .ai-card-btn.test');
-  const origText = btn ? btn.textContent : '';
-  if (btn) { btn.textContent = '⏳…'; btn.disabled = true; }
-  _setCardFeedback('grok', '', '⏳ Testing connection…');
-
-  const testUrl  = _grokProxyBase || GROK_API_URL;
-  const extraHdr = (inputVal && !_isLocalhost) ? { 'Authorization': `Bearer ${inputVal}` } : {};
-  try {
-    const res = await fetch(testUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...extraHdr },
-      body: JSON.stringify({
-        model: GROK_MODEL,
-        messages: [
-          { role: 'system', content: 'Reply with raw JSON only.' },
-          { role: 'user',   content: 'Reply with exactly: {"ok":true}' }
-        ],
-        max_tokens: 20
-      })
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      const msg = data?.error?.message || `HTTP ${res.status}`;
-      _setCardFeedback('grok', 'error', `❌ ${msg}`);
-      toast(`❌ Grok error: ${msg}`, 'error', 6000);
-    } else {
-      _setCardFeedback('grok', 'ok', '✅ Connection successful!');
-      toast('✅ Grok connection works!', 'success', 5000);
-    }
-  } catch (e) {
-    _setCardFeedback('grok', 'error', `❌ ${e.message}`);
-    toast(`❌ Grok test failed: ${e.message}`, 'error', 7000);
-  }
-  if (btn) { btn.textContent = origText; btn.disabled = false; }
-}
-
 /** Test Remove.bg by pinging the account endpoint via server proxy */
 async function testRemovebgKey() {
   const inputVal = document.getElementById('inputRemovebgKey')?.value.trim() || '';
@@ -1535,14 +2622,14 @@ async function testRemovebgKey() {
   if (btn) { btn.textContent = '⏳…'; btn.disabled = true; }
   _setCardFeedback('removebg', '', '⏳ Testing connection…');
 
-  const accountUrl = _isLocalhost
+  const accountUrl = _isNodeServer
     ? '/proxy/removebg-account'
     : 'https://api.remove.bg/v1.0/account';
 
   try {
     const headers = {};
     const key = inputVal || _browserRemovebgKey;
-    if (!_isLocalhost && key) headers['X-Api-Key'] = key;
+    if (!_isNodeServer && key) headers['X-Api-Key'] = key;
     const res = await fetch(accountUrl, { headers });
 
     if (res.ok || res.status === 200) {
@@ -1575,15 +2662,15 @@ async function testRemovebgKey() {
 }
 
 /**
- * Save key for a single card (gemini | grok | removebg).
+ * Save key for a single card (gemini | removebg).
  * On localhost: POSTs to /api/save-key which writes to .env (no restart needed).
  * On GitHub Pages: saves to localStorage.
  */
 async function saveCardKey(service) {
-  const inputId = service === 'gemini'   ? 'inputGeminiKey'
-                : service === 'grok'     ? 'inputGrokKey'
-                :                          'inputRemovebgKey';
-  const input = document.getElementById(inputId);
+  const inputMap = { gemini: 'inputGeminiKey', removebg: 'inputRemovebgKey', groq: 'inputGroqKey', hf: 'inputHFKey' };
+  const cardMap  = { gemini: 'aiCardGemini',   removebg: 'aiCardRemovebg',   groq: 'aiCardGroq',   hf: 'aiCardHf'   };
+  const inputId  = inputMap[service];
+  const input    = document.getElementById(inputId);
   const value = (input?.value || '').trim();
 
   if (!value) {
@@ -1591,12 +2678,26 @@ async function saveCardKey(service) {
     return;
   }
 
-  const saveBtn = document.querySelector(`#aiCard${service.charAt(0).toUpperCase()+service.slice(1)} .ai-card-btn.save`);
+  const cardId  = cardMap[service] || ('aiCard' + service.charAt(0).toUpperCase() + service.slice(1));
+  const saveBtn = document.querySelector(`#${cardId} .ai-card-btn.save`);
   const origLabel = saveBtn?.textContent || '💾 Save';
   if (saveBtn) { saveBtn.textContent = '⏳…'; saveBtn.disabled = true; }
 
-  if (_isLocalhost) {
-    /* ── Localhost: write key to .env via server endpoint ── */
+  /* Groq + HuggingFace are browser-only keys — always save to localStorage regardless of server mode */
+  if (service === 'groq' || service === 'hf') {
+    if (service === 'groq') { localStorage.setItem(_LS_GROQ, value); _browserGroqKey = value; }
+    if (service === 'hf')   { localStorage.setItem(_LS_HF,   value); _browserHFKey   = value; }
+    if (input) input.value = '';
+    _setCardFeedback(service, 'ok', `✅ ${service === 'hf' ? 'HuggingFace' : 'Groq'} key saved!`);
+    updateAIBadge();
+    _refreshAICardStatuses();
+    if (saveBtn) { saveBtn.textContent = origLabel; saveBtn.disabled = false; }
+    toast(`✅ ${service === 'hf' ? 'HuggingFace' : 'Groq'} key saved! Ready to use.`, 'success', 4000);
+    return;
+  }
+
+  if (_isNodeServer) {
+    /* ── Node server (port 3000): write key to .env via server endpoint ── */
     try {
       const res = await fetch('/api/save-key', {
         method: 'POST',
@@ -1605,6 +2706,12 @@ async function saveCardKey(service) {
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || 'Server error');
+
+      /* Also cache in localStorage as fallback for direct-API calls */
+      if (service === 'gemini')   { localStorage.setItem(_LS_GEMINI,   value); _browserGeminiKey   = value; }
+      if (service === 'removebg') { localStorage.setItem(_LS_REMOVEBG, value); _browserRemovebgKey = value; }
+      if (service === 'groq')     { localStorage.setItem(_LS_GROQ,     value); _browserGroqKey     = value; }
+      if (service === 'hf')       { localStorage.setItem(_LS_HF,       value); _browserHFKey       = value; }
 
       /* Re-fetch key-status so flags (_geminiKey etc.) are updated */
       await _reloadKeyStatus();
@@ -1619,14 +2726,20 @@ async function saveCardKey(service) {
     }
   } else {
     /* ── GitHub Pages: save to localStorage ── */
-    if (service === 'gemini')   { localStorage.setItem(_LS_GEMINI,   value); _browserGeminiKey   = value; _geminiKey   = true; }
-    if (service === 'grok')     { localStorage.setItem(_LS_GROK,     value); _browserGrokKey     = value; _grokKey     = true; }
-    if (service === 'removebg') { localStorage.setItem(_LS_REMOVEBG, value); _browserRemovebgKey = value; _removebgKey = true; }
-    if (input) input.value = '';
-    _setCardFeedback(service, 'ok', '✅ Key saved in browser!');
-    updateAIBadge();
-    _refreshAICardStatuses();
-    toast(`✅ ${service} key saved!`, 'success', 3000);
+    try {
+      if (service === 'gemini')   { localStorage.setItem(_LS_GEMINI,   value); _browserGeminiKey   = value; _geminiKey   = true; }
+      if (service === 'removebg') { localStorage.setItem(_LS_REMOVEBG, value); _browserRemovebgKey = value; _removebgKey = true; }
+      if (service === 'groq')     { localStorage.setItem(_LS_GROQ,     value); _browserGroqKey     = value; }
+      if (service === 'hf')       { localStorage.setItem(_LS_HF,       value); _browserHFKey       = value; }
+      if (input) input.value = '';
+      _setCardFeedback(service, 'ok', '✅ Key saved in browser!');
+      updateAIBadge();
+      _refreshAICardStatuses();
+      toast(`✅ ${service.charAt(0).toUpperCase()+service.slice(1)} key saved! AI features are now active.`, 'success', 4000);
+    } catch (e) {
+      _setCardFeedback(service, 'error', `❌ Save failed: ${e.message}`);
+      toast(`❌ Could not save key: ${e.message}`, 'error', 5000);
+    }
   }
 
   if (saveBtn) { saveBtn.textContent = origLabel; saveBtn.disabled = false; }
@@ -1643,63 +2756,70 @@ async function _reloadKeyStatus() {
     const data = await res.json();
     _geminiKey   = !!data.gemini;
     _removebgKey = !!data.removebg;
-    _grokKey     = !!data.grok;
   } catch { /* silent — flags stay as-is */ }
 }
 
 /** Show inline feedback text inside a card status element */
+const _cardFeedbackTimers = {};
 function _setCardFeedback(service, type, msg) {
-  const cardId = 'aiCard' + service.charAt(0).toUpperCase() + service.slice(1);
+  const _cmap = { gemini: 'aiCardGemini', removebg: 'aiCardRemovebg', groq: 'aiCardGroq', hf: 'aiCardHf' };
+  const cardId   = _cmap[service] || ('aiCard' + service.charAt(0).toUpperCase() + service.slice(1));
   const statusEl = document.querySelector(`#${cardId} .ai-card-status`);
   if (!statusEl) return;
+  /* Cancel any pending auto-revert timer for this card */
+  if (_cardFeedbackTimers[service]) {
+    clearTimeout(_cardFeedbackTimers[service]);
+    delete _cardFeedbackTimers[service];
+  }
   statusEl.textContent = msg;
-  statusEl.className = 'ai-card-status ' + (type === 'ok' ? 'ok' : 'err');
-  /* Auto-revert to proper status after 4s */
-  setTimeout(() => _refreshAICardStatuses(), 4000);
+  statusEl.className = 'ai-card-status ' + (type === 'ok' ? 'ok' : type === 'error' ? 'err' : '');
+  /* Auto-revert: hold success messages longer so user can read them */
+  const delay = type === 'ok' ? 8000 : 5000;
+  _cardFeedbackTimers[service] = setTimeout(() => {
+    delete _cardFeedbackTimers[service];
+    _refreshAICardStatuses();
+  }, delay);
 }
 
 function updateAIBadge() {
   const badge = document.getElementById('aiBadge');
   if (!badge) return;
-  const aiReady = (_aiProvider === 'grok') ? _grokKey : _geminiKey;
-  const providerLabel = (_aiProvider === 'grok') ? 'Grok' : 'Gemini';
-  const both = (_geminiKey || _grokKey) && _removebgKey;
-  const anyAI = _geminiKey || _grokKey;
-  if (aiReady && _removebgKey) {
-    badge.textContent = `🤖 ${providerLabel} + BgRemover`;
+  const geminiOk   = !!(_geminiKey || _browserGeminiKey);
+  const groqOk     = !!_browserGroqKey;
+  const removebgOk = !!(_removebgKey || _browserRemovebgKey);
+  const hfOk       = !!_browserHFKey;
+
+  if (geminiOk && groqOk && removebgOk && hfOk) {
+    badge.textContent = '🤖 All AI Active';
     badge.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
-    badge.title = `${providerLabel} AI + Remove.bg active — keys stored securely in .env`;
-  } else if (aiReady) {
-    badge.textContent = `🤖 ${providerLabel} AI`;
+    badge.title = 'Gemini + Groq + Remove.bg + HuggingFace all active';
+    badge.classList.remove('needs-setup');
+  } else if (geminiOk && removebgOk) {
+    badge.textContent = '🤖 Gemini + BgRemover';
+    badge.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
+    badge.title = 'Gemini AI + Remove.bg active';
+    badge.classList.remove('needs-setup');
+  } else if (geminiOk) {
+    badge.textContent = '🤖 Gemini AI';
     badge.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
-    badge.title = `${providerLabel} active — add REMOVEBG_API_KEY to .env for background removal`;
-  } else if (_removebgKey) {
+    badge.title = 'Gemini active' + (groqOk ? ' + Groq fallback' : '');
+    badge.classList.remove('needs-setup');
+  } else if (groqOk) {
+    badge.textContent = '⚡ Groq AI';
+    badge.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
+    badge.title = 'Groq AI active — add Gemini key for best results';
+    badge.classList.remove('needs-setup');
+  } else if (removebgOk) {
     badge.textContent = '🎨 BgRemover';
     badge.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
-    badge.title = 'Remove.bg active — add GEMINI_API_KEY or GROK_API_KEY for AI rewriting';
+    badge.title = 'Remove.bg active — add Gemini or Groq key for AI rewriting';
+    badge.classList.remove('needs-setup');
   } else {
-    badge.textContent = '⚙️ Setup AI';
+    badge.textContent = '⚙️ Setup AI Keys';
     badge.style.background = 'linear-gradient(135deg,#6366f1,#4f46e5)';
-    badge.title = 'Add GEMINI_API_KEY or GROK_API_KEY and REMOVEBG_API_KEY to your .env file';
+    badge.title = 'Click to add your free Gemini API key and enable all AI features';
+    badge.classList.add('needs-setup');
   }
-}
-
-/** Switch the active AI provider and persist the choice */
-function setAIProvider(provider) {
-  if (provider !== 'gemini' && provider !== 'grok') return;
-  _aiProvider = provider;
-  localStorage.setItem('aiProvider', provider);
-  _syncProviderUI();
-  updateAIBadge();
-  const label = provider === 'grok' ? 'Grok (xAI)' : 'Gemini';
-  toast(`🤖 AI provider switched to ${label}`, 'success', 2500);
-}
-
-/** Keep the pill buttons in the modal in sync with _aiProvider */
-function _syncProviderUI() {
-  document.querySelectorAll('.ai-provider-pill').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.provider === _aiProvider);
-  });
 }
 
 /**
@@ -1707,27 +2827,28 @@ function _syncProviderUI() {
  * On localhost this is a no-op — keys come from .env via the server proxy.
  */
 function saveBrowserKeys() {
-  if (_isLocalhost) {
-    toast('ℹ️ Running locally — keys are managed via .env on the server.', 'info', 4000);
+  if (_isNodeServer) {
+    toast('ℹ️ Running via Node server — keys are managed via .env on the server.', 'info', 4000);
     return;
   }
   const g  = (document.getElementById('inputGeminiKey')  ?.value || '').trim();
   const rb = (document.getElementById('inputRemovebgKey') ?.value || '').trim();
-  const gr = (document.getElementById('inputGrokKey')     ?.value || '').trim();
+  const gr = (document.getElementById('inputGroqKey')     ?.value || '').trim();
+  const hf = (document.getElementById('inputHFKey')       ?.value || '').trim();
 
   if (g)  { localStorage.setItem(_LS_GEMINI,   g);  _browserGeminiKey   = g; }
   if (rb) { localStorage.setItem(_LS_REMOVEBG, rb); _browserRemovebgKey = rb; }
-  if (gr) { localStorage.setItem(_LS_GROK,     gr); _browserGrokKey     = gr; }
+  if (gr) { localStorage.setItem(_LS_GROQ,     gr); _browserGroqKey     = gr; }
+  if (hf) { localStorage.setItem(_LS_HF,       hf); _browserHFKey       = hf; }
 
   /* Clear the input fields after saving (don't leave keys visible) */
-  ['inputGeminiKey','inputRemovebgKey','inputGrokKey'].forEach(id => {
+  ['inputGeminiKey','inputRemovebgKey','inputGroqKey','inputHFKey'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
 
   _geminiKey   = !!_browserGeminiKey;
   _removebgKey = !!_browserRemovebgKey;
-  _grokKey     = !!_browserGrokKey;
 
   updateAIBadge();
   _refreshAICardStatuses();
@@ -1736,292 +2857,765 @@ function saveBrowserKeys() {
 
 /** Clear all browser-stored keys */
 function clearBrowserKeys() {
-  [_LS_GEMINI, _LS_REMOVEBG, _LS_GROK].forEach(k => localStorage.removeItem(k));
-  _browserGeminiKey = _browserRemovebgKey = _browserGrokKey = '';
-  _geminiKey = _removebgKey = _grokKey = false;
+  [_LS_GEMINI, _LS_REMOVEBG, _LS_GROQ, _LS_HF].forEach(k => localStorage.removeItem(k));
+  _browserGeminiKey = _browserRemovebgKey = _browserGroqKey = _browserHFKey = '';
+  _geminiKey = _removebgKey = false;
   updateAIBadge();
   _refreshAICardStatuses();
   toast('🗑️ All saved keys cleared.', 'info', 3000);
 }
 
 /**
+ * Translate a raw fetch/API error into a user-readable reason code + message.
+ * Used by callGemini and callGroq to surface exact failure reasons.
+ */
+function _classifyAIError(status, rawMsg, isFetchError) {
+  if (isFetchError) {
+    // TypeError: Failed to fetch — usually CORS or no internet
+    return { code: 'NETWORK', msg: '🌐 Network error — no internet, or API blocked by browser (CORS). Try a different network.' };
+  }
+  if (status === 400) return { code: 'BAD_REQUEST', msg: `❌ Bad request to AI — possibly malformed key. Detail: ${rawMsg}` };
+  if (status === 401) return { code: 'KEY_INVALID', msg: '🔑 API key is invalid or has been revoked. Open ⚙️ Setup AI Keys and re-paste your key.' };
+  if (status === 403) return { code: 'KEY_FORBIDDEN', msg: '🚫 API key rejected (forbidden). The key may be expired, over quota, or wrong type. Check your key.' };
+  if (status === 429) return { code: 'RATE_LIMIT', msg: '⏳ Rate limit hit — you\'ve made too many requests. Wait 60 seconds then try again.' };
+  if (status >= 500) return { code: 'SERVICE_DOWN', msg: `🔴 AI service is temporarily down (HTTP ${status}). Try again in a minute.` };
+  return { code: 'HTTP_ERROR', msg: `❌ AI API error HTTP ${status}: ${rawMsg}` };
+}
+
+/**
+ * Use Gemini with Google Search grounding to research a news topic.
+ * Returns plain-text summary of additional facts found online.
+ * Falls back silently to empty string on any error.
+ * @param {string} title - news headline
+ * @param {string} bodySnippet - article body excerpt
+ * @returns {Promise<string>}
+ */
+async function _researchWithGemini(title, bodySnippet) {
+  const effectiveKey = _browserGeminiKey || (_geminiKey ? '__server__' : '');
+  if (!effectiveKey) return '';
+
+  const urlsToTry = [];
+  if (_isNodeServer && _browserGeminiKey) {
+    urlsToTry.push({ url: '/proxy/gemini-withkey', label: 'proxy(browser key)', headers: { 'X-Gemini-Key': _browserGeminiKey } });
+  }
+  if (_geminiProxyBase && _geminiKey) {
+    urlsToTry.push({ url: _geminiProxyBase, label: 'proxy(.env key)', headers: {} });
+  }
+  if (!_isNodeServer && _browserGeminiKey) {
+    urlsToTry.push({ url: `${GEMINI_API_URL}?key=${encodeURIComponent(_browserGeminiKey)}`, label: 'direct', headers: {} });
+  }
+  if (!urlsToTry.length) return '';
+
+  const researchPrompt = `You are a news researcher. A journalist needs additional context about the following news story to write an accurate, informative article.
+
+NEWS HEADLINE: ${title}
+${bodySnippet ? `ARTICLE EXCERPT:\n${bodySnippet.slice(0, 1000)}` : ''}
+
+Using your knowledge and web search, provide 4-6 additional key facts, background context, or related recent developments that would help a journalist write a more complete and accurate Nepali news article about this topic.
+
+Focus on:
+- Key people involved and their roles/background
+- Timeline of events leading up to this
+- Specific numbers, statistics or data points
+- Related recent developments or context
+- Why this matters / impact
+
+Write in plain English, bullet points, concise. Max 300 words.`;
+
+  const body = JSON.stringify({
+    contents: [{ parts: [{ text: researchPrompt }] }],
+    tools: [{ google_search: {} }],
+    generationConfig: { temperature: 0.3, maxOutputTokens: 512 },
+  });
+
+  for (const endpoint of urlsToTry) {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 15000);
+    try {
+      const res = await fetch(endpoint.url, {
+        method: 'POST', signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json', ...endpoint.headers },
+        body,
+      });
+      clearTimeout(tid);
+      if (!res.ok) { continue; }
+      const data = await res.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (text) {
+        console.log('[Gemini Research] got context:', text.slice(0, 200));
+        return text.trim();
+      }
+    } catch (e) {
+      clearTimeout(tid);
+      console.warn('[Gemini Research] failed:', e.message);
+    }
+  }
+  return '';
+}
+
+/**
  * Call Gemini 2.0-flash (free tier) with a structured prompt.
- * Returns parsed JSON from the model or null on failure.
+ * Returns parsed JSON from the model or throws a descriptive error.
  * @param {string} prompt
  * @param {number} timeoutMs
  */
 async function callGemini(prompt, timeoutMs = 18000) {
-  if (!_geminiKey) throw new Error('NO_KEY: Gemini API key not configured on server');
-  const ctrl = new AbortController();
-  const tid  = setTimeout(() => ctrl.abort(), timeoutMs);
+  const effectiveKey = _browserGeminiKey || (_geminiKey ? '__server__' : '');
+  if (!effectiveKey) throw new Error('🔑 No Gemini API key configured. Click ⚙️ Setup AI Keys to add your free key.');
 
-  /* On localhost: route through proxy (key injected server-side, never exposed).
-     On GitHub Pages: call the API directly with the browser-stored key. */
-  const fetchUrl = _geminiProxyBase
-    ? `${_geminiProxyBase}`
-    : `${GEMINI_API_URL}?key=${encodeURIComponent(_browserGeminiKey)}`;
-
-  try {
-    const res = await fetch(fetchUrl, {
-      method: 'POST',
-      signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.85,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 1024,
-        },
-      }),
-    });
-    clearTimeout(tid);
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      const msg = errData?.error?.message || res.statusText || res.status;
-      console.error('[Gemini] HTTP error:', res.status, msg);
-      throw new Error(`HTTP_${res.status}: ${msg}`);
-    }
-    const data = await res.json();
-    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    if (!raw) {
-      console.error('[Gemini] empty response:', JSON.stringify(data).slice(0, 300));
-      throw new Error('EMPTY_RESPONSE: Gemini returned no text');
-    }
-
-    console.log('[Gemini] raw response (first 400 chars):', raw.slice(0, 400));
-
-    /* ── Extract JSON from the raw text using multiple strategies ──
-       Try each strategy in order; return as soon as one parses cleanly.
-    */
-
-    // Strategy 1: Raw text IS already valid JSON
-    try { return JSON.parse(raw.trim()); } catch (_) {}
-
-    // Strategy 2: Strip ```json ... ``` code fence
-    const fenced = raw.match(/```json\s*([\s\S]*?)```/i);
-    if (fenced) {
-      try { return JSON.parse(fenced[1].trim()); } catch (_) {}
-    }
-
-    // Strategy 3: Strip any ``` ... ``` code fence
-    const anyFence = raw.match(/```\s*([\s\S]*?)```/i);
-    if (anyFence) {
-      try { return JSON.parse(anyFence[1].trim()); } catch (_) {}
-    }
-
-    // Strategy 4: Find the last { ... } block (greedy — handles nested objects)
-    const firstBrace = raw.indexOf('{');
-    const lastBrace  = raw.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      const block = raw.slice(firstBrace, lastBrace + 1);
-      try { return JSON.parse(block); } catch (_) {}
-    }
-
-    console.error('[Gemini] could not extract JSON. Full raw:', raw);
-    throw new Error('NO_JSON: Could not extract JSON from Gemini response');
-  } catch (e) {
-    clearTimeout(tid);
-    const msg = e.name === 'AbortError' ? 'TIMEOUT: Request timed out' : e.message;
-    console.error('[Gemini] threw:', msg);
-    throw new Error(msg);
+  /* Build the list of URLs to try in order:
+     1. Server proxy with browser key (X-Gemini-Key header) — works on localhost even without .env key
+     2. Server proxy with .env key (most secure — key never leaves server)
+     3. Direct API call (only works on GitHub Pages / non-localhost origins) */
+  const urlsToTry = [];
+  if (_isNodeServer && _browserGeminiKey) {
+    urlsToTry.push({ url: '/proxy/gemini-withkey', label: 'proxy(browser key)', headers: { 'X-Gemini-Key': _browserGeminiKey } });
   }
+  if (_geminiProxyBase && _geminiKey) {
+    urlsToTry.push({ url: _geminiProxyBase, label: 'proxy(.env key)', headers: {} });
+  }
+  if (!_isNodeServer && _browserGeminiKey) {
+    urlsToTry.push({ url: `${GEMINI_API_URL}?key=${encodeURIComponent(_browserGeminiKey)}`, label: 'direct', headers: {} });
+  }
+  if (!urlsToTry.length) throw new Error('🔑 No Gemini endpoint available — check your key is saved.');
+
+  const body = JSON.stringify({
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.85, topK: 40, topP: 0.95, maxOutputTokens: 4096 },
+  });
+
+  let lastError = 'Unknown Gemini error';
+
+  for (const endpoint of urlsToTry) {
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      console.log(`[Gemini] trying ${endpoint.label}…`);
+      const res = await fetch(endpoint.url, {
+        method: 'POST', signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json', ...endpoint.headers },
+        body,
+      });
+      clearTimeout(tid);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const rawMsg  = errData?.error?.message || res.statusText || String(res.status);
+        const { code, msg } = _classifyAIError(res.status, rawMsg, false);
+        console.warn(`[Gemini] ${endpoint.label} HTTP ${res.status} [${code}]:`, rawMsg);
+        lastError = msg;
+        // Auth/quota errors are fatal — no point trying next endpoint with same key
+        if (res.status === 401 || res.status === 403 || res.status === 429) throw new Error(msg);
+        continue; // try next endpoint for 5xx / 400
+      }
+      const data = await res.json();
+      const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (!raw) {
+        lastError = '⚠️ Gemini returned an empty response. The model may be overloaded — try again.';
+        console.warn('[Gemini] empty response from', endpoint.label);
+        continue;
+      }
+
+      console.log('[Gemini] raw response (first 400 chars):', raw.slice(0, 400));
+
+      // Strategy 1: Raw text IS already valid JSON
+      try { return JSON.parse(raw.trim()); } catch (_) {}
+      // Strategy 2: Strip ```json ... ``` code fence
+      const fenced = raw.match(/```json\s*([\s\S]*?)```/i);
+      if (fenced) { try { return JSON.parse(fenced[1].trim()); } catch (_) {} }
+      // Strategy 3: Strip any ``` ... ``` code fence
+      const anyFence = raw.match(/```\s*([\s\S]*?)```/i);
+      if (anyFence) { try { return JSON.parse(anyFence[1].trim()); } catch (_) {} }
+      // Strategy 4: Find the last { ... } block
+      const firstBrace = raw.indexOf('{');
+      const lastBrace  = raw.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        try { return JSON.parse(raw.slice(firstBrace, lastBrace + 1)); } catch (_) {}
+      }
+      lastError = '⚠️ Gemini responded but output was not valid JSON. Try again.';
+      console.error('[Gemini] could not extract JSON. Full raw:', raw);
+      throw new Error(lastError);
+    } catch (e) {
+      clearTimeout(tid);
+      if (e.name === 'AbortError') {
+        lastError = '⏱️ Gemini request timed out — your internet may be slow, or the model is busy. Try again.';
+        console.warn('[Gemini] timeout on', endpoint.label);
+        continue;
+      }
+      // TypeError: Failed to fetch = CORS / network issue
+      if (e instanceof TypeError && e.message.includes('fetch')) {
+        const { msg } = _classifyAIError(0, e.message, true);
+        lastError = msg;
+        console.warn('[Gemini] network/CORS error on', endpoint.label, ':', e.message);
+        continue;
+      }
+      // Re-throw auth/rate/parse errors immediately — no point retrying
+      if (e.message.startsWith('🔑') || e.message.startsWith('🚫') || e.message.startsWith('⏳') || e.message.startsWith('⚠️')) {
+        throw e;
+      }
+      lastError = e.message;
+      console.warn('[Gemini] error on', endpoint.label, ':', e.message);
+    }
+  }
+  throw new Error(lastError);
 }
 
 /**
- * Call Grok (xAI) with a structured prompt.
- * Uses the OpenAI-compatible chat/completions endpoint.
- * Returns parsed JSON from the model or throws on failure.
- * @param {string} prompt
- * @param {number} timeoutMs
- */
-async function callGrok(prompt, timeoutMs = 20000) {
-  if (!_grokKey) throw new Error('NO_KEY: Grok API key not configured on server');
-  const ctrl = new AbortController();
-  const tid  = setTimeout(() => ctrl.abort(), timeoutMs);
-
-  /* On localhost: route through proxy.
-     On GitHub Pages: call xAI directly with the browser-stored key. */
-  const fetchUrl = _grokProxyBase || GROK_API_URL;
-  const extraHeaders = _grokProxyBase ? {} : { 'Authorization': `Bearer ${_browserGrokKey}` };
-
-  try {
-    const res = await fetch(fetchUrl, {
-      method: 'POST',
-      signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json', ...extraHeaders },
-      body: JSON.stringify({
-        model: GROK_MODEL,
-        messages: [
-          { role: 'system', content: 'You are a helpful assistant. Always respond with valid raw JSON only — no markdown, no explanation.' },
-          { role: 'user',   content: prompt }
-        ],
-        temperature: 0.85,
-        max_tokens: 1200,
-      }),
-    });
-    clearTimeout(tid);
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      const msg = errData?.error?.message || res.statusText || res.status;
-      console.error('[Grok] HTTP error:', res.status, msg);
-      throw new Error(`HTTP_${res.status}: ${msg}`);
-    }
-    const data = await res.json();
-    const raw = data?.choices?.[0]?.message?.content || '';
-    if (!raw) {
-      console.error('[Grok] empty response:', JSON.stringify(data).slice(0, 300));
-      throw new Error('EMPTY_RESPONSE: Grok returned no text');
-    }
-
-    console.log('[Grok] raw response (first 400 chars):', raw.slice(0, 400));
-
-    // Strategy 1: Raw text IS already valid JSON
-    try { return JSON.parse(raw.trim()); } catch (_) {}
-
-    // Strategy 2: Strip ```json ... ``` code fence
-    const fenced = raw.match(/```json\s*([\s\S]*?)```/i);
-    if (fenced) { try { return JSON.parse(fenced[1].trim()); } catch (_) {} }
-
-    // Strategy 3: Strip any ``` ... ``` code fence
-    const anyFence = raw.match(/```\s*([\s\S]*?)```/i);
-    if (anyFence) { try { return JSON.parse(anyFence[1].trim()); } catch (_) {} }
-
-    // Strategy 4: Find the outermost { ... } block
-    const firstBrace = raw.indexOf('{');
-    const lastBrace  = raw.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      try { return JSON.parse(raw.slice(firstBrace, lastBrace + 1)); } catch (_) {}
-    }
-
-    // Strategy 5: Find a JSON array [ ... ]
-    const firstBrack = raw.indexOf('[');
-    const lastBrack  = raw.lastIndexOf(']');
-    if (firstBrack !== -1 && lastBrack > firstBrack) {
-      try { return JSON.parse(raw.slice(firstBrack, lastBrack + 1)); } catch (_) {}
-    }
-
-    console.error('[Grok] could not extract JSON. Full raw:', raw);
-    throw new Error('NO_JSON: Could not extract JSON from Grok response');
-  } catch (e) {
-    clearTimeout(tid);
-    const msg = e.name === 'AbortError' ? 'TIMEOUT: Request timed out' : e.message;
-    console.error('[Grok] threw:', msg);
-    throw new Error(msg);
-  }
-}
-
-/**
- * Unified AI dispatcher — routes to Grok or Gemini based on _aiProvider.
- * Falls back to the other provider if the selected one has no key.
+ * Unified AI dispatcher — routes to Gemini first, then Groq fallback.
+ * Sets `callAI._lastModel` to 'gemini' or 'groq' so callers know which ran.
  * @param {string} prompt
  * @param {number} timeoutMs
  */
 async function callAI(prompt, timeoutMs = 22000) {
-  /* Primary: use whichever provider the user has selected */
-  if (_aiProvider === 'grok' && _grokKey)     return callGrok(prompt, timeoutMs);
-  if (_aiProvider === 'gemini' && _geminiKey) return callGemini(prompt, timeoutMs);
-  /* Fallback: try the other provider automatically */
-  if (_grokKey)   return callGrok(prompt, timeoutMs);
-  if (_geminiKey) return callGemini(prompt, timeoutMs);
-  throw new Error('NO_KEY: No AI provider configured — add GEMINI_API_KEY or GROK_API_KEY to .env');
+  const hasGemini = _geminiKey || _browserGeminiKey;
+  const hasGroq   = !!_browserGroqKey;
+  callAI._lastModel = null;
+
+  /* Try Gemini first */
+  if (hasGemini) {
+    try {
+      const result = await callGemini(prompt, timeoutMs);
+      callAI._lastModel = 'gemini';
+      return result;
+    } catch (e) {
+      console.warn('[callAI] Gemini failed:', e.message, hasGroq ? '— trying Groq fallback…' : '');
+      if (!hasGroq) throw e;
+    }
+  }
+
+  /* Groq fallback */
+  if (hasGroq) {
+    try {
+      const result = await callGroq(prompt, timeoutMs);
+      callAI._lastModel = 'groq';
+      return result;
+    } catch (e) {
+      throw new Error('Both Gemini and Groq failed: ' + e.message);
+    }
+  }
+
+  throw new Error('NO_KEY: No AI key configured — add Gemini or Groq key via ⚙️ Setup AI');
+}
+
+/* ================================================================
+   GROQ AI — LLaMA3 fast text AI, fallback when Gemini unavailable
+================================================================ */
+async function callGroq(prompt, timeoutMs = 20000) {
+  const key = _browserGroqKey;
+  if (!key) throw new Error('🔑 No Groq API key configured. Click ⚙️ Setup AI Keys to add your free key.');
+
+  console.log('[Groq] calling API, key prefix:', key.slice(0, 8) + '…');
+
+  const groqEndpoint = 'https://api.groq.com/openai/v1/chat/completions';
+  const groqHeaders = { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' };
+  const GROQ_MODELS = ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'gemma2-9b-it'];
+
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), timeoutMs);
+  let lastError = 'Groq: unknown error';
+
+  for (const model of GROQ_MODELS) {
+    try {
+      console.log(`[Groq] trying model: ${model}`);
+      const res = await fetch(groqEndpoint, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: groqHeaders,
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: 'You are a helpful assistant that always responds with valid JSON only. No markdown, no explanation, no code fences — just raw JSON.' },
+            { role: 'user', content: prompt }
+          ],
+          max_tokens: 2048,
+          temperature: 0.7
+        })
+      });
+      clearTimeout(tid);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const rawMsg = err?.error?.message || res.statusText;
+        const { code, msg } = _classifyAIError(res.status, rawMsg, false);
+        console.warn(`[Groq] model ${model} HTTP ${res.status} [${code}]:`, rawMsg);
+        lastError = msg;
+        // Auth/quota errors are fatal — key is wrong, no point trying other models
+        if (res.status === 401 || res.status === 403 || res.status === 429) throw new Error(msg);
+        continue;
+      }
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content || '';
+      console.log('[Groq] raw response (first 400):', text.slice(0, 400));
+      if (!text) { lastError = '⚠️ Groq returned empty response'; console.warn('[Groq] empty response from', model); continue; }
+      /* Parse JSON — try several strategies */
+      try { return JSON.parse(text.trim()); } catch (_) {}
+      const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      if (fenced) { try { return JSON.parse(fenced[1].trim()); } catch (_) {} }
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) { try { return JSON.parse(jsonMatch[0]); } catch (_) {} }
+      lastError = '⚠️ Groq responded but output was not valid JSON. Try again.';
+      console.error('[Groq] could not parse JSON from model', model, ':', text.slice(0, 300));
+      throw new Error(lastError);
+    } catch (e) {
+      clearTimeout(tid);
+      if (e.name === 'AbortError') throw new Error('⏱️ Groq request timed out — your internet may be slow. Try again.');
+      if (e instanceof TypeError && e.message.includes('fetch')) {
+        const { msg } = _classifyAIError(0, e.message, true);
+        lastError = msg;
+        console.warn('[Groq] network/CORS error:', e.message);
+        continue;
+      }
+      // Re-throw descriptive errors immediately
+      if (e.message.startsWith('🔑') || e.message.startsWith('🚫') || e.message.startsWith('⏳') || e.message.startsWith('⚠️') || e.message.startsWith('⏱️')) {
+        throw e;
+      }
+      lastError = e.message;
+      console.warn('[Groq] model failed, trying next:', model, e.message);
+    }
+  }
+  throw new Error(lastError);
+}
+
+/* ================================================================
+   HUGGINGFACE — FLUX.1-schnell image generation for Meme Studio
+================================================================ */
+async function fetchHuggingFaceImage(query, timeoutMs = 35000) {
+  const key = _browserHFKey;
+  if (!key) throw new Error('NO_HF_KEY');
+
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), timeoutMs);
+  const enhancedPrompt = `${query}, high quality, vibrant colors, expressive faces, photorealistic, funny meme style`;
+
+  /* Try FLUX.1-schnell first; fall back to stable-diffusion-xl-base-1.0 if model is down */
+  const HF_MODELS = [
+    'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell',
+    'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell',
+    'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0',
+  ];
+
+  for (const endpoint of HF_MODELS) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ inputs: enhancedPrompt })
+      });
+      clearTimeout(tid);
+      /* Model still loading — wait and retry with same endpoint once */
+      if (res.status === 503) {
+        await new Promise(r => setTimeout(r, 9000));
+        const res2 = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inputs: enhancedPrompt })
+        });
+        if (!res2.ok) continue; // try next model
+        const blob2 = await res2.blob();
+        return URL.createObjectURL(blob2);
+      }
+      if (res.status === 401 || res.status === 403) throw new Error('HuggingFace key invalid or expired');
+      if (!res.ok) { console.warn(`[HF] ${endpoint} → ${res.status}`); continue; }
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    } catch (e) {
+      clearTimeout(tid);
+      if (e.message.includes('invalid') || e.message.includes('expired')) throw e;
+      if (e.name === 'AbortError') throw e;
+      console.warn('[HF] endpoint failed:', endpoint, e.message);
+    }
+  }
+  throw new Error('HuggingFace: all model endpoints failed');
 }
 
 /**
  * AI-rewrite all four content fields in one single API call to save quota.
  * Returns { hook, title, description, hashtags } or null on failure.
  */
-async function rewriteWithAI(rawTitle, articleBody, sourceLang) {
-  if (!_grokKey && !_geminiKey) return null;
+async function rewriteWithAI(rawTitle, articleBody, sourceLang, category) {
+  const hasGemini = _geminiKey || _browserGeminiKey;
+  const hasGroq   = !!_browserGroqKey;
+
+  console.log('[AI DEBUG] rewriteWithAI called — Gemini:', !!hasGemini, '| Groq:', hasGroq);
+
+  if (!hasGemini && !hasGroq) {
+    console.warn('[AI DEBUG] No AI key found — returning null immediately');
+    return null;
+  }
+
+  const aiLabel = hasGemini ? '✨ Gemini' : '⚡ Groq';
 
   /* Give AI the richest possible context — up to 3000 chars of actual article body */
-  const bodySnippet = (articleBody || '').replace(/\s+/g, ' ').slice(0, 3000).trim();
+  const bodySnippet = _cleanArticleText(articleBody || '', rawTitle).replace(/\s+/g, ' ').slice(0, 3000).trim();
   const langNote = sourceLang === 'ne' ? 'Nepali' : sourceLang === 'hi' ? 'Hindi' : 'English';
   const hasBody = bodySnippet.length > 100;
 
-  const prompt = `You are an expert Nepali news journalist and viral social media editor.
+  /* ── Google Search grounding: research the topic for richer context ── */
+  let researchContext = '';
+  if (hasGemini && rawTitle && rawTitle.length > 5) {
+    console.log('[AI] Running Google Search grounding for extra context…');
+    researchContext = await _researchWithGemini(rawTitle, bodySnippet).catch(() => '');
+    if (researchContext) console.log('[AI] Research context obtained — injecting into prompt');
+  }
 
-READ THIS NEWS ARTICLE CAREFULLY:
+  /* ── Category-specific prompt configuration ── */
+  const catCfg = {
+    'nepali-ent': {
+      persona:    'expert Nepali entertainment journalist and viral social media content creator who covers Nepali film, music and celebrity news',
+      audience:   'Nepali film fans, music lovers, and entertainment followers in Nepal and the Nepali diaspora',
+      hookEmojis: '🎬 (movie/film), 🎵 (music/song), ⭐ (celebrity), 💫 (star), 🏆 (award/achievement), 💔 (breakup/drama), 🔥 (viral/trending), 😱 (shocking celebrity news)',
+      hookTip:    'Start with a fan-engaging, celebrity-focused line that makes Nepali film lovers want to immediately share it',
+      titleTip:   'Write a detailed Nepali movie/celebrity/music headline with REAL actor/film/song names from the article',
+      descTip:    'Write in Nepali entertainment journalism style (like Setopati or Ratopati entertainment section). Focus on the film/music/celebrity story, fan reaction, box office/streaming numbers if available.',
+      hashtagSeed:'#नेपाली_चलचित्र, #नेपाली_मनोरञ्जन, #NepaliFilm, #NepaliCinema, #नेपाली_कलाकार',
+      langInstruction: 'All hook, title, description MUST be written in Nepali (नेपाली) Devanagari script. Translate/adapt from source language to Nepali.',
+    },
+    'bhojpuri': {
+      persona:    'expert regional journalist covering Bihar, Jharkhand and Bhojpuri-speaking states with deep knowledge of local politics, society, culture and the Bhojpuri film and music industry',
+      audience:   'residents of Bihar, Jharkhand, eastern UP and the global Bhojpuri diaspora who follow local news, politics and Bhojpuri cinema',
+      hookEmojis: '🗞️ (news), 📢 (announcement), 🎬 (film), 🎵 (song), 🏛️ (politics), 🌾 (agriculture/rural), 🔥 (viral/trending), ⭐ (celebrity)',
+      hookTip:    'Start with a punchy, engaging hook that resonates with Bihar/Bhojpuri audiences — whether it is local politics, a big film release, or a viral moment',
+      titleTip:   'Write a detailed headline with REAL names — politicians, actors, places in Bihar/Jharkhand (e.g. Pawan Singh, Nitish Kumar, Patna, Ranchi)',
+      descTip:    'Write in engaging Hindi journalism style covering Bihar/Bhojpuri states. If about film/music use Bhojpuri entertainment style; if about politics/society use regional news style. Include key details — location, people involved, and why it matters to the region.',
+      hashtagSeed:'#बिहार, #Bihar, #भोजपुरी_फिल्म, #BhojpuriCinema, #पटना, #Patna, #झारखंड',
+      langInstruction: 'All hook, title, description MUST be written in Hindi (हिंदी) Devanagari script. Translate/adapt from source language to Hindi.',
+    },
+    'hindi-ent': {
+      persona:    'expert Bollywood entertainment journalist and viral social media content creator who covers Hindi films, celebrities and music',
+      audience:   'Bollywood fans across India and the South Asian diaspora worldwide',
+      hookEmojis: '🎬 (film/movie), 🌟 (Bollywood star), 🎵 (music/song), 🏆 (box office hit), 💔 (celebrity drama), 🔥 (viral/trending), 😱 (shocking news), 💫 (glamour)',
+      hookTip:    'Start with a punchy Bollywood fan-page style hook that makes fans immediately want to comment and share',
+      titleTip:   'Write a detailed Bollywood headline with REAL actor/film/director names from the article (e.g. Shah Rukh Khan, Deepika Padukone, etc.)',
+      descTip:    'Write in energetic Bollywood entertainment journalism style (like Pinkvilla or Filmfare). Include box office numbers, OTT release info, celebrity quotes or fan reactions.',
+      hashtagSeed:'#बॉलीवुड, #Bollywood, #HindiFilm, #BollywoodNews, #BollywoodMovies',
+      langInstruction: 'All hook, title, description MUST match the source article language.',
+    },
+    'science': {
+      persona:    'expert science and technology journalist who makes complex innovations clear, accurate and viral for social media audiences',
+      audience:   'tech-savvy readers, students, professionals and science enthusiasts',
+      hookEmojis: '🔬 (science/research), 🚀 (space/future), 💡 (innovation/idea), 🤖 (AI/robots), 🌍 (environment/climate), ⚡ (breakthrough), 🧬 (biology/health), 🔭 (discovery)',
+      hookTip:    'Start with a mind-blowing fact or discovery that makes the reader say "Wow, I had no idea!" — make it feel like the future is here',
+      titleTip:   'Write a detailed science/tech headline that clearly states the breakthrough or innovation and WHY it matters',
+      descTip:    'Write in clear, exciting science journalism style. Explain WHAT the discovery/invention is, HOW it works in simple terms, and WHY it matters. Use analogies where helpful.',
+      hashtagSeed:'#Science, #Technology, #Innovation, #विज्ञान, #प्रविधि',
+      langInstruction: 'All hook, title, description MUST match the source article language.',
+    },
+    'world': {
+      persona:    'expert international news journalist and viral social media content strategist covering global affairs',
+      audience:   'globally-aware readers who follow international politics, conflicts and world events',
+      hookEmojis: '🌍 (world/global), 🚨 (breaking/urgent), ⚡ (crisis), 💔 (tragedy), 🏆 (victory/milestone), 🗳️ (election/politics), 💰 (economy), 🌊 (disaster)',
+      hookTip:    'Start with an urgent, impactful hook that makes readers feel this world event is unmissable',
+      titleTip:   'Write a detailed international news headline with REAL country names, leader names, and specific consequences',
+      descTip:    'Write in international news journalism style. Explain WHAT happened, WHERE, WHO is involved, WHY it matters, and what happens next.',
+      hashtagSeed:'#WorldNews, #BreakingNews, #International, #Global, #विश्व_समाचार',
+      langInstruction: 'All hook, title, description MUST match the source article language.',
+    },
+    'india-hi': {
+      persona:    'expert Indian news journalist and viral Hindi social media content creator covering national politics, economy, society, sports and culture for Hindi-speaking audiences across India',
+      audience:   'Hindi-speaking Indians across all states who follow national news, politics, business and social issues',
+      hookEmojis: '🇮🇳 (India), 🏛️ (politics/parliament), 💰 (economy/finance), 🚨 (breaking news), ⚡ (urgent), 🌾 (agriculture), 🏏 (cricket/sports), 🔥 (viral/trending)',
+      hookTip:    'Start with a strong, emotionally engaging hook in Hindi that makes Indian readers immediately want to read and share',
+      titleTip:   'Write a detailed Hindi headline with REAL names — politicians, cities, events (e.g. Modi, Delhi, Lok Sabha, Supreme Court)',
+      descTip:    'Write in engaging Hindi news journalism style (like Aaj Tak or BBC Hindi). Explain WHO, WHAT, WHERE, WHEN, WHY clearly. Focus on impact on common Indian citizens. Include key facts, numbers and quotes.',
+      hashtagSeed:'#भारत, #India, #BreakingNews, #भारत_समाचार, #IndiaNews, #हिंदी_समाचार',
+      langInstruction: 'All hook, title, description MUST be written in Hindi (हिंदी) Devanagari script. Translate/adapt from source language to Hindi.',
+    },
+    'india-en': {
+      persona:    'expert Indian English-language journalist and viral social media content creator covering national politics, economy, technology, sports and society for English-speaking Indian audiences',
+      audience:   'English-speaking Indians, NRIs and global readers interested in India — professionals, students, policymakers and diaspora',
+      hookEmojis: '🇮🇳 (India), 🏛️ (politics/democracy), 💰 (economy/markets), 🚨 (breaking), ⚡ (urgent), 🏏 (cricket/sports), 🤖 (technology/AI), 🔥 (viral/trending)',
+      hookTip:    'Start with a sharp, punchy English hook that makes English-speaking Indian readers instantly engage and share on LinkedIn, X or Instagram',
+      titleTip:   'Write a detailed English headline with REAL names — politicians, institutions, cities (e.g. PM Modi, Supreme Court, Mumbai, RBI, ISRO)',
+      descTip:    'Write in crisp English news journalism style (like The Hindu or Times of India). Cover WHO, WHAT, WHERE, WHEN, WHY. Include specific numbers, quotes, and the direct impact on India and its citizens.',
+      hashtagSeed:'#India, #IndiaNews, #BreakingIndia, #IndianPolitics, #IndiaEconomy, #BJP, #Congress',
+      langInstruction: 'All hook, title, description MUST be written in English.',
+    },
+    'twitter': {
+      persona:    'expert breaking news journalist and viral social media editor who curates and rewrites the most impactful latest tweets and wire reports from top news influencers into compelling social media posts',
+      audience:   'fast-news followers on Twitter/X, Facebook and Instagram who want instant, accurate breaking news in an engaging format',
+      hookEmojis: '🚨 (breaking), ⚡ (urgent), 🔴 (live), 📢 (announcement), 🗞️ (news wire), 🌐 (global), 🏛️ (political), 💣 (shocking)',
+      hookTip:    'Start with a BREAKING-NEWS style hook like a tweet would — ultra short, high-impact, creates immediate urgency',
+      titleTip:   'Write a punchy breaking-news headline like a tweet — short, direct, with REAL names, numbers and outcomes. Max 12 words.',
+      descTip:    'Write in fast-paced breaking news wire style. Give WHO, WHAT, WHERE, WHEN in the first sentence. Expand with context in subsequent paragraphs. Include the source/handle where relevant.',
+      hashtagSeed:'#BreakingNews, #Breaking, #NewsAlert, #LiveUpdates, #viral, #trending',
+      langInstruction: 'Match the source article language — write in English if the tweet/article is in English, in Hindi if it is in Hindi, in Nepali if it is in Nepali.',
+    },
+  };
+
+  /* Default = Nepal breaking news (existing behaviour) */
+  const cfg = catCfg[category] || {
+    persona:    'expert Nepali news journalist and viral social media content strategist with deep knowledge of what goes viral on Facebook, Instagram and X (Twitter) in Nepal',
+    audience:   'Nepali social media users across all ages',
+    hookEmojis: '🔥 anger/controversy, 😱 shock, 💔 tragedy, ⚡ breaking, 🏆 victory, 💰 money/economy, 🚨 urgent, 🗳️ politics/election, 🌊 disaster, 🏥 health',
+    hookTip:    'Mention the SPECIFIC subject of THIS news (a real name, place, or event from the article). Make it feel urgent and emotionally compelling.',
+    titleTip:   'Must contain: WHO, WHAT happened, WHERE, and the most important number or consequence',
+    descTip:    'Write in formal Nepali journalism style (like Kantipur or Onlinekhabar). Include WHO, WHAT, WHERE, WHEN, WHY and impact on common people.',
+    hashtagSeed:'#BreakingNepal, #नेपाल_समाचार, #NepalNews, #नेपाल, #Nepal',
+    langInstruction: 'All hook, title, description MUST be in Nepali Devanagari script.',
+  };
+
+  /* ── Dynamic language: always generate in the same language as the article ── */
+  if (sourceLang === 'hi') {
+    cfg.langInstruction = 'All hook, title, description MUST be written in Hindi (हिंदी) Devanagari script. Use natural, engaging Hindi journalism style matching the category tone.';
+    cfg.audience = cfg.audience.replace(/\bNepali\b/gi, 'Hindi-speaking').replace(/नेपाली/g, 'हिंदी भाषी');
+    cfg.descTip  = cfg.descTip.replace(/\bNepali\b/gi, 'Hindi').replace(/नेपाली/g, 'हिंदी');
+  } else if (sourceLang === 'en') {
+    cfg.langInstruction = 'All hook, title, description MUST be written in English. Use clear, engaging English journalism style.';
+    cfg.audience = cfg.audience.replace(/\bNepali\b/gi, 'English-speaking').replace(/नेपाली/g, 'English-speaking');
+    cfg.descTip  = cfg.descTip.replace(/\bNepali\b/gi, 'English').replace(/नेपाली/g, 'English');
+  } else {
+    cfg.langInstruction = 'All hook, title, description MUST be written in Nepali (नेपाली) Devanagari script. Use natural, accurate Nepali journalism style.';
+  }
+
+  /* Target language name for prompt copy */
+  const targetLangName = sourceLang === 'hi' ? 'Hindi' : sourceLang === 'en' ? 'English' : 'Nepali';
+
+  const prompt = `You are an ${cfg.persona}.
+
+⚠️ LANGUAGE (HIGHEST PRIORITY — overrides everything): Write ALL output — hook, title, description, hashtags — in ${targetLangName} ONLY. This is NON-NEGOTIABLE. Do NOT produce any other language.
+
+Your target audience: ${cfg.audience}
+
+READ THIS ARTICLE CAREFULLY AND MEMORISE EVERY FACT:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HEADLINE (${langNote}): ${rawTitle}
 ${hasBody ? `FULL ARTICLE BODY:\n${bodySnippet}` : '(No article body available — work from headline only)'}
+${researchContext ? `\nADDITIONAL CONTEXT (from Google Search):\n${researchContext}` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Your job: After reading the article above, write compelling Nepali social media content.
-CRITICAL: Every output field MUST be based on the ACTUAL specific details in this article.
-- Use the REAL names of people, places, organisations mentioned
-- Use the REAL numbers (deaths, injuries, amounts, dates) from the article
-- Use the REAL event/action described — do NOT invent or guess details
+🚨 ACCURACY IS YOUR #1 PRIORITY — READ THIS FIRST 🚨
+You are a TRANSLATOR and FORMATTER, not a creative writer. Your job is to:
+1. ACCURATELY translate/rewrite the above article into ${targetLangName}
+2. Format it nicely for Facebook
+
+ABSOLUTE RULES — violating any of these makes the output WRONG:
+• NEVER change WHO won, who lost, who died, who was arrested, who scored, the result, the outcome
+• NEVER invert a fact (e.g. if the article says "Nepal lost the toss" you MUST write "नेपालले टस हार्‍यो" — NEVER write "जित्यो")
+• NEVER add facts not present in the article
+• NEVER remove key facts from the article
+• NEVER change names, places, scores, dates, numbers — copy them EXACTLY
+• If you are unsure of a fact, write what the article says — do NOT guess or "improve" it
+• The article is the SINGLE SOURCE OF TRUTH — your output must be a faithful ${targetLangName} rendering of it
 
 ━━━ OUTPUT FORMAT (strict JSON, no markdown) ━━━
 
 {
-  "hook": "<ONE punchy viral opening line in Nepali Devanagari>",
-  "title": "<Sharp news headline in Nepali Devanagari>",
-  "description": "<3-4 sentence factual news paragraph in Nepali Devanagari>",
-  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5", "#tag6", "#tag7", "#tag8"]
+  "hook": "<ONE opening line in ${targetLangName} — accurate, engaging>",
+  "title": "<${targetLangName} headline — 1 to 2 lines, based 100% on the article>",
+  "description": "<Structured bullet-point post in ${targetLangName} — 🔴 summary → 📌 Background bullets → ⚡ Key Facts bullets → 👥 Reactions bullets → 🔮 What's Next bullets → 👉 call-to-action. NO paragraphs. ONLY bullets.>",
+  "hashtags": ["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#tag9","#tag10","#ShashiNewsGen"]
 }
 
 ━━━ RULES FOR EACH FIELD ━━━
 
-HOOK (max 18 words in Nepali):
-• Start with ONE emoji matching the news mood (🔥 anger/controversy, 😱 shock, 💔 tragedy, ⚡ breaking, 🏆 victory, 💰 money/economy, 🚨 urgent, 🗳️ politics/election)
-• Must mention the SPECIFIC subject of THIS news (a real name, place, or event from the article)
-• Make it feel urgent and personal — WHY should a Nepali reader care RIGHT NOW?
-• NEVER write generic phrases like "नेपालमा ठूलो घटना" or "महत्त्वपूर्ण समाचार"
+HOOK (max 15 words — opening line in ${targetLangName}):
+• Start with ONE emoji matching the mood — choose from: ${cfg.hookEmojis}
+• ${cfg.hookTip}
+• The hook creates curiosity — it hints at the news but does NOT restate the title
+• NEVER use generic phrases like "एउटा ठूलो खबर" or "महत्त्वपूर्ण समाचार"
+• MUST be 100% factually accurate — do NOT add drama that changes the meaning
 
-TITLE (max 30 words in Nepali):
-• Must contain the KEY fact: WHO did WHAT (or WHAT happened WHERE)
-• Include the most important name or number from the story
-• SEO-friendly — reads like a newspaper front page headline
-• NEVER start with "नेपालमा" unless the story is specifically about Nepal as a country
+TITLE (1 to 2 LINES MAX — the ${targetLangName} headline):
+• MAX 10 words per line — SHORT, PUNCHY, DIRECT
+• Based STRICTLY on the article — reflect the ACTUAL outcome/event
+• MUST copy real names, places, results from the article exactly
+• Use \\n to separate lines. Do NOT write 3 lines.
+• ${cfg.titleTip}
 
-DESCRIPTION (60-90 Nepali words total, 3-4 sentences):
-• Sentence 1: State exactly WHAT happened, WHO was involved, WHERE/WHEN (use real names from article)
-• Sentence 2: WHY it happened or KEY details/numbers (death toll, amount, cause)
-• Sentence 3: Reaction, impact, or consequence (who responded, what changed)
-• Sentence 4: Current status or what happens next
-• Write in formal Nepali journalism style (like Kantipur or Onlinekhabar)
-• NEVER use vague fillers like "सम्बन्धित निकायले जानकारी दिएको छ"
+DESCRIPTION (structured bullet-point post in ${targetLangName} — accurate, Facebook-ready):
+• This is an ACCURATE TRANSLATION/REWRITE of the article — not a creative piece
+• Every bullet must reflect what is stated in the article
+• NEVER repeat the hook or title — the description EXPANDS with more detail
+• Use a blank line between each section
+• Write ALL content in ${targetLangName} only — NO mixing of languages
+• Use this EXACT bullet structure:
 
-HASHTAGS (exactly 8):
-• 3-4 must be STORY-SPECIFIC: the real name, place, or event keyword from THIS article
-• Mix: ~4 in Nepali Devanagari, ~4 in English
-• Include relevant trending Nepali news hashtags like #NepalPolitics, #नेपाल_राजनीति, #BreakingNepal etc. ONLY if relevant
-• NO generic tags like #Nepal or #नेपाल unless the story is pan-Nepal
-• No spaces within a hashtag
+🔴 [1-2 sentence summary — WHO did WHAT, WHERE, key result]
 
-LANGUAGE: All hook, title, description text MUST be in Nepali Devanagari script.
+📌 Background:
+• [Key context point 1]
+• [Key context point 2]
+• [Key context point 3]
+
+⚡ Key Facts:
+• [Specific number / date / stat from article]
+• [Specific quote or statement from article]
+• [Location / timeline detail from article]
+• [Any other key data point from article]
+
+👥 Reactions & Impact:
+• [Who responded and how]
+• [Consequence or effect mentioned in article]
+• [Affected people / communities]
+
+🔮 What's Next:
+• [Next expected development]
+• [Implication or ongoing situation]
+
+👉 [Call to action — ask readers to share and comment, written in ${targetLangName}] 💬
+
+• ${cfg.descTip}
+• Each bullet = 1 concise sentence. Do NOT write long paragraphs. ONLY bullet points.
+• 15–25 bullets total across all sections.
+
+━━━ GRAMMAR & LANGUAGE RULES ━━━
+${sourceLang === 'ne' ? `
+NEPALI GRAMMAR RULES (MANDATORY — apply to every sentence):
+
+VERB FORMS — use the CORRECT Nepali perfective/progressive forms:
+✅ CORRECT → ❌ WRONG
+• "गएको छ" → ❌ "गयो छ" / "गयेको छ"
+• "भएको छ" → ❌ "भयो छ" / "भयेको छ"
+• "गरेको छ" → ❌ "गरेयो छ" / "गरयो"
+• "गरेका छन्" → ❌ "गरेछन्" / "गर्छन् छन्"
+• "भनेका छन्" → ❌ "भनेछन्"
+• "आएको छ" → ❌ "आयो छ"
+• "गरिएको छ" → ❌ "गरियो छ"
+• Simple past: "गयो", "भयो", "आयो", "गर्‍यो", "बसे", "गरे", "भने"
+• Present perfect: "गएको छ", "भएको छ", "गरेको छ", "आएको छ"
+• Future: "गर्नेछ", "हुनेछ", "आउनेछ"
+• Respectful past: "गर्नुभयो", "आउनुभयो", "भन्नुभयो"
+
+BANNED HINDI/MIXED WORDS — NEVER use in Nepali text:
+❌ हो गया, हो गई, कर दिया, बन गया, आ गया
+❌ के लिए (use "को लागि"), के साथ (use "सँग"), नहीं (use "छैन")
+❌ बहुत (use "धेरै"), लेकिन (use "तर"), और (use "र"), भी (use "पनि"), या (use "वा")
+❌ क्योंकि (use "किनभने"), इसलिए (use "त्यसैले")
+` : ''}${sourceLang === 'hi' ? `
+HINDI GRAMMAR RULES (for Hindi output):
+• Use correct Hindi verb forms: "हो गया", "किया है", "किया गया", "हो रहा है"
+• Natural Hindi connectors: क्योंकि, इसलिए, लेकिन, हालांकि, जिससे, जबकि
+• Respectful forms: ने कहा, ने बताया, ने किया
+• NO Nepali or English words mixed into Hindi text
+` : ''}${sourceLang === 'en' ? `
+ENGLISH WRITING RULES (for English output):
+• Use clear, journalistic English — active voice where possible
+• Natural connectors: because, therefore, however, meanwhile, as a result
+• Attribution: "said", "stated", "confirmed", "announced"
+• NO Nepali or Hindi words mixed into English text
+` : ''}
+
+QUALITY CHECK before outputting (mentally verify each):
+✓ FACT CHECK: Does the title match the article exactly? (correct outcome, correct names, no inverted results)
+✓ Are ALL names, places, scores, dates, outcomes copied EXACTLY from the article?
+✓ Have you added ANY fact not in the article? If yes, REMOVE it.
+✓ Does the hook create curiosity WITHOUT changing or exaggerating the facts?
+✓ Does each bullet section cover a DIFFERENT aspect (no repetition)?
+✓ Are there duplicate bullets? If yes, DELETE one.
+✓ Is the ENTIRE output written in ${targetLangName} only? (NO mixing languages)
+✓ All bullets are concise single sentences? (no paragraph prose inside bullet fields)
+✓ Is the description using the correct bullet structure (🔴 / 📌 / ⚡ / 👥 / 🔮 / 👉)?
+
+HASHTAGS (exactly 11 — the last MUST be #ShashiNewsGen — for viral Facebook SEO):
+• Tags 1-5: STORY-SPECIFIC keywords from THIS article (in the article's language — real names, places, events, people)
+• Tags 6-9: Viral reach tags — from: ${cfg.hashtagSeed}, #viral, #trending, #BreakingNews
+• Tag 10: ONE broad reach tag: #viral OR #trending OR #breaking OR #news
+• Tag 11: MUST be exactly #ShashiNewsGen
+• No spaces within any hashtag — Facebook-compatible
+
+WRITING TIPS FOR FACEBOOK (secondary — only after accuracy is guaranteed):
+• Use the specific numbers from the article (scores, dates, figures) — they make posts more credible and shareable
+• Emotional language is fine — but it must describe what ACTUALLY happened, not a changed version
+• "tapailai tha cha?" style is good — but only when it does not distort the facts
+• Descriptions should feel like they were written by a real person who read and understood the article
+• Emojis should be copy-paste-ready standard Unicode (no custom/special chars)
+
+LANGUAGE: ${cfg.langInstruction}
 OUTPUT: Raw JSON only — no \`\`\`json, no explanation, nothing else.`;
 
+  /* For Groq (LLaMA3), use a shorter, more direct prompt to avoid token issues */
+  const usingGroqModel = !(_geminiKey || _browserGeminiKey) && !!_browserGroqKey;
+  const groqLangInstruction = sourceLang === 'en'
+    ? 'Write everything in ENGLISH.'
+    : sourceLang === 'hi'
+    ? 'Write everything in HINDI (\u0939\u093f\u0902\u0926\u0940) Devanagari script. Use natural Hindi journalism style.'
+    : 'Write everything in NEPALI (\u0928\u0947\u092a\u093e\u0932\u0940) Devanagari script. Use correct Nepali verb forms (\u0917\u090f\u0915\u094b \u091b, NOT \u0917\u092f\u094b \u091b; \u092d\u090f\u0915\u094b \u091b, NOT \u092d\u092f\u094b \u091b).';
+  const finalPrompt = usingGroqModel ? `You are a ${targetLangName} news translator and journalist. Accurately translate and rewrite this article into ${targetLangName} for Facebook.
+
+HEADLINE: ${rawTitle}
+${bodySnippet ? `ARTICLE BODY: ${bodySnippet.slice(0, 1000)}` : ''}
+
+\ud83d\udea8 ACCURACY FIRST — MOST IMPORTANT RULE:
+- NEVER change who won/lost, who died, who was arrested, the result, the outcome
+- NEVER invert facts (if article says "Nepal lost the toss" write "नेपालले टस हार्‍यो" — NEVER "जित्यो")
+- NEVER add facts not in the article
+- Copy names, scores, dates, numbers EXACTLY from the article
+- The article is the SINGLE SOURCE OF TRUTH
+
+LANGUAGE: ${groqLangInstruction}
+
+FORMAT RULES:
+- hook = teaser (1 sentence, max 15 words, one emoji, creates curiosity without changing facts)
+- title = accurate headline in ${targetLangName} (1-2 lines, max 10 words/line, real names/places/results)
+- description = bullet-point structured post in ${targetLangName}. Use this format:
+  🔴 [1-2 sentence summary]
+  📌 Background: • [point 1] • [point 2] • [point 3]
+  ⚡ Key Facts: • [fact 1] • [fact 2] • [fact 3] • [fact 4]
+  👥 Reactions & Impact: • [point 1] • [point 2] • [point 3]
+  🔮 What's Next: • [point 1] • [point 2]
+  👉 [Call to action in ${targetLangName}] 💬
+  Each bullet = 1 concise sentence. 15-20 bullets total. NO paragraph prose.
+
+Return ONLY this JSON (no markdown):
+{"hook":"<accurate tease, 1 sentence, max 15 words>","title":"<accurate 1-2 line headline, real names/results/numbers from article>","description":"<bullet-point post: 🔴 summary \\n\\n📌 Background:\\n• point1\\n• point2\\n\\n⚡ Key Facts:\\n• fact1\\n• fact2\\n\\n👥 Reactions:\\n• point1\\n\\n🔮 What's Next:\\n• point1\\n\\n👉 call-to-action>","hashtags":["#tag1","#tag2","#tag3","#tag4","#tag5","#tag6","#tag7","#tag8","#ShashiNewsGen"]}` : prompt;
+
   let result;
+  let _aiFailReason = null;
   try {
-    result = await callAI(prompt, 30000);
+    console.log('[AI DEBUG] calling callAI… model:', usingGroqModel ? 'Groq' : 'Gemini');
+    result = await callAI(finalPrompt, 30000);
+    console.log('[AI DEBUG] callAI returned:', JSON.stringify(result)?.slice(0, 200));
   } catch(e) {
+    _aiFailReason = e.message;
     console.warn('[AI Rewrite] callAI threw:', e.message);
-    return null;
+    return { _error: _aiFailReason };   // return error object, not null, so caller can show it
   }
-  if (!result) return null;
+  if (!result) { console.warn('[AI DEBUG] result is null/undefined after callAI'); return { _error: '⚠️ AI returned empty result — try again.' }; }
 
   /* Validate the response has all required fields with Devanagari content */
   const { hook, title, description, hashtags } = result;
   const hasDevanagari = s => /[\u0900-\u097F]{3,}/.test(s || '');
+  console.log('[AI DEBUG] hook:', hook);
+  console.log('[AI DEBUG] title:', title);
+  console.log('[AI DEBUG] description (first 80):', (description||'').slice(0,80));
+  console.log('[AI DEBUG] hashtags:', hashtags);
+  console.log('[AI DEBUG] hook hasDevanagari:', hasDevanagari(hook), '| title:', hasDevanagari(title), '| desc:', hasDevanagari(description));
 
-  if (!hasDevanagari(hook) || !hasDevanagari(title) || !hasDevanagari(description)) {
-    console.warn('[AI Rewrite] Response missing Devanagari — falling back');
-    return null;
+  /* Validate fields exist and are non-empty strings */
+  if (!hook || !title || !description) {
+    const missing = [!hook&&'hook', !title&&'title', !description&&'description'].filter(Boolean).join(', ');
+    console.warn('[AI Rewrite] Missing required fields:', missing);
+    return { _error: `⚠️ AI responded but output was incomplete (missing: ${missing}). Try again.` };
   }
+
+  /* Validate Devanagari content — only required when output language uses Devanagari script (Nepali/Hindi).
+     Skip check entirely for English output (india-en tab or any English-language article). */
+  const actualModel = callAI._lastModel || ((_geminiKey || _browserGeminiKey) ? 'gemini' : 'groq');
+  if (actualModel === 'gemini' && sourceLang !== 'en') {
+    if (!hasDevanagari(description)) {
+      console.warn('[AI Rewrite] Gemini description missing Devanagari — desc:', (description||'').slice(0,80));
+      return { _error: `⚠️ Gemini responded in wrong language. Try again — or try a different article.` };
+    }
+  }
+  /* For Groq: accept any non-empty response — it may write partly in English */
   if (!Array.isArray(hashtags) || hashtags.length < 3) {
-    console.warn('[AI Rewrite] Invalid hashtags array — falling back');
-    return null;
+    console.warn('[AI Rewrite] Invalid hashtags array');
+    return { _error: '⚠️ AI response was missing hashtags. Try again.' };
+  }
+
+  /* Always ensure #ShashiNewsGen is present as the brand tag */
+  let finalHashtags = hashtags.slice(0, 11).map(h => h.startsWith('#') ? h : '#' + h);
+  if (!finalHashtags.some(h => h.toLowerCase() === '#shashinewsgen')) {
+    finalHashtags = [...finalHashtags.slice(0, 10), '#ShashiNewsGen'];
   }
 
   return {
     hook:        hook.trim(),
     title:       cleanTitle(title.trim()),
     description: description.trim(),
-    hashtags:    hashtags.slice(0, 8).map(h => h.startsWith('#') ? h : '#' + h),
+    hashtags:    finalHashtags,
   };
 }
 
@@ -2031,7 +3625,12 @@ OUTPUT: Raw JSON only — no \`\`\`json, no explanation, nothing else.`;
 async function selectArticle(idx) {
   document.querySelectorAll('.news-item').forEach(el => el.classList.remove('active'));
   document.getElementById('item-' + idx)?.classList.add('active');
-  selectedArticle = articles[idx];
+  /* Category articles use idx >= 1000000 — look them up in the cat pool */
+  if (idx >= 1000000) {
+    selectedArticle = _catPool[idx - 1000000] || null;
+  } else {
+    selectedArticle = articles[idx];
+  }
   /* New article = new image — clear ALL uploaded images and composite state */
   customImageDataUrl   = null;
   _subjectDataUrl      = null;
@@ -2071,6 +3670,15 @@ async function selectArticle(idx) {
   _renderExtraTextList();
   resetImgAdjust(/* silent */ true);
 
+  /* Disable Share All buttons until new image is generated */
+  ['shareAllBtn', 'shareAllBtn2'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = true;
+    btn.style.opacity = '.45';
+    btn.style.cursor  = 'not-allowed';
+  });
+
   /* Show panel immediately */
   document.getElementById('contentWelcome').style.display = 'none';
   document.getElementById('contentOutput').style.display  = 'block';
@@ -2100,8 +3708,8 @@ async function selectArticle(idx) {
   const bestBody = fullArticleText || selectedArticle.description || '';
 
   /* ── Step 2: Show AI indicator in spinners if any AI key is set ── */
-  const aiReady = _geminiKey || _grokKey;
-  const aiLabel = _aiProvider === 'grok' ? '⚡ Grok' : '✨ Gemini';
+  const aiReady = _geminiKey || _browserGeminiKey || _browserGroqKey;
+  const aiLabel = (_geminiKey || _browserGeminiKey) ? '✨ Gemini' : '⚡ Groq';
   if (aiReady) {
     document.getElementById('outHook').innerHTML =
       `<span class="spinner" style="border-color:rgba(139,92,246,.3);border-top-color:#a78bfa"></span> 🤖 ${aiLabel} AI ले hook लेख्दैछ…`;
@@ -2115,9 +3723,9 @@ async function selectArticle(idx) {
   let hook, nepaliTitle, desc, hashtags;
   let aiUsed = false;
 
-  const aiResult = await rewriteWithAI(rawTitle, bestBody, sourceLang);
+  const aiResult = await rewriteWithAI(rawTitle, bestBody, sourceLang, selectedArticle._category || _activeNewsTab);
 
-  if (aiResult) {
+  if (aiResult && !aiResult._error) {
     /* ✅ AI succeeded — use fully original AI-generated content */
     hook        = aiResult.hook;
     nepaliTitle = aiResult.title;
@@ -2129,36 +3737,96 @@ async function selectArticle(idx) {
     /* Step 3a: Translate title to Nepali */
     nepaliTitle = await buildTitle(rawTitle, sourceLang);
     /* Step 3b: Hook from topic-aware template bank */
-    hook = buildHook(nepaliTitle + ' ' + rawTitle);
-    /* Step 3c: Build description (translates + extracts key facts) */
-    desc = await buildDescription(nepaliTitle, rawTitle, bestBody, sourceLang);
+    hook = buildHook(nepaliTitle + ' ' + rawTitle, bestBody);
+    /* Step 3c: Use raw article text directly; fall back to template only if no body */
+    if (fullArticleText && fullArticleText.trim().length > 150) {
+      desc = stripArticleMetadata(fullArticleText);
+    } else {
+      desc = await buildDescription(nepaliTitle, rawTitle, bestBody, sourceLang);
+    }
     /* Step 3d: Hashtags */
-    hashtags = buildHashtags(nepaliTitle + ' ' + rawTitle);
+    hashtags = buildHashtags(nepaliTitle + ' ' + rawTitle, bestBody);
+
+    /* Show EXACT reason why AI failed — not a generic message */
+    const hasAnyKey = _geminiKey || _browserGeminiKey || _browserGroqKey;
+    const failReason = aiResult?._error || null;
+    setTimeout(() => {
+      if (!hasAnyKey) {
+        toast('📝 Template mode — click ⚙️ Setup AI Keys to enable real AI (free Gemini key)', 'info', 8000);
+      } else if (failReason) {
+        // Show the exact error with a persistent red toast (10s)
+        toast(`🤖 AI failed: ${failReason}`, 'error', 10000);
+      } else {
+        toast('⚠️ AI call failed — showing template. Check your key in ⚙️ Setup AI Keys.', 'error', 6000);
+      }
+    }, 800);
   }
 
-  document.getElementById('outHook').textContent   = hook;
-  document.getElementById('outTitle').textContent  = nepaliTitle;
+  /* ── Build a clean label-based hook prefix (Breaking: / Update: / etc.) ── */
+  const _HOOK_LABELS = ['Breaking:', 'Update:', 'Latest:', 'Alert:', 'Exclusive:', 'Just In:'];
+  /* Pick based on keywords in title/hook, or random */
+  const hookLower = (hook || '').toLowerCase() + (nepaliTitle || '').toLowerCase();
+  let hookPrefix;
+  if (hookLower.includes('ब्रेकिङ') || hookLower.includes('breaking') || hookLower.includes('तत्काल') || hookLower.includes('urgent')) {
+    hookPrefix = 'Breaking:';
+  } else if (hookLower.includes('update') || hookLower.includes('अपडेट')) {
+    hookPrefix = 'Update:';
+  } else if (hookLower.includes('exclusive') || hookLower.includes('खुलासा')) {
+    hookPrefix = 'Exclusive:';
+  } else if (hookLower.includes('alert') || hookLower.includes('चेतावनी')) {
+    hookPrefix = 'Alert:';
+  } else {
+    hookPrefix = _HOOK_LABELS[Math.floor(Math.random() * _HOOK_LABELS.length)];
+  }
+  document.getElementById('outHook').textContent = hookPrefix;
+
+  /* Show title as-is from AI (already max 2 lines), or just the translated title for template mode */
+  const displayTitle = nepaliTitle;
+  document.getElementById('outTitle').textContent  = displayTitle;
   document.getElementById('outDesc').textContent   = desc;
 
-  generatedPost = { hook, title: nepaliTitle, description: desc, hashtags, link: selectedArticle.link || '' };
+  /* generatedPost — hook is stored separately from title now */
+  generatedPost = { hook: hookPrefix, title: displayTitle, description: desc, hashtags, link: selectedArticle.link || '' };
   renderHashtags(hashtags);
 
   /* ── Update AI/Template badges on all content fields ── */
-  const prov = _aiProvider === 'grok' ? '⚡ Grok' : '✨ Gemini';
+  const prov = (callAI._lastModel === 'groq') ? '⚡ Groq' : ((_geminiKey || _browserGeminiKey) ? '✨ Gemini' : '⚡ Groq');
   setGenBadges(aiUsed, aiUsed ? prov : '');
 
   if (aiUsed) {
     toast(`🤖 ${prov} AI ले मूल लेख पढेर मौलिक सामग्री तयार गर्‍यो!`, 'success', 3500);
   }
+
+  /* ── Auto-generate image now that post is ready — user can regenerate/edit afterwards ── */
+  generateImage();
 }
 
 /* ================================================================
    FULL ARTICLE FETCHER
-   Fetches the actual article page via CORS proxy chain, strips HTML,
-   returns the clean article body text (up to 5000 chars).
+   1st try: server-side /api/article endpoint (no CORS, clean text)
+   Fallback: CORS proxy chain + client-side HTML extraction
 ================================================================ */
 async function fetchFullArticle(url) {
   if (!url) return '';
+
+  /* ── Priority: server-side extraction (works even when sites block CORS proxies) ── */
+  if (_fetchProxyBase) {
+    try {
+      const apiUrl = _fetchProxyBase.replace(/\/proxy\/fetch$/, '/api/article');
+      const ctrl   = new AbortController();
+      const tid    = setTimeout(() => ctrl.abort(), 18000);
+      const res    = await fetch(`${apiUrl}?url=${encodeURIComponent(url)}`, { signal: ctrl.signal });
+      clearTimeout(tid);
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.ok && data.text && data.text.length > 100) {
+          return data.text;
+        }
+      }
+    } catch { /* fall through */ }
+  }
+
+  /* ── Fallback: CORS proxy + client-side extraction ── */
   const html = await fetchRawHtml(url);
   if (!html || html.length < 200) return '';
   return extractArticleText(html, url) || '';
@@ -2173,33 +3841,176 @@ function extractArticleText(html, sourceUrl) {
     const parser = new DOMParser();
     const doc    = parser.parseFromString(html, 'text/html');
 
-    /* Remove noise: scripts, styles, nav, footer, ads, sidebars */
-    ['script','style','nav','footer','header','aside','form',
-     '.advertisement','.ads','.sidebar','.related','.social-share',
-     '.comments','.comment-section','#comments'].forEach(sel => {
-      doc.querySelectorAll(sel).forEach(el => el.remove());
+    /* ── STEP 1: Aggressively remove ALL non-article elements ── */
+    const REMOVE_SELECTORS = [
+      /* Layout chrome */
+      'script','style','noscript','link','meta',
+      'nav','header','footer','aside','form','iframe','object','embed',
+      /* Ads & trackers */
+      '.advertisement','.ads','.ad-slot','.ad-wrapper','.ad-container',
+      '[class*="advertisement"]','[class*="-ad-"]','[id*="google_ad"]',
+      /* Related / recommended content */
+      '.related','.related-articles','.related-news','.related-posts',
+      '[class*="related"]','[class*="recommended"]','[class*="suggestion"]',
+      '[class*="more-news"]','[class*="also-read"]','[class*="trending"]',
+      /* Social share bars */
+      '.social-share','.share-bar','.share-buttons','.sharing',
+      '[class*="social"]','[class*="share-"]',
+      /* Comments & feedback */
+      '.comments','#comments','.comment-section','.comment-form',
+      '.disqus','.fb-comments','[class*="comment"]','[class*="feedback"]',
+      '[class*="reaction"]','[id*="comment"]','[id*="disqus"]',
+      /* Newsletter / subscription */
+      '.newsletter','[class*="newsletter"]','[class*="subscribe"]',
+      '[class*="subscription"]','[class*="signup"]',
+      /* Author bio boxes (usually after article) */
+      '.author-bio','.author-box','.author-info','[class*="author-"]',
+      /* Tags / categories widget */
+      '.tags','.tag-list','.categories','[class*="tag-"]',
+      /* Breadcrumbs, pagination */
+      '.breadcrumb','[class*="breadcrumb"]','.pagination','[class*="paginat"]',
+      /* Cookie / GDPR banners */
+      '.cookie','.gdpr','[class*="cookie"]',
+      /* Sidebar widgets */
+      '.sidebar','.widget','[class*="sidebar"]','[class*="widget"]',
+      /* "Back to top", print, email buttons */
+      '[class*="back-to-top"]','[class*="print-"]','[class*="email-"]',
+      /* ── Image / media wrappers — these inject caption noise between paragraphs ── */
+      'figure','figcaption','picture',
+      '[class*="caption"]','[class*="photo-caption"]','[class*="img-caption"]',
+      '[class*="image-caption"]','[class*="figure-"]','[class*="wp-caption"]',
+      '[class*="inline-image"]','[class*="article-image"]','[class*="media-caption"]',
+      '.img-holder','.image-holder','.photo-holder','.photo-wrap',
+      '[class*="media-"]','[class*="gallery"]','[class*="slideshow"]',
+      '[class*="photo-"]','[class*="img-wrap"]','[class*="image-wrap"]',
+      /* ── In-article ad/promo blocks ── */
+      '[class*="inline-ad"]','[class*="in-article"]','[class*="mid-article"]',
+      '[class*="inread"]','[class*="sponsored"]','[class*="promo"]',
+      '[class*="outbrain"]','[class*="taboola"]','[class*="revcontent"]',
+    ];
+
+    REMOVE_SELECTORS.forEach(sel => {
+      try { doc.querySelectorAll(sel).forEach(el => el.remove()); } catch {}
     });
 
-    /* Try to find the main article container */
-    const candidates = [
-      doc.querySelector('article'),
-      doc.querySelector('[class*="article-body"]'),
-      doc.querySelector('[class*="post-content"]'),
-      doc.querySelector('[class*="entry-content"]'),
-      doc.querySelector('[class*="news-detail"]'),
-      doc.querySelector('[class*="content-body"]'),
-      doc.querySelector('[class*="story-body"]'),
-      doc.querySelector('main'),
-      doc.body,
-    ].filter(Boolean);
+    /* ── STEP 2: Find the most specific article container ── */
+    /* Priority order — most specific first */
+    const ARTICLE_SELECTORS = [
+      'article[class*="detail"]',
+      'article[class*="news"]',
+      'article[class*="post"]',
+      'article[class*="content"]',
+      '[class*="article-detail"]',
+      '[class*="news-detail"]',
+      '[class*="news-content"]',
+      '[class*="article-content"]',
+      '[class*="article-body"]',
+      '[class*="story-body"]',
+      '[class*="story-content"]',
+      '[class*="post-content"]',
+      '[class*="post-body"]',
+      '[class*="entry-content"]',
+      '[class*="content-body"]',
+      '[class*="content-detail"]',
+      '[class*="main-content"]',
+      '[id*="article-body"]',
+      '[id*="news-detail"]',
+      '[id*="content-area"]',
+      'article',
+      'main',
+    ];
 
-    for (const el of candidates) {
-      const text = (el.innerText || el.textContent || '')
-        .replace(/\s+/g, ' ')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-      if (text.length > 200) return text.slice(0, 5000);
+    let articleEl = null;
+    for (const sel of ARTICLE_SELECTORS) {
+      try {
+        const el = doc.querySelector(sel);
+        if (el) { articleEl = el; break; }
+      } catch {}
     }
+    if (!articleEl) articleEl = doc.body;
+
+    /* ── STEP 3: Remove post-article noise INSIDE the article container ──
+       Some sites inject related/social/comment widgets inside the article div.
+       Remove any block whose text content looks like post-article noise. */
+    const POST_ARTICLE_NOISE = [
+      'blockquote[class*="twitter"]','blockquote[class*="instagram"]',
+      '[class*="tags"]','[class*="topics"]','[class*="keywords"]',
+    ];
+    POST_ARTICLE_NOISE.forEach(sel => {
+      try { articleEl.querySelectorAll(sel).forEach(el => el.remove()); } catch {}
+    });
+
+    /* ── STEP 4: Extract paragraphs — the gold standard ──
+       Collect <p> tags AND <div> elements that behave like paragraphs.
+       Many Nepali news sites use <div class="article-para"> instead of <p>.
+       Lower the minimum length to 20 chars (Nepali sentences can be short).
+       Ads/images between paragraphs are already removed in Step 1. */
+    const PARA_NOISE_RE = /^(?:share|follow|subscribe|click here|read more|also read|related|advertisement|loading|tags?|topics?|photo|image|pic|video|source|credit|फोटो|तस्वीर|स्रोत)/i;
+
+    /* Collect both <p> and paragraph-like <div>s */
+    const allParaEls = [...articleEl.querySelectorAll('p, div')].filter(el => {
+      /* For <div>: skip layout/container divs (those that contain other block elements) */
+      if (el.tagName === 'DIV') {
+        if (el.querySelector('div, article, section, nav, ul, ol, table')) return false;
+      }
+      const t = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t.length < 20) return false;                /* too short */
+      if (PARA_NOISE_RE.test(t)) return false;        /* noise label */
+      if (/^https?:\/\/\S+$/.test(t)) return false;  /* bare URL */
+      return true;
+    }).map(el => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim());
+
+    /* Deduplicate — a parent <div> may include the same text as its child <p> */
+    const seen = new Set();
+    const paragraphs = allParaEls.filter(t => {
+      /* Check whether this text is already a substring of something we have */
+      if (seen.has(t)) return false;
+      /* Also check if the new text is fully contained in an already-seen entry */
+      for (const s of seen) { if (s.includes(t) || t.includes(s)) return false; }
+      seen.add(t);
+      return true;
+    });
+
+    if (paragraphs.length >= 1) {
+      /* Got clean paragraphs — join them. Cap at 5000 chars. */
+      return paragraphs.join(' ').slice(0, 5000);
+    }
+
+    /* ── STEP 5: Fallback — use full innerText but cut at definitive noise signal ──
+       Only honor the cutoff AFTER we have accumulated > 300 chars of real content.
+       This prevents mid-article "related news" widgets from chopping the text early. */
+    const rawText = (articleEl.innerText || articleEl.textContent || '')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    const CUTOFF_PATTERNS = [
+      /^(?:प्रतिक्रिया|टिप्पणी|comment|feedback|leave a reply|reply)/i,
+      /^(?:सम्बन्धित समाचार|related news|related articles|you may also like|also read|read more)/i,
+      /^(?:tags?|topics?|categories|keywords?|hashtag)/i,
+      /^(?:share this|share on|follow us|subscribe|newsletter)/i,
+      /^(?:advertisement|sponsored|promoted)/i,
+      /^(?:सम्पर्क|contact us|about us|privacy policy|terms of)/i,
+      /^(?:facebook|twitter|instagram|youtube)\s*(?:page|account|channel)/i,
+    ];
+
+    const lines = rawText.split('\n');
+    let cutLine = lines.length;
+    let accumulated = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line.length < 5) continue;
+      accumulated += line.length;
+      /* Only cut at noise AFTER we have at least 300 chars of real content */
+      if (accumulated > 300 && CUTOFF_PATTERNS.some(rx => rx.test(line))) {
+        cutLine = i;
+        break;
+      }
+    }
+
+    const clipped = lines.slice(0, cutLine).join('\n').trim();
+    if (clipped.length > 100) return clipped.slice(0, 5000);
+
   } catch { /* fall through */ }
   return '';
 }
@@ -2251,20 +4062,96 @@ function detectTopic(text) {
   return null;
 }
 
-function buildHook(rawTitle) {
+/**
+ * Extract key Nepali/English nouns from a title for use in dynamic hooks.
+ * Returns the most meaningful word (proper noun, number, or subject keyword).
+ */
+function _extractHookSubject(rawTitle) {
+  /* Try to find numbers (death toll, amount, count) */
+  const numMatch = rawTitle.match(/\b(\d+)\s*(?:जना|व्यक्ति|killed|dead|injured|crore|lakh|करोड|लाख)/i);
+  if (numMatch) return numMatch[0].trim();
+
+  /* Try to find capitalized proper nouns (English names/places) */
+  const capWords = rawTitle.match(/\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){0,2})\b/g);
+  if (capWords && capWords.length) {
+    /* Skip generic words */
+    const skip = new Set(['Nepal','Nepali','The','This','How','Why','What','When','Where']);
+    const best = capWords.find(w => !skip.has(w));
+    if (best) return best;
+  }
+
+  /* Try to find Devanagari proper nouns (words > 3 chars not in common stop-word list) */
+  const devWords = rawTitle.match(/[\u0900-\u097F]{4,}/g);
+  const stopNe   = new Set(['नेपालमा','नेपालको','नेपाली','भएको','भएकी','गरिएको','गर्ने','गर्छ','भयो','छ।','छन्','हुने','गर्न','गरे','मा','को','ले','र']);
+  if (devWords) {
+    const best = devWords.find(w => !stopNe.has(w));
+    if (best) return best;
+  }
+  return '';
+}
+
+function buildHook(rawTitle, articleBody) {
   const topic = detectTopic(rawTitle);
-  if (topic) return HOOK_BY_TOPIC[topic];
-  /* Extra Devanagari checks */
+  const subject = _extractHookSubject(rawTitle);
+
+  /* Build a dynamic hook using topic + specific subject from THIS article */
+  const EMOJI_MAP = {
+    flood:'🌊', rain:'🌧️', earthquake:'🔴', election:'🗳️',
+    government:'🏛️', politics:'🏛️', health:'🏥', accident:'🚨',
+    education:'📚', police:'🚔', crime:'🚔', cricket:'🏆',
+    football:'⚽', fire:'🔥', road:'🚦', tourism:'🏔️', economy:'💰',
+  };
+
+  const HOOK_TEMPLATES_BY_TOPIC = {
+    flood      : s => s ? `🌊 ${s} — बाढी र पहिरोले नेपाल थर्कायो! यो खबर नपढी नबस्नुस्।` : HOOK_BY_TOPIC['flood'],
+    rain       : s => s ? `🌧️ ${s} — मनसुनी बाढी र पहिरोको खतरा बढ्यो!` : HOOK_BY_TOPIC['rain'] || HOOK_BY_TOPIC['flood'],
+    earthquake : s => s ? `🔴 भूकम्पको झड्का! ${s} — नेपालमा ठूलो भूचाल गयो।` : HOOK_BY_TOPIC['earthquake'],
+    election   : s => s ? `🗳️ ${s} — निर्वाचनमा नाटकीय मोड! हेर्नुस् के भयो।` : HOOK_BY_TOPIC['election'],
+    economy    : s => s ? `💰 ${s} — नेपालको आर्थिक अवस्थामा ठूलो हलचल!` : HOOK_BY_TOPIC['economy'],
+    government : s => s ? `🏛️ ${s} — सरकारको ठूलो निर्णय, नेपाल स्तब्ध!` : HOOK_BY_TOPIC['government'],
+    politics   : s => s ? `🏛️ ${s} — राजनीतिमा भूचाल, नेपाल थर्कायो!` : HOOK_BY_TOPIC['politics'],
+    health     : s => s ? `🏥 ${s} — स्वास्थ्य अलर्ट! नेपालीहरू सतर्क रहनुस्।` : HOOK_BY_TOPIC['health'],
+    accident   : s => s ? `🚨 ${s} — दुर्घटनामा ज्यान गयो! हृदयविदारक घटना।` : HOOK_BY_TOPIC['accident'],
+    police     : s => s ? `🚔 ${s} — प्रहरीको ठूलो कारबाही! अपराधी पक्राउ।` : HOOK_BY_TOPIC['police'],
+    crime      : s => s ? `🚔 ${s} — अपराधको नयाँ अध्याय! नेपाल स्तब्ध।` : HOOK_BY_TOPIC['crime'],
+    education  : s => s ? `📚 ${s} — शिक्षा क्षेत्रमा ठूलो बदलाव! विद्यार्थीहरू सतर्क रहनुस्।` : HOOK_BY_TOPIC['education'],
+    cricket    : s => s ? `🏆 ${s} — नेपाली क्रिकेट इतिहास रच्यो!` : HOOK_BY_TOPIC['cricket'],
+    football   : s => s ? `⚽ ${s} — फुटबल मैदानमा तहल्का मच्यो!` : HOOK_BY_TOPIC['football'],
+    fire       : s => s ? `🔥 ${s} — आगलागीमा ठूलो क्षति! हृदयविदारक दृश्य।` : HOOK_BY_TOPIC['fire'],
+    road       : s => s ? `🚦 ${s} — सडक दुर्घटनामा ज्यान गयो!` : HOOK_BY_TOPIC['road'],
+    tourism    : s => s ? `🏔️ ${s} — नेपाल पर्यटनमा नयाँ इतिहास!` : HOOK_BY_TOPIC['tourism'],
+  };
+
+  /* Extra Devanagari topic checks */
   const t = rawTitle.toLowerCase();
-  if (t.includes('बाढी') || t.includes('पहिरो') || t.includes('वर्षा')) return HOOK_BY_TOPIC['flood'];
-  if (t.includes('भूकम्प'))       return HOOK_BY_TOPIC['earthquake'];
-  if (t.includes('निर्वाचन') || t.includes('मतदान')) return HOOK_BY_TOPIC['election'];
-  if (t.includes('सरकार') || t.includes('प्रधानमन्त्री')) return HOOK_BY_TOPIC['government'];
-  if (t.includes('स्वास्थ्य') || t.includes('अस्पताल')) return HOOK_BY_TOPIC['health'];
-  if (t.includes('दुर्घटना') || t.includes('सडक'))    return HOOK_BY_TOPIC['accident'];
-  if (t.includes('विद्यार्थी') || t.includes('शिक्षा')) return HOOK_BY_TOPIC['education'];
-  if (t.includes('प्रहरी') || t.includes('अपराध'))    return HOOK_BY_TOPIC['police'];
-  if (t.includes('क्रिकेट') || t.includes('खेल'))     return HOOK_BY_TOPIC['cricket'];
+  const devTopic = t.includes('बाढी') || t.includes('पहिरो') ? 'flood'
+    : t.includes('भूकम्प') ? 'earthquake'
+    : t.includes('निर्वाचन') || t.includes('मतदान') ? 'election'
+    : t.includes('सरकार') || t.includes('प्रधानमन्त्री') ? 'government'
+    : t.includes('स्वास्थ्य') || t.includes('अस्पताल') ? 'health'
+    : t.includes('दुर्घटना') ? 'accident'
+    : t.includes('शिक्षा') || t.includes('विद्यार्थी') ? 'education'
+    : t.includes('प्रहरी') || t.includes('अपराध') ? 'police'
+    : t.includes('क्रिकेट') ? 'cricket'
+    : t.includes('फुटबल') ? 'football'
+    : t.includes('आगलागी') ? 'fire'
+    : null;
+
+  const resolvedTopic = topic || devTopic;
+  if (resolvedTopic && HOOK_TEMPLATES_BY_TOPIC[resolvedTopic]) {
+    return HOOK_TEMPLATES_BY_TOPIC[resolvedTopic](subject);
+  }
+
+  /* Generic dynamic hook — use subject if available */
+  if (subject) {
+    const GENERIC_DYNAMIC = [
+      `😱 ${subject} — नेपालमा अहिले यही कुराको चर्चा छ! सबैले पढ्नुस्।`,
+      `⚡ ब्रेकिङ: ${subject} — यो खबरले नेपाल हल्लाउँदैछ!`,
+      `🔥 ${subject} सम्बन्धी ठूलो खुलासा — नेपाली जनता स्तब्ध!`,
+      `📢 ${subject} — सबैले थाहा पाउनुपर्ने जरुरी खबर!`,
+    ];
+    return GENERIC_DYNAMIC[Math.floor(Math.random() * GENERIC_DYNAMIC.length)];
+  }
   return HOOK_GENERIC[Math.floor(Math.random() * HOOK_GENERIC.length)];
 }
 
@@ -2288,7 +4175,19 @@ function _offlineTitleFallback(raw) {
   if (l.match(/fire|blaze|आगलागी/))                             return 'नेपालमा आगलागी, क्षतिको जानकारी आउँदै';
   if (l.match(/tourism|trekk|पर्यटन/))                          return 'नेपालको पर्यटन क्षेत्रमा नयाँ समाचार';
   if (l.match(/human.rights|rights.commission|मानवअधिकार|आयोग/)) return 'मानवअधिकार उल्लङ्घनमा कारबाहीको माग';
-  return 'नेपालबाट महत्त्वपूर्ण समाचार';
+  /* Bollywood / Nepali film / Bhojpuri */
+  if (l.match(/bollywood|फिल्म|movie|film|cinema|चलचित्र/))    return 'मनोरञ्जन जगतमा नयाँ हलचल — चलचित्र समाचार';
+  if (l.match(/bhojpuri|भोजपुरी/))                              return 'भोजपुरी सिनेमामा नयाँ धमाका';
+  if (l.match(/song|music|album|singer|गाना|गायक|गायिका/))     return 'संगीत जगतमा नयाँ समाचार';
+  if (l.match(/actor|actress|star|celebrity|कलाकार|अभिनेता|अभिनेत्री/)) return 'मनोरञ्जन क्षेत्रमा चर्चामा रहेका कलाकार';
+  /* World / international news */
+  if (l.match(/war|conflict|attack|bomb|युद्ध|आक्रमण/))         return 'विश्वमा तनाव बढ्दो, अन्तर्राष्ट्रिय समाचार';
+  if (l.match(/trump|biden|modi|president|prime.minister/i))   return 'विश्वका नेताहरूसम्बन्धी महत्त्वपूर्ण खबर';
+  if (l.match(/climate|environment|global.warm|वातावरण/))       return 'वातावरण परिवर्तनसम्बन्धी महत्त्वपूर्ण अपडेट';
+  /* Science / tech */
+  if (l.match(/science|research|discovery|invention|space|ai |artificial/i)) return 'विज्ञान तथा प्रविधिमा नयाँ खोज';
+  if (l.match(/nasa|isro|rocket|satellite|space/i))             return 'अन्तरिक्ष विज्ञानमा नयाँ उपलब्धि';
+  return 'महत्त्वपूर्ण समाचार — थप विवरण भित्र';
 }
 
 /**
@@ -2303,8 +4202,10 @@ async function buildTitle(raw, sourceLang) {
   /* If input is very long (pasted article body), extract a headline-length snippet */
   const titleInput = extractHeadlineFromBody(cleaned);
 
-  /* Already Nepali — clean, SEO-rephrase and return */
-  if (/[\u0900-\u097F]{5,}/.test(titleInput)) {
+  /* Already Nepali (sourceLang='ne' AND has Devanagari) — clean and rephrase, no translation needed.
+     NOTE: Hindi also uses the same Devanagari Unicode block (U+0900–U+097F), so we MUST check
+     sourceLang to avoid treating a Hindi title as Nepali and skipping translation. */
+  if (sourceLang === 'ne' && /[\u0900-\u097F]{5,}/.test(titleInput)) {
     return cleanTitle(rephraseNepaliTitle(titleInput));
   }
 
@@ -2312,7 +4213,9 @@ async function buildTitle(raw, sourceLang) {
   if (_titleCache.has(cacheKey)) return _titleCache.get(cacheKey);
 
   /* Determine translation pair: auto-detect source → Nepali */
-  const langpair = sourceLang === 'hi' ? 'hi|ne' : 'en|ne';
+  const langpair = sourceLang === 'hi' ? 'hi|ne'
+                 : sourceLang === 'ne' ? 'ne|ne'   /* fallback: ne source treated as already done above but just in case */
+                 : 'en|ne';
 
   try {
     const apiUrl = 'https://api.mymemory.translated.net/get?q='
@@ -2463,6 +4366,16 @@ const DESC_IMPACT = {
   fire       : 'पीडितहरूलाई तत्काल राहत उपलब्ध गराउन स्थानीय प्रशासन र सामाजिक संस्थाहरू सक्रिय भएका छन्।',
   road       : 'सम्बन्धित अधिकारीहरूले छानबिन गरी जिम्मेवारहरूविरुद्ध कारबाही गर्ने बताएका छन्।',
   tourism    : 'सरकारले पर्यटन क्षेत्रको विस्तारका लागि थप नीतिगत सहयोग उपलब्ध गराउने प्रतिबद्धता जनाएको छ।',
+  environment : 'स्थानीय प्रशासन, युवा क्लब र विद्यालयका विद्यार्थीहरू यस सफाई अभियानमा जोश र उत्साहका साथ सहभागी भएका छन्।',
+  campaign    : 'यो अभियानले समाजमा सकारात्मक परिवर्तन ल्याउने र नागरिक सहभागिता अभिवृद्धि गर्ने अपेक्षा गरिएको छ।',
+  infrastructure : 'यो परियोजना पूरा भएपछि स्थानीय जनजीवन सहज बन्ने र क्षेत्रको विकासमा महत्त्वपूर्ण टेवा पुग्नेछ।',
+  agriculture : 'उन्नत कृषि प्रविधिको प्रयोगले किसानको आय बढ्ने र खाद्य सुरक्षित हुने अपेक्षा छ।',
+  water       : 'शुद्ध पिउने पानीको उपलब्धताले सार्वजनिक स्वास्थ्य सुधारमा प्रत्यक्ष योगदान पुग्नेछ।',
+  energy      : 'विद्युत् आपूर्ति सुनिश्चित भएपछि उद्योग र व्यापारको विकासमा सकारात्मक असर पर्नेछ।',
+  business    : 'लगानी अनुकूल वातावरण तयार गर्न सरकार र निजी क्षेत्र मिलेर काम गर्ने प्रतिबद्धता जनाएका छन्।',
+  meeting     : 'बैठकमा भएका निर्णयहरू लागू गर्न सम्बन्धित निकायहरूलाई कडा निर्देशन दिइएको छ।',
+  award       : 'यस सफलताबाट प्रेरणा लिँदै नेपाली युवा पुस्ताले आ-आफ्नो क्षेत्रमा उत्कृष्टता हासिल गर्ने उत्साह देखाएका छन्।',
+  culture     : 'यो पहलले नेपालको पर्यटन र सांस्कृतिक पहिचानलाई अन्तर्राष्ट्रिय मञ्चमा झनै माथि उठाउने अपेक्षा छ।',
 };
 
 const DESC_GENERIC_CONTEXT = [
@@ -2600,76 +4513,203 @@ function transliterateName(en) {
  * @param {string} articleBody  – full article text (or RSS body fallback)
  * @param {string} sourceLang   – 'ne' | 'en' | 'hi' | etc.
  */
+/**
+ * Strip author bylines, dates, timestamps, "Read more" links, and
+ * other article metadata from body text before using it for description.
+ * This prevents the template from outputting "By John Smith | April 14, 2025"
+ * style noise as part of the description.
+ */
+function _cleanArticleText(text, rawTitle) {
+  if (!text) return '';
+
+  let t = text;
+
+  /* ── 1. Strip the article's own title if it appears at the start of the body ──
+     Nepali news sites often repeat the headline as the first line of the body.
+     Only strip if there is meaningful content remaining after removal. */
+  if (rawTitle) {
+    const normTitle = rawTitle.replace(/\s+/g, '').toLowerCase().slice(0, 60);
+    const normBody  = t.replace(/\s+/g, '').toLowerCase().slice(0, 80);
+    if (normBody.startsWith(normTitle.slice(0, 30)) || normTitle.slice(0, 30) && normBody.includes(normTitle.slice(0, 30))) {
+      const stripped = t.replace(/^[^\n।]{0,200}[।\n]/, '');
+      /* Only discard the title line if substantial content remains */
+      if (stripped.trim().length > 60) t = stripped;
+    }
+  }
+
+  /* ── 2. Remove Nepali news header block — the single most common noise pattern ──
+     Pattern: [optional section] [title text] [Nepali-month] [digits] [year] [weekday] [time] [city] [colon]
+     Example: "विदेश नीतिश कुमारले दिए राजीनामा… अन्नपूर्ण वैशाख १, २०८३ मंगलबार २१:२१:५९ काठमाडौं :"
+     This entire block up to and including the final colon is metadata — remove it. */
+  const NEPALI_MONTHS  = 'बैशाख|जेठ|असार|श्रावण|भाद्र|आश्विन|कार्तिक|मंसिर|पुष|माघ|फाल्गुण|चैत्र';
+  const NEPALI_WEEKDAYS= 'आइतबार|सोमबार|मंगलबार|बुधबार|बिहिबार|शुक्रबार|शनिबार';
+  const NEPALI_DIGITS  = '[०-९\\d]';
+
+  /* Pattern A: full header up to colon (greedily removes the whole metadata block) */
+  t = t.replace(
+    new RegExp(
+      `[^।\\n]{0,120}(?:${NEPALI_MONTHS})\\s+${NEPALI_DIGITS}+[,،]?\\s*${NEPALI_DIGITS}*\\s*(?:${NEPALI_WEEKDAYS})?\\s*${NEPALI_DIGITS}*[:\\s${NEPALI_DIGITS}]*(?:काठमाडौं|पोखरा|ललितपुर|भक्तपुर|वीरगञ्ज|धरान|विराटनगर|नेपालगञ्ज|बुटवल|हेटौंडा|दाङ|सुर्खेत|जुम्ला|धनगढी|महेन्द्रनगर)?\\s*[:\\-।]?`,
+      'g'
+    ), ''
+  );
+
+  /* Pattern B: standalone Nepali weekday + time (२१:२१:५९) + optional city + colon */
+  t = t.replace(new RegExp(`(?:${NEPALI_WEEKDAYS})\\s*[०-९\\d]{1,2}:[०-९\\d]{2}(?::[०-९\\d]{2})?\\s*(?:[\\u0900-\\u097F]{3,15}\\s*)?[:\\-]?`, 'g'), '');
+
+  /* Pattern C: Nepali month + day + year block anywhere in text */
+  t = t.replace(new RegExp(`(?:${NEPALI_MONTHS})\\s+[०-९\\d]+[,،]?\\s*[०-९\\d]{4}`, 'g'), '');
+
+  /* Pattern D: Nepali 4-digit year alone (e.g. २०८३) */
+  t = t.replace(/[२][०][७-९][०-९]/g, '');
+
+  /* Pattern E: Nepali time pattern HH:MM or HH:MM:SS with Nepali/Arabic digits */
+  t = t.replace(/[०-९\d]{1,2}:[०-९\d]{2}(?::[०-९\d]{2})?\s*(?:AM|PM|am|pm|बजे)?/g, '');
+
+  /* ── 3. Section/category labels that appear as standalone words ──
+     e.g. "विदेश", "राजनीति", "खेलकुद", "अर्थ", "समाज" at line start */
+  t = t.replace(/^(?:विदेश|राजनीति|खेलकुद|अर्थ|समाज|स्वास्थ्य|प्रविधि|मनोरञ्जन|शिक्षा|पर्यटन|वातावरण|कानून|अपराध|दुर्घटना)\s*/gm, '');
+
+  /* ── 4. Remove typical English byline patterns ── */
+  t = t.replace(/^(?:by|reporter|correspondent|staff|author|written by|posted by)[:\s]+[^\n]{0,80}/gim, '');
+
+  /* ── 5. Remove English date/time stamps ── */
+  t = t.replace(/\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},?\s+\d{4}\b/gi, '');
+  t = t.replace(/\b\d{1,2}\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}\b/gi, '');
+  t = t.replace(/\b\d{4}[-\/]\d{2}[-\/]\d{2}\b/g, '');
+  t = t.replace(/\b\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}\b/g, '');
+  t = t.replace(/\b\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?\b/g, '');
+
+  /* ── 6. Remove "Published:", "Updated:" markers ── */
+  t = t.replace(/(?:published|updated|last updated|posted|edited)[:\s]+[^\n]{0,60}/gi, '');
+
+  /* ── 7. Remove photo/image captions ── */
+  t = t.replace(/[\[\(](?:photo|image|pic|picture|video|source|credit|फोटो|तस्वीर)[:\s][^\]\)]{0,80}[\]\)]/gi, '');
+
+  /* ── 8. Remove "Read more:", "Also read:", "Related:" cross-links ── */
+  t = t.replace(/(?:read more|also read|related|see also|यो पनि पढ्नुस्|सम्बन्धित)[:\s]+[^\n]{0,150}/gi, '');
+
+  /* ── 9. Remove social share / nav artifact lines ── */
+  t = t.replace(/^[\s\W]{0,5}(?:share|follow|subscribe|like|comment|tweet|whatsapp|facebook|instagram|twitter|youtube)[\s\W]{0,5}$/gim, '');
+
+  /* ── 10. Remove URLs ── */
+  t = t.replace(/https?:\/\/[^\s]+/g, '');
+
+  /* ── 11. Remove lines shorter than 30 chars (nav items, labels, stray metadata) ── */
+  t = t.replace(/^.{1,30}$/gm, '');
+
+  /* ── 12. Final whitespace cleanup ── */
+  t = t.replace(/\n{3,}/g, '\n\n').replace(/\s{3,}/g, ' ').trim();
+
+  /* ── 13. If the cleaned text still starts with a colon or dash — strip it ── */
+  t = t.replace(/^[\s:।\-–—]+/, '').trim();
+
+  return t;
+}
+
+/**
+ * Strip author bylines, date/place prefixes, source credits, and navigation
+ * noise from raw article text — leaving only the actual news content.
+ */
+function stripArticleMetadata(text) {
+  if (!text) return '';
+  let t = text.trim();
+
+  // ── Remove leading place + date line (e.g. "काठमाडौं, माघ १५ गते।") ──
+  t = t.replace(/^[\u0900-\u097F\w ]{1,40}[,।|]\s*(?:[\u0900-\u097F\w ]{1,60})?(?:गते|साल|सन्|\d{4}|जनवरी|फेब्रुअरी|मार्च|अप्रिल|मे|जुन|जुलाई|अगस्ट|सेप्टेम्बर|अक्टोबर|नोभेम्बर|डिसेम्बर)[^\n]{0,120}\n?/i, '');
+
+  // ── Remove author / reporter / source lines ──
+  t = t.replace(/^(संवाददाता|रिपोर्टर|लेखक|स्रोत|सम्पादक|By|Author|Reporter|Source|Staff|Agency)[^\n]{0,200}\n?/gim, '');
+  t = t.replace(/\b(संवाददाता|रिपोर्टर|स्रोत|Source|Author|Reporter):\s*[^\n,।]{1,80}/gi, '');
+
+  // ── Remove "Published:", "Updated:", "प्रकाशित:", "अपडेट:" ──
+  t = t.replace(/^(प्रकाशित|अपडेट|Published|Updated)[^\n]{0,100}\n?/gim, '');
+
+  // ── Remove standalone news agency names on their own line ──
+  t = t.replace(/^\s*(रासस|एजेन्सी|PTI|ANI|AFP|Reuters|AP)\s*\n/gim, '');
+
+  // ── Remove copyright / subscribe / comment noise lines ──
+  t = t.replace(/^.{0,80}(?:copyright|©|सर्वाधिकार|सदस्यता|subscribe|टिप्पणी|comment here).{0,80}$/gim, '');
+
+  // ── Remove ISO dates and Nepali date stamps ──
+  t = t.replace(/\b\d{4}[-\/]\d{1,2}[-\/]\d{1,2}(?:T[\d:Z.]+)?\b/g, '');
+
+  // ── Collapse extra blank lines ──
+  t = t.replace(/\n{3,}/g, '\n\n').trim();
+
+  return t;
+}
+
 async function buildDescription(nepaliTitle, rawTitle, articleBody, sourceLang = 'ne') {
+  /* ── STEP 0: Strip author, date, bylines, nav noise from body ── */
+  const cleanedBody = _cleanArticleText(articleBody || '', rawTitle);
+  /* If cleaning stripped everything (e.g. RSS description was just the title),
+     fall back to the raw uncleaned body so we still have something to work with */
+  const effectiveBody = cleanedBody.trim().length > 40 ? cleanedBody : (articleBody || '').trim();
+
   const combinedLower = (nepaliTitle + ' ' + rawTitle).toLowerCase();
   const topic = detectTopic(combinedLower) || detectNepaliTopic(nepaliTitle);
-  const bodyIsNepali = /[\u0900-\u097F]{10,}/.test(articleBody || '');
+  const bodyIsNepali = /[\u0900-\u097F]{10,}/.test(effectiveBody);
 
   /* ── STEP 1: Translate body to Nepali if it's in another language ── */
-  let nepaliBody = articleBody || '';
+  let nepaliBody = effectiveBody;
   if (!bodyIsNepali && nepaliBody.trim().length > 50) {
     nepaliBody = await translateBodyToNepali(nepaliBody, sourceLang);
   }
 
-  /* ── STEP 2: Extract key facts from original body (numbers work in any language) ── */
-  const extractedFacts = extractKeyFacts(rawTitle, articleBody);
+  /* ── STEP 2: Split body into clean sentences ── */
+  const allSentences = (nepaliBody.replace(/\n+/g, ' ').replace(/\s+/g, ' ').match(/[^.!?।]+[.!?।]+/g) || [])
+    .map(s => s.trim())
+    .filter(s => {
+      if (s.length < 20) return false;
+      if (/(?:read more|click here|share this|follow us|subscribe|यो खबर|सम्बन्धित|प्रतिक्रिया दिनुहोस्)/i.test(s)) return false;
+      return true;
+    });
 
-  /* ── STEP 3: Extract best sentences from Nepali body ── */
-  const bodySentences = extractBestSentences(nepaliBody, nepaliTitle, rawTitle, true, 6);
+  /* ── STEP 3: Build a structured, multi-section description ── */
+  const sections = [];
+  let usedTemplateContext = false;
 
-  /* ── STEP 4: Assemble description ── */
-  const parts = [];
-  const usedW = new Set();
+  /* 3a. Summary — first 3 sentences, or full body line, or nepali title as absolute fallback */
+  const summarySentences = allSentences.length >= 1
+    ? allSentences.slice(0, 3)
+    : (nepaliBody.trim() ? [nepaliBody.trim()] : []);
 
-  const track  = s => s.replace(/[।,.!?]/g, '').split(/\s+/).filter(w => w.length > 3).forEach(w => usedW.add(w));
-  const isDup  = s => {
-    const words = s.replace(/[।,.!?]/g, '').split(/\s+/).filter(w => w.length > 3);
-    return words.length > 0 && words.filter(w => usedW.has(w)).length / words.length > 0.40;
-  };
-  const addPart = s => { if (s && s.trim() && !isDup(s)) { parts.push(s.trim()); track(s); return true; } return false; };
-
-  /* A – Best body sentences first (most factual, most contextual) */
-  for (const sent of bodySentences) {
-    if (wordCount(parts.join(' ')) >= 80) break;
-    addPart(sent);
-  }
-
-  /* B – Inject numeric facts if body was thin */
-  if (parts.length < 2) {
-    for (const fact of extractedFacts) {
-      if (wordCount(parts.join(' ')) >= 80) break;
-      addPart(fact);
+  if (summarySentences.length > 0) {
+    sections.push('🔴 ' + summarySentences.join(' '));
+  } else {
+    /* Use the Nepali headline itself — it IS the news in condensed form */
+    sections.push('🔴 ' + nepaliTitle);
+    if (topic && DESC_CONTEXT[topic]) {
+      sections.push('📌 विवरण:\n• ' + DESC_CONTEXT[topic]);
+      usedTemplateContext = true;
     }
   }
 
-  /* C – Fallback to topic context bank */
-  if (parts.length === 0) {
-    const ctx = topic
-      ? DESC_CONTEXT[topic]
-      : DESC_GENERIC_CONTEXT[Math.floor(Math.random() * DESC_GENERIC_CONTEXT.length)];
-    addPart(ctx);
+  /* 3b. Key details — remaining sentences as bullet points */
+  const detailSentences = allSentences.slice(3, 10);
+  if (detailSentences.length > 0) {
+    sections.push('📌 विवरण:\n' + detailSentences.map(s => '• ' + s).join('\n'));
   }
 
-  /* D – Close with an impact sentence (non-duplicate) */
-  if (wordCount(parts.join(' ')) < 90) {
-    const impact = topic
-      ? DESC_IMPACT[topic]
-      : DESC_GENERIC_IMPACT[Math.floor(Math.random() * DESC_GENERIC_IMPACT.length)];
-    addPart(impact);
+  /* 3c. Extracted numeric / named facts from title + body */
+  const facts = extractKeyFacts(rawTitle, effectiveBody);
+  if (facts.length > 0) {
+    sections.push('⚡ मुख्य तथ्यहरू:\n' + facts.map(f => '• ' + f).join('\n'));
   }
 
-  /* ── STEP 5: Final consecutive-duplicate guard ── */
-  const final = [parts[0]];
-  for (let i = 1; i < parts.length; i++) {
-    const prevW = new Set(final[final.length - 1].replace(/[।,.!?]/g, '').split(/\s+/).filter(w => w.length > 3));
-    const currW = parts[i].replace(/[।,.!?]/g, '').split(/\s+/).filter(w => w.length > 3);
-    if (currW.filter(w => prevW.has(w)).length / Math.max(currW.length, 1) < 0.40) {
-      final.push(parts[i]);
-    }
+  /* 3d. Topic context — skip if already shown in summary fallback */
+  if (!usedTemplateContext && topic && DESC_CONTEXT[topic]) {
+    sections.push('📋 पृष्ठभूमि:\n• ' + DESC_CONTEXT[topic]);
   }
 
-  /* ── STEP 6: Trim to target 60-100 Nepali words ── */
-  return trimToWordTarget(final.join(' '), 60, 100);
+  /* 3e. Impact */
+  if (topic && DESC_IMPACT[topic]) {
+    sections.push('🔮 प्रभाव र अपेक्षा:\n• ' + DESC_IMPACT[topic]);
+  } else {
+    sections.push('👉 थप जानकारीका लागि सम्बन्धित समाचार स्रोत अनुगमन गर्नुहोस्। 💬');
+  }
+
+  return sections.join('\n\n');
 }
 
 /** Count words in a string (Nepali-aware: split on whitespace) */
@@ -2747,91 +4787,103 @@ async function translateBodyToNepali(body, srcLang) {
 
 /**
  * Extract the most factual, informative sentences from the full article body.
- * Prefers sentences that contain:
- *   - Numbers / figures
- *   - Named people or places
- *   - Specific actions (arrested, fired, demanded, recommended)
- *   - Cause/effect language (because, due to, following, after)
- * Avoids: very short sentences, generic filler, duplicate-to-title sentences.
+ * Returns up to maxSents sentences sorted by score (highest first → re-ordered
+ * to article sequence), with NO per-sentence char truncation — let the
+ * final trimToWordTarget do the overall cut.
  */
 function extractBestSentences(text, nepaliTitle, rawTitle, isNepali, maxSents) {
   if (!text || text.trim().length < 60) return [];
 
-  /* Split on Nepali (।) or Latin sentence endings */
-  const raw = text
-    .replace(/\n+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const raw = text.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
 
+  /* Split on Nepali (।) or Latin sentence endings */
   const sents = (raw.match(/[^.!?।]+[.!?।]+/g) || [])
     .map(s => s.replace(/\s+/g, ' ').trim())
-    .filter(s => s.length > 40 && s.length < 320);
+    .filter(s => {
+      if (s.length < 30) return false;              /* skip stub lines */
+      /* Skip obvious noise */
+      if (/(?:read more|click here|share this|follow us|subscribe|यो खबर|थप जानकारी|सम्बन्धित|प्रतिक्रिया दिनुहोस्)/i.test(s)) return false;
+      /* Skip bare time stamps like "मंगलबार २१:२१" with no substance */
+      if (/^[^क-ह a-zA-Z]*[०-९\d]{1,2}:[०-९\d]{2}[^क-ह a-zA-Z]*$/.test(s)) return false;
+      return true;
+    });
 
   if (!sents.length) return [];
 
-  /* Score each sentence */
-  const titleWordsLower = new Set((rawTitle + ' ' + nepaliTitle)
-    .toLowerCase().split(/\s+/).filter(w => w.length > 3));
+  /* Score each sentence for informational value */
+  const titleWordsLower = new Set(
+    (rawTitle + ' ' + nepaliTitle).toLowerCase().split(/\s+/).filter(w => w.length > 3)
+  );
 
-  const scored = sents.map(s => {
+  const scored = sents.map((s, idx) => {
     const sl = s.toLowerCase();
     let score = 0;
 
-    /* Bonus: contains numbers */
-    if (/\d/.test(s)) score += 3;
-    /* Bonus: contains Devanagari numerals */
-    if (/[०-९]/.test(s)) score += 2;
-    /* Bonus: contains money/percentage */
-    if (/रु\.|rs\.|%|crore|lakh|करोड|लाख|अर्ब/i.test(s)) score += 3;
-    /* Bonus: named person keywords */
-    if (/(?:मन्त्री|प्रधानमन्त्री|अध्यक्ष|सचिव|प्रमुख|अधिकारी|पदाधिकारी|minister|president|secretary|chairman|chief|officer)/i.test(s)) score += 4;
-    /* Bonus: organization names */
-    if (/(?:आयोग|समिति|सरकार|मन्त्रालय|प्रहरी|अदालत|commission|committee|government|ministry|court|police)/i.test(s)) score += 3;
-    /* Bonus: causal / factual language */
-    if (/(?:किनभने|कारण|फलस्वरूप|पछि|अनुसार|because|due to|following|after|as a result|according)/i.test(s)) score += 3;
-    /* Bonus: action verbs (arrest, fire, demand, recommend) */
-    if (/(?:पक्राउ|बर्खास्त|सिफारिस|माग|आदेश|गरिएको|गरे|arrested|dismissed|recommended|demanded|ordered|issued)/i.test(s)) score += 4;
-    /* Bonus: specific time markers */
-    if (/(?:आइतबार|सोमबार|मंगलबार|बुधबार|बिहिबार|शुक्रबार|शनिबार|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4})/i.test(s)) score += 2;
-    /* Penalty: too similar to the title */
+    /* ── HIGH-VALUE signals ── */
+    const numMatches = (s.match(/\d+/g) || []).length;
+    score += Math.min(numMatches, 4) * 2;                                         /* arabic numbers */
+    if (/[०-९]/.test(s))                                                           score += 3;  /* Nepali numerals */
+    if (/(?:रु\.|rs\.|%|करोड|लाख|अर्ब|crore|lakh|million|billion)/i.test(s))     score += 4;  /* money/amounts */
+    if (/(?:मृत्यु|घाइते|मारिए|मारियो|killed|dead|injured|died|casualt)/i.test(s)) score += 6; /* casualties */
+    if (/(?:पक्राउ|गिरफ्तार|बर्खास्त|arrested|dismissed|resign|fired)/i.test(s)) score += 5;  /* key actions */
+    if (/(?:विस्फोट|explosion|blast|आगलागी|fire|बाढी|flood|भूकम्प|quake)/i.test(s)) score += 5; /* disaster */
+    if (/(?:मन्त्री|प्रधानमन्त्री|अध्यक्ष|राष्ट्रपति|minister|president|chief|pm\b)/i.test(s)) score += 4;
+    if (/(?:आयोग|सरकार|मन्त्रालय|प्रहरी|अदालत|government|court|police|army)/i.test(s)) score += 3;
+    if (/(?:कारण|फलस्वरूप|अनुसार|because|due to|according|following|after)/i.test(s)) score += 3;
+    if (/(?:सिफारिस|माग|आदेश|demanded|ordered|recommended|issued|declared)/i.test(s)) score += 3;
+    if (/(?:जिल्ला|नगर|गाउँ|district|municipality|province|काठमाडौं|Kathmandu)/i.test(s)) score += 2; /* location */
+    /* Reward longer sentences — they carry more information */
+    if (s.length > 120) score += 2;
+    if (s.length > 200) score += 2;
+
+    /* ── PENALTY signals ── */
     const sentW = new Set(sl.split(/\s+/).filter(w => w.length > 3));
     const titleOverlap = [...sentW].filter(w => titleWordsLower.has(w)).length / Math.max(sentW.size, 1);
-    if (titleOverlap > 0.6) score -= 5;
-    /* Penalty: generic / filler sentences */
-    if (/(?:यो खबर|यस विषयमा|थप जानकारी|read more|click here|share this|follow us|subscribe)/i.test(s)) score -= 10;
-    /* Penalty: very short */
-    if (s.length < 60) score -= 2;
+    if (titleOverlap > 0.60) score -= 5;  /* too similar to title */
+    if (s.length < 45)       score -= 3;  /* too short to be informative */
+    if (idx === 0)           score -= 1;  /* first sentence often is the headline reworded */
 
-    return { s, score };
+    return { s, score, idx };
   });
 
-  /* Sort by score, take top maxSents */
+  /* Sort by score, take top N */
+  const MAX = Math.min(maxSents, 8);
   scored.sort((a, b) => b.score - a.score);
-  const top = scored.slice(0, maxSents).map(x => x.s);
+  const top = scored.filter(x => x.score >= 0).slice(0, MAX);
 
-  /* Re-order to match original article sequence (preserve story flow) */
-  const order = new Map(sents.map((s, i) => [s, i]));
-  top.sort((a, b) => (order.get(a) ?? 999) - (order.get(b) ?? 999));
+  /* Re-order to match original article flow (reads naturally) */
+  top.sort((a, b) => a.idx - b.idx);
 
-  /* Ensure sentences end with proper punctuation */
-  return top.map(s => /[।.!?]$/.test(s) ? s : s + '।');
+  /* Return full sentences — NO per-sentence truncation; trimToWordTarget handles overall length */
+  return top.map(({ s }) => /[।.!?]$/.test(s) ? s : s + '।');
 }
 
 function detectNepaliTopic(text) {
   const t = text;
-  if (t.includes('बाढी') || t.includes('पहिरो') || t.includes('वर्षा')) return 'flood';
-  if (t.includes('भूकम्प'))          return 'earthquake';
-  if (t.includes('निर्वाचन') || t.includes('मतदान')) return 'election';
-  if (t.includes('सरकार') || t.includes('प्रधानमन्त्री') || t.includes('मन्त्री')) return 'government';
-  if (t.includes('स्वास्थ्य') || t.includes('अस्पताल'))  return 'health';
-  if (t.includes('दुर्घटना') || t.includes('सडक'))       return 'accident';
-  if (t.includes('शिक्षा') || t.includes('विद्यार्थी')) return 'education';
-  if (t.includes('प्रहरी') || t.includes('अपराध'))       return 'police';
-  if (t.includes('क्रिकेट'))         return 'cricket';
-  if (t.includes('फुटबल'))           return 'football';
-  if (t.includes('आगलागी'))          return 'fire';
-  if (t.includes('पर्यटन'))          return 'tourism';
-  if (t.includes('मूल्य') || t.includes('रुपैयाँ') || t.includes('अर्थ')) return 'economy';
+  if (t.includes('बाढी') || t.includes('पहिरो') || t.includes('वर्षा') || t.includes('मनसुन')) return 'flood';
+  if (t.includes('भूकम्प')) return 'earthquake';
+  if (t.includes('निर्वाचन') || t.includes('मतदान') || t.includes('चुनाव')) return 'election';
+  if (t.includes('सरकार') || t.includes('प्रधानमन्त्री') || t.includes('मन्त्री') || t.includes('बजेट') || t.includes('संसद')) return 'government';
+  if (t.includes('राजनीति') || t.includes('दल') || t.includes('पार्टी') || t.includes('कांग्रेस') || t.includes('एमाले') || t.includes('माओवादी')) return 'politics';
+  if (t.includes('स्वास्थ्य') || t.includes('अस्पताल') || t.includes('रोग') || t.includes('उपचार') || t.includes('औषधि')) return 'health';
+  if (t.includes('दुर्घटना') || t.includes('ट्राफिक')) return 'accident';
+  if (t.includes('सडक') || t.includes('पुल') || t.includes('निर्माण')) return 'road';
+  if (t.includes('शिक्षा') || t.includes('विद्यार्थी') || t.includes('विद्यालय') || t.includes('विश्वविद्यालय')) return 'education';
+  if (t.includes('प्रहरी') || t.includes('अपराध') || t.includes('गिरफ्तार') || t.includes('हत्या')) return 'police';
+  if (t.includes('क्रिकेट')) return 'cricket';
+  if (t.includes('फुटबल') || t.includes('खेल') || t.includes('टूर्नामेन्ट')) return 'football';
+  if (t.includes('आगलागी') || t.includes('आगो')) return 'fire';
+  if (t.includes('पर्यटन') || t.includes('पर्यटक') || t.includes('होटल')) return 'tourism';
+  if (t.includes('मूल्य') || t.includes('रुपैयाँ') || t.includes('अर्थ') || t.includes('बैंक') || t.includes('व्यापार') || t.includes('आयात') || t.includes('निर्यात')) return 'economy';
+  if (t.includes('वातावरण') || t.includes('पर्यावरण') || t.includes('हरियो') || t.includes('सफाइ') || t.includes('सफाई') || t.includes('ग्रीन') || t.includes('क्लीन') || t.includes('प्रदूषण')) return 'environment';
+  if (t.includes('अभियान') || t.includes('कार्यक्रम') || t.includes('पहल') || t.includes('लन्च') || t.includes('सुरु')) return 'campaign';
+  if (t.includes('कृषि') || t.includes('किसान') || t.includes('खेती') || t.includes('धान') || t.includes('मल') || t.includes('बीउ')) return 'agriculture';
+  if (t.includes('खानेपानी') || t.includes('सिंचाइ') || t.includes('पानी आपूर्ति')) return 'water';
+  if (t.includes('विद्युत्') || t.includes('सौर्य') || t.includes('जलविद्युत्') || t.includes('ऊर्जा')) return 'energy';
+  if (t.includes('उद्योग') || t.includes('व्यवसाय') || t.includes('कम्पनी') || t.includes('लगानी')) return 'business';
+  if (t.includes('बैठक') || t.includes('सम्मेलन') || t.includes('सम्झौता') || t.includes('छलफल')) return 'meeting';
+  if (t.includes('पुरस्कार') || t.includes('सम्मान') || t.includes('उपाधि') || t.includes('विजय')) return 'award';
+  if (t.includes('संस्कृति') || t.includes('चाड') || t.includes('पर्व') || t.includes('जात्रा') || t.includes('उत्सव')) return 'culture';
   return null;
 }
 
@@ -2860,17 +4912,91 @@ const TOPIC_HASHTAGS = {
   tourism    : ['#पर्यटन', '#Tourism', '#VisitNepal'],
 };
 
-function buildHashtags(title) {
-  const lower = title.toLowerCase();
-  let extra = [];
-  for (const [key, tags] of Object.entries(TOPIC_HASHTAGS)) {
-    if (lower.includes(key)) extra = extra.concat(tags);
+/**
+ * Build dynamic hashtags from the actual article content.
+ * Priority:
+ *  1. Named entity tags — proper nouns extracted from title + body
+ *  2. Topic-specific tags — matched from TOPIC_HASHTAGS
+ *  3. Location tags — districts, cities, provinces found in text
+ *  4. Base Nepal tags — fill remaining slots
+ *  Always ends with #ShashiNewsGen
+ */
+function buildHashtags(title, articleBody = '') {
+  const combined = (title + ' ' + articleBody).slice(0, 1200);
+  const lower    = combined.toLowerCase();
+  const tags     = new Set();
+
+  /* ── 1. NAMED ENTITY extraction from title + body ── */
+
+  /* People — capitalized English names (2+ words) or Nepali name-like patterns */
+  const engNames = combined.match(/\b([A-Z][a-z]{2,})\s+([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?)\b/g) || [];
+  engNames.slice(0, 3).forEach(name => {
+    const tag = '#' + name.replace(/\s+/g, '');
+    if (tag.length > 4 && tag.length < 30) tags.add(tag);
+  });
+
+  /* Nepali named words — 3+ Devanagari chars that are title-case in the title portion */
+  const nepTitle = title.replace(/\s+/g, ' ').trim();
+  const nepWords = nepTitle.match(/[\u0900-\u097F]{3,}/g) || [];
+  /* Key content words from title (skip filler words) */
+  const nepaliFiller = new Set(['भएको','गरेको','गर्ने','छ।','हुने','गरी','बाट','लाई','मा','को','र','पनि','भए','भन्ने','गर्दा','गएको','आएको','रहेको','सम्म']);
+  nepWords
+    .filter(w => w.length >= 4 && !nepaliFiller.has(w))
+    .slice(0, 4)
+    .forEach(w => tags.add('#' + w));
+
+  /* ── 2. LOCATION extraction — Nepali districts, cities, provinces ── */
+  const LOCATIONS = [
+    ['काठमाडौं','#काठमाडौं'],['ललितपुर','#ललितपुर'],['भक्तपुर','#भक्तपुर'],
+    ['पोखरा','#पोखरा'],['चितवन','#चितवन'],['बुटवल','#बुटवल'],
+    ['बिराटनगर','#बिराटनगर'],['धरान','#धरान'],['जनकपुर','#जनकपुर'],
+    ['नेपालगन्ज','#नेपालगन्ज'],['सुर्खेत','#सुर्खेत'],['दाङ','#दाङ'],
+    ['कास्की','#कास्की'],['मकवानपुर','#मकवानपुर'],['रुपन्देही','#रुपन्देही'],
+    ['सिन्धुपाल्चोक','#सिन्धुपाल्चोक'],['गण्डकी','#गण्डकी'],['लुम्बिनी','#लुम्बिनी'],
+    ['कर्णाली','#कर्णाली'],['सुदूरपश्चिम','#सुदूरपश्चिम'],['बागमती','#बागमती'],
+    ['Kathmandu','#Kathmandu'],['Pokhara','#Pokhara'],['Chitwan','#Chitwan'],
+    ['Butwal','#Butwal'],['Biratnagar','#Biratnagar'],['Janakpur','#Janakpur'],
+    /* India/International if mentioned */
+    ['भारत','#भारत'],['India','#India'],['Delhi','#Delhi'],['China','#China'],
+    ['चीन','#चीन'],['अमेरिका','#America'],['US ','#USA'],
+  ];
+  LOCATIONS.forEach(([kw, tag]) => {
+    if (combined.includes(kw)) tags.add(tag);
+  });
+
+  /* ── 3. ORGANIZATION extraction ── */
+  const ORGS = [
+    ['सरकार','#नेपालसरकार'],['प्रहरी','#नेपालप्रहरी'],['सेना','#नेपालीसेना'],
+    ['अदालत','#सर्वोच्चअदालत'],['संसद','#संसद'],['राष्ट्रपति','#राष्ट्रपति'],
+    ['प्रधानमन्त्री','#प्रधानमन्त्री'],['मन्त्री','#मन्त्रिपरिषद'],
+    ['आयोग','#आयोग'],['विश्वविद्यालय','#विश्वविद्यालय'],
+    ['राष्ट्र बैंक','#राष्ट्रबैंक'],['बैंक','#NepalBanking'],
+    ['Police','#NepalPolice'],['Government','#NepalGovt'],['Army','#NepalArmy'],
+    ['Court','#SupremeCourt'],['Parliament','#NepalParliament'],
+  ];
+  ORGS.forEach(([kw, tag]) => {
+    if (combined.includes(kw) && tags.size < 8) tags.add(tag);
+  });
+
+  /* ── 4. TOPIC-SPECIFIC tags ── */
+  for (const [key, topicTags] of Object.entries(TOPIC_HASHTAGS)) {
+    if (lower.includes(key) && tags.size < 9) {
+      topicTags.slice(0, 2).forEach(t => tags.add(t));
+    }
   }
-  const topicPick = [...new Set(extra)].slice(0, 3);
-  const basePick  = NEPAL_HASHTAGS.filter(h => !topicPick.includes(h)).slice(0, 3);
-  const chosen    = [...topicPick, ...basePick];
-  if (chosen.length < 4) chosen.push('#NepalNews', '#BreakingNews', '#Nepal', '#नेपाल');
-  return chosen.slice(0, 6);
+
+  /* ── 5. Fill remaining slots with base Nepal tags ── */
+  for (const baseTag of NEPAL_HASHTAGS) {
+    if (tags.size >= 10) break;
+    tags.add(baseTag);
+  }
+
+  /* ── 6. Always end with brand tag ── */
+  const filtered = [...tags]
+    .filter(h => h.toLowerCase() !== '#shashinewsgen')
+    .slice(0, 10);
+
+  return [...filtered, '#ShashiNewsGen'];
 }
 
 /* ================================================================
@@ -2960,7 +5086,7 @@ async function regenerateHashtags() {
 
   try {
     let newTags;
-    if ((_grokKey || _geminiKey) && selectedArticle) {
+    if ((_geminiKey || _browserGeminiKey || _browserGroqKey) && selectedArticle) {
       const articleBody = (selectedArticle.fullArticleText || selectedArticle.description || '').replace(/\s+/g, ' ').slice(0, 800);
       const prompt = `You are a Nepali social media expert who knows trending hashtags.
 
@@ -2997,7 +5123,7 @@ Example format: ["#RealTag1","#वास्तविकट्याग2","#Speci
     }
     if (!newTags || newTags.length < 3) {
       /* Fallback: keyword method */
-      newTags = buildHashtags((selectedArticle?.title || '') + ' ' + (generatedPost?.title || ''));
+      newTags = buildHashtags((selectedArticle?.title || '') + ' ' + (generatedPost?.title || ''), selectedArticle?.fullArticleText || selectedArticle?.description || '');
     }
     renderHashtags(newTags);
     toast('✅ Hashtags regenerated!', 'success', 2000);
@@ -3503,6 +5629,8 @@ function addSideImage(event) {
       subjectDataUrl: null,
       img:            null,
       x: 0, y: 0, w: 0, h: 0, rot: 0,
+      flipH:   false,   /* horizontal flip (pre-composite) */
+      removeBg: true,   /* BG removal toggle — user can turn off per image */
       selected: false,
     });
     _renderSideImageList();
@@ -3535,16 +5663,77 @@ function _renderSideImageList() {
     const item = document.createElement('div');
     item.className = 'side-img-item';
     item.dataset.id = sp.id;
+
+    /* Preview thumb — show BG-removed version if available, else raw */
+    const thumbSrc = sp.subjectDataUrl || sp.rawDataUrl;
+
     item.innerHTML = `
-      <img src="${sp.rawDataUrl}" class="side-img-thumb" alt="">
-      <button class="btn btn-ghost side-img-remove" onclick="removeSideSprite(${sp.id})" title="Remove">✕</button>`;
+      <button class="btn btn-ghost side-img-remove" onclick="removeSideSprite(${sp.id})" title="Remove image">✕</button>
+      <img src="${thumbSrc}" class="side-img-thumb" alt="" title="Click Apply to place on canvas">
+      <div class="side-img-actions">
+        <button class="side-img-action-btn" onclick="rotateSpritePreview(${sp.id}, -90)" title="Rotate 90° left">↺</button>
+        <button class="side-img-action-btn" onclick="rotateSpritePreview(${sp.id}, 90)" title="Rotate 90° right">↻</button>
+        <button class="side-img-action-btn" onclick="flipSpritePreview(${sp.id})" title="Flip horizontal">⇆</button>
+      </div>`;
     list.appendChild(item);
   });
-  /* Show/hide apply+clear buttons */
-  const applyBtn = document.getElementById('compositeApplyBtn');
-  const clearBtn = document.getElementById('compositeClearBtn');
-  if (applyBtn) applyBtn.style.display = _sideSprites.length ? 'inline-flex' : 'none';
-  if (clearBtn) clearBtn.style.display = _sideSprites.length ? 'inline-flex' : 'none';
+
+  /* Show/hide apply+clear+bg buttons */
+  const applyBtn  = document.getElementById('compositeApplyBtn');
+  const clearBtn  = document.getElementById('compositeClearBtn');
+  const bgBtn     = document.getElementById('compositeBgBtn');
+  const circleBtn = document.getElementById('compositeCircleBtn');
+  if (applyBtn)  applyBtn.style.display  = _sideSprites.length ? 'inline-flex' : 'none';
+  if (clearBtn)  clearBtn.style.display  = _sideSprites.length ? 'inline-flex' : 'none';
+  if (bgBtn)     bgBtn.style.display     = _sideSprites.length ? 'inline-flex' : 'none';
+  if (circleBtn) circleBtn.style.display = _sideSprites.length ? 'inline-flex' : 'none';
+}
+
+/** Rotate a sprite's base image pre-composite (baked into rawDataUrl) */
+function rotateSpritePreview(id, deg) {
+  const sp = _sideSprites.find(s => s.id === id);
+  if (!sp) return;
+  /* Rotate the raw image onto an offscreen canvas */
+  const img = new Image();
+  img.onload = () => {
+    const rad = (deg * Math.PI) / 180;
+    const sin = Math.abs(Math.sin(rad)), cos = Math.abs(Math.cos(rad));
+    const nW = Math.round(img.width * cos + img.height * sin);
+    const nH = Math.round(img.width * sin + img.height * cos);
+    const oc = document.createElement('canvas');
+    oc.width = nW; oc.height = nH;
+    const ctx = oc.getContext('2d');
+    ctx.translate(nW / 2, nH / 2);
+    ctx.rotate(rad);
+    ctx.drawImage(img, -img.width / 2, -img.height / 2);
+    sp.rawDataUrl = oc.toDataURL('image/png');
+    /* Invalidate cached outputs so applyComposite re-processes */
+    sp.subjectDataUrl = null;
+    sp.img = null;
+    _renderSideImageList();
+  };
+  img.src = sp.rawDataUrl;
+}
+
+/** Flip a sprite's base image horizontally pre-composite */
+function flipSpritePreview(id) {
+  const sp = _sideSprites.find(s => s.id === id);
+  if (!sp) return;
+  const img = new Image();
+  img.onload = () => {
+    const oc = document.createElement('canvas');
+    oc.width = img.width; oc.height = img.height;
+    const ctx = oc.getContext('2d');
+    ctx.translate(img.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(img, 0, 0);
+    sp.rawDataUrl = oc.toDataURL('image/png');
+    /* Invalidate cached outputs */
+    sp.subjectDataUrl = null;
+    sp.img = null;
+    _renderSideImageList();
+  };
+  img.src = sp.rawDataUrl;
 }
 
 /** Compute a default position for sprite index i — centred on canvas */
@@ -3565,32 +5754,83 @@ function _defaultSpritePos(i, img) {
 }
 
 /**
+ * Client-side background removal using canvas pixel manipulation.
+ * Samples the BORDER edge pixels to detect dominant background colour,
+ * then removes pixels within tolerance — preserving skin tones and faces.
+ * Returns a data-URL (PNG with alpha transparency).
+ */
+async function _localRemoveBackground(dataUrl, tolerance = 32) {
+  const img = await loadImageFromSrc(dataUrl, 10000);
+  const oc  = document.createElement('canvas');
+  oc.width  = img.naturalWidth  || img.width;
+  oc.height = img.naturalHeight || img.height;
+  const octx = oc.getContext('2d');
+  octx.drawImage(img, 0, 0);
+  const { width: W, height: H } = oc;
+  const imgData = octx.getImageData(0, 0, W, H);
+  const d = imgData.data;
+
+  /* Sample the full outer border (top+bottom rows + left+right cols) to find BG colour */
+  let rSum=0, gSum=0, bSum=0, cnt=0;
+  const addPx = (px, py) => {
+    const i = (py * W + px) * 4;
+    rSum += d[i]; gSum += d[i+1]; bSum += d[i+2]; cnt++;
+  };
+  for (let x = 0; x < W; x++) { addPx(x, 0); addPx(x, H-1); }
+  for (let y = 1; y < H-1; y++) { addPx(0, y); addPx(W-1, y); }
+  const bgR = rSum/cnt, bgG = gSum/cnt, bgB = bSum/cnt;
+
+  /* Helper: is a pixel likely a skin tone? Preserve these from removal. */
+  function isSkinTone(r, g, b) {
+    // Fitzpatrick scale heuristic: skin tones have warm cast, R > G > B in various ranges
+    return r > 60 && g > 30 && b > 15 &&
+           r > g && g > b * 0.7 &&
+           Math.abs(r - g) < 80 &&
+           r < 255 && g < 240;
+  }
+
+  /* Make pixels close to background colour transparent — skip skin tones */
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i+1], b = d[i+2];
+    const dr = r - bgR, dg = g - bgG, db = b - bgB;
+    const dist = Math.sqrt(dr*dr + dg*dg + db*db);
+    if (dist < tolerance) {
+      /* Don't remove if it looks like skin (protects faces/hands) */
+      if (!isSkinTone(r, g, b)) {
+        d[i+3] = 0;  // fully transparent
+      }
+    } else if (dist < tolerance * 1.8) {
+      /* Feathered edge — also skip if skin */
+      if (!isSkinTone(r, g, b)) {
+        d[i+3] = Math.round(255 * (dist - tolerance) / (tolerance * 0.8));
+      }
+    }
+  }
+  octx.putImageData(imgData, 0, 0);
+  return oc.toDataURL('image/png');
+}
+
+/**
  * Apply Composite:
- *  1. BG-remove any new sprites
- *  2. Load Image objects
- *  3. Assign default positions for new sprites
- *  4. Redraw
+ *  1. Clears any stale BG-removed cache (subjectDataUrl) on each sprite.
+ *  2. Loads Image objects from rawDataUrl (original, with background).
+ *  3. Assigns default positions for new sprites, then redraws.
+ *  Background removal is a SEPARATE step — use the 🚫 Remove BG button.
  */
 async function applyComposite() {
   if (_sideSprites.length === 0) {
     toast('⚠️ Upload at least one side image first.', 'error'); return;
   }
   const applyBtn = document.getElementById('compositeApplyBtn');
-  if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = '⏳ Processing…'; }
+  if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = '⏳ Applying…'; }
   try {
     for (const sp of _sideSprites) {
-      if (!sp.subjectDataUrl) {
-        toast(`🎨 Removing background for image ${sp.id}…`, 'info', 4000);
-        try {
-          sp.subjectDataUrl = await removeBackground(sp.rawDataUrl);
-        } catch {
-          toast('⚠️ BG removal failed — using original', 'error', 3000);
-          sp.subjectDataUrl = sp.rawDataUrl;
-        }
-      }
-      if (!sp.img) {
-        try { sp.img = await loadImageFromSrc(sp.subjectDataUrl); } catch {}
-      }
+      /* ALWAYS use the raw image — BG removal is a separate step via 🚫 Remove BG.
+         Clear subjectDataUrl so no downstream code accidentally uses a stale
+         BG-removed version from a previous removeBgAllSprites() call. */
+      sp.subjectDataUrl = null;   // ← clear stale BG-removed cache
+      sp.img = null;
+      try { sp.img = await loadImageFromSrc(sp.rawDataUrl); } catch {}
     }
     /* Set default positions for any sprite that doesn't have one yet */
     _sideSprites.forEach((sp, i) => {
@@ -3598,11 +5838,70 @@ async function applyComposite() {
       if (sp.w === 0) Object.assign(sp, _defaultSpritePos(i, sp.img));
     });
     _compositeMode = true;
+
+    /* ── CRITICAL: Apply Composite works on the NEWS CANVAS (real background).
+       If AI enhanced mode is active it would swap in an AI background instead of
+       the news photo — force-exit it so the real image stays as the base. */
+    _enhancedMode    = false;
+    _mainImgSprite   = null;
+    _mainImgSelected = false;
+    /* Redraw the main canvas from scratch with the real news/custom image */
+    if (_cachedNewsImg) {
+      const canvas = document.getElementById('newsCanvas');
+      const ctx    = canvas.getContext('2d');
+      canvas.width  = CANVAS_W;
+      canvas.height = CANVAS_H;
+      drawNewsImage(ctx, _cachedNewsImg, CANVAS_W, CANVAS_H);
+      _drawNewsBanner(ctx, CANVAS_W);
+      if (generatedPost) await drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+    }
+
     _showCompositeHandles(true);
     await redrawComposite();
     toast('✅ Composite ready! Drag · resize · rotate side images freely.', 'success');
   } finally {
     if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = '✨ Apply Composite'; }
+  }
+}
+
+/**
+ * Remove background from ALL side sprites (separate from Apply Composite).
+ * Uses Remove.bg API if a key is set, otherwise canvas-based local removal.
+ * After processing, refreshes thumbnails and redraws the composite.
+ */
+async function removeBgAllSprites() {
+  if (_sideSprites.length === 0) {
+    toast('⚠️ Upload at least one side image first.', 'error'); return;
+  }
+  const bgBtn = document.getElementById('compositeBgBtn');
+  if (bgBtn) { bgBtn.disabled = true; bgBtn.textContent = '⏳ Removing BG…'; }
+  try {
+    for (const sp of _sideSprites) {
+      /* Always redo BG removal when user explicitly clicks the button */
+      const hasRemovebg = _removebgKey || _browserRemovebgKey;
+      if (hasRemovebg) {
+        toast(`🎨 Removing background (Remove.bg) for image ${sp.id}…`, 'info', 4000);
+        try {
+          sp.subjectDataUrl = await removeBackground(sp.rawDataUrl);
+        } catch {
+          toast('⚠️ Remove.bg failed — using smart local removal', 'info', 2500);
+          sp.subjectDataUrl = await _localRemoveBackground(sp.rawDataUrl);
+        }
+      } else {
+        toast(`🎨 Auto-removing background for image ${sp.id}…`, 'info', 3000);
+        sp.subjectDataUrl = await _localRemoveBackground(sp.rawDataUrl);
+      }
+      /* Reload the image object with the new BG-removed version */
+      sp.img = null;
+      try { sp.img = await loadImageFromSrc(sp.subjectDataUrl); } catch {}
+    }
+    /* Refresh thumbnails to show BG-removed previews */
+    _renderSideImageList();
+    /* If composite is already active, redraw with the new processed images */
+    if (_compositeMode) await redrawComposite();
+    toast('✅ Backgrounds removed! Click ✨ Apply Composite to place on canvas.', 'success');
+  } finally {
+    if (bgBtn) { bgBtn.disabled = false; bgBtn.textContent = '🚫 Remove BG'; }
   }
 }
 
@@ -3659,26 +5958,77 @@ async function redrawComposite() {
 }
 
 /** Draw all side sprites onto any ctx */
+/** Toggle circle-clip mode for all composite sprites */
+function toggleCircleClip() {
+  _circleClipMode = !_circleClipMode;
+  const btn = document.getElementById('compositeCircleBtn');
+  if (btn) {
+    btn.style.background   = _circleClipMode ? 'linear-gradient(135deg,#4f46e5,#818cf8)' : '';
+    btn.style.color        = _circleClipMode ? '#fff' : '#818cf8';
+    btn.textContent        = _circleClipMode ? '⭕ Circle ON' : '⭕ Circle Clip';
+  }
+  if (_compositeMode) redrawComposite();
+  toast(_circleClipMode ? '⭕ Circle clip ON — images shown as circular icons' : '⬜ Circle clip OFF', 'info', 2000);
+}
+
 function _drawSpritesOnCtx(ctx) {
   _sideSprites.forEach(sp => {
     if (!sp.img) return;
     const cx = sp.x + sp.w / 2, cy = sp.y + sp.h / 2;
-    /* depth glow */
-    const grd = ctx.createRadialGradient(cx, cy + sp.h * 0.3, sp.w * 0.1, cx, cy, sp.w * 0.8);
-    grd.addColorStop(0, 'rgba(0,0,0,0.45)');
-    grd.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
-    ctx.fillStyle = grd; ctx.fillRect(-sp.w * 0.6, -sp.h * 0.6, sp.w * 1.2, sp.h * 1.2);
-    ctx.restore();
-    /* image */
-    ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
-    ctx.drawImage(sp.img, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
-    ctx.restore();
-    /* accent line */
-    ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
-    ctx.fillStyle = 'rgba(246,173,85,0.8)';
-    ctx.fillRect(-sp.w / 2, sp.h / 2, sp.w, 3);
-    ctx.restore();
+    const r  = Math.min(sp.w, sp.h) / 2;
+
+    if (_circleClipMode) {
+      /* ── Circle clip mode: draw as circular icon ── */
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(sp.rot);
+
+      /* Shadow/glow behind circle */
+      ctx.shadowColor = 'rgba(0,0,0,0.55)';
+      ctx.shadowBlur  = 18;
+
+      /* Circle clip */
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(sp.img, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
+      ctx.shadowBlur = 0;
+      ctx.restore();
+
+      /* Ring border */
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(sp.rot);
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      const ringGrad = ctx.createLinearGradient(-r, -r, r, r);
+      ringGrad.addColorStop(0,   '#f59e0b');
+      ringGrad.addColorStop(0.5, '#ef4444');
+      ringGrad.addColorStop(1,   '#a855f7');
+      ctx.strokeStyle = ringGrad;
+      ctx.lineWidth   = Math.max(3, r * 0.06);
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      /* ── Normal rectangular mode ── */
+      /* Depth glow */
+      const grd = ctx.createRadialGradient(cx, cy + sp.h * 0.3, sp.w * 0.1, cx, cy, sp.w * 0.8);
+      grd.addColorStop(0, 'rgba(0,0,0,0.45)');
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
+      ctx.fillStyle = grd; ctx.fillRect(-sp.w * 0.6, -sp.h * 0.6, sp.w * 1.2, sp.h * 1.2);
+      ctx.restore();
+      /* Image */
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
+      ctx.drawImage(sp.img, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
+      ctx.restore();
+      /* Accent line at bottom */
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(sp.rot);
+      ctx.fillStyle = 'rgba(246,173,85,0.8)';
+      ctx.fillRect(-sp.w / 2, sp.h / 2, sp.w, 3);
+      ctx.restore();
+    }
   });
 }
 
@@ -3689,8 +6039,8 @@ function _drawSpritesOnCtx(ctx) {
    currently selected sprite. Clicking empty canvas area deselects.
    ══════════════════════════════════════════════════════════════════ */
 
-const HANDLE_R   = 10;
-const ROTATE_GAP = 28;
+const HANDLE_R   = 14;   // slightly larger handles for better visibility
+const ROTATE_GAP = 36;
 
 function _getHandleCanvas() {
   let hc = document.getElementById('compositeHandleCanvas');
@@ -3725,9 +6075,12 @@ function _syncHandleCanvasSize() {
   const mc = document.getElementById('newsCanvas');
   if (!hc || !mc) return;
   /* Internal resolution must match newsCanvas attribute size (1080×1080).
-     The CSS width/max-width rules handle the visual scaling. */
-  hc.width  = mc.width  || CANVAS_W;
-  hc.height = mc.height || CANVAS_H;
+     The CSS width/max-width rules handle the visual scaling.
+     Only update if dimensions differ — setting canvas.width always clears it. */
+  const w = mc.width  || CANVAS_W;
+  const h = mc.height || CANVAS_H;
+  if (hc.width  !== w) hc.width  = w;
+  if (hc.height !== h) hc.height = h;
 }
 
 function _showCompositeHandles(show) {
@@ -3769,22 +6122,30 @@ function _drawCompositeHandles() {
   const mc = document.getElementById('newsCanvas');
   if (!mc) return;
   /* Set internal resolution to match the main canvas (1080×1080).
-     This must match so that sprite coordinates (in 1080-space) line up exactly. */
-  hc.width  = mc.width  || CANVAS_W;
-  hc.height = mc.height || CANVAS_H;
+     Only reset width/height if they actually differ — resetting clears the canvas
+     and is only needed when the main canvas changes size. */
+  const targetW = mc.width  || CANVAS_W;
+  const targetH = mc.height || CANVAS_H;
+  if (hc.width !== targetW)  hc.width  = targetW;
+  if (hc.height !== targetH) hc.height = targetH;
   const ctx = hc.getContext('2d');
   ctx.clearRect(0, 0, hc.width, hc.height);
 
-  const needsOverlay = ((_enhancedMode || _compositeMode) && _mainImgSprite) || (_compositeMode && _sideSprites.length > 0) || _extraTexts.length > 0;
+  const needsOverlay = (_enhancedMode && _mainImgSprite) || (_compositeMode && _sideSprites.length > 0) || _extraTexts.length > 0;
   hc.style.pointerEvents = needsOverlay ? 'auto' : 'none';
+  /* Ensure the handle canvas is visible whenever it has content to show */
+  if (needsOverlay && hc.style.display === 'none') {
+    hc.style.display = 'block';
+    _syncHandleCanvasSize();
+  }
   if (!needsOverlay) return;
 
-  /* Helper: draw selection box + corner handles + rotate grip for any sprite-like object */
+  /* Helper: draw full selection box + corner handles + rotate grip */
   function _drawHandles(sp, color) {
     const corners = [0,1,2,3].map(i => _cornerWorld(sp, i));
     const grip    = _rotGripWorld(sp);
     ctx.save();
-    ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash([10,6]);
+    ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.setLineDash([10,6]);
     ctx.beginPath();
     ctx.moveTo(corners[0].x, corners[0].y);
     corners.forEach(c => ctx.lineTo(c.x, c.y));
@@ -3796,29 +6157,63 @@ function _drawCompositeHandles() {
     corners.forEach(c => {
       ctx.beginPath(); ctx.arc(c.x, c.y, HANDLE_R, 0, Math.PI*2);
       ctx.fillStyle = '#fff'; ctx.fill();
-      ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash([]); ctx.stroke();
+      ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.setLineDash([]); ctx.stroke();
     });
     ctx.beginPath(); ctx.arc(grip.x, grip.y, HANDLE_R, 0, Math.PI*2);
     ctx.fillStyle = color; ctx.fill();
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.stroke();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.setLineDash([]); ctx.stroke();
     ctx.fillStyle = '#fff';
-    ctx.font = `bold ${Math.round(HANDLE_R*1.4)}px sans-serif`;
+    ctx.font = `bold ${Math.round(HANDLE_R*1.5)}px sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('↻', grip.x, grip.y);
   }
 
-  /* Draw main image (enhanced or composite mode) handles */
-  if ((_enhancedMode || _compositeMode) && _mainImgSprite) {
-    _drawHandles(_mainImgSprite, _mainImgSelected ? '#34d399' : 'rgba(52,211,153,0.5)');
+  /* Helper: draw a subtle hover outline for unselected sprites */
+  function _drawUnselectedOutline(sp, color) {
+    const corners = [0,1,2,3].map(i => _cornerWorld(sp, i));
+    ctx.save();
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([6,6]);
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath();
+    ctx.moveTo(corners[0].x, corners[0].y);
+    corners.forEach(c => ctx.lineTo(c.x, c.y));
+    ctx.closePath(); ctx.stroke();
+    /* Small click-me dot in centre */
+    const cx = sp.x + sp.w/2, cy = sp.y + sp.h/2;
+    ctx.globalAlpha = 0.7;
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI*2);
+    ctx.fillStyle = color; ctx.fill();
+    ctx.restore();
   }
 
-  /* Draw selected sprite handles */
-  const selSprite = _sideSprites.find(s => s.id === _selectedSpriteId);
-  if (selSprite && selSprite.img) _drawHandles(selSprite, '#f6ad55');
+  /* Draw main image (enhanced mode only — in composite-only mode it's the background) */
+  if (_enhancedMode && _mainImgSprite) {
+    _drawHandles(_mainImgSprite, _mainImgSelected ? '#34d399' : 'rgba(52,211,153,0.5)');
+  } else if (_compositeMode && _mainImgSprite && _mainImgSelected) {
+    _drawHandles(_mainImgSprite, '#34d399');
+  }
 
-  /* Draw selected text handles */
+  /* Draw ALL side sprites — selected sprite gets full handles, others get subtle outline */
+  if (_compositeMode) {
+    _sideSprites.forEach(sp => {
+      if (!sp.img) return;
+      if (sp.id === _selectedSpriteId) {
+        _drawHandles(sp, '#f6ad55');
+      } else {
+        _drawUnselectedOutline(sp, '#f6ad55');
+      }
+    });
+  }
+
+  /* Draw selected text handles (others are not selectable via canvas) */
   const selText = _extraTexts.find(t => t.id === _selectedTextId);
   if (selText && selText.text.trim()) _drawHandles(selText, '#818cf8');
+  /* Draw unselected text outlines */
+  _extraTexts.forEach(et => {
+    if (et.id === _selectedTextId || !et.text.trim()) return;
+    _drawUnselectedOutline(et, '#818cf8');
+  });
 }
 
 function _hitTestSprite(sp, wx, wy) {
@@ -3885,27 +6280,16 @@ function _hitTestSprite(sp, wx, wy) {
   }
 
   function _onDown(e) {
-    const hasMainImg = (_enhancedMode || _compositeMode) && _mainImgSprite;
+    /* Main image is selectable only in enhanced mode — in composite-only mode it is
+       the background and sprites sit on top of it, so sprites must take priority. */
+    const hasMainImg = _enhancedMode && _mainImgSprite;
     const hasSprites = _compositeMode && _sideSprites.length > 0;
     const hasTexts   = _extraTexts.length > 0;
     if (!hasMainImg && !hasSprites && !hasTexts) return;
 
     const pt = _ptToCanvas(e);
 
-    /* ── 0. Main image (enhanced mode) ── */
-    if (hasMainImg) {
-      const hit = _hitTestSprite(_mainImgSprite, pt.x, pt.y);
-      if (hit) {
-        _mainImgSelected  = true;
-        _selectedSpriteId = null;
-        _selectedTextId   = null;
-        _active = { type: 'mainImg', obj: _mainImgSprite, hit, startPt: pt, startSnap: { ..._mainImgSprite } };
-        _drawCompositeHandles();
-        e.preventDefault(); e.stopPropagation(); return;
-      }
-    }
-
-    /* ── 1. Selected sprite handles ── */
+    /* ── 0. Side sprites — checked FIRST because they sit on top of the background ── */
     if (hasSprites) {
       const sel = _sideSprites.find(s => s.id === _selectedSpriteId);
       if (sel) {
@@ -3926,6 +6310,19 @@ function _hitTestSprite(sp, wx, wy) {
           _drawCompositeHandles();
           e.preventDefault(); e.stopPropagation(); return;
         }
+      }
+    }
+
+    /* ── 1. Main image (enhanced mode only — background in composite-only mode) ── */
+    if (hasMainImg) {
+      const hit = _hitTestSprite(_mainImgSprite, pt.x, pt.y);
+      if (hit) {
+        _mainImgSelected  = true;
+        _selectedSpriteId = null;
+        _selectedTextId   = null;
+        _active = { type: 'mainImg', obj: _mainImgSprite, hit, startPt: pt, startSnap: { ..._mainImgSprite } };
+        _drawCompositeHandles();
+        e.preventDefault(); e.stopPropagation(); return;
       }
     }
 
@@ -3985,15 +6382,7 @@ function _hitTestSprite(sp, wx, wy) {
     const pt = _ptToCanvas(e);
     let cursor = 'default';
 
-    /* Check main image (enhanced or composite mode) */
-    if ((_enhancedMode || _compositeMode) && _mainImgSprite) {
-      const hit = _hitTestSprite(_mainImgSprite, pt.x, pt.y);
-      if      (hit === 'move')   cursor = 'grab';
-      else if (hit === 'rotate') cursor = 'crosshair';
-      else if (hit)              cursor = 'nwse-resize';
-    }
-
-    /* Check sprites */
+    /* Check sprites FIRST — they sit on top of the main background image */
     if (cursor === 'default' && _compositeMode) {
       const sel = _sideSprites.find(s => s.id === _selectedSpriteId);
       if (sel) {
@@ -4007,6 +6396,14 @@ function _hitTestSprite(sp, wx, wy) {
           if (_hitTestSprite(_sideSprites[i], pt.x, pt.y)) { cursor = 'pointer'; break; }
         }
       }
+    }
+
+    /* Check main image — only in enhanced mode (background in composite-only mode) */
+    if (cursor === 'default' && _enhancedMode && _mainImgSprite) {
+      const hit = _hitTestSprite(_mainImgSprite, pt.x, pt.y);
+      if      (hit === 'move')   cursor = 'grab';
+      else if (hit === 'rotate') cursor = 'crosshair';
+      else if (hit)              cursor = 'nwse-resize';
     }
     /* Check texts */
     if (cursor === 'default') {
@@ -4266,6 +6663,9 @@ async function fastRedraw() {
     if (e.button !== 0) return;
     const ito = document.getElementById('inlineTextOverlay');
     if (ito && ito.classList.contains('open')) return;
+    /* In composite or enhanced mode the handle-canvas overlay intercepts pointer events.
+       Clicks that somehow reach newsCanvas should not start a pan drag. */
+    if (_compositeMode || _enhancedMode) return;
     _dragging   = true;
     _dragStartX = e.clientX;
     _dragStartY = e.clientY;
@@ -4310,6 +6710,8 @@ async function fastRedraw() {
   }
 
   function _onTouchStart(e) {
+    /* In composite or enhanced mode the handle canvas handles touch interaction */
+    if (_compositeMode || _enhancedMode) return;
     if (e.touches.length === 2) {
       _pinchDist = _touchDist(e.touches);
     } else if (e.touches.length === 1) {
@@ -4449,10 +6851,241 @@ function panImage(dx, dy) {
   fastRedraw();
 }
 
+/**
+ * Build a highly contextual AI image generation prompt based on the article.
+ * Uses Gemini to extract precise visual context — ethnicity, location, persons,
+ * event type — so the image matches the ACTUAL story (e.g., Nepal president ≠ Donald Trump).
+ */
+async function _buildContextualImagePrompt(article, post) {
+  const hasAI = _geminiKey || _browserGeminiKey;
+  const titleText = article.title || '';
+  const bodyText  = (article.fullArticleText || article.description || '').slice(0, 1500);
+  const combined  = titleText + ' ' + bodyText;
+  const lower     = combined.toLowerCase();
+
+  /* ── AI-powered precise prompt generation (Gemini) ── */
+  if (hasAI) {
+    try {
+      const aiPrompt = `You are an expert at writing precise photorealistic image generation prompts for FLUX AI / Stable Diffusion.
+
+NEWS ARTICLE:
+Title: ${titleText}
+Body: ${bodyText.slice(0, 1000)}
+
+Your task: Write a single detailed image generation prompt that ACCURATELY depicts this news story.
+
+CRITICAL RULES — read carefully:
+
+1. ETHNICITY must be 100% accurate:
+   - Nepal, Nepali context → people must look NEPALI: brown skin, South Asian Nepali facial features, NOT Indian, NOT Western, NOT Arab
+   - Terai/Madhesh region (Bara, Kalaiya, Janakpur, Birgunj, Rautahat, Sarlahi) → Madhesi Nepali people, darker brown complexion, South Asian features
+   - Hill/Pahadi Nepal → Pahadi Nepali, lighter brown, often mongoloid features
+   - Nepali Newari → distinct Newari South Asian features
+   - Write explicitly: "Nepali man with South Asian features", "Madhesi Nepali person", NOT just "South Asian"
+
+2. CLOTHING must be context-accurate for Nepal:
+   - Nepal Police → MUST wear Nepal Police blue uniform (dark navy blue shirt, blue trousers, Nepal Police cap/beret) — NOT black, NOT khaki, NOT Indian police
+   - Armed Police Force Nepal → olive green uniform
+   - Nepal Army → olive green uniform with Nepal Army insignia
+   - Government official → formal suit or daura suruwal
+   - Common Nepali person → kurta suruwal, casual local clothes
+   - Write the clothing VERY specifically
+
+3. LOCATION must be visually accurate:
+   - Kathmandu → narrow streets, pagoda temples, brick buildings, Nepal flag
+   - Terai/Madhesh (Bara, Birgunj, Janakpur) → flat plains, simple buildings, hot dusty environment
+   - Hill districts → hilly terrain, terraced fields, mountain backdrop
+   - Court/jail → Nepali court building style
+   - Use specific Nepali architectural details
+
+4. EVENT TYPE — depict the actual event:
+   - Arrest/crime → Nepal Police officers in NAVY BLUE uniform handcuffing suspect(s), outdoor Nepal setting
+   - Press conference → podium with Nepali flag, microphones, formal indoor setting
+   - Flood/disaster → people in distress, water, Nepali village or town
+   - Election → Nepali voters, ballot boxes, Nepal Election Commission banner
+   - Road accident → Nepali road, vehicles, emergency workers
+   - Political meeting → Nepali politicians in formal dress, party banners with Nepali text
+
+5. PHOTO STYLE:
+   - Photorealistic news photography, documentary style
+   - Natural lighting, candid feel
+   - No text, no watermarks, no logos in the image
+   - High detail, sharp focus
+
+6. NUMBER OF PEOPLE: match the article — if "two arrested" show two people, if "protest" show crowd
+
+Output ONLY the image prompt — under 150 words, plain text, no explanation.`;
+
+      const result = await callAI(aiPrompt, 15000);
+      const promptText = typeof result === 'string'
+        ? result.trim()
+        : (result && (result.prompt || result.text || Object.values(result).find(v => typeof v === 'string' && v.length > 20)));
+      if (promptText && promptText.length > 20) return promptText;
+    } catch (e) {
+      console.warn('[ImagePrompt] AI prompt generation failed:', e.message);
+    }
+  }
+
+  /* ── Fallback: detailed rule-based contextual prompt ── */
+
+  /* Detect location for ethnicity/setting */
+  let ethnicity = 'Nepali person with South Asian features, brown skin';
+  let setting   = 'Nepal, hilly terrain, Himalayan backdrop';
+
+  /* Terai/Madhesh districts — Madhesi ethnicity */
+  const teraiDistricts = ['bara','kalaiya','janakpur','birgunj','rautahat','sarlahi','parsa','mahottari','dhanusha','siraha','saptari','sunsari','morang','jhapa','rupandehi','nawalparasi','kapilvastu','dang','banke','bardiya','kailali','kanchanpur'];
+  const isTerai = teraiDistricts.some(d => lower.includes(d)) ||
+    lower.includes('तराई') || lower.includes('मधेश') || lower.includes('terai') || lower.includes('madhesh');
+  if (isTerai) {
+    ethnicity = 'Madhesi Nepali person, South Asian features, brown complexion, Terai Nepal';
+    setting   = 'Terai region Nepal, flat plains, simple brick buildings, dusty road, hot environment';
+  } else if (lower.includes('kathmandu') || lower.includes('काठमाडौं') || lower.includes('patan') || lower.includes('bhaktapur')) {
+    ethnicity = 'Nepali person, South Asian features, Kathmandu Valley';
+    setting   = 'Kathmandu city, narrow streets, brick pagoda temples, Nepal flag visible';
+  } else if (lower.includes('india') || lower.includes('भारत')) {
+    ethnicity = 'Indian person, South Asian features';
+    setting   = 'India, urban Indian setting';
+  } else if (lower.includes('china') || lower.includes('चीन')) {
+    ethnicity = 'Chinese person, East Asian features';
+    setting   = 'China, urban Chinese setting';
+  }
+
+  /* Event/person type — very specific clothing and scene */
+  let scene = '';
+  if (lower.includes('पक्राउ') || lower.includes('arrest') || lower.includes('detained') || lower.includes('गिरफ्तार')) {
+    const count = (lower.match(/दुई|two|2/) ? 'two suspects' : lower.match(/तीन|three|3/) ? 'three suspects' : 'a suspect');
+    scene = `Nepal Police officers in dark navy blue Nepal Police uniform and blue cap handcuffing ${count}, outdoor Nepal street scene, documentary news photo`;
+  } else if (lower.includes('राष्ट्रपति') || lower.includes('president')) {
+    scene = 'Nepali male politician in formal suit, podium with Nepal flag, press conference, indoor formal setting Nepal';
+  } else if (lower.includes('प्रधानमन्त्री') || lower.includes('prime minister') || lower.includes('pm ')) {
+    scene = 'Nepali male politician in formal suit or daura suruwal, press conference podium, Nepal Parliament building background';
+  } else if (lower.includes('minister') || lower.includes('मन्त्री')) {
+    scene = 'Nepali official in formal suit, podium, Nepal government building';
+  } else if (lower.includes('election') || lower.includes('निर्वाचन') || lower.includes('vote')) {
+    scene = 'Nepali voters at polling station, ballot boxes, Nepal Election Commission banner, Nepali people in local attire';
+  } else if (lower.includes('flood') || lower.includes('बाढी')) {
+    scene = 'Nepali villagers affected by flood, damaged houses, muddy water, emergency workers, Terai or hilly Nepal landscape';
+  } else if (lower.includes('earthquake') || lower.includes('भूकम्प')) {
+    scene = 'earthquake damaged buildings Nepal, rubble, emergency rescue workers in Nepal, distressed Nepali civilians';
+  } else if (lower.includes('protest') || lower.includes('प्रदर्शन') || lower.includes('आन्दोलन')) {
+    scene = 'Nepali protesters in street holding banners with Nepali text, crowd, Nepal Police in navy blue uniform keeping order';
+  } else if (lower.includes('fire') || lower.includes('आगलागी')) {
+    scene = 'fire burning building or market in Nepal, Nepali fire brigade workers, crowd watching, Nepal setting';
+  } else if (lower.includes('accident') || lower.includes('दुर्घटना')) {
+    scene = 'road accident scene Nepal, damaged vehicle on Nepali highway or mountain road, Nepal Police navy blue uniform, bystanders';
+  } else if (lower.includes('film') || lower.includes('actor') || lower.includes('actress') || lower.includes('चलचित्र')) {
+    scene = 'Nepali film celebrity on red carpet or movie set, Nepali entertainment event, stylish clothing';
+  } else if (lower.includes('hospital') || lower.includes('अस्पताल') || lower.includes('health')) {
+    scene = 'Nepali doctors and nurses in hospital, white coats, Nepali government hospital setting';
+  } else {
+    scene = `Nepali people in ${setting}, news event, documentary photo`;
+  }
+
+  return `Photorealistic news photography documentary style: ${ethnicity}, ${scene}, ${setting}, natural light, candid realistic faces, no text overlay, no watermarks, sharp focus, high detail, 8k quality`;
+}
+
+/* ================================================================
+   REIMAGINE IMAGE WITH AI
+   Generates a fresh AI image using HuggingFace FLUX, always based
+   on news context + optional custom user prompt.
+   Called from the "✨ Reimagine with AI" button in the image panel.
+   ================================================================ */
+async function reimagineImage(useCustomPrompt = false) {
+  if (!selectedArticle || !generatedPost) {
+    toast('⚠️ Please generate a news post first.', 'error'); return;
+  }
+  if (!_browserHFKey) {
+    toast('⚠️ HuggingFace API key required for AI image generation. Add it in Settings.', 'error', 5000); return;
+  }
+
+  /* Pick a fresh random banner label for this reimagined image */
+  _pickRandomBanner();
+
+  const statusEl = document.getElementById('reimagineImageStatus');
+  const btn      = document.getElementById('reimagineImageBtn');
+  const customPromptText = (document.getElementById('reimaginePromptInput')?.value || '').trim();
+
+  /* Make sure image panel is visible */
+  const imgPanel = document.getElementById('imagePanel');
+  if (imgPanel) {
+    imgPanel.style.display = 'block';
+    imgPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  if (statusEl) statusEl.textContent = '⏳ AI is generating image…';
+  if (btn)      { btn.disabled = true; btn.textContent = '⏳ Generating…'; }
+  document.getElementById('imgSourceBadge').textContent = '🤖 AI ले image बनाउँदैछ…';
+
+  try {
+    /* Build the base contextual prompt from article */
+    const basePrompt = await _buildContextualImagePrompt(selectedArticle, generatedPost);
+
+    /* Merge with user custom prompt if provided */
+    let finalPrompt = basePrompt;
+    if (useCustomPrompt && customPromptText) {
+      finalPrompt = `${basePrompt}, ${customPromptText}`;
+    } else if (!useCustomPrompt && customPromptText) {
+      /* Even in quick-reimagine, append custom prompt if user has typed one */
+      finalPrompt = `${basePrompt}, ${customPromptText}`;
+    }
+
+    console.log('[Reimagine] Final AI image prompt:', finalPrompt);
+
+    const hfUrl = await fetchHuggingFaceImage(finalPrompt, 40000);
+
+    /* Load image and draw onto canvas */
+    const newsImg = new Image();
+    newsImg.crossOrigin = 'anonymous';
+    await new Promise((res, rej) => {
+      newsImg.onload = res;
+      newsImg.onerror = () => rej(new Error('Image load failed'));
+      newsImg.src = hfUrl;
+    });
+
+    _cachedNewsImg = newsImg;
+    _enhancedMode  = false;
+    _mainImgSprite = null;
+
+    const canvas = document.getElementById('newsCanvas');
+    const ctx    = canvas.getContext('2d');
+    canvas.width  = CANVAS_W;
+    canvas.height = CANVAS_H;
+
+    drawNewsImage(ctx, newsImg, CANVAS_W, CANVAS_H);
+    _drawNewsBanner(ctx, CANVAS_W);
+    await drawTextOverlay(ctx, generatedPost, CANVAS_W, CANVAS_H);
+
+    /* Cache for enhance tools */
+    const tmpCanvas = document.createElement('canvas');
+    tmpCanvas.width  = newsImg.naturalWidth  || newsImg.width;
+    tmpCanvas.height = newsImg.naturalHeight || newsImg.height;
+    tmpCanvas.getContext('2d').drawImage(newsImg, 0, 0);
+    try { _activeImageDataUrl = tmpCanvas.toDataURL('image/jpeg', 0.92); } catch { _activeImageDataUrl = null; }
+
+    document.getElementById('imgSourceBadge').textContent = '🤖 AI Reimagined';
+    document.getElementById('enhanceAIBtn').style.display = 'inline-flex';
+    _showCanvasEditor();
+
+    if (statusEl) statusEl.textContent = '✅ AI image ready!';
+    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+    toast('🤖 AI image reimagined!', 'success');
+
+  } catch (err) {
+    console.error('[Reimagine] Error:', err.message);
+    if (statusEl) statusEl.textContent = '❌ Failed — ' + err.message;
+    toast('❌ AI image generation failed: ' + err.message, 'error', 5000);
+    document.getElementById('imgSourceBadge').textContent = '❌ AI generation failed';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✨ Reimagine with AI'; }
+  }
+}
+
 async function generateImage() {
   if (!selectedArticle || !generatedPost) {
     toast('⚠️ Please select a news article first.', 'error'); return;
   }
+  /* Pick a fresh random banner label for this image */
+  _pickRandomBanner();
   /* Regenerate always exits enhanced/composite mode — user wants the original image */
   _enhancedMode    = false;
   _mainImgSprite   = null;
@@ -4486,8 +7119,26 @@ async function generateImage() {
     }
   }
 
-  /* ── If no article image, fall back to the Nepal default image ── */
+  /* ── If no article image, try AI (HuggingFace) image generation ── */
   let usedDefaultImg = false;
+  let usedAIImg = false;
+  if (!newsImg && (_browserHFKey || (_geminiKey || _browserGeminiKey))) {
+    try {
+      document.getElementById('imgSourceBadge').textContent = '🤖 AI ले image बनाउँदैछ…';
+      const aiImgPrompt = await _buildContextualImagePrompt(selectedArticle, generatedPost);
+      if (aiImgPrompt && _browserHFKey) {
+        const hfUrl = await fetchHuggingFaceImage(aiImgPrompt);
+        newsImg = new Image();
+        newsImg.crossOrigin = 'anonymous';
+        await new Promise((res, rej) => { newsImg.onload = res; newsImg.onerror = rej; newsImg.src = hfUrl; });
+        imgSource = '🤖 AI Generated';
+        usedAIImg = true;
+      }
+    } catch (aiErr) {
+      console.warn('[ImageGen] AI image failed:', aiErr.message, '— using default');
+      newsImg = null;
+    }
+  }
   if (!newsImg) {
     try {
       newsImg = await new Promise((resolve, reject) => {
@@ -4517,7 +7168,7 @@ async function generateImage() {
     tmpCanvas.getContext('2d').drawImage(newsImg, 0, 0);
     try { _activeImageDataUrl = tmpCanvas.toDataURL('image/jpeg', 0.92); } catch { _activeImageDataUrl = customImageDataUrl; }
     /* AI enhance and adjust tools available for real photos; hide for default placeholder */
-    document.getElementById('enhanceAIBtn').style.display = usedDefaultImg ? 'none' : 'inline-flex';
+    document.getElementById('enhanceAIBtn').style.display = (usedDefaultImg) ? 'none' : 'inline-flex';
   } else {
     _cachedNewsImg = null;   /* no image available */
     drawBackground(ctx, CANVAS_W, CANVAS_H);
@@ -4534,6 +7185,15 @@ async function generateImage() {
   if (_compositeMode && _sideSprites.length > 0) {
     redrawComposite();   // async, but non-blocking — updates canvas after centre is drawn
   }
+
+  /* Enable "Share All" buttons now that the image is ready */
+  ['shareAllBtn', 'shareAllBtn2'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor  = 'pointer';
+  });
 
   toast(newsImg ? '🖼️ Image generated!' : '🎨 Image generated (no photo)', newsImg ? 'success' : 'info');
 }
@@ -4972,48 +7632,124 @@ function drawNewsImage(ctx, img, W, H) {
 }
 
 function _drawNewsBanner(ctx, W) {
-  const bannerColor = _textOpts.bannerColor || '#c0392b';
-  const BANNER_H = 114;   // full height from y=0 → always covers the very top edge
-  /* Red banner bar — starts flush at y=0 */
-  ctx.fillStyle = bannerColor;
+  const BANNER_H = 118;
+
+  /* ── Vivid gradient banner (deep crimson → bright orange-red) ── */
+  const bannerGrad = ctx.createLinearGradient(0, 0, W, 0);
+  const baseColor  = _textOpts.bannerColor || '#c0392b';
+  bannerGrad.addColorStop(0,   baseColor === '#c0392b' ? '#b91c1c' : baseColor);
+  bannerGrad.addColorStop(0.4, baseColor === '#c0392b' ? '#dc2626' : baseColor);
+  bannerGrad.addColorStop(0.7, baseColor === '#c0392b' ? '#ef4444' : baseColor);
+  bannerGrad.addColorStop(1,   baseColor === '#c0392b' ? '#f97316' : baseColor);
+  ctx.fillStyle = bannerGrad;
   ctx.fillRect(0, 0, W, BANNER_H);
-  /* Left accent stripe */
-  ctx.fillStyle = '#f6ad55';
-  ctx.fillRect(0, 0, 10, BANNER_H);
-  /* Banner text — vertically centred in the bar */
-  ctx.font = 'bold 56px "Segoe UI",Arial,sans-serif';
-  ctx.fillStyle = '#ffffff';
+
+  /* ── Shiny gloss overlay (top half highlight) ── */
+  const gloss = ctx.createLinearGradient(0, 0, 0, BANNER_H * 0.55);
+  gloss.addColorStop(0, 'rgba(255,255,255,0.18)');
+  gloss.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gloss;
+  ctx.fillRect(0, 0, W, BANNER_H * 0.55);
+
+  /* ── Left gold accent bar (wider + gradient) ── */
+  const accentGrad = ctx.createLinearGradient(0, 0, 0, BANNER_H);
+  accentGrad.addColorStop(0, '#fde68a');
+  accentGrad.addColorStop(0.5, '#f59e0b');
+  accentGrad.addColorStop(1, '#d97706');
+  ctx.fillStyle = accentGrad;
+  ctx.fillRect(0, 0, 12, BANNER_H);
+
+  /* ── Banner text with glow ── */
+  /* Use cached label (set once per image generation) or user-customised text */
+  const bannerLabel = (_textOpts.bannerText && _textOpts.bannerText.trim())
+    ? _textOpts.bannerText.trim()
+    : _currentBannerLabel;
+  ctx.font = 'bold 52px "Segoe UI",Arial,sans-serif';
   ctx.textAlign = 'center';
-  ctx.shadowColor = 'rgba(0,0,0,0.7)';
-  ctx.shadowBlur = 8;
-  ctx.fillText(_textOpts.bannerText || '🚨  BREAKING NEWS', W / 2, 72);
-  ctx.shadowBlur = 0;
-  /* Bottom rule */
-  ctx.fillStyle = 'rgba(246,173,85,0.6)';
-  ctx.fillRect(0, BANNER_H, W, 2);
-  /* Date stamp */
+  /* Glow layer */
+  ctx.shadowColor = 'rgba(255,120,0,0.9)';
+  ctx.shadowBlur  = 22;
+  ctx.fillStyle   = '#fff7ed';
+  ctx.fillText(bannerLabel, W / 2, 70);
+  /* Crisp top layer */
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur  = 6;
+  ctx.fillStyle   = '#ffffff';
+  ctx.fillText(bannerLabel, W / 2, 70);
+  ctx.shadowBlur  = 0;
+
+  /* ── Bottom glowing rule ── */
+  const ruleGrad = ctx.createLinearGradient(0, 0, W, 0);
+  ruleGrad.addColorStop(0,   'rgba(253,230,138,0)');
+  ruleGrad.addColorStop(0.2, 'rgba(253,230,138,0.9)');
+  ruleGrad.addColorStop(0.8, 'rgba(253,230,138,0.9)');
+  ruleGrad.addColorStop(1,   'rgba(253,230,138,0)');
+  ctx.fillStyle = ruleGrad;
+  ctx.fillRect(12, BANNER_H, W - 12, 3);
+
+  /* ── Date stamp ── */
   const dateStr = new Date().toLocaleDateString('ne-NP', { year:'numeric', month:'short', day:'numeric' });
-  ctx.font = '22px "Segoe UI",Arial,sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.font      = '20px "Segoe UI",Arial,sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
   ctx.textAlign = 'right';
-  ctx.fillText(dateStr, W - 28, 100);
+  ctx.fillText(dateStr, W - 20, 104);
   ctx.textAlign = 'center';
 }
 
 function drawBackground(ctx, W, H) {
+  /* ── Rich deep gradient background (dark navy → deep maroon → dark slate) ── */
   const grad = ctx.createLinearGradient(0, 0, W, H);
-  grad.addColorStop(0, '#0a0e1a'); grad.addColorStop(.4, '#1a0a0a'); grad.addColorStop(1, '#0d1829');
-  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+  grad.addColorStop(0,    '#0f172a');
+  grad.addColorStop(0.35, '#1e0a0a');
+  grad.addColorStop(0.65, '#150e1f');
+  grad.addColorStop(1,    '#0a1628');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
 
-  ctx.strokeStyle = 'rgba(229,62,62,0.06)'; ctx.lineWidth = 1;
-  for (let x = 0; x < W; x += 60) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
-  for (let y = 0; y < H; y += 60) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  /* ── Subtle diagonal grid lines ── */
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,60,60,0.05)';
+  ctx.lineWidth = 1;
+  for (let x = -H; x < W + H; x += 55) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + H, H); ctx.stroke();
+  }
+  ctx.restore();
 
-  ctx.fillStyle = '#e53e3e'; ctx.fillRect(0, 0, W, 14); ctx.fillRect(0, H-14, W, 14);
+  /* ── Vivid radial glow — top-right crimson ── */
+  const glow1 = ctx.createRadialGradient(W * 0.85, H * 0.1, 20, W * 0.85, H * 0.1, 320);
+  glow1.addColorStop(0, 'rgba(220, 38, 38, 0.28)');
+  glow1.addColorStop(1, 'rgba(220, 38, 38, 0)');
+  ctx.fillStyle = glow1;
+  ctx.fillRect(0, 0, W, H);
 
-  const circ = ctx.createRadialGradient(W*.8, H*.2, 40, W*.8, H*.2, 280);
-  circ.addColorStop(0, 'rgba(229,62,62,0.15)'); circ.addColorStop(1, 'rgba(229,62,62,0)');
-  ctx.fillStyle = circ; ctx.fillRect(0, 0, W, H);
+  /* ── Secondary glow — bottom-left violet/indigo ── */
+  const glow2 = ctx.createRadialGradient(W * 0.15, H * 0.9, 10, W * 0.15, H * 0.9, 280);
+  glow2.addColorStop(0, 'rgba(99, 38, 180, 0.22)');
+  glow2.addColorStop(1, 'rgba(99, 38, 180, 0)');
+  ctx.fillStyle = glow2;
+  ctx.fillRect(0, 0, W, H);
+
+  /* ── Bottom accent glow — warm amber ── */
+  const glow3 = ctx.createRadialGradient(W * 0.5, H, 0, W * 0.5, H, 260);
+  glow3.addColorStop(0, 'rgba(245, 158, 11, 0.15)');
+  glow3.addColorStop(1, 'rgba(245, 158, 11, 0)');
+  ctx.fillStyle = glow3;
+  ctx.fillRect(0, 0, W, H);
+
+  /* ── Top & bottom accent bars (vivid) ── */
+  const topBar = ctx.createLinearGradient(0, 0, W, 0);
+  topBar.addColorStop(0,   '#b91c1c');
+  topBar.addColorStop(0.5, '#ef4444');
+  topBar.addColorStop(1,   '#f97316');
+  ctx.fillStyle = topBar;
+  ctx.fillRect(0, 0, W, 10);
+
+  const botBar = ctx.createLinearGradient(0, 0, W, 0);
+  botBar.addColorStop(0,   '#f97316');
+  botBar.addColorStop(0.5, '#ef4444');
+  botBar.addColorStop(1,   '#b91c1c');
+  ctx.fillStyle = botBar;
+  ctx.fillRect(0, H - 10, W, 10);
 
   /* Banner drawn separately after all image layers — do NOT call here */
 }
@@ -5068,18 +7804,23 @@ async function drawTextOverlay(ctx, post, W, H) {
   const blockH = TOP_PAD + titleLineCount * TITLE_LINE_H + 18 + BRAND_H + BOTTOM_PAD;
   const blockY = Math.max(BANNER_BOTTOM + 20, H - blockH);
 
-  /* ── Gradient overlay — fades up from bottom ── */
-  const grad = ctx.createLinearGradient(0, blockY - 120, 0, H);
+  /* ── Gradient overlay — rich deep fade from bottom with warm tint ── */
+  const grad = ctx.createLinearGradient(0, blockY - 140, 0, H);
   grad.addColorStop(0,    'rgba(0,0,0,0)');
-  grad.addColorStop(0.15, 'rgba(0,0,0,0.72)');
-  grad.addColorStop(0.4,  'rgba(0,0,0,0.90)');
-  grad.addColorStop(1,    'rgba(0,0,0,0.97)');
+  grad.addColorStop(0.12, 'rgba(10,5,20,0.65)');
+  grad.addColorStop(0.35, 'rgba(15,5,10,0.88)');
+  grad.addColorStop(0.7,  'rgba(10,2,8,0.96)');
+  grad.addColorStop(1,    'rgba(5,0,5,0.99)');
   ctx.fillStyle = grad;
-  ctx.fillRect(0, blockY - 120, W, blockH + 120);
+  ctx.fillRect(0, blockY - 140, W, blockH + 140);
 
-  /* Left accent bar */
-  ctx.fillStyle = '#e53e3e';
-  ctx.fillRect(0, blockY, 8, blockH);
+  /* Left accent bar — vivid gradient */
+  const accentBar = ctx.createLinearGradient(0, blockY, 0, blockY + blockH);
+  accentBar.addColorStop(0,   '#f97316');
+  accentBar.addColorStop(0.5, '#ef4444');
+  accentBar.addColorStop(1,   '#dc2626');
+  ctx.fillStyle = accentBar;
+  ctx.fillRect(0, blockY, 10, blockH);
 
   let y = blockY + TOP_PAD;
 
@@ -5087,13 +7828,20 @@ async function drawTextOverlay(ctx, post, W, H) {
   ctx.font = `bold ${titleSize}px "Segoe UI",Arial,sans-serif`;
   ctx.fillStyle = titleColor;
   ctx.textAlign = 'center';
-  ctx.shadowColor = 'rgba(0,0,0,1)'; ctx.shadowBlur = 16;
+  /* Warm glow pass */
+  ctx.shadowColor = 'rgba(249,115,22,0.35)'; ctx.shadowBlur = 20;
+  wrapText(ctx, rawTitle, W / 2, y, maxW, TITLE_LINE_H, titleLineCount);
+  /* Crisp white pass */
+  ctx.shadowColor = 'rgba(0,0,0,1)'; ctx.shadowBlur = 14;
   const drawnLines = wrapText(ctx, rawTitle, W / 2, y, maxW, TITLE_LINE_H, titleLineCount);
   y += drawnLines * TITLE_LINE_H + 18;
   ctx.shadowBlur = 0;
 
   /* ── Branding watermark ── */
-  await _drawAuthorWatermark(ctx, W, y);
+  const showNewsWatermark = document.getElementById('newsWatermark') ? document.getElementById('newsWatermark').checked : true;
+  if (showNewsWatermark) {
+    await _drawAuthorWatermark(ctx, W, y);
+  }
 
   ctx.shadowBlur = 0;
   ctx.textAlign = 'center';
@@ -5102,82 +7850,91 @@ async function drawTextOverlay(ctx, post, W, H) {
 }
 
 /**
- * Draw circular author avatar + name + email as a watermark.
- * Placed bottom-right, just below the title block.
+ * Draw a horizontal branding strip pinned to the very bottom of the canvas.
+ * Layout (left → right):  [avatar circle]  |  "Shashi News Gen"  ·  URL  ·  email
+ * The strip is always at the canvas bottom regardless of title height.
  */
-async function _drawAuthorWatermark(ctx, W, titleBottom) {
+async function _drawAuthorWatermark(ctx, W, _titleBottom, label = 'News') {
   /* Wait for the avatar image to finish loading if it hasn't yet */
-  if (!_authorImg && _authorImgPromise) {
-    await _authorImgPromise;
-  }
-  const AVATAR_R   = 48;          // circle radius — large enough for face to be clear
-  const AVATAR_D   = AVATAR_R * 2;
-  const PAD_RIGHT  = 28;
-  const PAD_BOTTOM = 10;
-  const cx = W - PAD_RIGHT - AVATAR_R;   // circle centre x
-  const cy = titleBottom + AVATAR_R + PAD_BOTTOM;   // circle centre y
+  if (!_authorImg && _authorImgPromise) await _authorImgPromise;
+
+  const H           = ctx.canvas.height || CANVAS_H;
+  const wScale      = Math.min(W / 600, 1);     // scale factor for narrow canvases (Reel = 400px → 0.667)
+  const STRIP_H     = Math.round(72 * Math.max(wScale, 0.65));  // shrink strip on narrow formats
+  const AVATAR_R    = Math.round(26 * Math.max(wScale, 0.7));   // shrink avatar too
+  const AVATAR_D    = AVATAR_R * 2;
+  const PAD_L       = Math.round(22 * Math.max(wScale, 0.7));   // left padding
+  const stripY      = H - STRIP_H;             // strip top-y
 
   ctx.save();
 
-  /* ── Semi-transparent backdrop pill ── */
-  const pillW = 260 + AVATAR_D + 12;
-  const pillH = AVATAR_D + 16;
-  const pillX = W - PAD_RIGHT - pillW;
-  const pillY = cy - pillH / 2;
-  ctx.beginPath();
-  ctx.roundRect(pillX, pillY, pillW, pillH, pillH / 2);
-  ctx.fillStyle = 'rgba(0,0,0,0.50)';
-  ctx.fill();
+  /* ── Semi-transparent dark strip across full width ── */
+  ctx.fillStyle = 'rgba(0,0,0,0.62)';
+  ctx.fillRect(0, stripY, W, STRIP_H);
 
-  /* ── Circular clip for the photo ── */
+  /* ── Thin gold separator line at top of strip ── */
+  ctx.strokeStyle = 'rgba(246,173,85,0.55)';
+  ctx.lineWidth   = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, stripY); ctx.lineTo(W, stripY);
+  ctx.stroke();
+
+  /* ── Avatar circle (left side) ── */
+  const avCX = PAD_L + AVATAR_R;
+  const avCY = stripY + STRIP_H / 2;
+
   ctx.save();
   ctx.beginPath();
-  ctx.arc(cx, cy, AVATAR_R, 0, Math.PI * 2);
+  ctx.arc(avCX, avCY, AVATAR_R, 0, Math.PI * 2);
   ctx.clip();
-
   if (_authorImg) {
-    const srcW = _authorImg.naturalWidth;
-    const srcH = _authorImg.naturalHeight;
-    /* Full face crop: square region covering full width, top 80% of height */
-    const cropSize = Math.min(srcW, srcH * 0.80);  // square side = min(width, 80% height)
-    const cropX = (srcW - cropSize) / 2;            // horizontally centred
-    const cropY = 0;                                // from the very top (hair/head)
+    const srcW = _authorImg.naturalWidth, srcH = _authorImg.naturalHeight;
+    const cropSize = Math.min(srcW, srcH);
+    const cropX = (srcW - cropSize) / 2;
+    const cropY = (srcH - cropSize) / 2;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(_authorImg, cropX, cropY, cropSize, cropSize,
-                  cx - AVATAR_R, cy - AVATAR_R, AVATAR_D, AVATAR_D);
+                  avCX - AVATAR_R, avCY - AVATAR_R, AVATAR_D, AVATAR_D);
   } else {
-    /* Fallback: solid colour circle with initials */
     ctx.fillStyle = '#c0392b';
-    ctx.fillRect(cx - AVATAR_R, cy - AVATAR_R, AVATAR_D, AVATAR_D);
-    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(avCX - AVATAR_R, avCY - AVATAR_R, AVATAR_D, AVATAR_D);
+    ctx.fillStyle = '#fff';
     ctx.font = `bold ${AVATAR_R}px "Segoe UI",Arial,sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('SJ', cx, cy);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('SJ', avCX, avCY);
   }
   ctx.restore();
 
-  /* ── Gold ring around avatar ── */
+  /* Gold ring around avatar */
   ctx.beginPath();
-  ctx.arc(cx, cy, AVATAR_R + 3, 0, Math.PI * 2);
+  ctx.arc(avCX, avCY, AVATAR_R + 2.5, 0, Math.PI * 2);
   ctx.strokeStyle = '#f6ad55';
-  ctx.lineWidth = 3.5;
+  ctx.lineWidth = 2.5;
   ctx.stroke();
 
-  /* ── Name + email text ── */
-  const textX = cx - AVATAR_R - 14;
-  ctx.textAlign = 'right';
+  /* ── Text block (right of avatar, vertically centred in strip) ── */
+  const textX     = avCX + AVATAR_R + 16;   // start of text area
+  const nameY     = stripY + STRIP_H / 2 - 11;
+  const detailY   = stripY + STRIP_H / 2 + 13;
+
+  ctx.shadowColor = 'rgba(0,0,0,0.95)';
+  ctx.shadowBlur  = 6;
+  ctx.textAlign   = 'left';
   ctx.textBaseline = 'alphabetic';
-  ctx.shadowColor = 'rgba(0,0,0,0.90)';
-  ctx.shadowBlur = 7;
 
-  ctx.font = 'bold 20px "Segoe UI",Arial,sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.92)';
-  ctx.fillText('© Shashi Viral Post Generator', textX, cy - 6);
+  /* Brand name */
+  ctx.font      = `bold ${Math.round(22 * Math.max(wScale, 0.7))}px "Segoe UI",Arial,sans-serif`;
+  ctx.fillStyle = 'rgba(255,255,255,0.96)';
+  ctx.fillText(`Shashi Creator Studio — ${label}`, textX, nameY);
 
-  ctx.font = '15px "Segoe UI",Arial,sans-serif';
-  ctx.fillStyle = 'rgba(246,173,85,0.88)';
-  ctx.fillText('shashi19.jaiswal@gmail.com', textX, cy + 16);
+  /* URL only — no email */
+  const SITE_URL = 'shajais.github.io/ShashiNewsGen';
+  ctx.font      = `${Math.round(11 * Math.max(wScale, 0.7))}px "Segoe UI",Arial,sans-serif`;
+  ctx.fillStyle = 'rgba(246,173,85,0.90)';
+  ctx.fillText(`🌐 ${SITE_URL}`, textX, detailY);
 
+  ctx.shadowBlur = 0;
   ctx.restore();
 }
 
@@ -5324,6 +8081,57 @@ function downloadImage() {
 /* ================================================================
    FEATURE 5 – POST TEXT & SHARING
 ================================================================ */
+
+/**
+ * Share the complete post (text + generated image) using the
+ * Web Share API (supported on mobile browsers and some desktop).
+ * Falls back to download + copy if Web Share is not available.
+ */
+async function shareWithImage() {
+  if (!generatedPost) { toast('⚠️ पहिले समाचार छान्नुहोस्।', 'error'); return; }
+  const text   = buildPostText(generatedPost, selectedArticle?.title, { includeUrl: false });
+  const canvas = document.getElementById('newsCanvas');
+
+  /* Hide selection handles during export */
+  const prevSelected = _selectedSpriteId;
+  _selectedSpriteId  = null;
+  const hc = document.getElementById('compositeHandleCanvas');
+  const hcWasVisible = hc && hc.style.display !== 'none';
+  if (hc) { hc.style.display = 'none'; hc.style.pointerEvents = 'none'; }
+
+  try {
+    const blob = await new Promise((resolve, reject) => {
+      try { canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas empty')), 'image/png'); }
+      catch (e) { reject(e); }
+    });
+    const file = new File([blob], 'shashinewsgen-' + Date.now() + '.png', { type: 'image/png' });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Shashi Creator Studio', text });
+      toast('✅ साझा गरियो!', 'success');
+    } else if (navigator.share) {
+      await navigator.share({ text });
+      toast('✅ Text साझा गरियो! Image छुट्टै download गर्नुहोस्।', 'success');
+    } else {
+      try { await navigator.clipboard.writeText(text); } catch {}
+      const url  = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = 'shashinewsgen-' + Date.now() + '.png';
+      link.href = url; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast('✅ Text copied + Image downloaded! Social media मा paste गर्नुहोस्।', 'success', 5000);
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      try { await navigator.clipboard.writeText(text); } catch {}
+      toast('⚠️ Text copied! Canvas export गर्न समस्या भयो।', 'info', 4000);
+    }
+  } finally {
+    _selectedSpriteId = prevSelected;
+    if (hc && hcWasVisible) { hc.style.display = 'block'; hc.style.pointerEvents = 'auto'; }
+    if (_compositeMode) _drawCompositeHandles();
+  }
+}
 function getNewsIcon(title) {
   const t = (title || '').toLowerCase();
   if (t.includes('flood') || t.includes('rain') || t.includes('landslide') || t.includes('बाढी') || t.includes('पहिरो')) return '🌧️';
@@ -5341,13 +8149,19 @@ function getNewsIcon(title) {
   return '📰';
 }
 
-function buildPostText(post, rawTitle) {
-  const icon = getNewsIcon(rawTitle || post.title || '');
-  return `${icon} ${post.hook}\n\n📢 ${post.title}\n\n${post.description}\n\n${post.hashtags.join(' ')}\n\n— Shashi News Generator 🇳🇵`;
+const BRAND_NAME = 'Shashi Creator Studio 🇳🇵';
+const BRAND_URL  = 'https://shajais.github.io/ShashiNewsGen/';
+
+function buildPostText(post, rawTitle, { includeUrl = true } = {}) {
+  const credit = includeUrl
+    ? `— ${BRAND_NAME}\n🌐 ${BRAND_URL}`
+    : `— ${BRAND_NAME}`;
+  /* When sharing/copying: NO title — only description, hashtags, brand */
+  return `${post.description}\n\n${post.hashtags.join(' ')}\n\n${credit}`;
 }
 
 function getPostText() {
-  return generatedPost ? buildPostText(generatedPost, selectedArticle?.title) : '';
+  return generatedPost ? buildPostText(generatedPost, selectedArticle?.title, { includeUrl: false }) : '';
 }
 
 /* Share helpers */
@@ -5355,55 +8169,22 @@ let _shareUrl = '', _shareTarget = '';
 
 function shareOnFacebook() {
   if (!generatedPost) { toast('⚠️ पहिले समाचार छान्नुहोस्।','error'); return; }
-  const text = getPostText();
-  /*
-   * Facebook's sharer.php only reliably passes a URL — it ignores the `quote`
-   * param in most contexts and the shared URL would point to the source site
-   * (not our content). Best practice for monetised pages:
-   * → Copy our full original text to clipboard, then open the user's own
-   *   FB profile/page composer so they can paste as an original post.
-   */
-  _shareUrl    = 'https://www.facebook.com/';
-  _shareTarget = 'facebook';
-  openShareModal(
-    '📘 Facebook मा साझा गर्नुहोस्',
-    '✅ तपाईंको पोस्ट क्लिपबोर्डमा कपी भयो!\n\nFacebook खुल्नेछ — "Write something…" बाकसमा Paste गर्नुहोस् र तस्बिर पनि थप्नुहोस्।',
-    text
-  );
+  const text = buildPostText(generatedPost, selectedArticle?.title, { includeUrl: false });
+  _shareCanvasToSocial('facebook', 'newsCanvas', text, () => document.getElementById('downloadBtn')?.click());
 }
 
 function shareOnInstagram() {
   if (!generatedPost) { toast('⚠️ पहिले समाचार छान्नुहोस्।','error'); return; }
-  /*
-   * Instagram has no web share API. Standard workflow:
-   * 1. Download the generated 1080×1080 image.
-   * 2. Paste caption (copied to clipboard) when creating the post on mobile.
-   */
-  const caption = getPostText();
-  _shareUrl    = 'https://www.instagram.com/';
-  _shareTarget = 'instagram';
-  openShareModal(
-    '📸 Instagram मा साझा गर्नुहोस्',
-    '✅ क्याप्सन क्लिपबोर्डमा कपी भयो!\n\n① तल "Download Image" थिच्नुहोस्।\n② Instagram खुल्नेछ — फोटो छान्नुहोस् र क्याप्सन Paste गर्नुहोस्।',
-    caption
-  );
+  const caption = buildPostText(generatedPost, selectedArticle?.title, { includeUrl: false });
+  _shareCanvasToSocial('instagram', 'newsCanvas', caption, () => document.getElementById('downloadBtn')?.click());
 }
 
 function shareOnX() {
   if (!generatedPost) { toast('⚠️ पहिले समाचार छान्नुहोस्।','error'); return; }
   const post = generatedPost;
-  /*
-   * X (Twitter) limit ≈ 280 chars. We send: hook + title + top 3 hashtags.
-   * No source URL — this is our original Nepali content.
-   */
-  const tweet = `${post.hook}\n\n📢 ${post.title}\n\n${post.hashtags.slice(0, 3).join(' ')}\n\n— Shashi News Generator 🇳🇵`;
-  _shareUrl    = `https://x.com/intent/tweet?text=${encodeURIComponent(tweet)}`;
-  _shareTarget = 'x';
-  openShareModal(
-    '𝕏 X (Twitter) मा साझा गर्नुहोस्',
-    '✅ Tweet तयार छ! "Share Now" थिच्नुहोस् — X मा सिधै पोस्ट हुन्छ।',
-    tweet
-  );
+  const descSnippet = (post.description || '').slice(0, 200).trim();
+  const tweet = `${descSnippet}…\n\n${post.hashtags.slice(0, 4).join(' ')}\n\n— ${BRAND_NAME}`;
+  _shareCanvasToSocial('twitter', 'newsCanvas', tweet, () => document.getElementById('downloadBtn')?.click());
 }
 
 function openShareModal(title, note, preview) {
@@ -5422,7 +8203,8 @@ function openShareWindow() { window.open(_shareUrl,'_blank','noopener,noreferrer
 
 function openCopyModal() {
   if (!generatedPost) { toast('⚠️ Generate content first.','error'); return; }
-  document.getElementById('modalText').textContent = buildPostText(generatedPost, selectedArticle?.title);
+  // Pass includeUrl:false so the URL is excluded from the copy text
+  document.getElementById('modalText').textContent = buildPostText(generatedPost, selectedArticle?.title, { includeUrl: false });
   document.getElementById('copyModal').classList.add('open');
 }
 function closeCopyModal() { document.getElementById('copyModal').classList.remove('open'); }
@@ -5491,7 +8273,7 @@ function startEdit(field) {
 /**
  * Update the AI/Template generation badges on each content field.
  * @param {boolean} aiUsed  - true = AI generated, false = template/fallback
- * @param {string}  providerLabel - e.g. '✨ Gemini' or '⚡ Grok'
+ * @param {string}  providerLabel - e.g. '✨ Gemini'
  */
 function setGenBadges(aiUsed, providerLabel) {
   const fields = ['Hook', 'Title', 'Desc', 'Hashtags'];
@@ -5500,14 +8282,13 @@ function setGenBadges(aiUsed, providerLabel) {
     if (!badge) continue;
     badge.style.display = '';
     if (aiUsed) {
-      const isGrok = (providerLabel || '').includes('Grok');
-      badge.className = 'gen-badge ' + (isGrok ? 'gen-badge-grok' : 'gen-badge-ai');
-      badge.textContent = isGrok ? '⚡ Grok AI' : '✨ Gemini AI';
-      badge.title = 'Content generated by ' + (isGrok ? 'Grok' : 'Gemini') + ' AI — specific to this article';
+      badge.className = 'gen-badge gen-badge-ai';
+      badge.textContent = '✨ Gemini AI';
+      badge.title = 'Content generated by Gemini AI — specific to this article';
     } else {
       badge.className = 'gen-badge gen-badge-template';
       badge.textContent = '📋 Template';
-      badge.title = 'No AI key set — content generated using smart template system. Add Gemini/Grok key for AI-generated content.';
+      badge.title = 'No AI key set — content generated using smart template system. Add Gemini API key for AI-generated content.';
     }
   }
 }
@@ -5517,18 +8298,17 @@ function _setFieldBadgeAI(field) {
   const idMap = { hook: 'badgeHook', title: 'badgeTitle', desc: 'badgeDesc' };
   const badge = document.getElementById(idMap[field]);
   if (!badge) return;
-  const isGrok = _aiProvider === 'grok';
   badge.style.display = '';
-  badge.className = 'gen-badge ' + (isGrok ? 'gen-badge-grok' : 'gen-badge-ai');
-  badge.textContent = isGrok ? '⚡ Grok AI' : '✨ Gemini AI';
-  badge.title = 'Reimagined by ' + (isGrok ? 'Grok' : 'Gemini') + ' AI';
+  badge.className = 'gen-badge gen-badge-ai';
+  badge.textContent = '✨ Gemini AI';
+  badge.title = 'Reimagined by Gemini AI';
 }
 
 async function reimagineField(field) {
   if (!generatedPost || !selectedArticle) {
     toast('⚠️ Please select an article first.', 'error'); return;
   }
-  if (!_grokKey && !_geminiKey) {
+  if (!_geminiKey && !_browserGeminiKey && !_browserGroqKey) {
     toast('⚙️ Setup your AI key first — click the AI button in the header.', 'error', 5000); return;
   }
 
@@ -5618,7 +8398,7 @@ Return ONLY this JSON (no markdown, no explanation):
   }
 
   try {
-    console.log(`[Reimagine] calling ${_aiProvider} for field="${field}", jsonKey="${jsonKey}"`);
+    console.log(`[Reimagine] calling Gemini for field="${field}", jsonKey="${jsonKey}"`);
     const result = await callAI(prompt, 22000);
 
     /* callGemini now throws on any failure — if we get here, result is a parsed object */
@@ -5724,6 +8504,40 @@ function _closeEditMode(m) {
 /* ================================================================
    STARTUP CHECKS
 ================================================================ */
+
+/** Show a friendly first-visit banner on GitHub Pages when no API keys are configured yet */
+function showGitHubPagesSetupBanner() {
+  if (document.getElementById('ghpSetupBanner')) return; // already shown
+  const banner = document.createElement('div');
+  banner.id = 'ghpSetupBanner';
+  banner.style.cssText = `
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:linear-gradient(135deg,#1e1b4b,#312e81);
+    color:#e0e7ff;padding:16px 24px;
+    border-radius:14px;font-size:.9rem;text-align:center;
+    border:1px solid #6366f1;z-index:9999;box-shadow:0 6px 30px rgba(0,0,0,.7);
+    max-width:90%;min-width:280px;
+  `;
+  banner.innerHTML = `
+    <div style="font-size:1.1rem;font-weight:700;margin-bottom:6px">🤖 AI Features Need Setup</div>
+    <div style="opacity:.85;margin-bottom:12px;font-size:.82rem">
+      This is a GitHub Pages site — add your free Gemini API key to enable<br>
+      AI title, description, hashtags, memes &amp; Content Studio.
+    </div>
+    <button onclick="openAISettings();document.getElementById('ghpSetupBanner')?.remove();"
+      style="background:#6366f1;color:#fff;border:none;border-radius:8px;padding:8px 18px;
+             font-size:.88rem;font-weight:600;cursor:pointer;margin-right:8px">
+      ⚙️ Setup AI Keys
+    </button>
+    <button onclick="document.getElementById('ghpSetupBanner').remove()"
+      style="background:rgba(255,255,255,.12);color:#c7d2fe;border:1px solid rgba(255,255,255,.2);
+             border-radius:8px;padding:8px 14px;font-size:.82rem;cursor:pointer">
+      Later
+    </button>
+  `;
+  document.body.appendChild(banner);
+}
+
 (function onStartup() {
   /* Show red CORS warning banner if opened as file:// */
   if (location.protocol === 'file:') {
@@ -5742,10 +8556,4331 @@ function _closeEditMode(m) {
      Keys live only in .env — the browser never sees the actual values. */
   loadKeyStatus();
 
+  /* On GitHub Pages: if no keys are saved yet, show a first-visit setup prompt */
+  if (!_isNodeServer && !_browserGeminiKey && !_browserGroqKey) {
+    setTimeout(() => {
+      showGitHubPagesSetupBanner();
+    }, 1500);
+  }
+
   /* Retry every 10 seconds if server was offline at startup */
   setInterval(async () => {
-    if (!_serverOnline && _isLocalhost) {
+    if (!_serverOnline && _isNodeServer) {
       await loadKeyStatus();
     }
   }, 10000);
 })();
+
+/* ================================================================
+   MEME STUDIO  (global scope — called from HTML onclick handlers)
+   v2  — Live trending from headlines + article-URL input
+       — Canvas matches news image format:
+           dark gradient BG · red top "😂 MEME" banner · avatar watermark strip
+       — Gemini AI generates meme text; local templates as fallback
+       — Images: Unsplash Source CDN + upload + solid BG
+       — Download / copy / share
+================================================================ */
+
+/* ── State ── */
+let _memeImgObj     = null;   // kept for legacy compat (single bg)
+let _memeSlots      = [];     // [{type:'img'|'color', img:Image|null, color:string|null, panX:0, panY:0}]  up to 4
+let _memeSelSlotIdx = -1;     // index of currently selected slot panel for panning
+let _memeTextColor  = '#ffffff';
+let _memeFontFamily = 'Arial Black';
+let _memeCanvasW    = 600;
+let _memeCanvasH    = 600;
+
+/* ── Overlay images state (up to 4) ── */
+let _memeOverlays      = [];   // [{img, x, y, w, h, circle, locked}]  locked=auto-layout
+let _memeSelOverlayIdx = -1;
+let _memeDragState     = null; // {type:'overlay'|'text', idx, startX, startY, origX, origY}
+
+/* ── Per-text drag positions ── */
+// Each entry: {x (0=centre), y, fontSize (0=use global), dragged}
+// 'x' is canvas X position (use null = centred)
+let _memeTextPositions = {
+  top:  { x: null, y: null, fontSize: 0 },
+  mid1: { x: null, y: null, fontSize: 0 },
+  mid2: { x: null, y: null, fontSize: 0 },  // kept for backward compat, not shown in UI  bot:  { x: null, y: null, fontSize: 0 },
+};
+let _memeSelText = null; // 'top'|'mid1'|'mid2'|'bot'|null
+let _memeVertical = false; // false = horizontal panels (default), true = vertical stacking
+
+function toggleMemeOrientation() {
+  _memeVertical = !_memeVertical;
+  const btn = document.getElementById('memeOrientationBtn');
+  if (btn) btn.textContent = _memeVertical ? '⇅ Vertical (click for ⇄ Horizontal)' : '⇄ Horizontal (click for ⇅ Vertical)';
+  renderMemeCanvas();
+}
+
+/* ── Evergreen Nepal meme topics (shown when live fetch unavailable) ── */
+const MEME_NEPAL_TOPICS_FALLBACK = [
+  { emoji:'⚡', label:'Load Shedding फेरि आयो',    hint:'Nepal बिजुली कटौती र जनताको दुःख' },
+  { emoji:'🚦', label:'काठमाडौं ट्राफिक जाम',       hint:'काठमाडौंको ट्राफिक र ढिलाई' },
+  { emoji:'🏛️', label:'नेताको खाली वाचा',            hint:'Nepal को राजनीतिज्ञको खाली वाचा र जनताको हालत' },
+  { emoji:'💸', label:'तलब र महँगी',                 hint:'Nepal मा महँगी र कम तलब' },
+  { emoji:'🛂', label:'खाडी जाने नेपाली',            hint:'बिदेश जाने नेपाली कामदार' },
+  { emoji:'📶', label:'Nepal Internet Speed',         hint:'नेपालको ढिलो इन्टरनेट speed' },
+  { emoji:'🏥', label:'सरकारी अस्पताल',               hint:'सरकारी अस्पतालको अवस्था र सेवा' },
+  { emoji:'🎓', label:'Board Exam Tension',           hint:'SEE र NEB exam को tension र preparation' },
+  { emoji:'🌧️', label:'Monsoon र पहिरो',              hint:'Nepal को बाढी पहिरो र सरकारी तयारी' },
+  { emoji:'🏔️', label:'Everest Tourist',              hint:'हिमाल पर्यटन र garbage' },
+  { emoji:'🎬', label:'नेपाली चलचित्र',               hint:'नेपाली फिल्म र कलाकार' },
+  { emoji:'🗳️', label:'Election को वाचा',             hint:'चुनाव वाचा र जनताको अपेक्षा' },
+  { emoji:'🍜', label:'Dal Bhat Power',               hint:'नेपाली खाना dal bhat संस्कृति' },
+  { emoji:'📱', label:'TikTok र नेपाली युवा',         hint:'नेपाली युवा र social media addiction' },
+  { emoji:'🚗', label:'Traffic नियम जरिवाना',         hint:'नेपाल ट्राफिक नियम र जरिवाना' },
+  { emoji:'⚽', label:'Nepal Football',               hint:'नेपाली फुटबल टिम र ANFA' },
+];
+
+/* Emojis to assign dynamically to live headline chips */
+const _LIVE_TOPIC_EMOJIS = ['🔥','📰','💥','🎭','🗞️','⚡','📢','🏛️','😮','🌐'];
+
+/* ── Creator Studio dropdown close helper ── */
+function csCloseMenu() {
+  const m = document.getElementById('csMenu');
+  if (m) m.classList.remove('open');
+}
+// Close menu when clicking anywhere outside it
+document.addEventListener('click', function(e) {
+  const dropdown = document.getElementById('csDropdown');
+  if (dropdown && !dropdown.contains(e.target)) csCloseMenu();
+});
+
+/* ── News Studio / Meme Studio tab switching ── */
+function openNewsStudio() {
+  /* Close Meme Studio, show the main News Explorer container */
+  const mainContainer = document.querySelector('.container');
+  const modal         = document.getElementById('memeStudioModal');
+  if (modal)         modal.style.display  = 'none';
+  if (mainContainer) mainContainer.style.display = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  /* Active state on buttons */
+  const nb = document.getElementById('newsStudioBtn');
+  const mb = document.getElementById('memeStudioBtn');
+  if (nb) nb.classList.add('active-studio-btn');
+  if (mb) mb.classList.remove('active-studio-btn');
+}
+
+/* ── Open / close ── */
+/** Toggle accordion open/closed in meme left panel */
+function toggleMemeAccordion(headerEl) {
+  const section = headerEl.closest('.meme-accordion');
+  if (section) section.classList.toggle('collapsed');
+}
+
+function openMemeStudio() {
+  /* Hide the main News Explorer container, show only Meme Studio */
+  const mainContainer = document.querySelector('.container');
+  const modal         = document.getElementById('memeStudioModal');
+  if (mainContainer) mainContainer.style.display = 'none';
+  modal.style.display = 'block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  /* Active state on buttons */
+  const nb = document.getElementById('newsStudioBtn');
+  const mb = document.getElementById('memeStudioBtn');
+  if (nb) nb.classList.remove('active-studio-btn');
+  if (mb) mb.classList.add('active-studio-btn');
+
+  /* Ensure canvas has correct dimensions before drawing */
+  const canvas = document.getElementById('memeCanvas');
+  if (canvas && (!canvas.width || canvas.width < 100)) {
+    canvas.width  = 600;
+    canvas.height = 600;
+  }
+
+  _loadMemeTrendingTopics();
+  /* Reset overlays and text positions */
+  _memeSlots = []; _memeImgObj = null; _memeSelSlotIdx = -1;
+  _memeOverlays = []; _memeSelOverlayIdx = -1; _memeDragState = null; _memeSelText = null;
+  _memeTextPositions = { top:{x:null,y:null,fontSize:0}, mid1:{x:null,y:null,fontSize:0}, mid2:{x:null,y:null,fontSize:0}, bot:{x:null,y:null,fontSize:0} };
+  /* Short delay so canvas is visible/sized before drawing */
+  setTimeout(() => renderMemeCanvas(), 80);
+}
+function closeMemeStudio() {
+  /* Restore the main News Explorer container */
+  const mainContainer = document.querySelector('.container');
+  const modal         = document.getElementById('memeStudioModal');
+  modal.style.display = 'none';
+  if (mainContainer) mainContainer.style.display = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  /* Reset button states */
+  const nb = document.getElementById('newsStudioBtn');
+  const mb = document.getElementById('memeStudioBtn');
+  if (nb) nb.classList.add('active-studio-btn');
+  if (mb) mb.classList.remove('active-studio-btn');
+}
+
+/* ── Live trending topics from loaded articles + fallback ── */
+async function _loadMemeTrendingTopics() {
+  const grid = document.getElementById('memeTrendingGrid');
+  if (!grid) return;
+  /* Reset every time so re-opening always refreshes */
+  grid.innerHTML = '<span style="color:var(--muted);font-size:.8rem;padding:4px">⏳ Loading live topics…</span>';
+
+  let liveTopics = [];
+
+  /* Pull topics from the app's cached articles if available */
+  try {
+    /* `articles` is the global array loaded by the main app */
+    if (typeof articles !== 'undefined' && Array.isArray(articles) && articles.length > 0) {
+      const seen = new Set();
+      for (const a of articles) {
+        const title = (a.title || a.headline || '').trim();
+        if (!title || seen.has(title)) continue;
+        seen.add(title);
+        /* Short chip label: first ~5 words */
+        const words = title.split(/\s+/);
+        const label = words.slice(0, 5).join(' ') + (words.length > 5 ? '…' : '');
+        liveTopics.push({
+          emoji: _LIVE_TOPIC_EMOJIS[liveTopics.length % _LIVE_TOPIC_EMOJIS.length],
+          label,
+          hint: title,
+          live: true
+        });
+        if (liveTopics.length >= 10) break;
+      }
+    }
+  } catch (e) { console.warn('[MemeTopics] articles read error', e); }
+
+  /* Merge live + fallback (live first) */
+  const merged = [...liveTopics, ...MEME_NEPAL_TOPICS_FALLBACK];
+  _renderMemeTrendingGrid(merged);
+}
+
+let _allMemeTopics = []; // stored for search filtering
+
+function _renderMemeTrendingGrid(topics) {
+  _allMemeTopics = topics;
+  _renderTopicsFiltered(topics);
+}
+
+function _renderTopicsFiltered(topics) {
+  const grid = document.getElementById('memeTrendingGrid');
+  if (!grid) return;
+  if (topics.length === 0) {
+    grid.innerHTML = '<span style="color:var(--muted);font-size:.8rem;padding:4px">No topics found</span>';
+    return;
+  }
+  grid.innerHTML = topics.map((t, i) =>
+    `<button class="meme-topic-chip${t.live ? ' live' : ''}" data-idx="${i}">${t.emoji} ${escHtml(t.label)}</button>`
+  ).join('');
+  grid.querySelectorAll('.meme-topic-chip').forEach((btn, i) => {
+    btn.addEventListener('click', () => memeClickTopic(topics[i].hint, topics[i].label));
+  });
+}
+
+function filterMemeTrendingTopics(q) {
+  if (!q || !q.trim()) { _renderTopicsFiltered(_allMemeTopics); return; }
+  const lq = q.toLowerCase();
+  const filtered = _allMemeTopics.filter(t =>
+    t.label.toLowerCase().includes(lq) || t.hint.toLowerCase().includes(lq)
+  );
+  // Always show filtered results; if empty, show all but highlight the search box
+  _renderTopicsFiltered(filtered.length > 0 ? filtered : _allMemeTopics);
+}
+
+function memeUseSearchTopic() {
+  const q = (document.getElementById('memeTrendingSearch')?.value || '').trim();
+  if (!q) return;
+  document.getElementById('memeTopicInput').value = q;
+  memeSetStatus('⏳ Generating meme for: ' + q);
+  memeGenerateAI();
+}
+
+function memeClickTopic(hint, label) {
+  document.getElementById('memeTopicInput').value = hint;
+  document.getElementById('memeTopText').value    = '';
+  document.getElementById('memeBottomText').value = '';
+  memeSetStatus('⏳ ' + label + ' मिम तयार गर्दैछ…');
+  memeGenerateAI();
+}
+function memeSetStatus(msg) {
+  const el = document.getElementById('memeStatusMsg');
+  if (el) el.textContent = msg;
+}
+function _memeArticleStatus(msg) {
+  const el = document.getElementById('memeArticleStatus');
+  if (el) el.textContent = msg;
+}
+
+/* ── Load meme from a news article URL or pasted headline ── */
+async function memeFromArticle() {
+  const raw = (document.getElementById('memeArticleUrl') ? document.getElementById('memeArticleUrl').value : '').trim();
+  if (!raw) { toast('⚠️ URL वा headline text लेख्नुस्', 'error'); return; }
+
+  /* If it looks like a URL, fetch article HTML and extract title + OG image */
+  if (/^https?:\/\//i.test(raw)) {
+    _memeArticleStatus('⏳ Article fetch गर्दैछ…');
+    try {
+      const html  = await fetchArticleHtml(raw);
+      const title = extractPageTitle(html) || raw;
+      const ogImg = extractOgImage(html);
+
+      document.getElementById('memeTopicInput').value = title;
+      _memeArticleStatus('✅ Article loaded: ' + title.slice(0, 60) + (title.length > 60 ? '…' : ''));
+
+      /* Auto-populate image search or load OG image */
+      if (ogImg) {
+        _memeArticleStatus('✅ Article + image loaded');
+        memeSetStatus('⏳ Article image load हुँदैछ…');
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload  = () => { _memeImgObj = img; renderMemeCanvas(); memeSetStatus('✅ Article image ready'); };
+        img.onerror = () => {
+          /* If OG image fails, fall back to keyword image search */
+          memeSetStatus('ℹ️ Fallback image search…');
+          const q = title.split(/\s+/).slice(0, 3).join(' ');
+          document.getElementById('memeImgQuery').value = q;
+          switchMemeImgSrc('search');
+          searchMemeImages();
+        };
+        img.src = ogImg;
+      } else {
+        const q = title.split(/\s+/).slice(0, 3).join(' ');
+        document.getElementById('memeImgQuery').value = q;
+        switchMemeImgSrc('search');
+        searchMemeImages();
+      }
+      /* Now auto-generate meme text from the title */
+      memeGenerateAI();
+    } catch (e) {
+      _memeArticleStatus('❌ Fetch failed: ' + e.message);
+    }
+  } else {
+    /* Treat as plain headline text */
+    document.getElementById('memeTopicInput').value = raw;
+    _memeArticleStatus('✅ Headline set — AI generate गर्नुस्');
+    memeGenerateAI();
+  }
+}
+
+/* ── Image source tabs ── */
+function switchMemeImgSrc(src) {
+  ['search','upload','blank'].forEach(s => {
+    const panel = document.getElementById('memeSrc' + s.charAt(0).toUpperCase() + s.slice(1));
+    if (panel) panel.style.display = (s === src) ? 'block' : 'none';
+  });
+  document.querySelectorAll('.meme-src-tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.src === src));
+}
+
+/* ── Image search — multi-source for better relevance ── */
+async function searchMemeImages() {
+  const q    = (document.getElementById('memeImgQuery').value || '').trim();
+  const grid = document.getElementById('memeImgResults');
+  if (!q) { toast('⚠️ Search keyword लेख्नुस्', 'error'); return; }
+  grid.innerHTML = '<span style="color:var(--muted);font-size:.8rem">🔍 Searching…</span>';
+
+  const enc = encodeURIComponent(q);
+  let thumbs = [];
+
+  /* 1. Wikipedia direct page thumbnail */
+  try {
+    const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${enc}&prop=pageimages&pithumbsize=400&format=json&origin=*`, {signal:AbortSignal.timeout(4000)});
+    if (r.ok) {
+      const j = await r.json();
+      for (const pg of Object.values(j.query?.pages || {}))
+        if (pg.thumbnail?.source) thumbs.push(pg.thumbnail.source);
+    }
+  } catch (_) {}
+
+  /* 2. Wikipedia search results thumbnails */
+  try {
+    const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${enc}&srlimit=6&format=json&origin=*`, {signal:AbortSignal.timeout(4000)});
+    if (r.ok) {
+      const j = await r.json();
+      const titles = (j.query?.search || []).map(s => s.title).slice(0, 5);
+      for (const t of titles) {
+        try {
+          const r2 = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(t)}&prop=pageimages&pithumbsize=400&format=json&origin=*`, {signal:AbortSignal.timeout(3000)});
+          if (r2.ok) {
+            const j2 = await r2.json();
+            for (const pg of Object.values(j2.query?.pages || {}))
+              if (pg.thumbnail?.source && !thumbs.includes(pg.thumbnail.source))
+                thumbs.push(pg.thumbnail.source);
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+
+  /* 3. Wikimedia Commons search */
+  try {
+    const r = await fetch(`https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch=${enc}&srnamespace=6&srlimit=6&format=json&origin=*`, {signal:AbortSignal.timeout(4000)});
+    if (r.ok) {
+      const j = await r.json();
+      for (const item of (j.query?.search || []).slice(0, 4)) {
+        try {
+          const fn = item.title.replace('File:','');
+          const r2 = await fetch(`https://commons.wikimedia.org/w/api.php?action=query&titles=${encodeURIComponent(item.title)}&prop=imageinfo&iiprop=url|thumburl&iiurlwidth=400&format=json&origin=*`, {signal:AbortSignal.timeout(3000)});
+          if (r2.ok) {
+            const j2 = await r2.json();
+            for (const pg of Object.values(j2.query?.pages || {}))
+              if (pg.imageinfo?.[0]?.thumburl && !thumbs.includes(pg.imageinfo[0].thumburl))
+                thumbs.push(pg.imageinfo[0].thumburl);
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+
+  /* 4. DuckDuckGo iframes redirect URL fallback (Picsum seeds for topic variety) */
+  if (thumbs.length < 4) {
+    const seed = q.replace(/\s+/g,'-').toLowerCase().replace(/[^a-z0-9-]/g,'');
+    for (let i = 0; thumbs.length < 6 && i < 4; i++)
+      thumbs.push(`https://picsum.photos/seed/${seed}${i}/400/400`);
+  }
+
+  thumbs = thumbs.slice(0, 8);
+
+  if (thumbs.length === 0) {
+    grid.innerHTML = '<span style="color:var(--muted);font-size:.8rem">❌ No results — try another keyword</span>';
+    return;
+  }
+
+  grid.innerHTML = thumbs.map((src, idx) => {
+    const safe = src.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    return `<div class="meme-img-result-item" style="position:relative;display:inline-block">
+      <img class="meme-img-thumb" src="${src}" loading="lazy" id="memeThumb_${idx}"
+        onerror="this.closest('.meme-img-result-item').style.display='none'" title="${q}">
+      <div class="meme-img-thumb-btns" style="position:absolute;bottom:0;left:0;right:0;display:flex;gap:2px;padding:2px;background:rgba(0,0,0,.7)">
+        <button style="flex:1;font-size:.6rem;padding:2px 3px;background:#1877f2;color:#fff;border:none;border-radius:3px;cursor:pointer"
+          onclick="memeAddSlot('img','${safe}')">➕ Add</button>
+        <button style="flex:1;font-size:.6rem;padding:2px 3px;background:#059669;color:#fff;border:none;border-radius:3px;cursor:pointer"
+          onclick="memeAddSearchImageAsOverlay('${safe}')">⭕ Overlay</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectMemeImage(el, src) {
+  document.querySelectorAll('.meme-img-thumb').forEach(i => i.classList.remove('selected'));
+  if (el) el.classList.add('selected');
+  memeAddSlot('img', src);
+}
+
+/* ── Slot system: up to 4 panels rendered vertically ── */
+function memeAddSlot(type, srcOrColor) {
+  if (_memeSlots.length >= 4) { toast('ℹ️ Maximum 4 panels allowed — remove one first', 'info', 3000); return; }
+  if (type === 'color') {
+    _memeSlots.push({ type: 'color', img: null, color: srcOrColor, panX: 0, panY: 0, zoom: 1 });
+    _memeImgObj = null;
+    _renderSlotList();
+    renderMemeCanvas();
+    memeSetStatus(`🎨 Color panel ${_memeSlots.length}/4 added`);
+    return;
+  }
+  memeSetStatus('⏳ Loading image…');
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    _memeSlots.push({ type: 'img', img, color: null, panX: 0, panY: 0, zoom: 1 });
+    _memeImgObj = null; // slot mode takes over
+    _renderSlotList();
+    renderMemeCanvas();
+    memeSetStatus(`✅ Image panel ${_memeSlots.length}/4 added`);
+    toast(`✅ Panel ${_memeSlots.length}/4 added`, 'success', 2000);
+  };
+  img.onerror = () => memeSetStatus('❌ Image load failed');
+  img.src = srcOrColor;
+}
+
+function memeRemoveSlot(idx) {
+  _memeSlots.splice(idx, 1);
+  if (_memeSelSlotIdx >= _memeSlots.length) _memeSelSlotIdx = _memeSlots.length - 1;
+  _renderSlotList();
+  renderMemeCanvas();
+}
+
+function memeZoomSlot(idx, val) {
+  if (!_memeSlots[idx]) return;
+  _memeSlots[idx].zoom = parseFloat(val);
+  const label = document.getElementById('memeZoomVal' + idx);
+  if (label) label.textContent = Math.round(parseFloat(val) * 100) + '%';
+  renderMemeCanvas();
+}
+
+function _renderSlotList() {
+  const el = document.getElementById('memeSlotList');
+  if (!el) return;
+  if (_memeSlots.length === 0) {
+    el.innerHTML = '<span style="color:var(--muted);font-size:.75rem">No panels yet</span>';
+    return;
+  }
+  el.innerHTML = _memeSlots.map((s, i) => {
+    const thumb = s.type === 'color'
+      ? `<span style="display:inline-block;width:28px;height:28px;background:${s.color};border-radius:4px;border:1px solid #555;vertical-align:middle"></span>`
+      : `<img src="${s.img.src}" style="width:28px;height:28px;object-fit:cover;border-radius:4px;vertical-align:middle">`;
+    const zoomSlider = s.type === 'img'
+      ? `<div style="display:flex;align-items:center;gap:4px;margin-top:3px">
+           <span style="font-size:.7rem;color:var(--muted)">🔍</span>
+           <input type="range" min="1" max="3" step="0.05" value="${s.zoom || 1}" style="flex:1;height:4px;accent-color:#f59e0b" oninput="memeZoomSlot(${i},this.value)">
+           <span id="memeZoomVal${i}" style="font-size:.7rem;color:var(--muted);min-width:26px">${Math.round((s.zoom||1)*100)}%</span>
+         </div>`
+      : '';
+    return `<div style="padding:3px 0;border-bottom:1px solid #2a2a2a">
+      <div style="display:flex;align-items:center;gap:6px">
+        ${thumb}
+        <span style="font-size:.75rem;color:var(--muted);flex:1">${s.type === 'color' ? 'Color: ' + s.color : 'Image ' + (i+1)}</span>
+        <button onclick="memeRemoveSlot(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:.8rem;padding:2px 6px">✕</button>
+      </div>
+      ${zoomSlider}
+    </div>`;
+  }).join('');
+}
+
+/* ── Upload ── */
+function memeLoadUpload(input) {
+  const files = Array.from(input.files || []);
+  if (!files.length) return;
+  const remaining = 4 - _memeSlots.length;
+  if (remaining <= 0) { toast('ℹ️ Maximum 4 panels — remove one first', 'info', 3000); return; }
+  const toLoad = files.slice(0, remaining);
+  let loaded = 0;
+  toLoad.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        _memeSlots.push({ type: 'img', img, color: null, panX: 0, panY: 0, zoom: 1 });
+        _memeImgObj = null;
+        loaded++;
+        _renderSlotList();
+        renderMemeCanvas();
+        if (loaded === toLoad.length) memeSetStatus(`✅ ${loaded} image(s) added (${_memeSlots.length}/4)`);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+}
+
+/* ── Solid colour ── */
+function memeApplyBgColor() {
+  const col = document.getElementById('memeBgColor')?.value || '#1a1a2e';
+  memeAddSlot('color', col);
+  memeSetStatus('🎨 Color panel added');
+}
+
+/* ─────────────────────────────────────────────────────────────
+   OVERLAY IMAGES — add (search or upload), auto-layout, drag, resize, circle-crop
+   Max 4 overlays. Layout:
+     1 image → fills entire content zone
+     2 images → left 50% / right 50%
+     3 images → 33% / 33% / 33%
+     4 images → 25% / 25% / 25% / 25%
+   User can drag any overlay to override its auto position.
+   ───────────────────────────────────────────────────────────── */
+
+function _memeContentZone() {
+  const canvas = document.getElementById('memeCanvas');
+  const W = canvas.width, H = canvas.height;
+  const BANNER_H = Math.round(H * 0.09);
+  const STRIP_H  = 72;
+  return { W, H, top: BANNER_H + 3, bottom: H - STRIP_H - 2 };
+}
+
+/* Re-calculate auto-layout positions for overlays (circular stickers in corners) */
+function _memeAutoLayout() {
+  const { W, H, top } = _memeContentZone();
+  const BANNER_H = Math.round(H * 0.09);
+  // Place 1st overlay bottom-left, 2nd bottom-right, small circular stickers
+  const corners = [
+    { cx: 0.12, cy: 0.80 },
+    { cx: 0.88, cy: 0.80 },
+  ];
+  _memeOverlays.forEach((ov, i) => {
+    if (ov.manualPos) return;
+    const sz = Math.round(Math.min(W, H) * 0.20);
+    const corner = corners[i] || { cx: 0.5, cy: 0.5 };
+    ov.w = sz; ov.h = sz;
+    ov.x = Math.round(W * corner.cx - sz / 2);
+    ov.y = Math.round(H * corner.cy - sz / 2);
+  });
+}
+
+/* Add overlay from file upload input */
+function memeAddOverlayImage(input) {
+  if (_memeOverlays.length >= 2) { toast('ℹ️ Maximum 2 overlays allowed', 'info', 3000); return; }
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const { W, H } = (() => { const c = document.getElementById('memeCanvas'); return {W:c.width,H:c.height}; })();
+      const sz = Math.round(Math.min(W, H) * 0.20); // smaller default: 20% of canvas
+      _memeOverlays.push({ img, x: 10, y: 10, w: sz, h: sz, circle: true, manualPos: false });
+      _memeAutoLayout();
+      _memeSelOverlayIdx = _memeOverlays.length - 1;
+      _updateOverlayControls();
+      _updateOverlayList();
+      renderMemeCanvas();
+      toast(`✅ Overlay ${_memeOverlays.length} added (${_memeOverlays.length}/2)`, 'success', 2000);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+/* Add overlay from a search-result URL */
+function memeAddSearchImageAsOverlay(src) {
+  if (_memeOverlays.length >= 2) { toast('ℹ️ Maximum 2 overlays allowed', 'info', 3000); return; }
+  memeSetStatus('⏳ Adding overlay…');
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    const { W, H } = (() => { const c = document.getElementById('memeCanvas'); return {W:c.width,H:c.height}; })();
+    const sz = Math.round(Math.min(W, H) * 0.20);
+    _memeOverlays.push({ img, x: 10, y: 10, w: sz, h: sz, circle: true, manualPos: false });
+    _memeAutoLayout();
+    _memeSelOverlayIdx = _memeOverlays.length - 1;
+    _updateOverlayControls();
+    _updateOverlayList();
+    renderMemeCanvas();
+    memeSetStatus(`✅ Overlay ${_memeOverlays.length}/2 added`);
+    toast(`✅ Overlay ${_memeOverlays.length}/2 added`, 'success', 2000);
+  };
+  img.onerror = () => memeSetStatus('❌ Could not load overlay image');
+  img.src = src;
+}
+
+function memeAddOverlayCircle() {
+  if (_memeSelOverlayIdx >= 0 && _memeOverlays[_memeSelOverlayIdx]) {
+    _memeOverlays[_memeSelOverlayIdx].circle = !_memeOverlays[_memeSelOverlayIdx].circle;
+    document.getElementById('memeOverlayCircle').checked = _memeOverlays[_memeSelOverlayIdx].circle;
+    renderMemeCanvas();
+  } else {
+    toast('ℹ️ Select an overlay image first, then click ⭕', 'info', 3000);
+  }
+}
+
+function memeRemoveSelectedOverlay() {
+  if (_memeSelOverlayIdx < 0) return;
+  _memeOverlays.splice(_memeSelOverlayIdx, 1);
+  _memeSelOverlayIdx = _memeOverlays.length > 0 ? _memeOverlays.length - 1 : -1;
+  _memeAutoLayout();
+  _updateOverlayControls();
+  _updateOverlayList();
+  renderMemeCanvas();
+}
+
+function memeResetOverlayLayout() {
+  _memeOverlays.forEach(ov => { ov.manualPos = false; });
+  _memeAutoLayout();
+  renderMemeCanvas();
+}
+
+function memeResizeSelectedOverlay(val) {
+  if (_memeSelOverlayIdx < 0 || !_memeOverlays[_memeSelOverlayIdx]) return;
+  const ov = _memeOverlays[_memeSelOverlayIdx];
+  const newW = parseInt(val);
+  // Keep aspect ratio only if NOT in auto-fill mode; in auto-fill let it stretch
+  ov.w = newW;
+  ov.h = newW; // square crop by default; user can drag height via overlay resize handle
+  ov.manualPos = true; // resizing implies manual override
+  _updateOverlayControls();
+  renderMemeCanvas();
+}
+
+function memeToggleOverlayCircle(checked) {
+  if (_memeSelOverlayIdx < 0 || !_memeOverlays[_memeSelOverlayIdx]) return;
+  _memeOverlays[_memeSelOverlayIdx].circle = checked;
+  renderMemeCanvas();
+}
+
+function _updateOverlayControls() {
+  const ctrl = document.getElementById('memeOverlayControls');
+  if (!ctrl) return;
+  if (_memeSelOverlayIdx >= 0 && _memeOverlays[_memeSelOverlayIdx]) {
+    ctrl.style.display = 'block';
+    const ov = _memeOverlays[_memeSelOverlayIdx];
+    document.getElementById('memeOverlaySize').value   = Math.min(600, Math.max(30, ov.w));
+    document.getElementById('memeOverlayCircle').checked = ov.circle;
+    const lbl = document.getElementById('memeOverlaySelLabel');
+    if (lbl) lbl.textContent = `Photo ${_memeSelOverlayIdx + 1} selected`;
+  } else {
+    ctrl.style.display = 'none';
+  }
+  // sync text selection label
+  const tsl = document.getElementById('memeTextSelLabel');
+  if (tsl) tsl.textContent = _memeSelText ? `"${_memeSelText}" text selected — drag on canvas` : '';
+
+  // Show/hide per-text size box
+  const tsb = document.getElementById('memeTextSizeBox');
+  if (tsb) {
+    if (_memeSelText) {
+      tsb.style.display = 'block';
+      const pos = _memeTextPositions[_memeSelText];
+      const curFs = pos.fontSize > 0 ? pos.fontSize : parseInt(document.getElementById('memeFontSize')?.value || 27);
+      document.getElementById('memeTextFontSize').value = curFs;
+      document.getElementById('memeTextFontSizeVal').textContent = curFs + 'px';
+      const lbl = document.getElementById('memeTextSizeLabel');
+      const names = { top:'Top', mid1:'Middle 1', mid2:'Middle 2', bot:'Bottom' };
+      if (lbl) lbl.textContent = `"${names[_memeSelText]}" text size`;
+    } else {
+      tsb.style.display = 'none';
+    }
+  }
+}
+
+function _updateOverlayList() {
+  const list = document.getElementById('memeOverlayList');
+  if (!list) return;
+  if (_memeOverlays.length === 0) {
+    list.innerHTML = '<span style="color:var(--muted);font-size:.75rem">No overlays added yet</span>';
+    return;
+  }
+  list.innerHTML = _memeOverlays.map((ov, i) =>
+    `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border)">
+      <canvas width="40" height="40" style="border-radius:4px;border:1px solid var(--border);flex-shrink:0"
+        id="memeOvThumb${i}"></canvas>
+      <span style="font-size:.78rem;flex:1">Photo ${i+1}${ov.circle?' ⭕':''}</span>
+      <button class="btn btn-ghost" style="font-size:.72rem;padding:3px 8px" onclick="memeSelectOverlay(${i})">Select</button>
+      <button class="btn" style="font-size:.72rem;padding:3px 8px;background:#ef4444;color:#fff" onclick="memeDeleteOverlay(${i})">✕</button>
+    </div>`
+  ).join('');
+  // Draw thumbnails
+  _memeOverlays.forEach((ov, i) => {
+    const tc = document.getElementById(`memeOvThumb${i}`);
+    if (!tc) return;
+    const tctx = tc.getContext('2d');
+    tctx.clearRect(0, 0, 40, 40);
+    const sc = Math.min(40 / ov.img.naturalWidth, 40 / ov.img.naturalHeight);
+    const tw = ov.img.naturalWidth * sc, th = ov.img.naturalHeight * sc;
+    tctx.drawImage(ov.img, (40-tw)/2, (40-th)/2, tw, th);
+  });
+}
+
+function memeSelectOverlay(i) {
+  _memeSelOverlayIdx = i;
+  _memeSelText = null;
+  _updateOverlayControls();
+  renderMemeCanvas();
+}
+
+function memeDeleteOverlay(i) {
+  _memeOverlays.splice(i, 1);
+  if (_memeSelOverlayIdx >= _memeOverlays.length) _memeSelOverlayIdx = _memeOverlays.length - 1;
+  _memeAutoLayout();
+  _updateOverlayControls();
+  _updateOverlayList();
+  renderMemeCanvas();
+}
+
+/* ─── Unified canvas drag system (overlays + text labels) ─── */
+
+function _memeCanvasCoords(e) {
+  const canvas = document.getElementById('memeCanvas');
+  const rect   = canvas.getBoundingClientRect();
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const src    = e.touches ? e.touches[0] : e;
+  return { x: (src.clientX - rect.left) * scaleX, y: (src.clientY - rect.top) * scaleY };
+}
+
+/* Returns bounding box of a text label on the canvas.
+   For top/bot text we return null since those are now in ribbons (not draggable floats). */
+function _memeTextBBox(key, W, H, BANNER_H, STRIP_H, fontSize) {
+  if (key === 'top' || key === 'bot') return null; // handled by ribbons
+  const pos = _memeTextPositions[key];
+  const textZoneT = BANNER_H + 12;
+  const textZoneB = H - STRIP_H - 8;
+  const fs = (pos.fontSize > 0 ? pos.fontSize : fontSize);
+
+  let defaultY;
+  if (key === 'mid1') defaultY = Math.round((textZoneT + textZoneB) / 2) - Math.round(fs * 0.6);
+  else                defaultY = Math.round((textZoneT + textZoneB) / 2) + Math.round(fs * 0.8);
+
+  const cx  = pos.x != null ? pos.x : W / 2;
+  const cy  = pos.y != null ? pos.y : defaultY;
+  const bw  = W * 0.9;
+  const bh  = fs * 1.6;
+  return { cx, cy, x: cx - bw/2, y: cy - bh/2, w: bw, h: bh };
+}
+
+function memeCanvasMouseDown(e) {
+  const { x, y } = _memeCanvasCoords(e);
+  const canvas = document.getElementById('memeCanvas');
+  const W = canvas.width, H = canvas.height;
+  const fontSize = parseInt(document.getElementById('memeFontSize')?.value || 27);
+
+  /* Compute dynamic ribbon heights (same logic as renderMemeCanvas) */
+  const _ctx = canvas.getContext('2d');
+  const _fn  = _memeFontFamily || 'Impact';
+  const _pad = 14, _acc = 5;
+  function _dynRibbonH(text) {
+    if (!text) return _acc;
+    _ctx.font = `900 ${fontSize}px "${_fn}", Impact, "Arial Black", sans-serif`;
+    const mw = W - 36; let line = '', lines = [];
+    for (const w of text.split(' ')) {
+      const t = line ? line + ' ' + w : w;
+      if (_ctx.measureText(t).width > mw && line) { lines.push(line); line = w; } else line = t;
+    }
+    if (line) lines.push(line);
+    return lines.length * fontSize * 1.28 + _pad * 2;
+  }
+  const topTxt   = (/[\u0900-\u097F]/.test(document.getElementById('memeTopText')?.value||'') ? (document.getElementById('memeTopText')?.value||'') : (document.getElementById('memeTopText')?.value||'').toUpperCase()).trim();
+  const botTxt   = (/[\u0900-\u097F]/.test(document.getElementById('memeBottomText')?.value||'') ? (document.getElementById('memeBottomText')?.value||'') : (document.getElementById('memeBottomText')?.value||'').toUpperCase()).trim();
+  const BANNER_H = _dynRibbonH(topTxt);
+  const STRIP_H  = _dynRibbonH(botTxt) + 72; // bot ribbon + watermark
+
+  // 0. Check slot panel hits for panning background images
+  if (_memeSlots.length > 0) {
+    const zoneTop = BANNER_H + 3;
+    const zoneBot = H - STRIP_H - 2;
+    const zoneH   = zoneBot - zoneTop;
+    const rowH    = Math.floor(zoneH / _memeSlots.length);
+    for (let i = 0; i < _memeSlots.length; i++) {
+      const sy = zoneTop + i * rowH;
+      const sh = (i === _memeSlots.length - 1) ? (zoneBot - sy) : rowH;
+      if (_memeSlots[i].type === 'img' && x >= 0 && x <= W && y >= sy && y <= sy + sh) {
+        // Only select the slot if clicking in the strip — overlays/text take priority so check those first
+        // Defer to after text/overlay checks below — use a flag
+        // Actually: check text and overlay first; if nothing hit, then pan this slot
+        break;
+      }
+    }
+  }
+
+  // 1. Check text label hits first (top layer)
+  const textKeys = ['top','mid1','mid2','bot'];
+  const textValues = {
+    top:  (document.getElementById('memeTopText')?.value     || '').trim(),
+    mid1: (document.getElementById('memeMiddleText1')?.value || '').trim(),
+    mid2: (document.getElementById('memeMiddleText2')?.value || '').trim(),
+    bot:  (document.getElementById('memeBottomText')?.value  || '').trim(),
+  };
+  for (const key of [...textKeys].reverse()) {
+    if (!textValues[key]) continue;
+    const bb = _memeTextBBox(key, W, H, BANNER_H, STRIP_H, fontSize);
+    if (!bb) continue; // key is handled by a ribbon — not draggable
+    if (x >= bb.x && x <= bb.x + bb.w && y >= bb.y && y <= bb.y + bb.h) {
+      _memeSelText       = key;
+      _memeSelOverlayIdx = -1;
+      _memeDragState     = { type:'text', key, startX: x, startY: y, origX: bb.cx, origY: bb.cy };
+      _updateOverlayControls();
+      renderMemeCanvas();
+      return;
+    }
+  }
+
+  // 2. Check overlay hits
+  for (let i = _memeOverlays.length - 1; i >= 0; i--) {
+    const ov = _memeOverlays[i];
+    const hit = ov.circle
+      ? Math.hypot(x - (ov.x + ov.w/2), y - (ov.y + ov.h/2)) <= ov.w/2
+      : (x >= ov.x && x <= ov.x + ov.w && y >= ov.y && y <= ov.y + ov.h);
+    if (hit) {
+      _memeSelOverlayIdx = i;
+      _memeSelText       = null;
+      _memeDragState     = { type:'overlay', idx: i, startX: x, startY: y, origX: ov.x, origY: ov.y };
+      _updateOverlayControls();
+      renderMemeCanvas();
+      return;
+    }
+  }
+  // 3. Check slot panel hits for panning — fallback after text & overlay
+  if (_memeSlots.length > 0) {
+    const zoneTop = BANNER_H + 3;
+    const zoneBot = H - STRIP_H - 2;
+    const zoneH   = zoneBot - zoneTop;
+    const rowH    = Math.floor(zoneH / _memeSlots.length);
+    for (let i = 0; i < _memeSlots.length; i++) {
+      const sy = zoneTop + i * rowH;
+      const sh = (i === _memeSlots.length - 1) ? (zoneBot - sy) : rowH;
+      if (_memeSlots[i].type === 'img' && x >= 0 && x <= W && y >= sy && y <= sy + sh) {
+        _memeSelSlotIdx    = i;
+        _memeSelOverlayIdx = -1;
+        _memeSelText       = null;
+        _memeDragState     = { type:'slot', idx: i, startX: x, startY: y, origPanX: _memeSlots[i].panX || 0, origPanY: _memeSlots[i].panY || 0 };
+        _updateOverlayControls();
+        renderMemeCanvas();
+        return;
+      }
+    }
+  }
+
+  // Deselect all
+  _memeSelSlotIdx    = -1;
+  _memeSelOverlayIdx = -1;
+  _memeSelText       = null;
+  _memeDragState     = null;
+  _updateOverlayControls();
+  renderMemeCanvas();
+}
+
+function memeCanvasMouseMove(e) {
+  if (!_memeDragState) return;
+  e.preventDefault();
+  const { x, y } = _memeCanvasCoords(e);
+  const dx = x - _memeDragState.startX;
+  const dy = y - _memeDragState.startY;
+
+  if (_memeDragState.type === 'overlay') {
+    const ov = _memeOverlays[_memeDragState.idx];
+    if (!ov) return;
+    ov.x = _memeDragState.origX + dx;
+    ov.y = _memeDragState.origY + dy;
+    ov.manualPos = true;
+  } else if (_memeDragState.type === 'slot') {
+    const slot = _memeSlots[_memeDragState.idx];
+    if (!slot || slot.type !== 'img') return;
+    slot.panX = _memeDragState.origPanX + dx;
+    slot.panY = _memeDragState.origPanY + dy;
+  } else if (_memeDragState.type === 'text') {
+    const pos = _memeTextPositions[_memeDragState.key];
+    pos.x = _memeDragState.origX + dx;
+    pos.y = _memeDragState.origY + dy;
+  }
+  renderMemeCanvas();
+}
+
+function memeCanvasMouseUp()  { _memeDragState = null; }
+function memeCanvasTouchStart(e) { e.preventDefault(); memeCanvasMouseDown(e); }
+function memeCanvasTouchMove(e)  { e.preventDefault(); memeCanvasMouseMove(e); }
+
+/* Resize selected text via slider */
+function memeResizeSelectedText(val) {
+  if (!_memeSelText) return;
+  _memeTextPositions[_memeSelText].fontSize = parseInt(val);
+  document.getElementById('memeTextFontSizeVal').textContent = val + 'px';
+  renderMemeCanvas();
+}
+
+/* Reset all text positions */
+function memeResetTextPositions() {
+  _memeTextPositions = { top:{x:null,y:null,fontSize:0}, mid1:{x:null,y:null,fontSize:0}, mid2:{x:null,y:null,fontSize:0}, bot:{x:null,y:null,fontSize:0} };
+  _memeSelText = null;
+  _updateOverlayControls();
+  renderMemeCanvas();
+}
+
+/* ── Style setters ── */
+function setMemeTextColor(color, btn) {
+  _memeTextColor = color;
+  document.querySelectorAll('.meme-color-swatch').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderMemeCanvas();
+}
+function setMemeFont(font, btn) {
+  _memeFontFamily = font;
+  document.querySelectorAll('.meme-font-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderMemeCanvas();
+}
+function setMemeSize(w, h, btn) {
+  _memeCanvasW = w; _memeCanvasH = h;
+  const canvas = document.getElementById('memeCanvas');
+  canvas.width = w; canvas.height = h;
+  document.querySelectorAll('.meme-size-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const dimLabel = document.getElementById('memeCanvasDims');
+  if (dimLabel) dimLabel.textContent = `${w} × ${h}`;
+  // Reset manual text positions so they recalculate for new dimensions
+  _memeTextPositions = { top:{x:null,y:null,fontSize:0}, mid1:{x:null,y:null,fontSize:0}, mid2:{x:null,y:null,fontSize:0}, bot:{x:null,y:null,fontSize:0} };
+  // Re-layout overlays for new canvas size
+  _memeOverlays.forEach(ov => { ov.manualPos = false; });  _memeAutoLayout();
+  renderMemeCanvas();
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   CANVAS RENDER — matches news image format:
+     • Dark gradient BG with subtle red grid lines
+     • Red top banner 110px: "😂 MEME" bold white, gold rule, date stamp
+     • Meme text block in middle zone (Impact, stroke, auto-wrap)
+     • _drawAuthorWatermark strip pinned to very bottom
+   ───────────────────────────────────────────────────────────────── */
+async function renderMemeCanvas() {
+  const canvas = document.getElementById('memeCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  /* ── Read all inputs once ── */
+  const fontSize  = parseInt(document.getElementById('memeFontSize')?.value || 42);
+  const fontFam   = _memeFontFamily || 'Impact';
+  // Do NOT toUpperCase — it destroys Nepali Devanagari script
+  const _toMemeCase = t => /[\u0900-\u097F]/.test(t) ? t : t.toUpperCase();
+  const topText   = _toMemeCase((document.getElementById('memeTopText')    ?.value || '').trim());
+  const mid1Text  = _toMemeCase((document.getElementById('memeMiddleText1')?.value || '').trim());
+  const mid2Text  = _toMemeCase((document.getElementById('memeMiddleText2')?.value || '').trim());
+  const botText   = _toMemeCase((document.getElementById('memeBottomText') ?.value || '').trim());
+  const useStroke = document.getElementById('memeStroke')?.checked ?? true;
+  const textColor = _memeTextColor || '#ffffff';
+
+  /* ── Layout constants ── */
+  const PAD_V    = 16;
+  const PAD_H    = 18;
+  const ACCENT_H = 6;   // thin accent bar when no text
+  const WM_H     = 72;  // watermark strip height
+
+  /* ── Helper: measure word-wrapped lines ── */
+  function measureLines(text, fs) {
+    if (!text) return { lines: [], lineH: fs * 1.25, totalH: 0 };
+    ctx.font = `900 ${fs}px "${fontFam}", Impact, "Arial Black", sans-serif`;
+    const maxW = W - PAD_H * 2;
+    const lines = [];
+    let line = '';
+    for (const w of text.split(' ')) {
+      const test = line ? line + ' ' + w : w;
+      if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+      else line = test;
+    }
+    if (line) lines.push(line);
+    const lineH = fs * 1.25;
+    return { lines, lineH, totalH: lines.length * lineH };
+  }
+
+  /* ── Compute ribbon heights ── */
+  const topRibbonH = topText ? measureLines(topText, fontSize).totalH + PAD_V * 2 : ACCENT_H;
+  const botRibbonH = botText ? measureLines(botText, fontSize).totalH + PAD_V * 2 : ACCENT_H;
+
+  /* ── Zone boundaries ── */
+  const zoneTop = topRibbonH;
+  const zoneBot = H - botRibbonH - WM_H;
+  const zoneH   = Math.max(0, zoneBot - zoneTop);
+
+  /* ════════════════════════════════════════════
+     STEP 1 — Clear + full dark base
+     ════════════════════════════════════════════ */
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0d0d0d';
+  ctx.fillRect(0, 0, W, H);
+
+  /* ════════════════════════════════════════════
+     STEP 2 — Draw image / panels in content zone ONLY
+     ════════════════════════════════════════════ */
+  if (_memeSlots.length > 0) {
+    if (_memeVertical) {
+      const rowH = Math.floor(zoneH / _memeSlots.length);
+      _memeSlots.forEach((slot, i) => {
+        const sy = zoneTop + i * rowH;
+        const sh = (i === _memeSlots.length - 1) ? (zoneBot - sy) : rowH;
+        if (slot.type === 'color') {
+          ctx.fillStyle = slot.color; ctx.fillRect(0, sy, W, sh);
+        } else if (slot.img) {
+          const iw = slot.img.naturalWidth, ih = slot.img.naturalHeight;
+          ctx.save();
+          ctx.beginPath(); ctx.rect(0, sy, W, sh); ctx.clip();
+          const scale = Math.max(W / iw, sh / ih) * (slot.zoom || 1);
+          const dw = iw * scale, dh = ih * scale;
+          const bx = (W - dw) / 2, by = sy + (sh - dh) / 2;
+          const mpx = Math.max(0, (dw - W) / 2), mpy = Math.max(0, (dh - sh) / 2);
+          ctx.drawImage(slot.img, bx + Math.max(-mpx, Math.min(mpx, slot.panX||0)), by + Math.max(-mpy, Math.min(mpy, slot.panY||0)), dw, dh);
+          if (i === _memeSelSlotIdx) {
+            ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 3; ctx.setLineDash([6,3]);
+            ctx.strokeRect(1, sy+1, W-2, sh-2); ctx.setLineDash([]);
+            ctx.fillStyle='rgba(245,158,11,0.85)'; ctx.font='bold 13px sans-serif';
+            ctx.textAlign='center'; ctx.textBaseline='top';
+            ctx.fillText('✥ drag to pan panel '+(i+1), W/2, sy+4);
+          }
+          const ov = ctx.createLinearGradient(0,sy,0,sy+sh);
+          ov.addColorStop(0,'rgba(0,0,0,0.4)'); ov.addColorStop(0.5,'rgba(0,0,0,0.15)'); ov.addColorStop(1,'rgba(0,0,0,0.5)');
+          ctx.fillStyle=ov; ctx.fillRect(0,sy,W,sh);
+          ctx.restore();
+        }
+      });
+    } else {
+      const colW = Math.floor(W / _memeSlots.length);
+      _memeSlots.forEach((slot, i) => {
+        const sx = i * colW;
+        const sw = (i === _memeSlots.length - 1) ? (W - sx) : colW;
+        if (slot.type === 'color') {
+          ctx.fillStyle = slot.color; ctx.fillRect(sx, zoneTop, sw, zoneH);
+        } else if (slot.img) {
+          const iw = slot.img.naturalWidth, ih = slot.img.naturalHeight;
+          ctx.save();
+          ctx.beginPath(); ctx.rect(sx, zoneTop, sw, zoneH); ctx.clip();
+          const scale = Math.max(sw / iw, zoneH / ih) * (slot.zoom || 1);
+          const dw = iw * scale, dh = ih * scale;
+          const bx = sx + (sw - dw) / 2, by = zoneTop + (zoneH - dh) / 2;
+          const mpx = Math.max(0, (dw - sw) / 2), mpy = Math.max(0, (dh - zoneH) / 2);
+          ctx.drawImage(slot.img, bx + Math.max(-mpx, Math.min(mpx, slot.panX||0)), by + Math.max(-mpy, Math.min(mpy, slot.panY||0)), dw, dh);
+          if (i === _memeSelSlotIdx) {
+            ctx.strokeStyle='#f59e0b'; ctx.lineWidth=3; ctx.setLineDash([6,3]);
+            ctx.strokeRect(sx+1, zoneTop+1, sw-2, zoneH-2); ctx.setLineDash([]);
+            ctx.fillStyle='rgba(245,158,11,0.85)'; ctx.font='bold 13px sans-serif';
+            ctx.textAlign='center'; ctx.textBaseline='top';
+            ctx.fillText('✥ pan '+(i+1), sx+sw/2, zoneTop+4);
+          }
+          const ov = ctx.createLinearGradient(sx,0,sx+sw,0);
+          ov.addColorStop(0,'rgba(0,0,0,0.4)'); ov.addColorStop(0.5,'rgba(0,0,0,0.15)'); ov.addColorStop(1,'rgba(0,0,0,0.4)');
+          ctx.fillStyle=ov; ctx.fillRect(sx, zoneTop, sw, zoneH);
+          ctx.restore();
+        }
+      });
+    }
+  } else if (_memeImgObj) {
+    /* Single image — draw inside content zone only */
+    const iw = _memeImgObj.naturalWidth, ih = _memeImgObj.naturalHeight;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, zoneTop, W, zoneH); ctx.clip();
+    const scale = Math.max(W / iw, zoneH / ih);
+    const dw = iw * scale, dh = ih * scale;
+    ctx.drawImage(_memeImgObj, (W - dw) / 2, zoneTop + (zoneH - dh) / 2, dw, dh);
+    ctx.restore();
+    /* Dark gradient overlay for text readability */
+    const ov = ctx.createLinearGradient(0, zoneTop, 0, zoneBot);
+    ov.addColorStop(0, 'rgba(0,0,0,0.45)'); ov.addColorStop(0.4,'rgba(0,0,0,0.15)');
+    ov.addColorStop(0.7,'rgba(0,0,0,0.20)'); ov.addColorStop(1,'rgba(0,0,0,0.60)');
+    ctx.fillStyle = ov; ctx.fillRect(0, zoneTop, W, zoneH);
+  } else {
+    /* Gradient background — fill only the content zone */
+    const bgCol = document.getElementById('memeBgColor')?.value || '#0f172a';
+    const bg = ctx.createLinearGradient(0, zoneTop, 0, zoneBot);
+    bg.addColorStop(0,    bgCol);
+    bg.addColorStop(0.5,  _shadeColor(bgCol, -30));
+    bg.addColorStop(1,    _shadeColor(bgCol, -55));
+    ctx.fillStyle = bg; ctx.fillRect(0, zoneTop, W, zoneH);
+    /* Diagonal grid */
+    ctx.save();
+    ctx.strokeStyle = 'rgba(192,57,43,0.07)'; ctx.lineWidth = 1;
+    const STEP = Math.round(W / 10);
+    for (let x = -H; x < W + H; x += STEP) { ctx.beginPath(); ctx.moveTo(x, zoneTop); ctx.lineTo(x + H, zoneBot + H); ctx.stroke(); }
+    ctx.restore();
+    /* Glows */
+    const glow1 = ctx.createRadialGradient(W*0.85,zoneTop+zoneH*0.1,20,W*0.85,zoneTop+zoneH*0.1,260);
+    glow1.addColorStop(0,'rgba(220,38,38,0.22)'); glow1.addColorStop(1,'rgba(220,38,38,0)');
+    ctx.fillStyle=glow1; ctx.fillRect(0,zoneTop,W,zoneH);
+    const glow2 = ctx.createRadialGradient(W*0.15,zoneBot-zoneH*0.1,10,W*0.15,zoneBot-zoneH*0.1,220);
+    glow2.addColorStop(0,'rgba(99,38,180,0.18)'); glow2.addColorStop(1,'rgba(99,38,180,0)');
+    ctx.fillStyle=glow2; ctx.fillRect(0,zoneTop,W,zoneH);
+  }
+
+  /* ════════════════════════════════════════════
+     STEP 3 — TOP ribbon (always on top of image)
+     ════════════════════════════════════════════ */
+  function drawRibbon(text, bandY, bandH, anchorTop) {
+    ctx.fillStyle = 'rgba(0,0,0,0.82)';
+    ctx.fillRect(0, bandY, W, bandH);
+    /* Gold left bar */
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(0, bandY, 7, bandH);
+    /* Gold rule */
+    ctx.fillStyle = 'rgba(245,158,11,0.6)';
+    if (anchorTop) ctx.fillRect(7, bandY + bandH - 2, W - 7, 2);
+    else           ctx.fillRect(7, bandY, W - 7, 2);
+    if (!text) return;
+    const { lines, lineH, totalH } = measureLines(text, fontSize);
+    ctx.font = `900 ${fontSize}px "${fontFam}", Impact, "Arial Black", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    const startY = anchorTop
+      ? bandY + PAD_V + fontSize * 0.88
+      : bandY + bandH - PAD_V - (totalH - lineH) - fontSize * 0.12;
+    lines.forEach((l, i) => {
+      const y = startY + i * lineH;
+      if (useStroke) {
+        ctx.save(); ctx.shadowColor='rgba(0,0,0,0.95)'; ctx.shadowBlur=4;
+        ctx.lineWidth=Math.max(3,fontSize*0.12); ctx.strokeStyle='#000'; ctx.lineJoin='round';
+        ctx.strokeText(l, W/2, y); ctx.restore();
+      }
+      ctx.save(); ctx.shadowColor='rgba(0,0,0,0.8)'; ctx.shadowBlur=5;
+      ctx.fillStyle=textColor; ctx.fillText(l, W/2, y); ctx.restore();
+    });
+  }
+
+  drawRibbon(topText, 0,           topRibbonH,  true);   // top ribbon
+  drawRibbon(botText, zoneBot,     botRibbonH,  false);  // bottom ribbon (above watermark)
+
+  /* Red side accent bar */
+  ctx.fillStyle = 'rgba(192,57,43,0.85)';
+  ctx.fillRect(0, zoneTop + 2, 5, zoneH - 4);
+
+  /* ════════════════════════════════════════════
+     STEP 4 — Middle floating texts (mid1, mid2)
+     ════════════════════════════════════════════ */
+  const textZoneT = zoneTop + 10;
+  const textZoneB = zoneBot - 8;
+  ctx.textAlign = 'center';
+
+  function drawMemeTextAt(text, key, defaultY) {
+    if (!text) return;
+    const pos = _memeTextPositions[key] || { x: null, y: null, fontSize: 0 };
+    const fs  = pos.fontSize > 0 ? pos.fontSize : Math.round(fontSize * 0.88);
+    const cx  = pos.x != null ? pos.x : W / 2;
+    const cy  = pos.y != null ? pos.y : defaultY;
+    ctx.font = `900 ${fs}px "${fontFam}", Impact, "Arial Black", sans-serif`;
+    ctx.textBaseline = 'alphabetic';
+    const maxW = W * 0.88;
+    const lines = []; let line = '';
+    for (const w of text.split(' ')) {
+      const test = line ? line + ' ' + w : w;
+      if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+      else line = test;
+    }
+    if (line) lines.push(line);
+    const lineH = fs * 1.22;
+    const totalH = lines.length * lineH;
+    const startY = cy - totalH / 2 + lineH / 2;
+    lines.forEach((l, i) => {
+      const y = startY + i * lineH;
+      if (useStroke) {
+        ctx.save(); ctx.shadowColor='rgba(0,0,0,0.9)'; ctx.shadowBlur=4;
+        ctx.lineWidth=Math.max(3,fs*0.12); ctx.strokeStyle='#000'; ctx.lineJoin='round';
+        ctx.strokeText(l, cx, y); ctx.restore();
+      }
+      ctx.save(); ctx.shadowColor='rgba(0,0,0,0.8)'; ctx.shadowBlur=6;
+      ctx.fillStyle=textColor; ctx.fillText(l, cx, y); ctx.restore();
+    });
+    /* Selection handle */
+    if (_memeSelText === key) {
+      ctx.save(); ctx.strokeStyle='#f59e0b'; ctx.lineWidth=2; ctx.setLineDash([5,3]);
+      const bx=cx-W*0.45, by=startY-fs*0.85, bw=W*0.9, bh=totalH+fs*0.2;
+      ctx.strokeRect(bx, by, bw, bh);
+      ctx.fillStyle='#f59e0b'; ctx.setLineDash([]);
+      ctx.fillRect(bx+bw-10, by+bh-10, 10, 10);
+      ctx.restore();
+    }
+  }
+
+  const midCY = (textZoneT + textZoneB) / 2;
+  drawMemeTextAt(mid1Text, 'mid1', midCY - Math.round(fontSize * 0.6));
+  drawMemeTextAt(mid2Text, 'mid2', midCY + Math.round(fontSize * 0.9));
+
+  /* ════════════════════════════════════════════
+     STEP 5 — Circle overlays
+     ════════════════════════════════════════════ */
+  for (let i = 0; i < _memeOverlays.length; i++) {
+    const ov = _memeOverlays[i];
+    ctx.save();
+    if (ov.circle) {
+      ctx.beginPath();
+      ctx.arc(ov.x + ov.w/2, ov.y + ov.h/2, Math.min(ov.w,ov.h)/2, 0, Math.PI*2);
+      ctx.clip();
+    }
+    const iw=ov.img.naturalWidth, ih=ov.img.naturalHeight;
+    const scale=Math.max(ov.w/iw, ov.h/ih);
+    const dw=iw*scale, dh=ih*scale;
+    ctx.drawImage(ov.img, ov.x+(ov.w-dw)/2, ov.y+(ov.h-dh)/2, dw, dh);
+    ctx.restore();
+    if (i === _memeSelOverlayIdx) {
+      ctx.save(); ctx.strokeStyle='#f59e0b'; ctx.lineWidth=3; ctx.setLineDash([6,3]);
+      if (ov.circle) { ctx.beginPath(); ctx.arc(ov.x+ov.w/2,ov.y+ov.h/2,Math.min(ov.w,ov.h)/2+4,0,Math.PI*2); ctx.stroke(); }
+      else ctx.strokeRect(ov.x-2,ov.y-2,ov.w+4,ov.h+4);
+      ctx.setLineDash([]); ctx.fillStyle='#f59e0b';
+      ctx.fillRect(ov.x+ov.w-12,ov.y+ov.h-12,12,12);
+      ctx.restore();
+    }
+  }
+
+  /* ════════════════════════════════════════════
+     STEP 6 — Watermark strip (always last)
+     ════════════════════════════════════════════ */
+  await _drawAuthorWatermark(ctx, W, 0, 'Meme');
+}
+
+/* Helper: darken/lighten a hex colour by `amount` (negative = darker) */
+function _shadeColor(hex, amount) {
+  try {
+    let c = parseInt(hex.replace('#',''), 16);
+    let r = Math.min(255, Math.max(0, (c >> 16) + amount));
+    let g = Math.min(255, Math.max(0, ((c >> 8) & 0xff) + amount));
+    let b = Math.min(255, Math.max(0, (c & 0xff) + amount));
+    return '#' + ((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1);
+  } catch { return hex; }
+}
+
+/* ── AI meme text via Gemini ── */
+async function memeGenerateAI() {
+  const topic = (document.getElementById('memeTopicInput') ? document.getElementById('memeTopicInput').value : '').trim();
+  if (!topic) { toast('⚠️ Topic / Prompt मा आफ्नो topic लेख्नुस् (e.g. KP Oli, Balen Shah, traffic jam)', 'error'); return; }
+
+  const hasAI = (_geminiKey || _browserGeminiKey || _browserGroqKey);
+  if (!hasAI) {
+    toast('ℹ️ AI key छैन — template प्रयोग गर्दैछ', 'info', 3000);
+    memeGenerateTemplate();
+    return;
+  }
+
+  const aiLabel = (_geminiKey || _browserGeminiKey) ? '✨ Gemini' : '⚡ Groq';
+
+  /* Show spinner */
+  const spinner = document.getElementById('memeCanvasSpinner');
+  if (spinner) spinner.style.display = 'flex';
+  memeSetStatus(`🤖 ${aiLabel} AI ले "${topic}" को लागि meme बनाउँदैछ…`);
+
+  const prompt = `You are a master Nepali viral meme creator. Create a funny, highly shareable meme specifically about: "${topic}".
+
+CRITICAL RULES:
+- The meme MUST be directly about "${topic}" — use the actual name/event/person
+- Write in Nepali Devanagari script mixed with English for maximum viral potential
+- TOP TEXT: sets up the situation/context about "${topic}" — max 8 words
+- BOTTOM TEXT: delivers the punchline/subverted expectation — max 8 words, HILARIOUS
+- MIDDLE1 (optional): use only if you need an extra line for a 3-part joke format (e.g. "Expectation / Reality / Nepal Reality" or setup/twist/punchline). Leave empty string "" if not needed.
+- MIDDLE2 (optional): use only if you need a 4th line. Leave empty string "" if not needed.
+- Make it SPECIFIC to "${topic}" — mention the topic by name, reference actual events, real situations
+- Style: deeply relatable Nepali humor — irony, exaggeration, "expectation vs reality", political satire, everyday life
+- The meme must feel like something a Nepali person shares saying "यो त सत्य कुरो हो!" about "${topic}"
+- Image search: 3-5 English words for a funny/expressive image that matches the meme vibe for "${topic}"
+- Caption: 2 fun sentences about "${topic}" (Nepali+English mix) + 8 hashtags including #ShashiNewsGen
+
+Return ONLY valid JSON, no markdown, no code fences:
+{"top":"<TOP TEXT about ${topic}>","middle1":"<MIDDLE LINE 1 or empty string>","middle2":"<MIDDLE LINE 2 or empty string>","bottom":"<PUNCHLINE about ${topic}>","img":"<image search query>","caption":"<caption with hashtags>"}`;
+
+  try {
+    const result = await callAI(prompt, 25000);
+    if (spinner) spinner.style.display = 'none';
+    if (result && (result.top || result.bottom)) {
+      // Fill all 4 text fields
+      const topEl  = document.getElementById('memeTopText');
+      const mid1El = document.getElementById('memeMiddleText1');
+      const mid2El = document.getElementById('memeMiddleText2');
+      const botEl  = document.getElementById('memeBottomText');
+      if (topEl)  topEl.value  = result.top    || '';
+      if (mid1El) mid1El.value = result.middle1 || '';
+      if (mid2El) mid2El.value = result.middle2 || '';
+      if (botEl)  botEl.value  = result.bottom  || '';
+      // Auto-show middle text fields if AI populated them
+      if (result.middle1 || result.middle2) {
+        const mw = document.getElementById('memeMiddleTextsWrap');
+        const mb = document.getElementById('memeAddTextBtn');
+        if (mw) { mw.style.display = 'flex'; }
+        if (mb) mb.textContent = '－ Hide middle text';
+      }
+      if (result.caption) {
+        const capEl = document.getElementById('memeCaptionText');
+        if (capEl) capEl.value = result.caption;
+      }
+
+      const imgQ = result.img || topic.split(' ').slice(0,4).join(' ');
+
+      /* ── Try HuggingFace FLUX image generation first ── */
+      if (_browserHFKey) {
+        memeSetStatus('🎨 HuggingFace AI ले image बनाउँदैछ…');
+        try {
+          const hfUrl = await fetchHuggingFaceImage(imgQ);
+          const img   = new Image();
+          img.crossOrigin = 'anonymous';
+          await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = hfUrl; });
+          _memeSlots = [{ type: 'img', img, color: null }];
+          _memeImgObj = null;
+          _renderSlotList();
+          await renderMemeCanvas();
+          memeSetStatus(`✅ AI meme "${topic}" को लागि तयार भयो! 🎨😂`);
+          toast(`🎨 ${aiLabel} text + HuggingFace image — Meme ready!`, 'success', 4000);
+        } catch (hfErr) {
+          console.warn('[MemeHF] HuggingFace failed:', hfErr.message);
+          memeSetStatus('ℹ️ HF image failed — web search गर्दैछ…');
+          document.getElementById('memeImgQuery').value = imgQ;
+          switchMemeImgSrc('search');
+          searchMemeImages();
+          await renderMemeCanvas();
+          memeSetStatus(`✅ AI meme "${topic}" को लागि तयार भयो! 😂`);
+          toast(`😂 ${aiLabel} Meme ready! (web image search)`, 'success', 3500);
+        }
+      } else {
+        document.getElementById('memeImgQuery').value = imgQ;
+        switchMemeImgSrc('search');
+        searchMemeImages();
+        await renderMemeCanvas();
+        memeSetStatus(`✅ AI meme "${topic}" को लागि तयार भयो! 😂`);
+        toast(`😂 ${aiLabel} Meme ready! Image search: "${imgQ}"`, 'success', 3500);
+      }
+    } else {
+      throw new Error('Bad AI response — missing top/bottom fields');
+    }
+  } catch (e) {
+    if (spinner) spinner.style.display = 'none';
+    console.warn('[MemeAI]', e.message);
+    memeSetStatus(`⚠️ AI failed: ${e.message.slice(0,60)} — template प्रयोग गर्दैछ`);
+    toast('⚠️ AI meme generation failed — check console', 'error', 4000);
+    memeGenerateTemplate();
+  }
+}
+
+/* ── Template fallback bank ── */
+const _MEME_TEMPLATES_BY_KW = [
+  { kw:['light','बिजुली','load shed'],   top:'जब LOAD SHEDDING आउँछ',       bottom:'र EXAM ठिक भोलि छ 🕯️😩',      img:'candle dark studying night' },
+  { kw:['traffic','ट्राफिक','जाम'],      top:'काठमाडौं ट्राफिक:',            bottom:'1 KM = 1 घण्टा ⏰🚦',           img:'traffic jam car stress' },
+  { kw:['नेता','election','वाचा','vote'], top:'ELECTION मा नेताको PROMISE:',  bottom:'5 साल पछि: "अर्को TERM मा" 🗳️😭', img:'politician pointing crowd promises' },
+  { kw:['exam','board','see','neb'],      top:'EXAM को आगाडिको रात:',         bottom:'"भोलि बिहानै पढ्छु" 📚😬',      img:'student procrastinating phone bed' },
+  { kw:['internet','net','speed','wifi'], top:'NEPAL INTERNET SPEED:',        bottom:'☕ चिया खाएर आउँछु, तबसम्म LOADING… 😴', img:'buffering loading slow internet frustrated' },
+  { kw:['महँगी','price','महंगाई'],         top:'बजार जाँदा POCKET:',           bottom:'घर फर्कँदा POCKET: EMPTY 💸😭', img:'empty wallet sad shopping' },
+  { kw:['abroad','खाडी','foreign','bidesh'], top:'ABROAD जाने PLAN:',         bottom:'Reality: फेरि Nepal ✈️😢',      img:'person suitcase airport sad leaving' },
+  { kw:['dal bhat','दाल भात','खाना','food'], top:'नेपालीको LIFE HACK:',       bottom:'जे PROBLEM होस्, DAL BHAT खा 💪😄', img:'dal bhat nepali food bowl happy' },
+  { kw:['football','cricket','sport','खेल'], top:'NEPAL SPORTS:',             bottom:'"NEXT TIME जित्छौं" 😭⚽',       img:'sport fan disappointed watching tv' },
+  { kw:['tiktok','social media','reels','youtube'], top:'1 VIDEO हेर्छु भनेर:',  bottom:'3 घण्टा पछि: 😵📱',            img:'person phone scrolling addicted bed' },
+  { kw:['salary','तलब','payday'],         top:'PAYDAY:',                       bottom:'Bills तिरेपछि: BROKE AGAIN 😂💸', img:'empty wallet bills payday broke' },
+  { kw:['rain','पानी','flood','बाढी'],    top:'Nepal मा पानी पर्‍यो भने:',    bottom:'सरकार: "RESCUE SOON आउँछ" 🌧️😒', img:'rain flood umbrella nepal village' },
+  { kw:['petrol','fuel','diesel','gas'],  top:'PETROL PRICE बढ्यो:',          bottom:'बाइक धकेलेर जाने भयो 🛵😭',    img:'motorcycle pushing bike empty fuel' },
+  { kw:['hospital','अस्पताल','doctor','health'], top:'सरकारी HOSPITAL मा:',   bottom:'QUEUE: 8 घण्टा, Doctor: 5 मिनेट 🏥😑', img:'hospital queue waiting long line' },
+];
+const _MEME_GENERIC = [
+  { top:'EXPECTATION:',               bottom:'REALITY: NEPAL 😭',                     img:'expectation vs reality funny' },
+  { top:'सरकारको PLAN:',              bottom:'जनताको HAAL: 🤦😅',                      img:'politician plan confused people' },
+  { top:'जब PROBLEM आउँछ:',          bottom:'नेपाली: "चिया खाउँ अनि सोच्छौं" ☕😂',   img:'tea cup thinking problem relax' },
+  { top:'NEPALI MAN को 3 DREAMS:',   bottom:'BIDESH, BIDESH, BIDESH 🛫😂',            img:'airplane airport dreaming travel' },
+  { top:'आमाले सोध्नुभयो:',           bottom:'"पढ्दैछु" 📱😅 (MOBILE HERDING THO)', img:'teenager phone caught studying lie' },
+  { top:'FRIDAY रात:',                bottom:'SATURDAY बिहान: 😴💀',                  img:'tired sleeping weekend morning funny' },
+];
+
+function memeGenerateTemplate() {
+  const topic = document.getElementById('memeTopicInput') ? document.getElementById('memeTopicInput').value.toLowerCase() : '';
+  let tmpl = _MEME_GENERIC[Math.floor(Math.random() * _MEME_GENERIC.length)];
+  for (const t of _MEME_TEMPLATES_BY_KW) {
+    if (t.kw.some(k => topic.includes(k))) { tmpl = t; break; }
+  }
+  document.getElementById('memeTopText').value    = tmpl.top;
+  document.getElementById('memeBottomText').value = tmpl.bottom;
+  const capEl = document.getElementById('memeCaptionText');
+  if (capEl) {
+    /* Generate a relevant caption based on the actual meme content */
+    const topicLabel = document.getElementById('memeTopicInput')?.value?.trim() || 'Nepal';
+    const captions = [
+      `${tmpl.top}\n${tmpl.bottom}\n\n😂 Tag गर्नुस् जो यो situation मा छन्! यो share गर्न नबिर्सनुस् �\n#NepalMeme #नेपाली_मिम #${topicLabel.replace(/\s+/g,'_').replace(/[^\w_]/g,'')} #ShashiNewsGen #viral #trending #nepal #funnynepal`,
+      `यो meme share गर्नुस् तपाईंको friends लाई! 😂🔥\n"${tmpl.top}" — सबैको यही हाल हो! 😭\n#NepalMeme #ShashiNewsGen #नेपालीहास्य #viral #nepal #meme #trending #relatable`,
+      `😂😂 Nepali life is full of surprises!\n${tmpl.bottom}\nComment गर्नुस् — तपाईंको पनि यस्तै हो? 😅\n#NepalMeme #ShashiNewsGen #${topicLabel.replace(/\s+/g,'_').replace(/[^\w_]/g,'')} #funnynepal #trending #nepal #viral #हास्य`,
+    ];
+    capEl.value = captions[Math.floor(Math.random() * captions.length)];
+  }
+  /* Auto-search matching image for this template */
+  const imgQ = tmpl.img || (topic.split(/\s+/).slice(0, 3).join(' ') || 'funny relatable meme');
+  document.getElementById('memeImgQuery').value = imgQ;
+  switchMemeImgSrc('search');
+  searchMemeImages();
+  renderMemeCanvas();
+  memeSetStatus('⚡ Template meme ready!');
+}
+
+/* ── AI caption ── */
+async function memeGenerateCaption() {
+  const top = document.getElementById('memeTopText')    ? document.getElementById('memeTopText').value    : '';
+  const bot = document.getElementById('memeBottomText') ? document.getElementById('memeBottomText').value : '';
+  if (!top && !bot) { toast('⚠️ पहिले meme text लेख्नुस्', 'error'); return; }
+  const hasAI = (_geminiKey || _browserGeminiKey || _browserGroqKey);
+  if (!hasAI) {
+    document.getElementById('memeCaptionText').value =
+      `${top} ${bot} 😂😂\n#NepalMeme #नेपाली_मिम #ShashiNewsGen #viral #trending #nepal #funnynepal #meme`;
+    return;
+  }
+  memeSetStatus('✨ Caption तयार गर्दैछ…');
+  try {
+    const result = await callAI(
+      `Write a short funny Nepali social media caption (1-2 fun Nepali sentences mixing Nepali + English) and exactly 8 hashtags for this meme:\nTop: "${top}"\nBottom: "${bot}"\nOutput plain text only.`,
+      15000
+    );
+    const txt = typeof result === 'string' ? result : (result && result.caption ? result.caption : '');
+    if (txt) document.getElementById('memeCaptionText').value = txt;
+    memeSetStatus('✅ Caption ready!');
+  } catch { memeSetStatus('⚠️ Caption AI failed'); }
+}
+
+/* ── Download ── */
+function downloadMeme() {
+  const canvas = document.getElementById('memeCanvas');
+  const a = document.createElement('a');
+  a.download = 'ShashiMeme_' + Date.now() + '.png';
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+  toast('💾 Meme downloaded!', 'success', 2500);
+}
+
+/* ── Copy to clipboard ── */
+async function memeCopyImage() {
+  const canvas = document.getElementById('memeCanvas');
+  try {
+    await new Promise((res, rej) =>
+      canvas.toBlob(async blob => {
+        try { await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]); res(); }
+        catch (e) { rej(e); }
+      })
+    );
+    toast('📋 Meme copied!', 'success', 2500);
+  } catch { toast('⚠️ Clipboard copy failed — download गर्नुस्', 'error', 3000); }
+}
+
+/* ── Share (all studios) ── */
+/* ═══════════════════════════════════════════════════════════════════
+   _shareCanvasToSocial — unified image sharing for ALL studios
+   Strategy:
+     1. Always try Web Share API with the actual image file first
+        (works on Android Chrome, iOS Safari — shares to any installed app)
+     2. On desktop / unsupported browsers: download image + open platform
+        with pre-filled text, showing a clear instruction toast.
+   ═══════════════════════════════════════════════════════════════════ */
+async function _shareCanvasToSocial(platform, canvasId, captionText, downloadFn) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+
+  const siteUrl = 'https://shajais.github.io/ShashiNewsGen/';
+  const caption = captionText + '\n\nCreate yours → ' + siteUrl;
+  const filename = 'shashi-creator-studio.png';
+
+  /* ── Helper: get canvas blob ── */
+  async function getBlob() {
+    return new Promise((res, rej) =>
+      canvas.toBlob(b => b ? res(b) : rej(new Error('Canvas empty')), 'image/png')
+    );
+  }
+
+  /* ── Helper: download the canvas image ── */
+  async function downloadImage() {
+    try {
+      const blob = await getBlob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e) {
+      if (typeof downloadFn === 'function') downloadFn();
+    }
+  }
+
+  /* ── Step 1: Try Web Share API with image file (mobile-first) ── */
+  if (navigator.canShare) {
+    try {
+      const blob = await getBlob();
+      const file = new File([blob], filename, { type: 'image/png' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Shashi Creator Studio', text: caption });
+        return; /* ✅ success — native share sheet opened */
+      }
+    } catch (e) {
+      if (e.name === 'AbortError') return; /* user cancelled */
+      /* fall through to platform-specific desktop fallback */
+    }
+  }
+
+  /* ── Step 2: Desktop fallback — download image + open platform ── */
+  await downloadImage(); /* always download the image first */
+
+  const textEnc = encodeURIComponent(caption);
+  const urlEnc  = encodeURIComponent(siteUrl);
+
+  const MSGS = {
+    facebook:  '👍 Image downloaded!\n① Facebook.com खोल्नुस् → "Photo/Video" post बनाउनुस्\n② Downloaded image select गर्नुस् → Caption paste गर्नुस्',
+    instagram: '📸 Image downloaded!\n① Instagram app खोल्नुस् → New Post/Story\n② Downloaded image select गर्नुस् → Caption paste गर्नुस्',
+    twitter:   '🐦 Image downloaded!\n① X/Twitter खुल्नेछ → "Add photos" थिच्नुस्\n② Downloaded image select गर्नुस् → Post गर्नुस्',
+    whatsapp:  '💬 Image downloaded!\n① WhatsApp खुल्नेछ → Chat/Status खोल्नुस्\n② Downloaded image attach गर्नुस् → Caption paste गर्नुस्',
+  };
+
+  const URLS = {
+    facebook:  `https://www.facebook.com/`,
+    instagram: `https://www.instagram.com/`,
+    twitter:   `https://x.com/intent/post?text=${textEnc}`,
+    whatsapp:  `https://web.whatsapp.com/`,
+  };
+
+  /* Copy caption to clipboard for easy paste */
+  try { await navigator.clipboard.writeText(caption); } catch (_) {}
+
+  if (URLS[platform]) {
+    window.open(URLS[platform], '_blank', 'noopener,width=960,height=680');
+  }
+
+  toast(MSGS[platform] || '✅ Image downloaded!', 'info', 9000);
+}
+
+function shareMeme(platform) {
+  const caption = (document.getElementById('memeCaptionText') ? document.getElementById('memeCaptionText').value : '😂 Nepal Meme!');
+  _shareCanvasToSocial(platform, 'memeCanvas', caption, downloadMeme);
+}
+
+/* ================================================================
+   PUZZLE STUDIO
+   Viral math puzzles with Einstein photo, custom text, themes.
+================================================================ */
+
+const EINSTEIN_PHOTOS = [
+  { id:'e1', label:'Einstein Classic',  emoji:'🧑‍🔬', url:'einstein3.jpg' },
+  { id:'e2', label:'Einstein Brain 1',  emoji:'🧠',   url:'einstein_brain1.jpg' },
+  { id:'e3', label:'Einstein Brain 2',  emoji:'�',   url:'einstein_brain2.jpg' },
+];
+
+const PUZZLE_THEMES = [
+  { id:'viral',  label:'🔴 Viral Red',    bg:'#1a0000', accent:'#dc2626', text:'#ffffff', subtext:'#fca5a5', expr:'#ffffff',  badge:'#dc2626' },
+  { id:'genius', label:'🟣 Genius Purple',bg:'#0f0020', accent:'#7c3aed', text:'#ffffff', subtext:'#c4b5fd', expr:'#f0e6ff', badge:'#7c3aed' },
+  { id:'dark',   label:'⚫ Dark Classic', bg:'#0a0a0f', accent:'#f59e0b', text:'#ffffff', subtext:'#fde68a', expr:'#ffffff',  badge:'#f59e0b' },
+  { id:'navy',   label:'🔵 Deep Navy',    bg:'#020617', accent:'#3b82f6', text:'#ffffff', subtext:'#93c5fd', expr:'#dbeafe', badge:'#3b82f6' },
+  { id:'forest', label:'🟢 Forest',       bg:'#021007', accent:'#22c55e', text:'#ffffff', subtext:'#86efac', expr:'#dcfce7', badge:'#22c55e' },
+  { id:'gold',   label:'🟡 Gold',         bg:'#1a1000', accent:'#eab308', text:'#ffffff', subtext:'#fef08a', expr:'#fefce8', badge:'#eab308' },
+];
+
+const PUZZLE_PRESETS = [
+  { expr:'3 - 3 × 6 + 2 = ??',      answer:'-13' },
+  { expr:'6 ÷ 2(1+2) = ??',          answer:'9'   },
+  { expr:'1 + 1 + 1 + 1 × 0 = ??',  answer:'3'   },
+  { expr:'8 ÷ 2(2+2) = ??',          answer:'16'  },
+  { expr:'5 + 5 × 5 - 5 = ??',       answer:'25'  },
+  { expr:'2² + 2 × 2 - 2 = ??',      answer:'6'   },
+  { expr:'10 - 1 - 2 × 3 = ??',      answer:'3'   },
+  { expr:'√9 + 3² - 5 = ??',         answer:'7'   },
+  { expr:'100 ÷ 4 × 0 + 8 = ??',     answer:'8'   },
+  { expr:'4 + 4 ÷ 4 + 4 × 4 = ??',  answer:'21'  },
+  { expr:'7 × 7 - 7 + 7 ÷ 7 = ??',  answer:'43'  },
+  { expr:'2 + 2 × 0 + 2 = ??',       answer:'4'   },
+  { expr:'50 ÷ 5 × 2 - 8 = ??',      answer:'12'  },
+  { expr:'3² × 2 - 4 × 3 = ??',      answer:'6'   },
+  { expr:'12 ÷ 4 + 3 × 2 = ??',      answer:'9'   },
+  { expr:'(5 + 3) × 2 - 6 = ??',     answer:'10'  },
+  { expr:'15 - 3 × 4 + 2 = ??',      answer:'5'   },
+  { expr:'2³ + 4 ÷ 2 - 3 = ??',      answer:'7'   },
+  { expr:'9 × 9 - 9 × 8 = ??',       answer:'9'   },
+  { expr:'√16 × √9 - 5 = ??',        answer:'7'   },
+  { expr:'6 × 6 ÷ 6 + 6 - 6 = ??',  answer:'6'   },
+  { expr:'100 - 10 × 9 + 1 = ??',    answer:'11'  },
+  { expr:'3 + 3 × 3 - 3 ÷ 3 = ??',  answer:'11'  },
+  { expr:'2 × (3 + 4) - 5 = ??',     answer:'9'   },
+  { expr:'5! ÷ 20 - 2 = ??',         answer:'4'   },
+  { expr:'4² - 4 × 3 + 4 = ??',      answer:'8'   },
+  { expr:'√64 + 2³ - 6 = ??',        answer:'10'  },
+  { expr:'11 × 11 - 11 × 10 = ??',   answer:'11'  },
+  { expr:'(2 + 3)² - 20 = ??',       answer:'5'   },
+  { expr:'48 ÷ (2 + 4) × 3 = ??',    answer:'24'  },
+  { expr:'7 + 7 ÷ 7 + 7 × 7 = ??',  answer:'57'  },
+  { expr:'1000 ÷ 8 ÷ 5 × 2 = ??',   answer:'50'  },
+  { expr:'3 × (2 + 1) - 3² = ??',    answer:'0'   },
+  { expr:'√(4 + 5) × √9 = ??',       answer:'9'   },
+  { expr:'5 × 4 - 3 × 6 + 2 = ??',  answer:'4'   },
+];
+
+/* Return a random puzzle NOT the same as current */
+let _liveUsedIdxs = [];
+function _livePickRandomPuzzle() {
+  if (_liveUsedIdxs.length >= PUZZLE_PRESETS.length) _liveUsedIdxs = [];
+  let idx;
+  do { idx = Math.floor(Math.random() * PUZZLE_PRESETS.length); }
+  while (_liveUsedIdxs.includes(idx));
+  _liveUsedIdxs.push(idx);
+  return PUZZLE_PRESETS[idx];
+}
+
+let _puzzleTheme      = 'viral';
+let _puzzleEinsteinId = null;
+let _puzzleImgCache   = {};
+let _puzzleCanvasW    = 600;
+let _puzzleCanvasH    = 600;
+let _puzzleInited     = false;
+
+/* ── Einstein photo drag / resize state ── */
+let _puzzlePhotoScale    = 0.55;   // fraction of canvas width (controls size)
+let _puzzleDragging      = false;
+let _puzzleDragStartY    = 0;
+let _puzzleScaleAtDragStart = 0.55;
+
+function openPuzzleStudio() {
+  document.querySelector('.container').style.display        = 'none';
+  document.getElementById('memeStudioModal').style.display  = 'none';
+  document.getElementById('puzzleStudioModal').style.display = 'block';
+  window.scrollTo({ top:0, behavior:'smooth' });
+  ['newsStudioBtn','memeStudioBtn','puzzleStudioBtn'].forEach(id => {
+    document.getElementById(id)?.classList.remove('active-studio-btn');
+  });
+  document.getElementById('puzzleStudioBtn')?.classList.add('active-studio-btn');
+  const canvas = document.getElementById('puzzleCanvas');
+  if (canvas) { canvas.width = _puzzleCanvasW; canvas.height = _puzzleCanvasH; }
+  if (!_puzzleInited) { _buildEinsteinGrid(); _buildPuzzleThemeGrid(); _buildPuzzlePresetGrid(); _puzzleInited = true; }
+  if (!_puzzleEinsteinId) {
+    const r = EINSTEIN_PHOTOS[Math.floor(Math.random() * EINSTEIN_PHOTOS.length)];
+    _selectEinsteinPhoto(r.id);
+  } else { renderPuzzleCanvas(); }
+}
+
+function closePuzzleStudio() {
+  document.getElementById('puzzleStudioModal').style.display = 'none';
+  document.querySelector('.container').style.display = '';
+  window.scrollTo({ top:0, behavior:'smooth' });
+  document.getElementById('newsStudioBtn')?.classList.add('active-studio-btn');
+  document.getElementById('puzzleStudioBtn')?.classList.remove('active-studio-btn');
+}
+
+/* Patch openMemeStudio + openNewsStudio to also hide puzzle modal */
+const _ps_origOpenMeme = openMemeStudio;
+openMemeStudio = function() {
+  document.getElementById('puzzleStudioModal').style.display = 'none';
+  document.getElementById('puzzleStudioBtn')?.classList.remove('active-studio-btn');
+  _ps_origOpenMeme();
+};
+const _ps_origOpenNews = openNewsStudio;
+openNewsStudio = function() {
+  document.getElementById('puzzleStudioModal').style.display = 'none';
+  document.getElementById('puzzleStudioBtn')?.classList.remove('active-studio-btn');
+  _ps_origOpenNews();
+};
+
+function _buildEinsteinGrid() {
+  const grid = document.getElementById('einsteinPhotoGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  EINSTEIN_PHOTOS.forEach(p => {
+    const btn = document.createElement('button');
+    btn.id = 'einsteinBtn_' + p.id;
+    btn.title = p.label;
+    btn.style.cssText = 'background:var(--card2);border:3px solid var(--border);border-radius:10px;padding:4px;cursor:pointer;transition:all .2s;width:80px;display:flex;flex-direction:column;align-items:center;gap:4px';
+    btn.innerHTML = `<img src="${p.url}" alt="${p.label}" crossorigin="anonymous" style="width:72px;height:72px;object-fit:cover;border-radius:6px" onerror="this.parentElement.style.display='none'"><span style="font-size:.65rem;color:var(--muted);text-align:center;line-height:1.2">${p.emoji} ${p.label}</span>`;
+    btn.onclick = () => _selectEinsteinPhoto(p.id);
+    grid.appendChild(btn);
+    _preloadEinsteinImg(p);
+  });
+}
+
+function _preloadEinsteinImg(p) {
+  if (_puzzleImgCache[p.id]) return;
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload  = () => { _puzzleImgCache[p.id] = img; if (_puzzleEinsteinId === p.id) renderPuzzleCanvas(); };
+  img.onerror = () => console.warn('[Puzzle] Einstein load failed:', p.url);
+  img.src = p.url;
+}
+
+function _selectEinsteinPhoto(id) {
+  _puzzleEinsteinId = id;
+  /* Reset size to default when a new photo is chosen */
+  _puzzlePhotoScale = 0.55;
+  EINSTEIN_PHOTOS.forEach(p => {
+    const btn = document.getElementById('einsteinBtn_' + p.id);
+    if (btn) btn.style.borderColor = (p.id === id) ? '#7c3aed' : 'var(--border)';
+  });
+  if (!_puzzleImgCache[id]) _preloadEinsteinImg(EINSTEIN_PHOTOS.find(p => p.id === id));
+  renderPuzzleCanvas();
+}
+
+function _buildPuzzleThemeGrid() {
+  const grid = document.getElementById('puzzleThemeGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  PUZZLE_THEMES.forEach(t => {
+    const btn = document.createElement('button');
+    btn.id = 'puzzleThemeBtn_' + t.id;
+    btn.textContent = t.label;
+    btn.style.cssText = `padding:5px 12px;border-radius:20px;border:2px solid ${t.accent};background:${t.bg};color:${t.text};font-size:.75rem;font-weight:700;cursor:pointer;transition:all .2s;opacity:${_puzzleTheme===t.id?1:.65}`;
+    btn.onclick = () => {
+      _puzzleTheme = t.id;
+      PUZZLE_THEMES.forEach(tt => {
+        const b = document.getElementById('puzzleThemeBtn_'+tt.id);
+        if (b) b.style.opacity = (tt.id===t.id)?'1':'0.65';
+      });
+      renderPuzzleCanvas();
+    };
+    grid.appendChild(btn);
+  });
+}
+
+function _buildPuzzlePresetGrid() {
+  const grid = document.getElementById('puzzlePresetGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  PUZZLE_PRESETS.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'meme-trending-chip';
+    btn.style.fontSize = '.72rem';
+    btn.textContent = p.expr;
+    btn.onclick = () => {
+      document.getElementById('puzzleExpr').value   = p.expr;
+      document.getElementById('puzzleAnswer').value = p.answer;
+      renderPuzzleCanvas();
+    };
+    grid.appendChild(btn);
+  });
+}
+
+function setPuzzleSize(val) {
+  const [w,h] = val.split('x').map(Number);
+  _puzzleCanvasW = w; _puzzleCanvasH = h;
+  const canvas = document.getElementById('puzzleCanvas');
+  if (canvas) { canvas.width = w; canvas.height = h; }
+  const lbl = document.getElementById('puzzleCanvasDims');
+  if (lbl) lbl.textContent = `${w} × ${h}`;
+  /* Reset photo size to default for new canvas dimensions */
+  _puzzlePhotoScale = 0.55;
+  renderPuzzleCanvas();
+}
+
+function puzzleRandomize() {
+  const p     = PUZZLE_PRESETS[Math.floor(Math.random()*PUZZLE_PRESETS.length)];
+  const photo = EINSTEIN_PHOTOS[Math.floor(Math.random()*EINSTEIN_PHOTOS.length)];
+  const theme = PUZZLE_THEMES[Math.floor(Math.random()*PUZZLE_THEMES.length)];
+  document.getElementById('puzzleExpr').value   = p.expr;
+  document.getElementById('puzzleAnswer').value = p.answer;
+  _puzzleTheme = theme.id;
+  PUZZLE_THEMES.forEach(t => {
+    const b = document.getElementById('puzzleThemeBtn_'+t.id);
+    if (b) b.style.opacity = (t.id===theme.id)?'1':'0.65';
+  });
+  _selectEinsteinPhoto(photo.id);
+  toast('🎲 Random puzzle!', 'success', 2000);
+}
+
+/* ── Generate a random ORDER-OF-OPERATIONS equation (whole numbers, ??  answer) ── */
+function puzzleGenerateRandom() {
+  /* Convert × ÷ to JS operators for safe eval */
+  const toJS = op => op === '×' ? '*' : op === '÷' ? '/' : op;
+  const ops = ['+', '-', '×', '÷'];
+  const styles = [
+    /* a OP b OP c = ??  (evaluated with proper BODMAS via JS eval) */
+    () => {
+      const a = _rn(1,20), b = _rn(1,10), c = _rn(1,10);
+      const op1 = ops[Math.floor(Math.random()*4)];
+      const op2 = ops[Math.floor(Math.random()*4)];
+      // Avoid division by zero
+      if ((op1 === '÷' && b === 0) || (op2 === '÷' && c === 0)) return null;
+      const ans = _evalJS(`${a}${toJS(op1)}${b}${toJS(op2)}${c}`);
+      return { expr: `${a} ${op1} ${b} ${op2} ${c} = ??`, answer: _fmt(ans) };
+    },
+    /* a OP b × c = ?? (BODMAS trap) */
+    () => {
+      const a = _rn(1,15), b = _rn(2,8), c = _rn(2,8);
+      const op = _rn(0,1) ? '+' : '-';
+      const ans = _evalJS(`${a}${toJS(op)}${b}*${c}`);
+      return { expr: `${a} ${op} ${b} × ${c} = ??`, answer: _fmt(ans) };
+    },
+    /* a ÷ b(c+d) = ?? */
+    () => {
+      const c = _rn(1,5), d = _rn(1,5), b = _rn(1,4), k = _rn(1,3);
+      const a = b * (c + d) * k;
+      return { expr: `${a} ÷ ${b}(${c}+${d}) = ??`, answer: _fmt(a / (b * (c + d))) };
+    },
+    /* a + a + a + a × 0 = ?? */
+    () => {
+      const a = _rn(1,9);
+      return { expr: `${a} + ${a} + ${a} + ${a} × 0 = ??`, answer: `${a + a + a}` };
+    },
+    /* √a + b² - c = ?? */
+    () => {
+      const sq = [1,4,9,16,25,36,49,64,81,100];
+      const a  = sq[Math.floor(Math.random() * sq.length)];
+      const b  = _rn(2,7), c = _rn(1,10);
+      return { expr: `√${a} + ${b}² - ${c} = ??`, answer: _fmt(Math.sqrt(a) + b*b - c) };
+    },
+    /* a² + a × a - a = ?? */
+    () => {
+      const a = _rn(2,8);
+      return { expr: `${a}² + ${a} × ${a} - ${a} = ??`, answer: _fmt(a*a + a*a - a) };
+    },
+  ];
+  let result = null;
+  // Retry if a style returns null (e.g. division by zero edge case)
+  for (let i = 0; i < 10 && !result; i++) {
+    result = styles[Math.floor(Math.random() * styles.length)]();
+  }
+  if (!result) return;
+  document.getElementById('puzzleExpr').value   = result.expr;
+  document.getElementById('puzzleAnswer').value = result.answer;
+  renderPuzzleCanvas();
+  toast('🎲 New random equation!', 'success', 1800);
+}
+
+/* ── Generate ANY wild random math (bigger numbers, mixed ops) ── */
+function puzzleGenerateRandomAny() {
+  const sq = [4,9,16,25,36,49,64,81,100,121,144];
+  const templates = [
+    /* pre-compute ALL random values so expr and answer use the SAME numbers */
+    () => {
+      const a=_rn(10,99), b=_rn(10,99), c=_rn(2,9), d=_rn(1,5);
+      return { expr:`${a} + ${b} - ${c} × ${d} = ??`, answer:_fmt(a+b-c*d) };
+    },
+    () => {
+      const a=_rn(2,12), b=_rn(2,12), e=_rn(1,20);
+      return { expr:`${a}² × ${b} - ${e} = ??`, answer:_fmt(a*a*b-e) };
+    },
+    () => {
+      const a=_rn(2,10)*_rn(2,10), b=_rn(2,10), e=_rn(1,30); // ensure clean division
+      const divisor = Math.gcd ? Math.gcd(a,b) : b;
+      return { expr:`${a} ÷ ${b} + ${e} = ??`, answer:_fmt(a/b+e) };
+    },
+    () => {
+      const a=_rn(1,9), b=_rn(1,9), c=_rn(1,9), d=_rn(1,9), e=_rn(1,5);
+      return { expr:`${a} + ${b} + ${c} + ${d} × 0 + ${e} = ??`, answer:`${a+b+c+e}` };
+    },
+    () => {
+      const a=_rn(3,9), b=_rn(2,9), f=_rn(1,a-1);
+      return { expr:`(${a} + ${b}) × (${a} - ${f}) = ??`, answer:_fmt((a+b)*(a-f)) };
+    },
+    () => {
+      const a=sq[Math.floor(Math.random()*sq.length)], b=_rn(1,10), e=_rn(1,15);
+      return { expr:`√${a} × ${b} + ${e} = ??`, answer:_fmt(Math.sqrt(a)*b+e) };
+    },
+    () => {
+      const a=_rn(1,5), b=_rn(1,5), c=_rn(1,5);
+      return { expr:`${a}³ + ${b}² - ${c} = ??`, answer:_fmt(a*a*a+b*b-c) };
+    },
+    () => {
+      const a=_rn(10,50), e=_rn(1,20), f=_rn(1,10);
+      return { expr:`${a} × 0 + ${e} × ${f} = ??`, answer:_fmt(e*f) };
+    },
+  ];
+  const { expr, answer } = templates[Math.floor(Math.random()*templates.length)]();
+  document.getElementById('puzzleExpr').value   = expr;
+  document.getElementById('puzzleAnswer').value = answer;
+  renderPuzzleCanvas();
+  toast('🔀 Wild math generated!', 'success', 1800);
+}
+
+/* Helpers */
+function _rn(min, max) { return Math.floor(Math.random()*(max-min+1))+min; }
+function _fmt(n) {
+  if (n === null || n === undefined || isNaN(n)) return '??';
+  const r = Math.round(n * 1000) / 1000;
+  return Number.isInteger(r) ? String(r) : r.toFixed(2).replace(/\.?0+$/, '');
+}
+function _evalJS(expr) {
+  try { return Function('"use strict";return (' + expr + ')')(); } catch { return null; }
+}
+function _evalExpr(a, op, b) {
+  switch(op) { case '+': return a+b; case '-': return a-b; case '×': return a*b; case '÷': return b!==0?a/b:null; }
+  return null;
+}
+function _solveLeft(a, op1, b, op2, c) {
+  const right = _evalExpr(b, op2, c);
+  return right !== null ? _evalExpr(a, op1, right) : null;
+}
+
+async function renderPuzzleCanvas() {
+  const canvas = document.getElementById('puzzleCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const theme = PUZZLE_THEMES.find(t => t.id === _puzzleTheme) || PUZZLE_THEMES[0];
+
+  const expr       = (document.getElementById('puzzleExpr')?.value       || '3 - 3 × 6 + 2 = ??').trim();
+  const answer     = (document.getElementById('puzzleAnswer')?.value     || '').trim();
+  const showAnswer = document.getElementById('puzzleShowAnswer')?.checked;
+  const topText    = (document.getElementById('puzzleTopText')?.value    || 'CAN YOU SOLVE IT?').trim();
+  const subText    = (document.getElementById('puzzleSubText')?.value    || '90% FAIL THIS!').trim();
+  const bottomText = (document.getElementById('puzzleBottomText')?.value || 'ONLY FOR GENIUS').trim();
+  const fontSize   = parseInt(document.getElementById('puzzleFontSize')?.value || 68);
+  const watermark  = document.getElementById('puzzleWatermark')?.checked !== false;
+
+  /* ════════════════════════════════════════════════════════
+     LAYOUT  (all measurements relative to W / H)
+     ┌──────────────────────────────────────────────────┐
+     │          TOP BAR  (full width, ~18% H)           │
+     │   "Can you solve it?" — big bold pill            │
+     │   "90% Fail this!"   — sub line                  │
+     ├─────────────────────┬────────────────────────────┤
+     │                     │  "ONLY FOR GENIUS"  label  │
+     │   Einstein photo    │  ┌──────────────────────┐  │
+     │   (middle-left,     │  │   math puzzle expr   │  │
+     │    vertically       │  └──────────────────────┘  │
+     │    centred)         │  answer (if shown)          │
+     │                     │  💬 comment CTA            │
+     ├─────────────────────┴────────────────────────────┤
+     │              WATERMARK  (full width)             │
+     └──────────────────────────────────────────────────┘
+     ════════════════════════════════════════════════════ */
+
+  const PAD    = Math.round(W * 0.035);
+  const WM_H   = watermark ? Math.round(H * 0.06) : 0;
+  const TOP_H  = Math.round(H * 0.20);          // top header zone
+  const MID_H  = H - TOP_H - WM_H;              // middle content zone
+  const MID_Y  = TOP_H;                          // where middle zone starts
+  const HALF   = Math.round(W * 0.5);            // vertical split point (50/50)
+
+  /* ═══════════════════════════════════════════════════════
+     STEP 1 — Full-canvas dark background
+     ═══════════════════════════════════════════════════════ */
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0,   theme.bg);
+  grad.addColorStop(0.5, _pzLighten(theme.bg, 20));
+  grad.addColorStop(1,   theme.bg);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  /* Subtle dot/grid texture across whole canvas */
+  ctx.save();
+  ctx.strokeStyle = theme.accent + '15';
+  ctx.lineWidth = 1;
+  for (let gx = 0; gx < W; gx += 38) { ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke(); }
+  for (let gy = 0; gy < H; gy += 38) { ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
+  ctx.restore();
+
+  /* ═══════════════════════════════════════════════════════
+     STEP 2 — TOP HEADER BAR (full width)
+     Skip static text when live — overlay animates it instead
+     ═══════════════════════════════════════════════════════ */
+  /* Solid accent fill */
+  ctx.save();
+  ctx.fillStyle = theme.badge;
+  _pzRoundRect(ctx, 0, 0, W, TOP_H, 0); ctx.fill();
+  /* Subtle inner glow at bottom edge */
+  const topEdge = ctx.createLinearGradient(0, TOP_H - 6, 0, TOP_H);
+  topEdge.addColorStop(0, 'transparent');
+  topEdge.addColorStop(1, 'rgba(255,255,255,0.12)');
+  ctx.fillStyle = topEdge;
+  ctx.fillRect(0, 0, W, TOP_H);
+  ctx.restore();
+
+  if (!_liveActive) {
+    /* Line 1: "CAN YOU SOLVE IT?" — big, full width, Impact */
+    {
+      ctx.save();
+      const line1Y = Math.round(TOP_H * 0.08);
+      const line1H = Math.round(TOP_H * 0.52);
+      let fs1 = Math.round(line1H * 0.78);
+      ctx.font = `900 ${fs1}px Impact,Arial Black,sans-serif`;
+      while (ctx.measureText(topText).width > W - PAD * 2 && fs1 > 12) {
+        fs1--; ctx.font = `900 ${fs1}px Impact,Arial Black,sans-serif`;
+      }
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 8;
+      ctx.fillText(topText, W / 2, line1Y);
+      ctx.restore();
+    }
+
+    /* Line 2: "90% FAIL THIS!" — slightly smaller, accent colour */
+    {
+      ctx.save();
+      const line2Y = Math.round(TOP_H * 0.58);
+      const line2H = Math.round(TOP_H * 0.36);
+      let fs2 = Math.round(line2H * 0.72);
+      ctx.font = `800 ${fs2}px Arial Black,Impact,sans-serif`;
+      while (ctx.measureText(subText).width > W - PAD * 4 && fs2 > 10) {
+        fs2--; ctx.font = `800 ${fs2}px Arial Black,Impact,sans-serif`;
+      }
+      ctx.fillStyle = '#ffffffcc';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 5;
+      ctx.fillText(subText, W / 2, line2Y);
+      ctx.restore();
+    }
+  }
+
+  /* Thin accent bottom border on header */
+  ctx.save();
+  ctx.fillStyle = theme.accent;
+  ctx.fillRect(0, TOP_H - 4, W, 4);
+  ctx.restore();
+
+  /* ═══════════════════════════════════════════════════════
+     STEP 3 — Einstein photo
+     Always centred in the left half of the middle zone.
+     Drag up/down on canvas to resize (up = grow, down = shrink).
+     ═══════════════════════════════════════════════════════ */
+  const eImg = _puzzleImgCache[_puzzleEinsteinId] || null;
+
+  if (eImg) {
+    const aspect = eImg.naturalWidth / eImg.naturalHeight;
+    const photoW = Math.round(W * _puzzlePhotoScale);
+    const photoH = Math.round(photoW / aspect);
+
+    /* Always centred in left half, vertically centred in middle zone */
+    const drawX = Math.round((HALF - photoW) / 2);
+    const drawY = MID_Y + Math.round((MID_H - photoH) / 2);
+
+    ctx.save();
+    ctx.drawImage(eImg, drawX, drawY, photoW, photoH);
+
+    /* Right-edge fade so photo blends into right text area */
+    const rFade = ctx.createLinearGradient(HALF - Math.round(W * 0.18), 0, HALF + Math.round(W * 0.04), 0);
+    rFade.addColorStop(0, 'transparent');
+    rFade.addColorStop(1, theme.bg);
+    ctx.fillStyle = rFade;
+    ctx.fillRect(drawX, drawY, photoW, photoH);
+
+    /* Bottom-edge fade into watermark */
+    if (WM_H) {
+      const bFade = ctx.createLinearGradient(0, H - WM_H * 2.5, 0, H - WM_H);
+      bFade.addColorStop(0, 'transparent');
+      bFade.addColorStop(1, 'rgba(0,0,0,0.65)');
+      ctx.fillStyle = bFade;
+      ctx.fillRect(drawX, drawY, photoW, photoH);
+    }
+    ctx.restore();
+  } else {
+    /* Placeholder */
+    ctx.save();
+    ctx.fillStyle = theme.accent + '22';
+    ctx.fillRect(0, MID_Y, HALF, MID_H);
+    ctx.font = `${Math.round(HALF * 0.3)}px sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('🧑‍🔬', HALF / 2, MID_Y + MID_H / 2);
+    ctx.restore();
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     STEP 4 — MIDDLE-RIGHT: "Only for Genius" + Puzzle box
+     ═══════════════════════════════════════════════════════ */
+  const rxPad  = PAD;                                    // gap from centre split
+  const rxPadR = Math.round(W * 0.06);                   // breathing room from right canvas edge
+  const rxX    = HALF + rxPad;                           // right text zone x-start
+  const rxW    = W - HALF - rxPad - rxPadR;              // right text zone width
+  const rxMidY = MID_Y + Math.round(MID_H / 2);         // vertical centre of middle zone
+
+  /* Helper: auto-shrink font to fit rxW, draw centred in right zone.
+     Clips drawing to the right text zone so nothing bleeds over the edge. */
+  function _pzR(text, font, color, shadow, y, align) {
+    ctx.save();
+    /* Clip to right text zone so text can never bleed past right canvas edge */
+    ctx.beginPath();
+    ctx.rect(rxX, MID_Y, rxW, MID_H + WM_H);
+    ctx.clip();
+    ctx.font = font; ctx.fillStyle = color;
+    ctx.textAlign = align || 'center'; ctx.textBaseline = 'top';
+    if (shadow) { ctx.shadowColor = shadow; ctx.shadowBlur = 10; }
+    let sz = parseInt(font);
+    const cx = align === 'left' ? rxX : rxX + rxW / 2;
+    while (ctx.measureText(text).width > rxW && sz > 10) {
+      sz--; ctx.font = font.replace(/^\d+/, sz);
+    }
+    ctx.fillText(text, cx, y);
+    ctx.restore();
+    return y + sz * 1.3;
+  }
+
+  /* Vertical layout: figure out total height of right content, then
+     vertically centre the whole block relative to the middle zone          */
+  const geniusFs  = Math.round(H * 0.052);
+  const exprBoxH  = Math.round(MID_H * 0.38);
+  const ansFs     = Math.round(H * 0.034);
+  const ctaFs     = Math.round(H * 0.026);
+  const spacing   = Math.round(H * 0.018);
+
+  /* Pre-calculate total block height so we can centre it.
+     During live mode the overlay animates genius label & header,
+     so exclude them from static layout to avoid duplicates. */
+  const geniusLabelH  = _liveActive ? 0 : (geniusFs * 1.3 + spacing);
+  const underlineH    = _liveActive ? 0 : spacing;
+  const answerBlockH  = (showAnswer && answer) ? (ansFs * 1.4 + spacing * 0.5) : 0;
+  const ctaBlockH     = ctaFs * 1.3;
+  const totalBlockH   = geniusLabelH + underlineH + exprBoxH + spacing + answerBlockH + ctaBlockH;
+  /* Start Y so the block is vertically centred in the middle zone */
+  let rightY = MID_Y + Math.round((MID_H - totalBlockH) / 2);
+  if (rightY < MID_Y + spacing) rightY = MID_Y + spacing;   // safety clamp
+
+  /* 4a. "ONLY FOR GENIUS" label — skip during live (overlay animates it) */
+  if (!_liveActive) {
+    {
+      ctx.save();
+      ctx.font = `italic 900 ${geniusFs}px Georgia,serif`;
+      ctx.fillStyle = theme.accent;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.shadowColor = theme.accent; ctx.shadowBlur = 14;
+      let sz = geniusFs;
+      while (ctx.measureText(bottomText).width > rxW && sz > 12) {
+        sz--; ctx.font = `italic 900 ${sz}px Georgia,serif`;
+      }
+      ctx.fillText(bottomText, rxX + rxW / 2, rightY);
+      ctx.restore();
+      rightY += geniusFs * 1.3 + spacing;
+    }
+
+    /* Thin accent underline below genius label */
+    ctx.save();
+    ctx.strokeStyle = theme.accent + 'aa';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(rxX, rightY - spacing * 0.5);
+    ctx.lineTo(rxX + rxW, rightY - spacing * 0.5);
+    ctx.stroke();
+    ctx.restore();
+    rightY += spacing * 0.5;
+  }
+
+  /* 4b. Puzzle expression box */
+  {
+    const boxY = rightY;
+    ctx.save();
+    /* Clip the entire box to the right text zone */
+    ctx.beginPath();
+    ctx.rect(rxX, MID_Y, rxW, MID_H + WM_H);
+    ctx.clip();
+    /* Box fill — subtle tinted background */
+    ctx.fillStyle = theme.accent + '20';
+    _pzRoundRect(ctx, rxX, boxY, rxW, exprBoxH, 18); ctx.fill();
+    /* Crisp solid border — no shadow/blur */
+    ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = theme.accent; ctx.lineWidth = 3;
+    _pzRoundRect(ctx, rxX, boxY, rxW, exprBoxH, 18); ctx.stroke();
+
+    /* Expression text — NO shadow/blur at all, pure crisp */
+    let fs = fontSize;
+    ctx.font = `900 ${fs}px Impact,"Arial Black",sans-serif`;
+    while (ctx.measureText(expr).width > rxW - 24 && fs > 14) {
+      fs -= 2; ctx.font = `900 ${fs}px Impact,"Arial Black",sans-serif`;
+    }
+    ctx.shadowBlur  = 0;
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle   = theme.expr;
+    ctx.textAlign   = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(expr, rxX + rxW / 2, boxY + exprBoxH / 2);
+    ctx.restore();
+    rightY = boxY + exprBoxH + spacing;
+  }
+
+  /* 4c. Answer (optional) */
+  if (showAnswer && answer) {
+    rightY = _pzR(`✅  Answer: ${answer}`, `800 ${ansFs}px Arial,sans-serif`,
+                  theme.accent + 'ee', 'rgba(0,0,0,0.6)', rightY);
+    rightY += spacing * 0.5;
+  }
+
+  /* 4d. CTA — position depends on format:
+     • Square / Landscape (W >= H): below the puzzle box in the right zone (in-flow)
+     • Portrait / Story / Reel  (H > W): full-width centred just above watermark */
+  const _isPortrait = H > W;
+  if (_isPortrait) {
+    /* Full-width, centred, pinned just above watermark */
+    const ctaY = H - WM_H - Math.round(H * 0.055);
+    let ctaSize = ctaFs;
+    ctx.save();
+    ctx.font = `600 ${ctaSize}px Arial,sans-serif`;
+    while (ctx.measureText('💬 Comment your answer ↓').width > W - PAD * 4 && ctaSize > 10) {
+      ctaSize--;
+      ctx.font = `600 ${ctaSize}px Arial,sans-serif`;
+    }
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle    = theme.subtext + 'cc';
+    ctx.shadowColor  = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur   = 6;
+    ctx.fillText('💬 Comment your answer ↓', W / 2, ctaY);
+    ctx.restore();
+  } else {
+    /* Square / Landscape — draw in-flow below puzzle box inside right zone */
+    _pzR('💬 Comment your answer ↓', `600 ${ctaFs}px Arial,sans-serif`,
+         theme.subtext + 'cc', null, rightY);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     STEP 5 — WATERMARK STRIP (full width, bottom)
+     ═══════════════════════════════════════════════════════ */
+  if (watermark) {
+    await _drawAuthorWatermark(ctx, W, 0, 'Puzzle');
+  }
+}
+
+function _pzRoundRect(ctx,x,y,w,h,r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+
+function _pzLighten(hex,amt) {
+  const h=hex.replace('#','');
+  if(h.length!==6) return hex;
+  return '#'+[0,2,4].map(i=>Math.min(255,parseInt(h.slice(i,i+2),16)+amt).toString(16).padStart(2,'0')).join('');
+}
+
+function downloadPuzzle() {
+  const canvas = document.getElementById('puzzleCanvas');
+  const expr   = (document.getElementById('puzzleExpr')?.value||'puzzle').replace(/[^\w]/g,'_').slice(0,20);
+  const a = document.createElement('a');
+  a.download = `puzzle_${expr}_${Date.now()}.png`;
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+  toast('⬇️ Puzzle downloaded!','success',2500);
+}
+
+async function puzzleCopyImage() {
+  const canvas = document.getElementById('puzzleCanvas');
+  try {
+    await new Promise((res,rej)=>canvas.toBlob(async blob=>{
+      try{await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);res();}
+      catch(e){rej(e);}
+    }));
+    toast('📋 Puzzle copied!','success',2500);
+  } catch { toast('⚠️ Copy failed — download गर्नुस्','error',3000); }
+}
+
+/* ── Puzzle Einstein photo — drag / resize handlers ────────────
+   The canvas element has onmousedown/move/up/leave and onwheel
+   handlers wired in index.html. These functions implement free
+   drag-to-reposition and scroll-to-resize behaviour.
+   ──────────────────────────────────────────────────────────── */
+function _puzzleCanvasScale() {
+  /* Returns the CSS-to-canvas pixel ratio for the puzzle canvas */
+  const canvas = document.getElementById('puzzleCanvas');
+  if (!canvas) return 1;
+  const rect = canvas.getBoundingClientRect();
+  return canvas.width / rect.width;
+}
+
+function puzzlePhotoDragStart(e) {
+  e.preventDefault();
+  _puzzleDragging          = true;
+  const ratio              = _puzzleCanvasScale();
+  _puzzleDragStartY        = e.clientY * ratio;
+  _puzzleScaleAtDragStart  = _puzzlePhotoScale;
+}
+
+function puzzlePhotoDragMove(e) {
+  if (!_puzzleDragging) return;
+  e.preventDefault();
+  const ratio   = _puzzleCanvasScale();
+  /* dy in canvas pixels — drag UP (negative dy) = grow, drag DOWN = shrink */
+  const dy      = e.clientY * ratio - _puzzleDragStartY;
+  const canvas  = document.getElementById('puzzleCanvas');
+  const H       = canvas ? canvas.height : 600;
+  /* Map vertical drag distance to scale change (full canvas height = ±0.7 scale) */
+  const delta   = -(dy / H) * 0.7;
+  _puzzlePhotoScale = Math.min(1.2, Math.max(0.15, _puzzleScaleAtDragStart + delta));
+  renderPuzzleCanvas();
+}
+
+function puzzlePhotoDragEnd(e) {
+  _puzzleDragging = false;
+}
+
+function puzzlePhotoWheel(e) {
+  e.preventDefault();
+  const delta = e.deltaY < 0 ? 0.03 : -0.03;
+  _puzzlePhotoScale = Math.min(1.2, Math.max(0.15, _puzzlePhotoScale + delta));
+  renderPuzzleCanvas();
+}
+
+function puzzlePhotoTouchStart(e) {
+  if (e.touches.length === 1) {
+    const t = e.touches[0];
+    puzzlePhotoDragStart({ clientY: t.clientY, preventDefault: () => e.preventDefault() });
+  }
+}
+
+function puzzlePhotoTouchMove(e) {
+  if (e.touches.length === 1) {
+    const t = e.touches[0];
+    puzzlePhotoDragMove({ clientY: t.clientY, preventDefault: () => e.preventDefault() });
+  } else if (e.touches.length === 2) {
+    /* Pinch to resize */
+    e.preventDefault();
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (!puzzlePhotoTouchMove._lastDist) { puzzlePhotoTouchMove._lastDist = dist; return; }
+    const ratio = dist / puzzlePhotoTouchMove._lastDist;
+    _puzzlePhotoScale = Math.min(1.2, Math.max(0.15, _puzzlePhotoScale * ratio));
+    puzzlePhotoTouchMove._lastDist = dist;
+    renderPuzzleCanvas();
+  }
+}
+
+function sharePuzzle(platform) {
+  const expr    = document.getElementById('puzzleExpr')?.value || 'Math Puzzle';
+  const caption = `🧩 Can you solve it??\n\n${expr}\n\n90% fail! Only for genius 🧠\n#MathPuzzle #ShashiNewsGen #viral #nepal #puzzle #genius #mathchallenge #trending`;
+  _shareCanvasToSocial(platform, 'puzzleCanvas', caption, downloadPuzzle);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PUZZLE LIVE MODE
+   • Fullscreen animated canvas: puzzle question for 3 min →
+     answer reveal for 10 sec → random next puzzle → repeat
+   • Web Speech API: random AI-style voice phrases
+   • MediaRecorder: records canvas stream as .webm download
+   ═══════════════════════════════════════════════════════════════════ */
+
+let _liveActive       = false;
+let _livePhase        = 'question';   // 'question' | 'answer'
+let _liveSecondsLeft  = 180;
+let _liveTimer        = null;
+let _liveAnimFrame    = null;
+let _liveAnimT        = 0;
+let _livePuzzleIdx    = 0;
+let _liveRecorder     = null;
+
+/* ── Background music (Web Audio API) ── */
+let _liveAudioCtx     = null;
+let _liveMusicNodes   = [];   // active oscillator/gain nodes
+let _liveMusicTimer   = null;
+let _liveTikTokPlayed = false; // guard: play countdown beeps once per answer phase
+let _liveRecChunks    = [];
+let _liveIsRecording  = false;
+let _liveSpeaking     = false;
+let _liveSessionVoice = null; /* locked-in voice for current live session */
+let _liveSessionLang  = 'en'; /* language code for current session */
+let _liveVoiceIsNative = false; /* true only if an actual native voice was found */
+
+/* ── Multilingual phrase tables ─────────────────────────────────────────── */
+/* Each language has two variants:
+   'native' = pure script (used only when a real native TTS voice is found)
+   'roman'  = romanised / code-mixed (Hinglish, Nepanglish etc) — works on
+              any English voice and sounds natural for bilingual audiences   */
+const _LIVE_PHRASES = {
+  en: {
+    intros: [
+      'Are you a genius? Very few people can answer this!',
+      'Only 10 percent of people get this right. Can you?',
+      'This one is tricky! 90 percent fail. Think carefully!',
+      'Here is a challenge for you. Only geniuses can solve this!',
+      'Warning! This puzzle will test your brain. Ready?',
+      'Most people get this wrong. Are you smarter than average?',
+      'Can you solve it before time runs out? Let us find out!',
+      'Brain test time! This one is harder than it looks!',
+    ],
+    answerIntros: [
+      'Time is up! Let us see the answer now!',
+      'Did you get it right? Here is the answer!',
+      'The correct answer is coming up. How did you do?',
+      'Reveal time! Let us check if you are a genius!',
+    ],
+    engage: [
+      'Drop your answer in the comments — I will read it out live!',
+      'Most people fail this one. Are you different?',
+      'Remember: order of operations is everything here!',
+      'No calculator — solve it in your head!',
+      'Share this live with a friend right now!',
+      'Tag someone who thinks they are a math genius!',
+      'Clock is ticking! Have you got an answer yet?',
+      'Think step by step — do not skip any operation!',
+      'If you get this right you are in the top ten percent!',
+      'I can see your comments coming in! Keep them coming!',
+      'The answer might surprise you — stay till the end!',
+      'I will reveal the answer when the timer hits zero — not a moment before!',
+      'Confident? Tell me your answer and how sure you are out of ten!',
+    ],
+    wrong:   ['Ooh, that is not quite right — keep trying!', 'Close but no cigar! Think again!', 'Nice try! But the answer is hiding somewhere else.', 'Not this time! Give it another shot!', 'Almost! You are on the right track though!'],
+    correct: ['Yes! That is absolutely right! Genius confirmed!', 'Correct! You are in the top ten percent!', 'Nailed it! You crushed this puzzle!', 'Brilliant! You really are a math genius!', 'Outstanding! Perfect answer!'],
+    twoMin:  'Two minutes left. Have you worked it out yet?',
+    oneMin:  'One minute remaining! Final stretch! Think carefully!',
+    thirty:  'Thirty seconds! Lock in your answer now!',
+    ten:     'Ten! Nine! Eight! Almost time!',
+    timeUp:  (ans) => `Time is up! The answer is ${ans}! How many got it right?`,
+    answerSpeak: (intro, ans) => `${intro} The answer is ${ans}! Check your comments — let me see who got it!`,
+    newPuzzle: (n) => `Puzzle ${n} — Can YOU solve it? Comment your answer!`,
+    welcome: 'Welcome to the LIVE Math Puzzle Game! Drop your answer in the comments!',
+    equation: (intro, expr) => `${intro} Here is the equation: ${expr}`,
+    correct_r: (name) => `${name} got it right! Genius!`,
+    wrong_r:   (name, ans) => `${name} said ${ans}. Not quite! The correct answer is different.`,
+    wait_r:    (name, num) => `${name} says ${num}. Will that be right? We will find out when the timer ends!`,
+    interesting_r: (name, num) => `${name} says ${num}. Interesting! Wait for the timer — no spoilers!`,
+    general_r: (name, text) => `${name} says: ${text}`,
+  },
+
+  /* ── Hindi ── */
+  /* Native Devanagari — used only when hi-IN voice is available on the device */
+  hi_native: {
+    intros: [
+      'क्या आप प्रतिभाशाली हैं? बहुत कम लोग यह हल कर सकते हैं!',
+      'केवल दस प्रतिशत लोग यह सही करते हैं। क्या आप कर सकते हैं?',
+      'यह सवाल मुश्किल है! नब्बे प्रतिशत लोग गलत करते हैं। ध्यान से सोचिए!',
+      'यह चुनौती केवल प्रतिभाशाली लोग हल कर सकते हैं!',
+      'सावधान! यह पहेली आपके दिमाग की परीक्षा लेगी। तैयार हैं?',
+      'ज़्यादातर लोग यह गलत करते हैं। क्या आप होशियार हैं?',
+    ],
+    answerIntros: ['समय समाप्त! अब उत्तर देखते हैं!', 'क्या आप सही थे? यह रहा उत्तर!', 'खुलासे का समय! देखते हैं आप प्रतिभाशाली हैं या नहीं!'],
+    engage: [
+      'कमेंट में अपना उत्तर लिखें — मैं इसे live पढ़ूंगा!',
+      'ज़्यादातर लोग यह हल नहीं कर पाते। क्या आप अलग हैं?',
+      'याद रखें: गणित में order of operations बहुत ज़रूरी है!',
+      'बिना calculator के — दिमाग से हल करें!',
+      'घड़ी चल रही है! क्या आपका answer तैयार है?',
+      'step by step सोचें — कोई भी step न छोड़ें!',
+      'यदि आप यह सही करते हैं तो आप top 10 percent में हैं!',
+      'आपके comments आ रहे हैं! जारी रखें!',
+      'उत्तर आपको चौंका सकता है — अंत तक रुकें!',
+    ],
+    wrong:   ['ओह, यह सही नहीं है — फिर कोशिश करें!', 'लगभग सही! फिर सोचें!', 'कोशिश अच्छी थी! लेकिन उत्तर कहीं और है।', 'इस बार नहीं! एक और बार प्रयास करें!'],
+    correct: ['हाँ! बिल्कुल सही! आप genius हैं!', 'सही! आप top 10 percent में हैं!', 'शानदार! आपने यह puzzle जीत ली!', 'Brilliant! एकदम सही उत्तर!'],
+    twoMin: 'दो मिनट बचे हैं। क्या आपने हल कर लिया?',
+    oneMin: 'एक मिनट बचा है! आखिरी chance! ध्यान से सोचें!',
+    thirty: 'तीस seconds! अब अपना answer पक्का करें!',
+    ten:    'दस! नौ! आठ! लगभग time खत्म!',
+    timeUp:  (ans) => `Time up! Answer है ${ans}! कितने लोगों ने सही किया?`,
+    answerSpeak: (intro, ans) => `${intro} Answer है ${ans}! Comments देखें!`,
+    newPuzzle: (n) => `Puzzle number ${n} — क्या आप solve कर सकते हैं? Comment में answer दें!`,
+    welcome: 'Live Math Puzzle Game में आपका स्वागत है! Comment में अपना answer दें!',
+    equation: (intro, expr) => `${intro} यह है equation: ${expr}`,
+    correct_r: (name) => `${name} ने सही किया! Genius confirmed!`,
+    wrong_r:   (name, ans) => `${name} का answer गलत था। सही answer अलग है।`,
+    wait_r:    (name, num) => `${name} ने ${num} लिखा है। Time खत्म होने पर पता चलेगा!`,
+    interesting_r: (name, num) => `${name} ने ${num} कहा। Interesting! Timer का wait करें!`,
+    general_r: (name, text) => `${name} कहते हैं: ${text}`,
+  },
+  /* Hinglish (romanised) — works on any English TTS voice, sounds natural */
+  hi: {
+    intros: [
+      'Kya aap genius hain? Bahut kam log yeh puzzle solve kar sakte hain!',
+      'Sirf 10 percent log yeh sahi karte hain. Kya aap kar sakte hain?',
+      'Yeh question bahut tricky hai! 90 percent log fail hote hain. Dhyan se socho!',
+      'Yeh ek challenge hai — sirf genius log hi is puzzle ko solve kar sakte hain!',
+      'Khabardar! Yeh puzzle aapke dimaag ki pareeksha lega. Ready hain?',
+      'Zyaadatar log yeh galat karte hain. Kya aap average se zyaada hoshiyaar hain?',
+      'Kya aap time khatam hone se pehle solve kar sakte hain? Chaliye dekhte hain!',
+      'Brain test time! Yeh utna aasaan nahi jitna dikhta hai!',
+    ],
+    answerIntros: [
+      'Time up! Ab answer dekhte hain!',
+      'Kya aap sahi the? Yeh raha answer!',
+      'Sahi answer aa raha hai. Aapne kaisa kiya?',
+      'Reveal time! Dekhte hain aap genius hain ya nahi!',
+    ],
+    engage: [
+      'Comment mein apna answer likho — main ise live padhenge!',
+      'Zyaadatar log yeh solve nahi kar paate. Kya aap alag hain?',
+      'Yaad rakhein: maths mein order of operations bahut zaroori hai!',
+      'Bina calculator ke — dimaag se solve karo!',
+      'Is live ko abhi kisi dost ke saath share karo!',
+      'Ghadi tick kar rahi hai! Kya aapka answer ready hai?',
+      'Step by step socho — koi bhi step mat chhodo!',
+      'Agar aap yeh sahi karte hain toh aap top 10 percent mein hain!',
+      'Aapke comments aa rahe hain! Jaari rakhein!',
+      'Answer aapko chauka sakta hai — end tak ruko!',
+      'Confident hain? Comment mein batao kitne confident hain 10 mein se!',
+      'Main timer zero hone par answer reveal karunga — ek second bhi pehle nahi!',
+    ],
+    wrong:   ['Ooh, yeh bilkul sahi nahi hai — phir koshish karo!', 'Lagbhag sahi! Phir socho!', 'Achhi koshish! Lekin answer kahin aur chhupa hai.', 'Is baar nahi! Ek aur baar try karo!', 'Aap sahi raaste par hain!'],
+    correct: ['Haan! Bilkul sahi! Genius confirmed!', 'Correct! Aap top 10 percent mein hain!', 'Shandaar! Aapne yeh puzzle jeet li!', 'Brilliant! Sach mein maths genius ho aap!', 'Outstanding! Ekdum sahi answer!'],
+    twoMin: 'Do minute bache hain. Kya aapne solve kar liya?',
+    oneMin: 'Ek minute bacha hai! Aakhiri stretch! Dhyan se socho!',
+    thirty: 'Tees seconds! Ab apna answer pakka karo!',
+    ten:    'Das! Nau! Aath! Lagbhag time khatam!',
+    timeUp:  (ans) => `Time khatam! Answer hai ${ans}! Kitne logon ne sahi kiya?`,
+    answerSpeak: (intro, ans) => `${intro} Answer hai ${ans}! Comments dekho — dekhte hain kisne sahi kiya!`,
+    newPuzzle: (n) => `Puzzle number ${n} — Kya aap solve kar sakte hain? Comment mein answer do!`,
+    welcome: 'Live Math Puzzle Game mein aapka swagat hai! Comment mein apna answer do!',
+    equation: (intro, expr) => `${intro} Yeh hai equation: ${expr}`,
+    correct_r: (name) => `${name} ne sahi kiya! Shabash! Genius confirmed!`,
+    wrong_r:   (name, ans) => `${name} ka answer sahi nahi tha. Sahi answer alag hai.`,
+    wait_r:    (name, num) => `${name} ne ${num} likha hai. Sahi hoga kya? Timer khatam hone par pata chalega!`,
+    interesting_r: (name, num) => `${name} ne ${num} kaha. Interesting! Timer ka wait karo — no spoilers!`,
+    general_r: (name, text) => `${name} kehte hain: ${text}`,
+  },
+
+  /* ── Nepali ── */
+  /* Native Devanagari — used only when ne-NP voice is available */
+  ne_native: {
+    intros: [
+      'के तपाईं genius हुनुहुन्छ? धेरै थोरै मान्छेहरूले यो solve गर्न सक्छन्!',
+      'केवल 10 percent मान्छेहरूले यो सही गर्छन्। के तपाईं गर्न सक्नुहुन्छ?',
+      'यो question गाह्रो छ! 90 percent मान्छे गलत गर्छन्। ध्यानले सोच्नुस्!',
+      'यो challenge केवल genius मान्छेहरूले हल गर्न सक्छन्!',
+      'सावधान! यो puzzle ले तपाईंको दिमागको परीक्षा लिनेछ। तयार हुनुहुन्छ?',
+    ],
+    answerIntros: ['Time सकियो! अब answer हेरौं!', 'के तपाईं सही हुनुहुन्थ्यो? यो रह्यो answer!', 'Reveal time! हेरौं तपाईं genius हुनुहुन्छ कि छैन!'],
+    engage: [
+      'Comment मा आफ्नो answer लेख्नुस् — म यसलाई live मा पढ्नेछु!',
+      'धेरैजसो मान्छेहरू यो solve गर्न सक्दैनन्। के तपाईं फरक हुनुहुन्छ?',
+      'याद गर्नुस्: maths मा order of operations धेरै महत्त्वपूर्ण छ!',
+      'Calculator बिना — दिमागले solve गर्नुस्!',
+      'घडी चलिरहेको छ! के तपाईंको answer तयार छ?',
+      'यदि तपाईं यो सही गर्नुभयो भने तपाईं top 10 percent मा हुनुहुन्छ!',
+    ],
+    wrong:   ['ओह, त्यो सही छैन — फेरि try गर्नुस्!', 'लगभग सही! फेरि सोच्नुस्!', 'राम्रो try! तर answer अन्त छ।'],
+    correct: ['Correct! तपाईं top 10 percent मा हुनुहुन्छ!', 'Brilliant! तपाईंले यो puzzle जित्नुभयो!', 'Shandaar! तपाईं साँच्चै maths genius हुनुहुन्छ!'],
+    twoMin: 'दुई minute बाँकी छ। के तपाईंले solve गर्नुभयो?',
+    oneMin: 'एक minute बाँकी छ! अन्तिम stretch! ध्यानले सोच्नुस्!',
+    thirty: 'तीस seconds! अब आफ्नो answer पक्का गर्नुस्!',
+    ten:    'दस! नौ! आठ! लगभग time सकियो!',
+    timeUp:  (ans) => `Time सकियो! Answer हो ${ans}! कतिजनाले सही गरे?`,
+    answerSpeak: (intro, ans) => `${intro} Answer हो ${ans}! Comments हेर्नुस्!`,
+    newPuzzle: (n) => `Puzzle number ${n} — के तपाईं solve गर्न सक्नुहुन्छ? Comment मा answer दिनुस्!`,
+    welcome: 'Live Math Puzzle Game मा स्वागत छ! Comment मा आफ्नो answer दिनुस्!',
+    equation: (intro, expr) => `${intro} यो हो equation: ${expr}`,
+    correct_r: (name) => `${name} ले सही गर्नुभयो! Shabash! Genius!`,
+    wrong_r:   (name, ans) => `${name} को answer सही थिएन। सही answer फरक छ।`,
+    wait_r:    (name, num) => `${name} ले ${num} लेख्नुभयो। Time सकिएपछि थाहा हुन्छ!`,
+    interesting_r: (name, num) => `${name} ले ${num} भन्नुभयो। Interesting! Timer को wait गर्नुस्!`,
+    general_r: (name, text) => `${name} भन्नुहुन्छ: ${text}`,
+  },
+  /* Nepanglish (romanised) — works on any English TTS voice */
+  ne: {
+    intros: [
+      'K tapai genius hunuhunchha? Dherai thorai manchheharu le yo puzzle solve garna sakchhan!',
+      'Sirf 10 percent manchheharu le yo sahi garchhan. K tapai garna saknu hunchha?',
+      'Yo question gaaro chha! 90 percent manchhe galat garchhan. Dhyan le sochnus!',
+      'Yo challenge sirf genius manchheharu le hal garna sakchhan!',
+      'Sawdhan! Yo puzzle le tapai ko dimag ko pareeksha linechha. Tayaar hunuhunchha?',
+      'Dhereijaso manchhe yo solve garna sakdainan. K tapai farak hunuhunchha?',
+    ],
+    answerIntros: [
+      'Time sakiyo! Ab answer herau!',
+      'K tapai sahi hunuhunthyo? Yo rayo answer!',
+      'Reveal time! Herau tapai genius hunuhunchha ki chhainas!',
+    ],
+    engage: [
+      'Comment ma afno answer lekhnus — ma yeslai live ma padhne chhu!',
+      'Dherai manchhe yo solve garna sakdainan. K tapai farak hunuhunchha?',
+      'Yaad garnus: maths ma order of operations dherai important chha!',
+      'Bina calculator — dimag le solve garnus!',
+      'Yo live lai abhi kisi sathi sanga share garnus!',
+      'Ghadi chalirako chha! K tapai ko answer tayaar chha?',
+      'Step by step sochus — koi step na chhadnus!',
+      'Yadi tapai yo sahi garnu bhayo bhane tapai top 10 percent ma hunuhunchha!',
+      'Tapai ka comments aai rahekan chhan! Jaari rakhnus!',
+      'Answer tapai lai chaukaa sakchha — end samma roknus!',
+    ],
+    wrong:   ['Oh, tyo sahi chhainas — pheri try garnus!', 'Lagbhag sahi! Pheri sochnus!', 'Ramro try! Tara answer anta chha.', 'Yo patak hoina! Arko patak try garnus!'],
+    correct: ['Hoo! Bilkul sahi! Genius confirmed!', 'Correct! Tapai top 10 percent ma hunuhunchha!', 'Shandaar! Tapai le yo puzzle jitnu bhayo!', 'Brilliant! Tapai sachai maths genius hunuhunchha!'],
+    twoMin: 'Dui minute baaki chha. K tapai le solve garnu bhayo?',
+    oneMin: 'Ek minute baaki chha! Antim chance! Dhyan le sochnus!',
+    thirty: 'Tees seconds! Ab afno answer pakka garnus!',
+    ten:    'Das! Nau! Aath! Lagbhag time sakiyo!',
+    timeUp:  (ans) => `Time sakiyo! Answer ho ${ans}! Katijana le sahi gare?`,
+    answerSpeak: (intro, ans) => `${intro} Answer ho ${ans}! Comments hernus — herau kasle sahi garyo!`,
+    newPuzzle: (n) => `Puzzle number ${n} — K tapai solve garna saknu hunchha? Comment ma answer dinus!`,
+    welcome: 'Live Math Puzzle Game ma swagat chha! Comment ma afno answer dinus!',
+    equation: (intro, expr) => `${intro} Yo ho equation: ${expr}`,
+    correct_r: (name) => `${name} le sahi garnu bhayo! Shabash! Genius!`,
+    wrong_r:   (name, ans) => `${name} ko answer sahi thiena. Sahi answer farak chha.`,
+    wait_r:    (name, num) => `${name} le ${num} lekhnu bhayo. Sahi hola? Time sakiepachhi thaha hunchha!`,
+    interesting_r: (name, num) => `${name} le ${num} bhannubhayo. Interesting! Timer ko wait garnus!`,
+    general_r: (name, text) => `${name} bhannu hunchha: ${text}`,
+  },
+
+  fr: {
+    intros: ['Êtes-vous un génie? Très peu de gens peuvent répondre à ça!', 'Seulement dix pour cent des gens répondent correctement. Et vous?', 'C\'est difficile! Quatre-vingt-dix pour cent échouent. Réfléchissez bien!'],
+    answerIntros: ['Le temps est écoulé! Voyons la réponse maintenant!', 'Avez-vous trouvé? Voici la réponse!', 'La bonne réponse arrive. Comment vous en êtes-vous sorti?'],
+    engage: ['Donnez votre réponse dans les commentaires!', 'La plupart des gens échouent. Êtes-vous différent?', 'La montre tourne! Avez-vous votre réponse?'],
+    wrong:   ['Ce n\'est pas tout à fait ça — réessayez!', 'Presque! Réfléchissez encore!'],
+    correct: ['Oui! C\'est absolument correct! Génie confirmé!', 'Correct! Vous êtes dans le top dix pour cent!'],
+    twoMin: 'Deux minutes restantes. Avez-vous trouvé?',
+    oneMin: 'Une minute restante! Dernière ligne droite!',
+    thirty: 'Trente secondes! Confirmez votre réponse!',
+    ten: 'Dix! Neuf! Huit! Presque fini!',
+    timeUp: (ans) => `Temps écoulé! La réponse est ${ans}!`,
+    answerSpeak: (intro, ans) => `${intro} La réponse est ${ans}!`,
+    newPuzzle: (n) => `Puzzle ${n} — Pouvez-vous le résoudre? Commentez votre réponse!`,
+    welcome: 'Bienvenue dans le jeu de puzzles mathématiques en direct!',
+    equation: (intro, expr) => `${intro} Voici l'équation: ${expr}`,
+    correct_r: (name) => `${name} a trouvé la bonne réponse! Bravo!`,
+    wrong_r: (name) => `${name} n'a pas la bonne réponse.`,
+    wait_r: (name, num) => `${name} dit ${num}. On verra à la fin!`,
+    interesting_r: (name, num) => `${name} dit ${num}. Intéressant!`,
+    general_r: (name, text) => `${name} dit: ${text}`,
+  },
+  es: {
+    intros: ['¿Eres un genio? ¡Muy poca gente puede responder esto!', 'Solo el diez por ciento lo responde bien. ¿Puedes tú?', '¡Esto es difícil! El noventa por ciento falla. ¡Piensa bien!'],
+    answerIntros: ['¡Se acabó el tiempo! ¡Veamos la respuesta!', '¿Lo acertaste? ¡Aquí está la respuesta!', '¡Es hora de revelar! Veamos si eres un genio.'],
+    engage: ['¡Deja tu respuesta en los comentarios!', 'La mayoría de la gente falla esto. ¿Eres diferente?', '¡El reloj corre! ¿Ya tienes tu respuesta?'],
+    wrong:   ['¡Eso no es correcto — sigue intentando!', '¡Casi! Piensa de nuevo.'],
+    correct: ['¡Sí! ¡Absolutamente correcto! ¡Genio confirmado!', '¡Correcto! ¡Estás en el diez por ciento superior!'],
+    twoMin: 'Dos minutos restantes. ¿Ya lo resolviste?',
+    oneMin: '¡Un minuto! ¡Recta final!',
+    thirty: '¡Treinta segundos! ¡Confirma tu respuesta ahora!',
+    ten: '¡Diez! ¡Nueve! ¡Ocho! ¡Casi termina!',
+    timeUp: (ans) => `¡Tiempo! La respuesta es ${ans}.`,
+    answerSpeak: (intro, ans) => `${intro} La respuesta es ${ans}.`,
+    newPuzzle: (n) => `Puzzle ${n} — ¿Puedes resolverlo? ¡Comenta tu respuesta!`,
+    welcome: '¡Bienvenido al juego de puzzles matemáticos en vivo!',
+    equation: (intro, expr) => `${intro} Aquí está la ecuación: ${expr}`,
+    correct_r: (name) => `¡${name} lo tiene bien! ¡Bravo!`,
+    wrong_r: (name) => `${name} no acertó esta vez.`,
+    wait_r: (name, num) => `${name} dice ${num}. ¡Lo veremos al final!`,
+    interesting_r: (name, num) => `${name} dice ${num}. ¡Interesante!`,
+    general_r: (name, text) => `${name} dice: ${text}`,
+  },
+  de: {
+    intros: ['Bist du ein Genie? Sehr wenige können das lösen!', 'Nur zehn Prozent antworten richtig. Schaffst du es?', 'Das ist knifflig! Neunzig Prozent scheitern. Denk genau nach!'],
+    answerIntros: ['Zeit abgelaufen! Schauen wir uns die Antwort an!', 'Hattest du recht? Hier ist die Antwort!', 'Die Lösung kommt jetzt. Wie hast du abgeschnitten?'],
+    engage: ['Schreib deine Antwort in die Kommentare!', 'Die meisten scheitern daran. Bist du anders?', 'Die Uhr tickt! Hast du schon eine Antwort?'],
+    wrong:   ['Das ist leider nicht ganz richtig — versuch es nochmal!', 'Fast! Denk nochmal nach.'],
+    correct: ['Ja! Das ist absolut richtig! Genie bestätigt!', 'Richtig! Du gehörst zu den besten zehn Prozent!'],
+    twoMin: 'Noch zwei Minuten. Hast du es schon gelöst?',
+    oneMin: 'Noch eine Minute! Letzte Runde!',
+    thirty: 'Dreißig Sekunden! Bestätige jetzt deine Antwort!',
+    ten: 'Zehn! Neun! Acht! Fast fertig!',
+    timeUp: (ans) => `Zeit abgelaufen! Die Antwort ist ${ans}!`,
+    answerSpeak: (intro, ans) => `${intro} Die Antwort ist ${ans}!`,
+    newPuzzle: (n) => `Rätsel ${n} — Kannst du es lösen? Kommentiere deine Antwort!`,
+    welcome: 'Willkommen beim Live-Mathe-Rätsel-Spiel!',
+    equation: (intro, expr) => `${intro} Hier ist die Gleichung: ${expr}`,
+    correct_r: (name) => `${name} hat es richtig! Großartig!`,
+    wrong_r: (name) => `${name} hatte leider nicht die richtige Antwort.`,
+    wait_r: (name, num) => `${name} sagt ${num}. Wir sehen es am Ende!`,
+    interesting_r: (name, num) => `${name} sagt ${num}. Interessant!`,
+    general_r: (name, text) => `${name} sagt: ${text}`,
+  },
+  ja: {
+    intros: ['あなたは天才ですか？これを解ける人はほとんどいません！', '正解するのは10パーセントだけです。あなたはできますか？', 'これは難しい！90パーセントが失敗します。よく考えてください！'],
+    answerIntros: ['時間切れ！答えを見てみましょう！', '正解でしたか？答えはこちらです！', '正解発表です！あなたは天才ですか？'],
+    engage: ['コメントに答えを書いてください！', 'ほとんどの人がこれに失敗します。あなたは違いますか？', '時計が刻んでいます！答えはありますか？'],
+    wrong:   ['惜しい！もう一度考えてみてください。', 'ほぼ正解です！再度挑戦してください。'],
+    correct: ['はい！完全に正解です！天才確認！', '正解！あなたは上位10パーセントです！'],
+    twoMin: 'あと2分です。解けましたか？',
+    oneMin: 'あと1分！最終局面です！',
+    thirty: '30秒！今すぐ答えを確定してください！',
+    ten: '10！9！8！もうすぐ終わりです！',
+    timeUp: (ans) => `時間切れ！答えは${ans}です！`,
+    answerSpeak: (intro, ans) => `${intro} 答えは${ans}です！`,
+    newPuzzle: (n) => `問題${n} — 解けますか？コメントで答えてください！`,
+    welcome: 'ライブ数学パズルゲームへようこそ！コメントで答えを教えてください！',
+    equation: (intro, expr) => `${intro} 方程式はこちらです: ${expr}`,
+    correct_r: (name) => `${name}さんが正解しました！すごい！`,
+    wrong_r: (name) => `${name}さんの答えは残念ながら違います。`,
+    wait_r: (name, num) => `${name}さんは${num}と答えました。終わりに確認します！`,
+    interesting_r: (name, num) => `${name}さんは${num}と言っています。興味深い！`,
+    general_r: (name, text) => `${name}さん: ${text}`,
+  },
+  zh: {
+    intros: ['你是天才吗？很少人能回答这个！', '只有10%的人能答对，你能吗？', '这道题很难！90%的人都答错了，仔细思考！'],
+    answerIntros: ['时间到！让我们看看答案！', '你答对了吗？答案来了！', '揭晓时刻！看看你是不是天才！'],
+    engage: ['把你的答案写在评论里！', '大多数人都做不到这道题，你与众不同吗？', '时钟在滴答！你有答案了吗？'],
+    wrong:   ['哦，那不太对——再试试！', '差不多！再想想。'],
+    correct: ['是的！完全正确！天才确认！', '正确！你在前10%！'],
+    twoMin: '还有两分钟，你解出来了吗？',
+    oneMin: '还有一分钟！最后冲刺！',
+    thirty: '三十秒！现在锁定你的答案！',
+    ten: '十！九！八！快结束了！',
+    timeUp: (ans) => `时间到！答案是${ans}！`,
+    answerSpeak: (intro, ans) => `${intro} 答案是${ans}！`,
+    newPuzzle: (n) => `第${n}道题——你能解出来吗？在评论里留下答案！`,
+    welcome: '欢迎来到直播数学谜题游戏！在评论里写下你的答案！',
+    equation: (intro, expr) => `${intro} 方程式是：${expr}`,
+    correct_r: (name) => `${name}答对了！太棒了！`,
+    wrong_r: (name) => `${name}的答案不对。`,
+    wait_r: (name, num) => `${name}说${num}，计时结束后我们来看看！`,
+    interesting_r: (name, num) => `${name}说${num}，有意思！`,
+    general_r: (name, text) => `${name}说：${text}`,
+  },
+  ar: {
+    intros: ['هل أنت عبقري؟ قليل جداً من الناس يمكنهم حل هذا!', 'فقط عشرة بالمئة يجيبون بشكل صحيح. هل يمكنك ذلك؟', 'هذا السؤال صعب! تسعون بالمئة يفشلون. فكر بعناية!'],
+    answerIntros: ['انتهى الوقت! لنرَ الإجابة الآن!', 'هل أجبت بشكل صحيح؟ ها هي الإجابة!', 'وقت الكشف! لنتحقق إن كنت عبقرياً!'],
+    engage: ['اكتب إجابتك في التعليقات!', 'معظم الناس يفشلون في هذا. هل أنت مختلف؟', 'الساعة تدق! هل لديك إجابة؟'],
+    wrong:   ['هذا ليس صحيحاً تماماً — حاول مرة أخرى!', 'تقريباً! فكر مجدداً.'],
+    correct: ['نعم! صحيح تماماً! تم تأكيد العبقرية!', 'صحيح! أنت في أفضل عشرة بالمئة!'],
+    twoMin: 'دقيقتان متبقيتان. هل حللتها؟',
+    oneMin: 'دقيقة واحدة! الجولة الأخيرة!',
+    thirty: 'ثلاثون ثانية! أكد إجابتك الآن!',
+    ten: 'عشرة! تسعة! ثمانية! أوشك الوقت على الانتهاء!',
+    timeUp: (ans) => `انتهى الوقت! الإجابة هي ${ans}!`,
+    answerSpeak: (intro, ans) => `${intro} الإجابة هي ${ans}!`,
+    newPuzzle: (n) => `اللغز ${n} — هل يمكنك حله؟ علق بإجابتك!`,
+    welcome: 'مرحباً بك في لعبة الألغاز الرياضية المباشرة!',
+    equation: (intro, expr) => `${intro} هذه هي المعادلة: ${expr}`,
+    correct_r: (name) => `${name} أجاب بشكل صحيح! رائع!`,
+    wrong_r: (name) => `${name} لم يكن لديه الإجابة الصحيحة.`,
+    wait_r: (name, num) => `${name} قال ${num}. سنرى في النهاية!`,
+    interesting_r: (name, num) => `${name} قال ${num}. مثير للاهتمام!`,
+    general_r: (name, text) => `${name} يقول: ${text}`,
+  },
+};
+
+
+/* ── BCP-47 tag map for language codes ──────────────────────────────────── */
+const _LIVE_LANG_BCP47 = {
+  en:'en-US', hi:'hi-IN', ne:'ne-NP', fr:'fr-FR',
+  es:'es-ES', de:'de-DE', ja:'ja-JP', zh:'zh-CN', ar:'ar-SA'
+};
+
+/* Helper: get phrases for current session language.
+   For hi/ne: use romanised variant unless a native voice was actually found. */
+function _liveP() {
+  const lang = _liveSessionLang;
+  if ((lang === 'hi' || lang === 'ne') && !_liveVoiceIsNative) {
+    return _LIVE_PHRASES[lang]; // romanised Hinglish/Nepanglish
+  }
+  if ((lang === 'hi' || lang === 'ne') && _liveVoiceIsNative) {
+    return _LIVE_PHRASES[lang + '_native'] || _LIVE_PHRASES[lang];
+  }
+  return _LIVE_PHRASES[lang] || _LIVE_PHRASES.en;
+}
+
+/* Backward-compat shims for the old named arrays */
+const _LIVE_INTROS            = _LIVE_PHRASES.en.intros;
+const _LIVE_ANSWER_INTROS     = _LIVE_PHRASES.en.answerIntros;
+const _LIVE_ENGAGE            = _LIVE_PHRASES.en.engage;
+const _LIVE_WRONG_REACTIONS   = _LIVE_PHRASES.en.wrong;
+const _LIVE_CORRECT_REACTIONS = _LIVE_PHRASES.en.correct;
+
+let _liveEngageIdx   = 0;
+let _liveSpeechTimer = null;   /* interval for continuous speech */
+
+function _liveSpeak(text, rate, pitch) {
+  if (!document.getElementById('liveSpeechToggle')?.checked) return;
+  if (!window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  /* Always set language so TTS engine uses correct phonetics */
+  u.lang = _LIVE_LANG_BCP47[_liveSessionLang] || 'en-US';
+  /* Randomise tone: excited or calm */
+  const tones = [
+    { rate:1.05, pitch:1.2 },  // excited
+    { rate:0.92, pitch:1.0 },  // calm
+    { rate:1.0,  pitch:1.1 },  // neutral-bright
+    { rate:0.88, pitch:0.95},  // deep-calm
+    { rate:1.1,  pitch:1.25},  // hyped
+  ];
+  const tone = tones[Math.floor(Math.random() * tones.length)];
+  u.rate   = rate  ?? tone.rate;
+  u.pitch  = pitch ?? tone.pitch;
+  u.volume = 1;
+  if (_liveSessionVoice) u.voice = _liveSessionVoice;
+  /* Only set u.lang when we have a real native voice — otherwise the English
+     voice will refuse to speak and stay silent for hi-IN / ne-NP text */
+  if (_liveVoiceIsNative) u.lang = _LIVE_LANG_BCP47[_liveSessionLang] || 'en-US';
+  speechSynthesis.speak(u);
+}
+
+/* Pick and lock a voice for the current live session based on gender + language */
+function _liveLockVoice() {
+  if (!window.speechSynthesis) return;
+  const gender = document.getElementById('preLiveVoiceGender')?.value || 'random';
+  const langCode = document.getElementById('preLiveVoiceLang')?.value || 'en';
+  _liveSessionLang = langCode;
+  const bcp47 = _LIVE_LANG_BCP47[langCode] || 'en-US';
+
+  const _doLock = () => {
+    const voices = speechSynthesis.getVoices();
+    /* Filter by full BCP-47 first, then by language prefix */
+    let nativePool = voices.filter(v => v.lang.toLowerCase() === bcp47.toLowerCase());
+    if (!nativePool.length) nativePool = voices.filter(v => v.lang.toLowerCase().startsWith(langCode.toLowerCase()));
+
+    /* Did we actually find a voice for this language? */
+    _liveVoiceIsNative = nativePool.length > 0;
+
+    /* If no native voice found, fall back to English — but keep romanised phrases */
+    let pool = nativePool.length ? nativePool : voices.filter(v => v.lang.toLowerCase().startsWith('en'));
+    if (!pool.length) pool = voices;
+
+    const femaleNames = /zira|samantha|karen|moira|tessa|fiona|victoria|susan|alice|allison|ava|kate|serena|hazel|nicky|female|lekha|heera|kalpana/i;
+    const maleNames   = /david|mark|daniel|alex|fred|tom|james|lee|rishi|google uk english male|microsoft david|microsoft mark|jorge|reed|rocko|male|hemant|kailash/i;
+
+    let chosen;
+    if (gender === 'female') {
+      chosen = pool.find(v => femaleNames.test(v.name)) || pool[0];
+    } else if (gender === 'male') {
+      chosen = pool.find(v => maleNames.test(v.name)) || pool[0];
+    } else {
+      const femPool = pool.filter(v => femaleNames.test(v.name));
+      const malPool = pool.filter(v => maleNames.test(v.name));
+      const src = (Math.random() < 0.5 ? femPool : malPool);
+      chosen = (src.length ? src : pool)[Math.floor(Math.random() * (src.length || pool.length))];
+    }
+    _liveSessionVoice = chosen || pool[0] || null;
+    console.log(`[Live] Voice locked: ${_liveSessionVoice?.name} | lang: ${bcp47} | native: ${_liveVoiceIsNative} | gender: ${gender}`);
+  };
+
+  /* Voices may not be loaded yet — use onvoiceschanged if list is empty */
+  if (speechSynthesis.getVoices().length > 0) {
+    _doLock();
+  } else {
+    speechSynthesis.onvoiceschanged = () => { _doLock(); speechSynthesis.onvoiceschanged = null; };
+  }
+}
+
+/* Starts the continuous engagement voice loop — speaks every ~12 seconds */
+function _liveStartEngagement(exprText) {
+  _liveStopEngagement();
+  const p = _liveP();
+  /* Speak the intro + equation immediately in selected language */
+  const intro = _liveRandom(p.intros);
+  const exprSpoken = exprText.replace(/×/g,'times').replace(/÷/g,'divided by').replace(/\?\?/g,'question mark');
+  _liveSpeak(p.equation(intro, exprSpoken));
+
+  /* Engagement phrase every 12 seconds — randomly shuffle order */
+  const shuffledEngage = [...p.engage].sort(() => Math.random() - 0.5);
+  _liveEngageIdx = 0;
+
+  _liveSpeechTimer = setInterval(() => {
+    if (!_liveActive || _livePhase !== 'question') return;
+    if (!document.getElementById('liveSpeechToggle')?.checked) return;
+    if (speechSynthesis.speaking) return;
+    /* Every 2nd cycle, try to read a pending comment */
+    if (_liveEngageIdx % 2 === 1) {
+      const read = _liveReadNextComment();
+      if (read) { _liveEngageIdx++; return; }
+    }
+    const phrase = shuffledEngage[_liveEngageIdx % shuffledEngage.length];
+    _liveEngageIdx++;
+    _liveSpeak(phrase);
+  }, 12000);
+}
+
+function _liveStopEngagement() {
+  clearInterval(_liveSpeechTimer);
+  _liveSpeechTimer = null;
+  speechSynthesis.cancel();
+}
+
+function _liveRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+/* ══════════════════════════════════════════════════
+   LIVE COMMENT SYSTEM
+   ══════════════════════════════════════════════════ */
+let _liveComments        = [];   // { name, text, ts, read }
+let _liveCommentReadIdx  = 0;
+
+function _liveAddComment(name, text, isHost) {
+  const el   = document.getElementById('liveCommentFeed');
+  if (!el) return;
+  const item = document.createElement('div');
+  item.className = 'live-comment-item';
+  item.innerHTML = `<span class="live-comment-name" style="color:${isHost ? '#f59e0b' : '#a78bfa'}">${name}</span>` +
+                   `<span class="live-comment-text"> ${text}</span>`;
+  el.appendChild(item);
+  el.scrollTop = el.scrollHeight;
+  if (!isHost) _liveComments.push({ name, text, ts: Date.now(), read: false });
+}
+
+/* Called by engagement loop to read pending comments */
+function _liveReadNextComment() {
+  const ans = document.getElementById('puzzleAnswer')?.value || '';
+  const unread = _liveComments.filter(c => !c.read);
+  if (!unread.length) return false;
+  const c  = unread[0];
+  c.read   = true;
+  const p  = _liveP();
+  /* Check answer: strip spaces/symbols and compare numerically */
+  const userNum = parseFloat(c.text.replace(/[^0-9.\-]/g,''));
+  const corrNum = parseFloat(ans);
+  const isAnswerPhase = _livePhase === 'answer';
+  if (!isNaN(userNum) && !isNaN(corrNum)) {
+    if (Math.abs(userNum - corrNum) < 0.001) {
+      /* Correct — but only say so after answer phase */
+      if (isAnswerPhase) {
+        _liveSpeak(p.correct_r(c.name, ans));
+        _liveAddComment('🎙️ Host', `@${c.name} ✅ Correct! The answer is ${ans}`, true);
+      } else {
+        _liveSpeak(p.wait_r(c.name, userNum));
+        _liveAddComment('🎙️ Host', `@${c.name} We will check your answer at the end! 🤫`, true);
+      }
+    } else {
+      if (isAnswerPhase) {
+        _liveSpeak(p.wrong_r(c.name, ans));
+        _liveAddComment('🎙️ Host', `@${c.name} ❌ Not quite! Answer is ${ans}`, true);
+      } else {
+        _liveSpeak(p.interesting_r(c.name, userNum));
+        _liveAddComment('🎙️ Host', `@${c.name} Interesting guess! Wait for the reveal! 🤫`, true);
+      }
+    }
+  } else {
+    _liveSpeak(p.general_r(c.name, c.text));
+  }
+  return true;
+}
+
+/* Called by the comment submit button */
+function liveSubmitComment() {
+  const nameEl = document.getElementById('liveCommentName');
+  const textEl = document.getElementById('liveCommentInput');
+  if (!nameEl || !textEl) return;
+  const name = nameEl.value.trim() || 'Guest';
+  const text = textEl.value.trim();
+  if (!text) return;
+  _liveAddComment(name, text, false);
+  textEl.value = '';
+  /* Immediate read if AI host is free */
+  if (!speechSynthesis.speaking && _liveActive) {
+    setTimeout(_liveReadNextComment, 500);
+  }
+}
+
+function _liveLoadNextPuzzle() {
+  const p = _livePickRandomPuzzle();
+
+  /* Pick a photo that is DIFFERENT from the current one */
+  let photo;
+  do { photo = EINSTEIN_PHOTOS[Math.floor(Math.random() * EINSTEIN_PHOTOS.length)]; }
+  while (EINSTEIN_PHOTOS.length > 1 && photo.id === _puzzleEinsteinId);
+
+  /* Pick a theme that is DIFFERENT from the current one */
+  let theme;
+  do { theme = PUZZLE_THEMES[Math.floor(Math.random() * PUZZLE_THEMES.length)]; }
+  while (PUZZLE_THEMES.length > 1 && theme.id === _puzzleTheme);
+
+  document.getElementById('puzzleExpr').value   = p.expr;
+  document.getElementById('puzzleAnswer').value = p.answer;
+  const showEl = document.getElementById('puzzleShowAnswer');
+  if (showEl) showEl.checked = false;
+
+  /* Apply new theme */
+  _puzzleTheme = theme.id;
+  /* Update theme grid UI so studio reflects the change */
+  PUZZLE_THEMES.forEach(tt => {
+    const b = document.getElementById('puzzleThemeBtn_' + tt.id);
+    if (b) b.style.opacity = (tt.id === theme.id) ? '1' : '0.65';
+  });
+
+  /* Apply new photo — also updates Einstein grid UI and calls renderPuzzleCanvas */
+  _selectEinsteinPhoto(photo.id);
+  _livePuzzleIdx++;
+}
+
+/* ── Draw live canvas overlay — NEVER redraws existing canvas text,
+      only adds glow effects ON the already-drawn text regions       ── */
+function _liveDrawOverlay(liveCanvas, phase, secsLeft, t) {
+  const src = document.getElementById('puzzleCanvas');
+  if (!src) return;
+  const ctx = liveCanvas.getContext('2d');
+  const W = liveCanvas.width, H = liveCanvas.height;
+
+  /* 1. Blit the puzzle canvas as the base */
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(src, 0, 0, W, H);
+
+  const totalSecs = phase === 'question' ? 180 : 10;
+  const elapsed   = totalSecs - secsLeft;
+  const progress  = Math.min(1, elapsed / totalSecs);
+
+  /* ── Re-read live text values so we can animate them ── */
+  const topText    = (document.getElementById('puzzleTopText')?.value    || 'CAN YOU SOLVE IT?').trim();
+  const subText    = (document.getElementById('puzzleSubText')?.value    || '90% FAIL THIS!').trim();
+  const bottomText = (document.getElementById('puzzleBottomText')?.value || 'ONLY FOR GENIUS').trim();
+  const theme      = (window.PUZZLE_THEMES || []).find(th => th.id === (window._puzzleTheme || 'dark')) || { badge:'#1a0533', accent:'#7c3aed', expr:'#fff' };
+
+  /* ── Heartbeat timer ── */
+  const hbT    = (t * 1.4) % (Math.PI * 2);
+  const beat1  = Math.max(0, Math.sin(hbT * 3)) * 0.5;
+  const beat2  = Math.max(0, Math.sin(hbT * 3 - 1.2)) * 0.35;
+  const hbScale = 1 + beat1 + beat2;
+
+  /* ── Timer (bottom-right, pulsing) ── */
+  const mins     = String(Math.floor(secsLeft / 60)).padStart(1,'0');
+  const secs     = String(secsLeft % 60).padStart(2,'0');
+  const timerStr = `${mins}:${secs}`;
+  const timerFs  = Math.round(H * 0.072);
+  const timerX   = W - 24;
+  const timerY   = H - 24;
+  const isUrgent = secsLeft <= 30;
+  const timerCol = phase === 'answer' ? '#22c55e' : isUrgent ? '#dc2626' : '#f59e0b';
+
+  ctx.save();
+  ctx.translate(timerX, timerY);
+  ctx.scale(hbScale, hbScale);
+  ctx.translate(-timerX, -timerY);
+  ctx.font = `900 ${timerFs}px "Courier New",monospace`;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+  ctx.shadowColor = timerCol; ctx.shadowBlur = 20 + beat1 * 30;
+  ctx.fillStyle = timerCol;
+  ctx.fillText(timerStr, timerX, timerY);
+  ctx.restore(); ctx.shadowBlur = 0;
+
+  /* ── Bottom progress bar ── */
+  const barH = 8;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(0, H - barH, W, barH);
+  const barGrad = ctx.createLinearGradient(0, 0, W, 0);
+  if (phase === 'answer') {
+    barGrad.addColorStop(0, '#22c55e'); barGrad.addColorStop(1, '#86efac');
+  } else {
+    barGrad.addColorStop(0, '#22c55e'); barGrad.addColorStop(0.6, '#f59e0b'); barGrad.addColorStop(1, '#dc2626');
+  }
+  ctx.fillStyle = barGrad;
+  ctx.fillRect(0, H - barH, progress * W, barH);
+
+  /* ── Shared layout constants used by both question and answer phases ── */
+  const TOP_H = Math.round(H * 0.20);
+  const PAD   = Math.round(W * 0.035);
+
+  if (phase === 'question') {
+    /* ════════════════════════════════════════════════════════
+       RE-DRAW THE TOP HEADER BAR with animated flashing text
+       The static puzzle canvas text cannot flash, so we overdraw
+       the entire header zone with our own animated version.
+       ════════════════════════════════════════════════════════ */
+
+    /* Cycling hue for the header background */
+    const hue    = (t * 30) % 360;
+    const hue2   = (hue + 60) % 360;
+    const hdrGrd = ctx.createLinearGradient(0, 0, W, TOP_H);
+    hdrGrd.addColorStop(0, `hsl(${hue},90%,20%)`);
+    hdrGrd.addColorStop(1, `hsl(${hue2},90%,15%)`);
+    ctx.fillStyle = hdrGrd;
+    ctx.fillRect(0, 0, W, TOP_H);
+
+    /* Flash cycle for text */
+    const flashPhase = Math.sin(t * 4);                    // -1 → +1, ~2 Hz
+    const flashScale = 1 + flashPhase * 0.06;              // subtle size pulse
+    const flashAlpha = 0.85 + flashPhase * 0.15;           // opacity pulse
+
+    /* ── LINE 1: "CAN YOU SOLVE IT?" ── */
+    {
+      const line1Y  = Math.round(TOP_H * 0.08);
+      const line1H  = Math.round(TOP_H * 0.52);
+      let fs1 = Math.round(line1H * 0.78);
+      ctx.save();
+      ctx.font = `900 ${fs1}px Impact,Arial Black,sans-serif`;
+      while (ctx.measureText(topText).width > W - PAD * 2 && fs1 > 12) {
+        fs1--; ctx.font = `900 ${fs1}px Impact,Arial Black,sans-serif`;
+      }
+      /* Colour cycles through white → yellow → orange → white */
+      const textHue  = (t * 45) % 360;
+      ctx.fillStyle  = `hsl(${textHue < 60 ? 55 : textHue < 120 ? 30 : 0},100%,${85 + flashPhase * 10}%)`;
+      ctx.globalAlpha = flashAlpha;
+      ctx.textAlign   = 'center'; ctx.textBaseline = 'top';
+      ctx.shadowColor = `hsl(${textHue},100%,70%)`; ctx.shadowBlur = 18 + flashPhase * 12;
+      /* Scale the text in-place */
+      const cx1 = W / 2, cy1 = line1Y + fs1 / 2;
+      ctx.translate(cx1, cy1); ctx.scale(flashScale, flashScale); ctx.translate(-cx1, -cy1);
+      ctx.fillText(topText, cx1, line1Y);
+      ctx.restore();
+    }
+
+    /* ── LINE 2: "90% FAIL THIS!" ── fast alternate flash colour ── */
+    {
+      const line2Y = Math.round(TOP_H * 0.58);
+      const line2H = Math.round(TOP_H * 0.36);
+      let fs2 = Math.round(line2H * 0.72);
+      ctx.save();
+      ctx.font = `800 ${fs2}px Arial Black,Impact,sans-serif`;
+      while (ctx.measureText(subText).width > W - PAD * 4 && fs2 > 10) {
+        fs2--; ctx.font = `800 ${fs2}px Arial Black,Impact,sans-serif`;
+      }
+      /* Alternates between white and accent yellow/red */
+      const subFlash = Math.sin(t * 6);   // faster, ~3 Hz
+      ctx.fillStyle   = subFlash > 0 ? '#ffffff' : '#f59e0b';
+      ctx.globalAlpha = 0.8 + subFlash * 0.2;
+      ctx.textAlign   = 'center'; ctx.textBaseline = 'top';
+      ctx.shadowColor = subFlash > 0 ? '#f59e0b' : '#dc2626'; ctx.shadowBlur = 14 + Math.abs(subFlash) * 10;
+      ctx.fillText(subText, W / 2, line2Y);
+      ctx.restore();
+    }
+
+    /* Bottom border of header — cycling colour */
+    ctx.save();
+    ctx.strokeStyle = `hsl(${hue},100%,60%)`;
+    ctx.lineWidth   = 4;
+    ctx.shadowColor = `hsl(${hue},100%,60%)`; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.moveTo(0, TOP_H - 2); ctx.lineTo(W, TOP_H - 2); ctx.stroke();
+    ctx.restore(); ctx.shadowBlur = 0;
+
+    /* ════════════════════════════════════════════════════════
+       RE-DRAW "ONLY FOR GENIUS" at bottom of middle-right zone
+       with its own flash independent of top header.
+       ════════════════════════════════════════════════════════ */
+    const WM_H   = Math.round(H * 0.06);
+    const MID_Y  = TOP_H;
+    const MID_H  = H - TOP_H - WM_H;
+    const HALF   = Math.round(W * 0.5);
+    const rxPad  = Math.round(W * 0.035);
+    const rxPadR = Math.round(W * 0.06);
+    const rxX    = HALF + rxPad;
+    const rxW    = W - HALF - rxPad - rxPadR;
+
+    /* "ONLY FOR GENIUS" flash — phase-offset so it's different from top header */
+    const gFlash = Math.sin(t * 5 + 1.5);   // ~2.5 Hz, offset
+    const gHue   = (t * 50 + 180) % 360;    // complementary hue
+    {
+      const geniusFs  = Math.round(H * 0.052);
+      const spacing   = Math.round(H * 0.018);
+      const exprBoxH  = Math.round(MID_H * 0.38);
+      const ctaBlockH = Math.round(H * 0.026) * 1.3;
+
+      /* Mirror exactly how the static canvas positions the equation box during live.
+         During live: geniusLabelH=0, underlineH=0, answerBlockH=0 (question phase),
+         so totalBlockH = exprBoxH + spacing + ctaBlockH, centred in MID_H. */
+      const staticTotalH = exprBoxH + spacing + ctaBlockH;
+      let exprBoxY = MID_Y + Math.round((MID_H - staticTotalH) / 2);
+      if (exprBoxY < MID_Y + spacing) exprBoxY = MID_Y + spacing;
+
+      /* Genius label sits directly above the equation box */
+      const gY = exprBoxY - Math.round(geniusFs * 1.3) - spacing;
+
+      ctx.save();
+      /* Overdraw a narrow strip behind the genius label to ensure legibility */
+      const stripH = Math.round(geniusFs * 1.6);
+      ctx.fillStyle = `hsla(${gHue},60%,10%,0.6)`;
+      ctx.fillRect(rxX, gY - 4, rxW, stripH);
+
+      let sz = geniusFs;
+      ctx.font = `italic 900 ${sz}px Georgia,serif`;
+      while (ctx.measureText(bottomText).width > rxW && sz > 12) {
+        sz--; ctx.font = `italic 900 ${sz}px Georgia,serif`;
+      }
+      ctx.fillStyle   = gFlash > 0 ? `hsl(${gHue},100%,75%)` : '#ffffff';
+      ctx.globalAlpha = 0.8 + gFlash * 0.2;
+      ctx.textAlign   = 'center'; ctx.textBaseline = 'top';
+      ctx.shadowColor = `hsl(${gHue},100%,60%)`; ctx.shadowBlur = 16 + Math.abs(gFlash) * 12;
+      const cx2 = rxX + rxW / 2;
+      ctx.translate(cx2, gY + sz / 2);
+      ctx.scale(1 + gFlash * 0.04, 1 + gFlash * 0.04);
+      ctx.translate(-cx2, -(gY + sz / 2));
+      ctx.fillText(bottomText, cx2, gY);
+      ctx.restore();
+    }
+
+    /* ── Thin animated rainbow border around the whole canvas ── */
+    const bHue = (t * 40) % 360;
+    ctx.strokeStyle = `hsl(${bHue},100%,60%)`;
+    ctx.lineWidth   = 5;
+    ctx.shadowColor = `hsl(${bHue},100%,60%)`; ctx.shadowBlur = 14;
+    ctx.strokeRect(3, 3, W - 6, H - 6);
+    ctx.shadowBlur = 0;
+
+    /* ── LIVE badge top-left ── */
+    const badgePulse = 0.85 + Math.sin(t * 3.5) * 0.15;
+    ctx.save();
+    ctx.globalAlpha = badgePulse;
+    ctx.fillStyle   = '#dc2626';
+    ctx.shadowColor = '#dc2626'; ctx.shadowBlur = 16;
+    _liveRoundRect(ctx, 10, 10, 82, 30, 15);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle  = '#fff';
+    ctx.font       = `900 16px sans-serif`;
+    ctx.textAlign  = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('● LIVE', 20, 25);
+    ctx.restore();
+
+  } else {
+    /* ══════════════════════════════════════════════════════
+       ANSWER PHASE — reveal shown in the TOP header zone
+       (the blank area between the "90% fail" line and the
+       bottom of the header bar), so it never overlaps Einstein
+       or the equation box.
+       ══════════════════════════════════════════════════════ */
+
+    /* Re-draw the header background for the answer phase with green tint */
+    const aHue   = (t * 25) % 360;
+    const aHdrGr = ctx.createLinearGradient(0, 0, W, TOP_H);
+    aHdrGr.addColorStop(0, `hsl(140,80%,10%)`);
+    aHdrGr.addColorStop(1, `hsl(160,80%,8%)`);
+    ctx.fillStyle = aHdrGr;
+    ctx.fillRect(0, 0, W, TOP_H);
+
+    /* Glowing animated border around just the TOP zone */
+    const bFlash = 0.7 + Math.sin(t * 6) * 0.3;
+    ctx.save();
+    ctx.strokeStyle = `rgba(34,197,94,${bFlash})`;
+    ctx.lineWidth = 4;
+    ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 18;
+    ctx.strokeRect(3, 3, W - 6, TOP_H - 3);
+    ctx.restore(); ctx.shadowBlur = 0;
+
+    /* ── "✅ ANSWER REVEALED!" banner label (top row of header) ── */
+    const labelFs   = Math.round(TOP_H * 0.28);
+    const labelY    = Math.round(TOP_H * 0.06);
+    const labelFlip = Math.sin(t * 4);
+    ctx.save();
+    ctx.font        = `900 ${labelFs}px Impact,Arial Black,sans-serif`;
+    ctx.textAlign   = 'center'; ctx.textBaseline = 'top';
+    ctx.fillStyle   = labelFlip > 0 ? '#22c55e' : '#86efac';
+    ctx.globalAlpha = 0.85 + labelFlip * 0.15;
+    ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 18 + Math.abs(labelFlip) * 10;
+    ctx.fillText('✅  ANSWER REVEALED!', W / 2, labelY);
+    ctx.restore(); ctx.shadowBlur = 0;
+
+    /* ── The answer value — big, centred in lower portion of header ── */
+    const ans    = document.getElementById('puzzleAnswer')?.value || '';
+    const ansFs  = Math.round(TOP_H * 0.52);
+    const scaleA = 1 + Math.sin(t * 3) * 0.07;
+    const ansY   = Math.round(TOP_H * 0.40);
+    ctx.save();
+    ctx.font        = `900 ${ansFs}px "Courier New",Impact,monospace`;
+    ctx.textAlign   = 'center'; ctx.textBaseline = 'top';
+    ctx.shadowColor = '#f59e0b'; ctx.shadowBlur = 32 + Math.sin(t * 2.5) * 12;
+    ctx.fillStyle   = '#f59e0b';
+    ctx.globalAlpha = 0.95;
+    ctx.translate(W / 2, ansY + ansFs / 2);
+    ctx.scale(scaleA, scaleA);
+    ctx.translate(-W / 2, -(ansY + ansFs / 2));
+    ctx.fillText(ans, W / 2, ansY);
+    ctx.restore(); ctx.shadowBlur = 0;
+
+    /* ── "CORRECT ANSWER ↑" sub-label just below answer ── */
+    ctx.save();
+    ctx.globalAlpha = 0.75;
+    ctx.fillStyle   = 'rgba(255,255,255,0.9)';
+    ctx.font        = `700 ${Math.round(TOP_H * 0.14)}px Arial,sans-serif`;
+    ctx.textAlign   = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('— CORRECT ANSWER —', W / 2, Math.round(TOP_H * 0.85));
+    ctx.restore();
+
+    /* Header bottom border — green pulse */
+    ctx.save();
+    ctx.strokeStyle = `rgba(34,197,94,${bFlash})`;
+    ctx.lineWidth   = 4;
+    ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.moveTo(0, TOP_H - 2); ctx.lineTo(W, TOP_H - 2); ctx.stroke();
+    ctx.restore(); ctx.shadowBlur = 0;
+
+    /* Sparkle particles above the TOP zone only */
+    const spark = (t * 2) % (Math.PI * 2);
+    ctx.save();
+    for (let i = 0; i < 16; i++) {
+      const px    = (((i * 0.618 + t * 0.3) % 1)) * W;
+      const py    = (Math.sin(spark + i * 0.9) * 0.5 + 0.5) * (TOP_H - 8) + 4;
+      const sc    = ['#f59e0b','#22c55e','#7c3aed','#fff','#f472b6'][i % 5];
+      ctx.fillStyle   = sc;
+      ctx.globalAlpha = 0.4 + Math.sin(spark + i * 1.2) * 0.35;
+      ctx.beginPath(); ctx.arc(px, py, 2.5 + Math.sin(spark + i) * 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+
+    /* Top-left "✅ REVEALED" badge */
+    const ap2 = 0.75 + Math.sin(t * 4) * 0.25;
+    ctx.save();
+    ctx.globalAlpha = ap2;
+    ctx.fillStyle   = '#22c55e'; ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 14;
+    _liveRoundRect(ctx, 10, 10, 180, 28, 14); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = '#fff'; ctx.font = `800 13px sans-serif`;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('✅ ANSWER REVEALED!', 18, 24);
+    ctx.restore();
+
+    /* Rainbow border around full canvas */
+    const bHue2 = (t * 40) % 360;
+    ctx.strokeStyle = `hsl(${bHue2},100%,55%)`;
+    ctx.lineWidth   = 5;
+    ctx.shadowColor = `hsl(${bHue2},100%,55%)`; ctx.shadowBlur = 14;
+    ctx.strokeRect(3, 3, W - 6, H - 6);
+    ctx.shadowBlur = 0;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   ANSWER REVEAL FANFARE — dramatic trumpet-style stab + drum roll
+   Plays the moment the answer phase begins. No files needed.
+   ════════════════════════════════════════════════════════════════════ */
+function _liveAnswerFanfare() {
+  try {
+    const ac   = new (window.AudioContext || window.webkitAudioContext)();
+    const now  = ac.currentTime;
+    const masterGain = ac.createGain();
+    masterGain.gain.setValueAtTime(0.55, now);
+    masterGain.connect(ac.destination);
+
+    /* ── Trumpet fanfare: ascending 5-note stab (C major chord run) ── */
+    const fanfare = [
+      { f: 523.25, t: 0.00, d: 0.12, type: 'sawtooth' },  // C5
+      { f: 659.25, t: 0.10, d: 0.12, type: 'sawtooth' },  // E5
+      { f: 783.99, t: 0.20, d: 0.12, type: 'sawtooth' },  // G5
+      { f: 1046.5, t: 0.30, d: 0.24, type: 'sawtooth' },  // C6
+      { f: 1318.5, t: 0.52, d: 0.35, type: 'sawtooth' },  // E6 — top note held
+    ];
+    fanfare.forEach(({ f, t: nt, d, type }) => {
+      const osc = ac.createOscillator();
+      const env = ac.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(f, now + nt);
+      env.gain.setValueAtTime(0, now + nt);
+      env.gain.linearRampToValueAtTime(0.9, now + nt + 0.015);
+      env.gain.exponentialRampToValueAtTime(0.001, now + nt + d);
+      osc.connect(env); env.connect(masterGain);
+      osc.start(now + nt); osc.stop(now + nt + d + 0.01);
+    });
+
+    /* ── Snare roll burst (4 fast hits) ── */
+    for (let i = 0; i < 4; i++) {
+      const bufSz = ac.sampleRate * 0.06;
+      const buf   = ac.createBuffer(1, bufSz, ac.sampleRate);
+      const data  = buf.getChannelData(0);
+      for (let s = 0; s < bufSz; s++) data[s] = (Math.random() * 2 - 1) * Math.pow(1 - s / bufSz, 2.5);
+      const src  = ac.createBufferSource();
+      const filt = ac.createBiquadFilter();
+      const sEnv = ac.createGain();
+      src.buffer = buf;
+      filt.type  = 'bandpass'; filt.frequency.value = 2200; filt.Q.value = 0.9;
+      sEnv.gain.setValueAtTime(0.6, now + 0.52 + i * 0.07);
+      sEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.52 + i * 0.07 + 0.06);
+      src.connect(filt); filt.connect(sEnv); sEnv.connect(masterGain);
+      src.start(now + 0.52 + i * 0.07);
+    }
+
+    /* ── Bass drum hit on the top note ── */
+    const bdBuf  = ac.createBuffer(1, Math.round(ac.sampleRate * 0.25), ac.sampleRate);
+    const bdData = bdBuf.getChannelData(0);
+    for (let s = 0; s < bdData.length; s++) bdData[s] = (Math.random() * 2 - 1) * Math.pow(1 - s / bdData.length, 4);
+    const bdSrc  = ac.createBufferSource();
+    const bdOsc  = ac.createOscillator();
+    const bdEnv  = ac.createGain();
+    bdOsc.frequency.setValueAtTime(120, now + 0.52);
+    bdOsc.frequency.exponentialRampToValueAtTime(40, now + 0.72);
+    bdEnv.gain.setValueAtTime(0.8, now + 0.52);
+    bdEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.72);
+    bdOsc.connect(bdEnv); bdEnv.connect(masterGain);
+    bdSrc.buffer = bdBuf;
+    bdOsc.start(now + 0.52); bdOsc.stop(now + 0.73);
+
+    /* ── Shimmer: rising sweep synth over the whole fanfare ── */
+    const sweep = ac.createOscillator();
+    const swEnv = ac.createGain();
+    sweep.type  = 'sine';
+    sweep.frequency.setValueAtTime(300, now);
+    sweep.frequency.exponentialRampToValueAtTime(1800, now + 0.88);
+    swEnv.gain.setValueAtTime(0.15, now);
+    swEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+    sweep.connect(swEnv); swEnv.connect(masterGain);
+    sweep.start(now); sweep.stop(now + 0.91);
+
+    /* Stop & close after fanfare completes */
+    setTimeout(() => { try { ac.close(); } catch(e){} }, 1400);
+  } catch(e) { /* AudioContext unavailable */ }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   LIVE BACKGROUND MUSIC — generated via Web Audio API (no files needed)
+   Three royalty-free generative tracks, played randomly each live session
+   ════════════════════════════════════════════════════════════════════ */
+
+/* Music track definitions: each is a list of {freq, dur} note sequences
+   played on a simple synth. BPM ~120. */
+const _LIVE_TRACKS = [
+  /* Track 0 — upbeat looping arp (major pentatonic, C) */
+  [523,261,392,523,659,784,659,523,392,329,261,392,523,659,784,659].map((f,i)=>({f,d:0.18+(i%3===0?0.06:0)})),
+  /* Track 1 — mysterious minor (A minor chord tones) */
+  [220,277,330,440,330,277,220,165,196,220,262,330,220,196,165,220].map((f,i)=>({f,d:0.22+(i%4===0?0.08:0)})),
+  /* Track 2 — tense quiz-show groove (D dorian feel) */
+  [294,370,440,587,440,370,294,247,294,370,494,587,494,370,294,247].map((f,i)=>({f,d:0.16+(i%2===0?0.04:0)})),
+];
+
+function _liveStartMusic() {
+  if (!document.getElementById('liveMusicToggle')?.checked) return;
+  _liveStopMusic();
+  try {
+    _liveAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const trackNotes = _LIVE_TRACKS[Math.floor(Math.random() * _LIVE_TRACKS.length)];
+    let noteIdx = 0;
+    let startTime = _liveAudioCtx.currentTime + 0.1;
+
+    /* Master gain (low volume — background only) */
+    const master = _liveAudioCtx.createGain();
+    master.gain.setValueAtTime(0.06, _liveAudioCtx.currentTime);
+    master.connect(_liveAudioCtx.destination);
+
+    function scheduleNote() {
+      if (!_liveActive) return;
+      const note = trackNotes[noteIdx % trackNotes.length];
+      noteIdx++;
+
+      const osc  = _liveAudioCtx.createOscillator();
+      const gain = _liveAudioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(note.f, startTime);
+      gain.gain.setValueAtTime(0.9,  startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + note.d * 0.95);
+      osc.connect(gain); gain.connect(master);
+      osc.start(startTime);
+      osc.stop(startTime + note.d);
+      startTime += note.d;
+
+      /* Schedule next note 50ms before current ends */
+      const delay = Math.max(10, (note.d - 0.05) * 1000);
+      _liveMusicTimer = setTimeout(scheduleNote, delay);
+    }
+    scheduleNote();
+  } catch(e) { /* AudioContext not available */ }
+}
+
+function _liveStopMusic() {
+  clearTimeout(_liveMusicTimer);
+  _liveMusicTimer = null;
+  if (_liveAudioCtx) {
+    try { _liveAudioCtx.close(); } catch(e) {}
+    _liveAudioCtx = null;
+  }
+}
+
+/* TikTok-style last-10-seconds countdown beeps:
+   ascending tones, each beat higher pitch, last beat a distinct double-beep */
+function _liveTikTokCountdown(secondsLeft) {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const basePitch = 440 + (10 - secondsLeft) * 55;  /* 440→990 Hz as count increases */
+    const isLast    = secondsLeft === 1;
+    const beepCount = isLast ? 2 : 1;
+
+    for (let i = 0; i < beepCount; i++) {
+      const osc  = ac.createOscillator();
+      const gain = ac.createGain();
+      osc.type = isLast ? 'square' : 'sine';
+      osc.frequency.setValueAtTime(isLast ? 880 : basePitch, ac.currentTime + i * 0.12);
+      gain.gain.setValueAtTime(0.35, ac.currentTime + i * 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + i * 0.12 + 0.09);
+      osc.connect(gain); gain.connect(ac.destination);
+      osc.start(ac.currentTime + i * 0.12);
+      osc.stop(ac.currentTime + i * 0.12 + 0.1);
+    }
+    setTimeout(() => { try { ac.close(); } catch(e){} }, 500);
+  } catch(e) {}
+}
+
+/* Helper: draw rounded rectangle path */
+function _liveRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function _liveAnimLoop() {
+  if (!_liveActive) return;
+  _liveAnimT += 0.035;
+  const lc = document.getElementById('puzzleLiveCanvas');
+  if (lc) _liveDrawOverlay(lc, _livePhase, _liveSecondsLeft, _liveAnimT);
+  _liveAnimFrame = requestAnimationFrame(_liveAnimLoop);
+}
+
+function _liveTick() {
+  if (!_liveActive) return;
+  _liveSecondsLeft--;
+
+  /* Update HUD timer display */
+  const mins = String(Math.floor(_liveSecondsLeft / 60)).padStart(1, '0');
+  const secs = String(_liveSecondsLeft % 60).padStart(2, '0');
+  const el = document.getElementById('liveCountdownDisplay');
+  if (el) {
+    el.textContent = `${mins}:${secs}`;
+    el.style.color = _livePhase === 'answer' ? '#22c55e' : _liveSecondsLeft <= 30 ? '#dc2626' : '#f59e0b';
+  }
+
+  if (_livePhase === 'question') {
+    const p = _liveP();
+    /* Milestone voice cues — only if speech engine is not mid-sentence */
+    if (_liveSecondsLeft === 120 && !speechSynthesis.speaking)
+      _liveSpeak(p.twoMin);
+    if (_liveSecondsLeft === 60  && !speechSynthesis.speaking)
+      _liveSpeak(p.oneMin);
+    if (_liveSecondsLeft === 30  && !speechSynthesis.speaking)
+      _liveSpeak(p.thirty, 0.95);
+    if (_liveSecondsLeft === 10  && !speechSynthesis.speaking)
+      _liveSpeak(p.ten, 1.05, 1.1);
+
+    /* TikTok countdown beeps for last 10 seconds of question phase */
+    if (_liveSecondsLeft <= 10 && _liveSecondsLeft > 0) {
+      _liveTikTokCountdown(_liveSecondsLeft);
+    }
+
+    if (_liveSecondsLeft <= 0) {
+      /* → Switch to answer phase */
+      _liveStopEngagement();
+      _liveTikTokPlayed = false;
+      _livePhase = 'answer';
+      _liveSecondsLeft = 15;
+
+      /* 🎺 Play dramatic answer-reveal fanfare */
+      _liveAnswerFanfare();
+
+      /* Show answer on the puzzle canvas */
+      const showEl = document.getElementById('puzzleShowAnswer');
+      if (showEl) { showEl.checked = true; renderPuzzleCanvas(); }
+
+      /* Host announces answer in selected language */
+      const ans = document.getElementById('puzzleAnswer')?.value || '?';
+      _liveAddComment('🎙️ Host', `⏰ Time's up! The answer is ${ans}! How many got it right?`, true);
+      const ansIntro = _liveRandom(p.answerIntros);
+      _liveSpeak(p.answerSpeak(ansIntro, ans));
+      /* After 2s, check pending comments now that answer is revealed */
+      setTimeout(() => {
+        _liveComments.filter(c => !c.read).forEach(c => {
+          setTimeout(() => _liveReadNextComment(), 0);
+        });
+      }, 2000);
+
+      document.getElementById('livePhaseLabel').textContent = '✅ Answer Reveal';
+      document.getElementById('liveStatusBar').textContent  = 'Answer revealed! Checking your comments…';
+    }
+  } else {
+    /* Answer phase countdown → next puzzle */
+    if (_liveSecondsLeft <= 0 && document.getElementById('liveAutoAdvance')?.checked) {
+      const showEl = document.getElementById('puzzleShowAnswer');
+      if (showEl) showEl.checked = false;
+
+      _liveLoadNextPuzzle();
+      _livePhase = 'question';
+      _liveSecondsLeft = 180;
+      _liveAnimT = 0;
+      _liveEngageIdx = 0;
+      _liveComments = [];   /* clear comments for fresh puzzle */
+
+      const puzzleNum = _livePuzzleIdx;
+      document.getElementById('livePhaseLabel').textContent = `Puzzle ${puzzleNum}`;
+      document.getElementById('liveStatusBar').textContent  = 'New puzzle! 3 minutes on the clock…';
+      _liveAddComment('🎙️ Host', _liveP().newPuzzle(puzzleNum), true);
+
+      /* Restart engagement voice */
+      setTimeout(() => {
+        const expr = document.getElementById('puzzleExpr')?.value || 'this equation';
+        _liveStartEngagement(expr);
+      }, 700);
+    }
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   PRE-LIVE MODAL — opens before puzzleStartLive()
+   ════════════════════════════════════════════════════════ */
+const _PRELIVE_LANGS = [
+  { code:'en', flag:'🇬🇧', label:'English' },
+  { code:'ne', flag:'🇳🇵', label:'Nepali'  },
+  { code:'hi', flag:'🇮🇳', label:'Hindi'   },
+  { code:'fr', flag:'🇫🇷', label:'French'  },
+  { code:'es', flag:'🇪🇸', label:'Spanish' },
+  { code:'de', flag:'🇩🇪', label:'German'  },
+  { code:'ja', flag:'🇯🇵', label:'Japanese'},
+  { code:'zh', flag:'🇨🇳', label:'Chinese' },
+  { code:'ar', flag:'🇸🇦', label:'Arabic'  },
+];
+
+function puzzleOpenPreLive() {
+  if (_liveActive) { puzzleStopLive(); return; }
+  /* Build language grid on first open */
+  const grid = document.getElementById('preLiveLangGrid');
+  if (grid && !grid.dataset.built) {
+    grid.dataset.built = '1';
+    _PRELIVE_LANGS.forEach((l, i) => {
+      const btn = document.createElement('label');
+      btn.style.cssText = 'display:flex;align-items:center;gap:5px;background:#1f2937;border:2px solid transparent;border-radius:8px;padding:7px 8px;cursor:pointer;font-size:.78rem;color:#fff;transition:.15s';
+      btn.innerHTML = `<input type="radio" name="preLiveLang" value="${l.code}" ${i===0?'checked':''} style="accent-color:#7c3aed"> ${l.flag} ${l.label}`;
+      btn.querySelector('input').addEventListener('change', () => {
+        document.getElementById('preLiveVoiceLang').value = l.code;
+        grid.querySelectorAll('label').forEach(lb => lb.style.borderColor = 'transparent');
+        btn.style.borderColor = '#7c3aed';
+      });
+      if (i === 0) { btn.style.borderColor = '#7c3aed'; document.getElementById('preLiveVoiceLang').value = 'en'; }
+      grid.appendChild(btn);
+    });
+  }
+  /* Wire gender radio buttons */
+  ['Female','Male','Random'].forEach(g => {
+    const r = document.getElementById(`preLiveGender${g}`);
+    if (r) r.addEventListener('change', () => {
+      document.getElementById('preLiveVoiceGender').value = g.toLowerCase();
+      document.querySelectorAll('#preLiveModal label[id$="Btn"]').forEach(lb => lb.style.borderColor='transparent');
+      document.getElementById(`gender${g}Btn`).style.borderColor = '#7c3aed';
+    });
+  });
+  document.getElementById('preLiveModal').style.display = 'flex';
+}
+
+function _preLiveConfirm() {
+  /* Copy pre-live settings into live toggles */
+  const speechOn = document.getElementById('preLiveSpeechOn')?.checked ?? true;
+  const musicOn  = document.getElementById('preLiveMusicOn')?.checked ?? true;
+  const autoAdv  = document.getElementById('preLiveAutoAdv')?.checked ?? true;
+  const st = document.getElementById('liveSpeechToggle'); if (st) st.checked = speechOn;
+  const mt = document.getElementById('liveMusicToggle');  if (mt) mt.checked = musicOn;
+  const at = document.getElementById('liveAutoAdvance');  if (at) at.checked = autoAdv;
+  document.getElementById('preLiveModal').style.display = 'none';
+  puzzleStartLive();
+}
+
+function puzzleStartLive() {
+  if (_liveActive) return;
+  _liveActive      = true;
+  _livePhase       = 'question';
+  _liveSecondsLeft = 180;
+  _liveAnimT       = 0;
+  _livePuzzleIdx   = 1;
+  _liveUsedIdxs    = [];
+  _liveComments    = [];
+  _liveSessionVoice = null;
+
+  /* Lock the voice for this session BEFORE any speech */
+  /* Voices may not be loaded yet — try immediately, then retry once loaded */
+  const _doLockVoice = () => {
+    _liveLockVoice();
+  };
+  if (speechSynthesis.getVoices().length) {
+    _doLockVoice();
+  } else {
+    speechSynthesis.addEventListener('voiceschanged', _doLockVoice, { once: true });
+  }
+
+  /* Size live canvas to 800×800 */
+  const lc = document.getElementById('puzzleLiveCanvas');
+  lc.width = 800; lc.height = 800;
+
+  /* Hide answer, load first puzzle with a fresh random photo + theme */
+  const showEl = document.getElementById('puzzleShowAnswer');
+  if (showEl) showEl.checked = false;
+  /* Randomise photo and theme for puzzle 1 */
+  {
+    const photo0 = EINSTEIN_PHOTOS[Math.floor(Math.random() * EINSTEIN_PHOTOS.length)];
+    const theme0 = PUZZLE_THEMES[Math.floor(Math.random() * PUZZLE_THEMES.length)];
+    _puzzleTheme = theme0.id;
+    PUZZLE_THEMES.forEach(tt => {
+      const b = document.getElementById('puzzleThemeBtn_' + tt.id);
+      if (b) b.style.opacity = (tt.id === theme0.id) ? '1' : '0.65';
+    });
+    _selectEinsteinPhoto(photo0.id);   /* triggers renderPuzzleCanvas */
+  }
+
+  /* Show overlay */
+  const ov = document.getElementById('puzzleLiveOverlay');
+  ov.style.display = 'flex';
+
+  /* Update Live button */
+  const liveBtn = document.getElementById('puzzleLiveBtn');
+  if (liveBtn) {
+    liveBtn.textContent = '⏹ Stop Live';
+    liveBtn.style.background = '#374151';
+    liveBtn.style.animation  = 'none';
+    liveBtn.style.boxShadow  = 'none';
+    liveBtn.setAttribute('onclick', 'puzzleStopLive()');
+  }
+
+  /* Speak intro + start continuous engagement loop */
+  setTimeout(() => {
+    const expr = document.getElementById('puzzleExpr')?.value || 'this equation';
+    _liveAddComment('🎙️ Host', _liveP().welcome, true);
+    _liveStartEngagement(expr);
+  }, 800);
+
+  /* Start tick (1s interval) and animation loop */
+  _liveTikTokPlayed = false;
+  _liveTimer     = setInterval(_liveTick, 1000);
+  _liveAnimFrame = requestAnimationFrame(_liveAnimLoop);
+
+  /* Start background music after a short delay */
+  setTimeout(_liveStartMusic, 600);
+
+  document.getElementById('livePhaseLabel').textContent = 'Puzzle 1';
+  document.getElementById('liveStatusBar').textContent  = 'Puzzle in progress… 3 minutes on the clock!';
+}
+
+function puzzleStopLive() {
+  _liveActive = false;
+  _liveSessionVoice = null;
+  clearInterval(_liveTimer);
+  cancelAnimationFrame(_liveAnimFrame);
+  _liveStopEngagement();
+  _liveStopMusic();
+
+  /* Stop recording if active */
+  if (_liveIsRecording && _liveRecorder) {
+    _liveRecorder.stop();
+  }
+
+  /* Hide overlay */
+  document.getElementById('puzzleLiveOverlay').style.display = 'none';
+
+  /* Reset answer checkbox */
+  const showEl = document.getElementById('puzzleShowAnswer');
+  if (showEl) { showEl.checked = false; renderPuzzleCanvas(); }
+
+  /* Restore Live button */
+  const liveBtn = document.getElementById('puzzleLiveBtn');
+  if (liveBtn) {
+    liveBtn.textContent = '🔴 GO LIVE';
+    liveBtn.style.background = 'linear-gradient(135deg,#dc2626,#f59e0b)';
+    liveBtn.style.animation  = 'livePulse 1.8s infinite';
+    liveBtn.style.boxShadow  = '0 0 18px rgba(220,38,38,.5)';
+    liveBtn.setAttribute('onclick', 'puzzleOpenPreLive()');
+  }
+
+  toast('🎬 Live session ended!', 'success', 3000);
+}
+
+async function puzzleLiveToggleRecord() {
+  const btn = document.getElementById('liveRecordBtn');
+  const dot = document.getElementById('liveRecordingDot');
+
+  if (!_liveIsRecording) {
+    /* Start recording */
+    try {
+      const lc     = document.getElementById('puzzleLiveCanvas');
+      const stream = lc.captureStream(30);
+      _liveRecChunks  = [];
+      _liveRecorder   = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+      _liveRecorder.ondataavailable = e => { if (e.data.size > 0) _liveRecChunks.push(e.data); };
+      _liveRecorder.onstop = () => {
+        const blob = new Blob(_liveRecChunks, { type: 'video/webm' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = `puzzle-live-${Date.now()}.webm`; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 8000);
+        toast('🎬 Video saved! Open in VLC or upload to YouTube/Facebook.', 'success', 6000);
+      };
+      _liveRecorder.start(500);
+      _liveIsRecording = true;
+      btn.textContent  = '⏹ Stop Rec';
+      btn.style.background = '#374151';
+      dot.style.display = 'inline';
+      toast('⏺ Recording started! Video saved when you stop.', 'info', 3000);
+    } catch (e) {
+      toast('⚠️ Recording failed: ' + e.message, 'error', 4000);
+    }
+  } else {
+    /* Stop recording */
+    if (_liveRecorder) _liveRecorder.stop();
+    _liveIsRecording = false;
+    btn.textContent  = '⏺ Record';
+    btn.style.background = '#dc2626';
+    dot.style.display = 'none';
+  }
+}
+
+/* ── Puzzle Studio live-render bindings ── */
+document.addEventListener('DOMContentLoaded', () => {
+  ['puzzleExpr','puzzleAnswer','puzzleTopText','puzzleSubText','puzzleBottomText',
+   'puzzleFontSize'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', renderPuzzleCanvas);
+  });
+  ['puzzleSize'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', () => {
+      if (id==='puzzleSize') setPuzzleSize(document.getElementById(id).value);
+      else renderPuzzleCanvas();
+    });
+  });
+  ['puzzleShowAnswer','puzzleWatermark'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', renderPuzzleCanvas);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FACE SWAP VIDEO CREATOR
+// Step 1: Pick trending video template (or upload own)
+// Step 2: Upload face photo
+// Step 3: Choose background replacement
+// Step 4: Send to HF Space (InsightFace + rembg) → download result
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Trending video templates database ────────────────────────────────────────
+const FS_TEMPLATES = [
+  // Nepal trending
+  { id:'np1', cat:'nepal', title:'Resham Firiri Dance', artist:'Nepali Folk', views:'12M', badge:'hot',
+    thumb:'https://images.unsplash.com/photo-1545205597-3d9d02c29597?w=300&q=60',
+    vidUrl:null, duration:'0:30', tags:['dance','nepal'] },
+  { id:'np2', cat:'nepal', title:'Dashain Celebration', artist:'Festival Nepal', views:'8.4M', badge:'top',
+    thumb:'https://images.unsplash.com/photo-1601814933824-fd0b574dd592?w=300&q=60',
+    vidUrl:null, duration:'0:20', tags:['festival','nepal'] },
+  { id:'np3', cat:'nepal', title:'Pokhara Reel Trend', artist:'Nepal TikTok', views:'6.1M', badge:'new',
+    thumb:'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=300&q=60',
+    vidUrl:null, duration:'0:15', tags:['reel','nepal'] },
+  // Bollywood
+  { id:'bl1', cat:'bollywood', title:'Kesariya Trend', artist:'Brahmastra', views:'42M', badge:'hot',
+    thumb:'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=300&q=60',
+    vidUrl:null, duration:'0:30', tags:['bollywood','dance'] },
+  { id:'bl2', cat:'bollywood', title:'Jhoome Jo Pathaan', artist:'Shah Rukh Khan', views:'38M', badge:'top',
+    thumb:'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=300&q=60',
+    vidUrl:null, duration:'0:30', tags:['bollywood','reel'] },
+  { id:'bl3', cat:'bollywood', title:'Gallan Goodiyaan', artist:'Dil Dhadakne Do', views:'22M', badge:'new',
+    thumb:'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=300&q=60',
+    vidUrl:null, duration:'0:25', tags:['bollywood','dance'] },
+  // Viral Dance
+  { id:'d1', cat:'dance', title:'Naatu Naatu Step', artist:'RRR Official', views:'95M', badge:'hot',
+    thumb:'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=300&q=60',
+    vidUrl:null, duration:'0:30', tags:['dance','viral'] },
+  { id:'d2', cat:'dance', title:'Kala Chashma Reel', artist:'Viral TikTok', views:'61M', badge:'top',
+    thumb:'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=300&q=60',
+    vidUrl:null, duration:'0:20', tags:['dance','reel'] },
+  { id:'d3', cat:'dance', title:'Besharam Rang', artist:'Pathaan', views:'44M', badge:'hot',
+    thumb:'https://images.unsplash.com/photo-1504609773096-104ff2c73ba4?w=300&q=60',
+    vidUrl:null, duration:'0:30', tags:['dance','bollywood'] },
+  // Reels
+  { id:'r1', cat:'reel', title:'Morning Routine Reel', artist:'Trending Reels', views:'18M', badge:'new',
+    thumb:'https://images.unsplash.com/photo-1520013817300-1f4c753bb4b9?w=300&q=60',
+    vidUrl:null, duration:'0:30', tags:['reel','lifestyle'] },
+  { id:'r2', cat:'reel', title:'Transition Reel', artist:'Instagram Trending', views:'29M', badge:'hot',
+    thumb:'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=300&q=60',
+    vidUrl:null, duration:'0:15', tags:['reel','transition'] },
+  { id:'r3', cat:'reel', title:'Travel Reel Nepal', artist:'Wanderlust Nepal', views:'9.2M', badge:'new',
+    thumb:'https://images.unsplash.com/photo-1585016495481-91140f4e0c91?w=300&q=60',
+    vidUrl:null, duration:'0:30', tags:['reel','nepal','travel'] },
+];
+
+// Background options config
+const FS_BG_OPTIONS = {
+  none:   { label:'Keep Original', icon:'🎬', url:null },
+  black:  { label:'Black Studio',  icon:'⬛', url:null, color:'#000000' },
+  white:  { label:'White Studio',  icon:'⬜', url:null, color:'#f8fafc' },
+  nepal:  { label:'Nepal Mountains', icon:'🏔️', url:'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=1280&q=80' },
+  office: { label:'Office',        icon:'🏢', url:'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1280&q=80' },
+  stage:  { label:'Stage',         icon:'🎤', url:'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1280&q=80' },
+  custom: { label:'Custom',        icon:'📤', url:null },
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const _fs = {
+  step: 1,
+  selectedTpl: null,     // template object or { custom:true, file/url }
+  srcFile: null,         // face photo File
+  selectedBg: 'none',    // bg key
+  bgFile: null,          // custom bg File
+  resultBlob: null,
+  resultIsVideo: false,
+  currentCat: 'all',
+};
+
+// ── Open / Close ───────────────────────────────────────────────────────────────
+function openFaceSwapStudio() {
+  const modal = document.getElementById('faceSwapModal');
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  // Restore saved HF URL
+  const hfInput = document.getElementById('fsHfUrl');
+  if (hfInput) hfInput.value = localStorage.getItem('ghp_hf_faceswap_url') || '';
+  // Restore disclaimer
+  if (localStorage.getItem('ghp_fs_disclaimer') === '1') {
+    const chk = document.getElementById('fsDisclaimerCheck');
+    if (chk) { chk.checked = true; _applyDisclaimer(true); }
+  }
+  // Render templates
+  fsRenderTemplates('all');
+  // Go to step 1
+  fsGoStep(1, true);
+}
+
+function closeFaceSwapStudio() {
+  document.getElementById('faceSwapModal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+// ── Step navigation ────────────────────────────────────────────────────────────
+function fsGoStep(n, force) {
+  // Validate before advancing
+  if (!force) {
+    if (n > 1 && !_fs.selectedTpl) { showToast('Please select a video template first', 3000); fsGoStep(1,true); return; }
+    if (n > 2 && !_fs.srcFile) { showToast('Please upload your face photo', 3000); return; }
+    if (n > 2 && localStorage.getItem('ghp_fs_disclaimer') !== '1') { showToast('Please accept the terms first', 3000); return; }
+  }
+  _fs.step = n;
+  [1,2,3,4].forEach(i => {
+    document.getElementById('fsStep'+i).style.display = i === n ? 'block' : 'none';
+    const tab = document.getElementById('fsTab'+i);
+    tab.classList.toggle('active', i === n);
+    tab.style.borderBottomColor = i === n ? '#7c3aed' : 'transparent';
+    tab.style.color = i === n ? '#a78bfa' : '';
+  });
+  // Update summary on step 4
+  if (n === 4) _fsUpdateSummary();
+}
+
+// ── Template rendering ─────────────────────────────────────────────────────────
+function fsRenderTemplates(cat) {
+  _fs.currentCat = cat;
+  const grid = document.getElementById('fsTplGrid');
+  const customSection = document.getElementById('fsCustomSection');
+  if (!grid) return;
+
+  if (cat === 'custom') {
+    grid.innerHTML = '';
+    customSection.style.display = 'block';
+    return;
+  }
+  customSection.style.display = 'none';
+
+  const list = cat === 'all' ? FS_TEMPLATES : FS_TEMPLATES.filter(t => t.cat === cat);
+  grid.innerHTML = list.map(t => `
+    <div class="fs-tpl-card${_fs.selectedTpl?.id === t.id ? ' selected':''}" onclick="fsSelectTemplate('${t.id}')" id="fsTplCard_${t.id}">
+      ${t.badge ? `<span class="fs-tpl-badge ${t.badge}">${t.badge==='hot'?'🔥':t.badge==='new'?'✨':'⭐'} ${t.badge.toUpperCase()}</span>` : ''}
+      <img src="${t.thumb}" alt="${t.title}" loading="lazy">
+      <div class="fs-tpl-card-body">
+        <div class="fs-tpl-title">${t.title}</div>
+        <div class="fs-tpl-meta">👁️ ${t.views} · ⏱ ${t.duration}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function fsFilterCat(cat, btn) {
+  document.querySelectorAll('.fs-cat-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  fsRenderTemplates(cat);
+}
+
+function fsSelectTemplate(id) {
+  const tpl = FS_TEMPLATES.find(t => t.id === id);
+  if (!tpl) return;
+  _fs.selectedTpl = tpl;
+  // Update card styles
+  document.querySelectorAll('.fs-tpl-card').forEach(c => c.classList.remove('selected'));
+  const card = document.getElementById('fsTplCard_'+id);
+  if (card) card.classList.add('selected');
+  // Show selected bar
+  document.getElementById('fsSelectedThumb').src = tpl.thumb;
+  document.getElementById('fsSelectedTitle').textContent = tpl.title;
+  document.getElementById('fsSelectedMeta').textContent = `👁️ ${tpl.views} · ⏱ ${tpl.duration} · 🎵 ${tpl.artist}`;
+  document.getElementById('fsSelectedTpl').style.display = 'flex';
+  document.getElementById('fsNext1').disabled = false;
+}
+
+function fsClearTemplate() {
+  _fs.selectedTpl = null;
+  document.getElementById('fsSelectedTpl').style.display = 'none';
+  document.getElementById('fsNext1').disabled = true;
+  document.querySelectorAll('.fs-tpl-card').forEach(c => c.classList.remove('selected'));
+}
+
+// Custom video upload
+function fsVidDropped(e) {
+  e.preventDefault();
+  document.getElementById('fsSrcDrop') && (document.getElementById('fsSrcDrop').style.borderColor = '');
+  const file = e.dataTransfer.files[0];
+  if (file) fsVidFileChanged({ target: { files: [file] } });
+}
+function fsVidFileChanged(e) {
+  const file = e.target.files[0]; if (!file) return;
+  _fs.selectedTpl = { custom:true, file, title: file.name, thumb: null };
+  document.getElementById('fsVidDropLabel').textContent = '✅ ' + file.name;
+  document.getElementById('fsNext1').disabled = false;
+  showToast('Video selected: ' + file.name, 2500);
+}
+function fsVidUrlChanged(val) {
+  if (!val.trim()) return;
+  _fs.selectedTpl = { custom:true, url: val.trim(), title: 'Pasted URL', thumb: null };
+  document.getElementById('fsNext1').disabled = false;
+}
+
+// ── Face photo ─────────────────────────────────────────────────────────────────
+function handleFsDisclaimer() {
+  const checked = document.getElementById('fsDisclaimerCheck').checked;
+  _applyDisclaimer(checked);
+  if (checked) localStorage.setItem('ghp_fs_disclaimer','1');
+  else localStorage.removeItem('ghp_fs_disclaimer');
+}
+function _applyDisclaimer(on) {
+  const box = document.getElementById('fsDisclaimerBox');
+  if (box) box.style.opacity = on ? '.5' : '1';
+  _fsUpdateNext2();
+}
+
+function fsSrcChanged(e) {
+  const file = e.target.files[0]; if (!file) return;
+  _fs.srcFile = file;
+  const img = document.getElementById('fsSrcPreview');
+  img.src = URL.createObjectURL(file);
+  img.style.display = 'block';
+  document.getElementById('fsSrcPlaceholder').style.display = 'none';
+  _fsUpdateNext2();
+}
+function fsSrcDropped(e) {
+  e.preventDefault();
+  document.getElementById('fsSrcDrop').style.borderColor = '';
+  const file = e.dataTransfer.files[0];
+  if (file) fsSrcChanged({ target: { files: [file] } });
+}
+function _fsUpdateNext2() {
+  const ok = _fs.srcFile && localStorage.getItem('ghp_fs_disclaimer') === '1';
+  const btn = document.getElementById('fsNext2');
+  if (btn) btn.disabled = !ok;
+}
+
+// ── Background ─────────────────────────────────────────────────────────────────
+function fsSelectBg(key, el) {
+  _fs.selectedBg = key;
+  document.querySelectorAll('.fs-bg-opt').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  if (key === 'custom') document.getElementById('fsBgImgInput').click();
+}
+function fsBgImgChanged(e) {
+  const file = e.target.files[0]; if (!file) return;
+  _fs.bgFile = file;
+  FS_BG_OPTIONS.custom.url = URL.createObjectURL(file);
+  const prev = document.getElementById('fsBgImgPreview');
+  prev.src = FS_BG_OPTIONS.custom.url;
+  prev.style.display = 'block';
+  document.getElementById('fsBgImgIcon').style.display = 'none';
+  showToast('Custom background set ✅', 2000);
+}
+
+// ── Summary (step 4) ──────────────────────────────────────────────────────────
+function _fsUpdateSummary() {
+  const tpl = _fs.selectedTpl;
+  const thumb = document.getElementById('fsSumThumb');
+  const title = document.getElementById('fsSumTitle');
+  if (tpl) {
+    thumb.src = tpl.thumb || '';
+    thumb.style.display = tpl.thumb ? 'block' : 'none';
+    title.textContent = tpl.title || 'Custom Video';
+  }
+  const face = document.getElementById('fsSumFace');
+  if (_fs.srcFile) face.src = URL.createObjectURL(_fs.srcFile);
+
+  const bgCfg = FS_BG_OPTIONS[_fs.selectedBg] || FS_BG_OPTIONS.none;
+  const sumBg = document.getElementById('fsSumBg');
+  const sumBgLabel = document.getElementById('fsSumBgLabel');
+  sumBg.textContent = bgCfg.icon;
+  sumBgLabel.textContent = bgCfg.label;
+  if (bgCfg.url) sumBg.style.backgroundImage = `url('${bgCfg.url}')`;
+}
+
+// ── Core: run swap ─────────────────────────────────────────────────────────────
+async function runFaceSwap() {
+  if (!_fs.selectedTpl || !_fs.srcFile) return;
+
+  const progress = document.getElementById('fsProgress');
+  const progressMsg = document.getElementById('fsProgressMsg');
+  const progressBar = document.getElementById('fsProgressBar');
+  const resultBox = document.getElementById('fsResultBox');
+  const createBtn = document.getElementById('fsCreateBtn');
+
+  progress.style.display = 'block';
+  resultBox.style.display = 'none';
+  createBtn.disabled = true;
+  progressBar.style.width = '5%';
+
+  const setMsg = (msg, pct) => {
+    progressMsg.textContent = msg;
+    if (pct !== undefined) progressBar.style.width = pct + '%';
+  };
+
+  try {
+    let resultBlob = null;
+    let isVideo = false;
+
+    const hfUrl = (document.getElementById('fsHfUrl')?.value || '').trim().replace(/\/$/, '');
+
+    if (hfUrl) {
+      setMsg('Connecting to HuggingFace Space…', 10);
+      resultBlob = await _fsCallHFSpace(hfUrl, setMsg);
+      // Detect video vs image
+      isVideo = resultBlob.type.startsWith('video/');
+    } else if (window._isNodeServer) {
+      setMsg('Sending to local server…', 15);
+      resultBlob = await _fsCallLocalServer(setMsg);
+    } else {
+      // Browser-side canvas fallback — no backend needed
+      setMsg('Preparing canvas magic…', 15);
+      resultBlob = await _fsCanvasFallback(setMsg);
+      isVideo = false;
+    }
+
+    _fs.resultBlob = resultBlob;
+    _fs.resultIsVideo = isVideo;
+    progressBar.style.width = '100%';
+
+    const url = URL.createObjectURL(resultBlob);
+    const resVideo = document.getElementById('fsResultVideo');
+    const resImg = document.getElementById('fsResultImg');
+    if (isVideo) {
+      resVideo.src = url; resVideo.style.display = 'block';
+      resImg.style.display = 'none';
+    } else {
+      resImg.src = url; resImg.style.display = 'block';
+      resVideo.style.display = 'none';
+    }
+    resultBox.style.display = 'block';
+    progress.style.display = 'none';
+    showToast('🎬 Video created successfully!', 3500);
+  } catch (err) {
+    progress.style.display = 'none';
+    progressBar.style.width = '0%';
+    showToast('❌ ' + err.message, 9000);
+    console.error('[FaceSwap]', err);
+  } finally {
+    createBtn.disabled = false;
+  }
+}
+
+// ── Browser canvas fallback (no backend) ──────────────────────────────────────
+async function _fsCanvasFallback(setMsg) {
+  setMsg('Loading template image…', 20);
+  const tpl = _fs.selectedTpl;
+
+  // Load background: template thumb or bg option or solid colour
+  const bgKey = _fs.selectedBg;
+  const bgCfg = FS_BG_OPTIONS[bgKey];
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 720; canvas.height = 1280; // portrait reel ratio
+  const ctx = canvas.getContext('2d');
+
+  // Helper to load an image from url or File
+  function loadImg(src) {
+    return new Promise((res, rej) => {
+      const img = new Image(); img.crossOrigin = 'anonymous';
+      if (src instanceof File) img.src = URL.createObjectURL(src);
+      else img.src = src;
+      img.onload = () => res(img);
+      img.onerror = () => rej(new Error('Could not load image: ' + (src?.name || src)));
+    });
+  }
+
+  // 1) Draw background
+  if (bgKey !== 'none' && bgCfg?.color) {
+    ctx.fillStyle = bgCfg.color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } else {
+    const bgUrl = (bgKey === 'custom' && _fs.bgFile) ? _fs.bgFile
+                : (bgCfg?.url || tpl?.thumb || null);
+    if (bgUrl) {
+      try {
+        setMsg('Loading background…', 30);
+        const bg = await loadImg(bgUrl);
+        // Cover-fit
+        const scale = Math.max(canvas.width / bg.width, canvas.height / bg.height);
+        const sw = bg.width * scale, sh = bg.height * scale;
+        ctx.drawImage(bg, (canvas.width - sw) / 2, (canvas.height - sh) / 2, sw, sh);
+      } catch (_) {
+        ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+    } else {
+      ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  // 2) Slight dark vignette overlay
+  const vignette = ctx.createRadialGradient(360,640,200, 360,640,700);
+  vignette.addColorStop(0,'rgba(0,0,0,0)');
+  vignette.addColorStop(1,'rgba(0,0,0,0.55)');
+  ctx.fillStyle = vignette; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // 3) Draw face photo centered, taking up ~60% height
+  setMsg('Compositing your face…', 60);
+  try {
+    const face = await loadImg(_fs.srcFile);
+    const maxH = canvas.height * 0.62;
+    const maxW = canvas.width * 0.78;
+    const scale = Math.min(maxW / face.width, maxH / face.height);
+    const fw = face.width * scale, fh = face.height * scale;
+    const fx = (canvas.width - fw) / 2, fy = (canvas.height - fh) / 2 + 60;
+    // Soft circular mask for the face
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 30;
+    ctx.drawImage(face, fx, fy, fw, fh);
+    ctx.restore();
+  } catch(_) { /* face load failed, skip */ }
+
+  // 4) Overlay title text
+  ctx.save();
+  ctx.font = 'bold 36px Inter, Arial, sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.shadowColor = '#000'; ctx.shadowBlur = 8;
+  const title = tpl?.title || 'Face Swap Preview';
+  ctx.fillText(title, canvas.width / 2, 80);
+  ctx.font = '22px Inter, Arial, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.fillText('✨ Shashi Creator Studio', canvas.width / 2, 118);
+  ctx.restore();
+
+  setMsg('Finalising image…', 90);
+  return await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.92));
+}
+
+// ── HuggingFace Gradio REST ────────────────────────────────────────────────────
+async function _fsCallHFSpace(baseUrl, setMsg) {
+  // Build payload — send face photo + bg choice + template info
+  async function uploadFile(file, label) {
+    const fd = new FormData(); fd.append('files', file);
+    const r = await fetch(baseUrl + '/upload', { method:'POST', body:fd });
+    if (!r.ok) throw new Error('HF upload failed (' + label + '): ' + r.status);
+    return (await r.json())[0];
+  }
+
+  setMsg('Uploading face photo…', 20);
+  const facePath = await uploadFile(_fs.srcFile, 'face');
+
+  // Upload bg image if custom
+  let bgPath = null;
+  if (_fs.selectedBg === 'custom' && _fs.bgFile) {
+    setMsg('Uploading background image…', 30);
+    bgPath = await uploadFile(_fs.bgFile, 'bg');
+  }
+
+  // Upload template video if custom file
+  let vidPath = null;
+  if (_fs.selectedTpl.custom && _fs.selectedTpl.file) {
+    setMsg('Uploading your video…', 35);
+    vidPath = await uploadFile(_fs.selectedTpl.file, 'video');
+  }
+
+  setMsg('Queuing face swap job on GPU…', 45);
+  const sessionHash = Math.random().toString(36).slice(2);
+
+  // Determine fn_index: video swap = 1, photo swap = 0
+  const isVideoSwap = !!(vidPath || (_fs.selectedTpl && !_fs.selectedTpl.custom));
+  const fn_index = isVideoSwap ? 1 : 0;
+  const api_name = isVideoSwap ? '/swap_video' : '/swap_photo';
+
+  const payload = {
+    fn_index,
+    session_hash: sessionHash,
+    data: [
+      { path: facePath, orig_name: _fs.srcFile.name },
+      vidPath ? { path: vidPath, orig_name: _fs.selectedTpl.file?.name || 'video.mp4' }
+               : (_fs.selectedTpl?.vidUrl || _fs.selectedTpl?.url || null),
+      _fs.selectedBg,
+      bgPath ? { path: bgPath } : (FS_BG_OPTIONS[_fs.selectedBg]?.url || null),
+    ]
+  };
+
+  const joinRes = await fetch(baseUrl + '/queue/join', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!joinRes.ok) throw new Error('HF queue/join failed: ' + joinRes.status);
+  await joinRes.json(); // Gradio 4: just confirms queued
+
+  setMsg('Processing on GPU (this takes ~30–60s)…', 55);
+
+  return await new Promise((resolve, reject) => {
+    const es = new EventSource(baseUrl + '/queue/data?session_hash=' + sessionHash);
+    let pct = 55;
+    const ticker = setInterval(() => {
+      pct = Math.min(pct + 2, 92);
+      setMsg('Processing on GPU…', pct);
+    }, 1500);
+    const timeout = setTimeout(() => { clearInterval(ticker); es.close(); reject(new Error('HF Space timeout (120s) — try a shorter video')); }, 120000);
+
+    es.onmessage = async (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.msg === 'process_completed') {
+          clearTimeout(timeout); clearInterval(ticker); es.close();
+          const output = msg.output?.data?.[0];
+          if (!output) { reject(new Error('HF returned no output')); return; }
+          setMsg('Downloading result…', 95);
+          if (typeof output === 'string' && output.startsWith('data:')) {
+            resolve(await (await fetch(output)).blob());
+          } else if (output?.url) {
+            const url = output.url.startsWith('http') ? output.url : baseUrl + '/file=' + output.url;
+            resolve(await (await fetch(url)).blob());
+          } else { reject(new Error('Unexpected output format from HF Space')); }
+        } else if (msg.msg === 'queue_full') {
+          clearTimeout(timeout); clearInterval(ticker); es.close();
+          reject(new Error('HF Space queue is full — please try again in a minute'));
+        } else if (msg.msg === 'error') {
+          clearTimeout(timeout); clearInterval(ticker); es.close();
+          reject(new Error('HF Space error: ' + (msg.output?.error || 'unknown')));
+        }
+      } catch(_) {}
+    };
+    es.onerror = () => { clearTimeout(timeout); clearInterval(ticker); es.close(); reject(new Error('Connection to HF Space lost')); };
+  });
+}
+
+// ── Local server fallback ──────────────────────────────────────────────────────
+async function _fsCallLocalServer(setMsg) {
+  const fd = new FormData();
+  fd.append('face_photo', _fs.srcFile);
+  if (_fs.selectedTpl?.file) fd.append('target_video', _fs.selectedTpl.file);
+  if (_fs.selectedTpl?.url) fd.append('target_url', _fs.selectedTpl.url);
+  fd.append('bg_mode', _fs.selectedBg);
+  if (_fs.bgFile) fd.append('bg_image', _fs.bgFile);
+  setMsg('Processing on local server…', 40);
+  const res = await fetch('http://localhost:3000/api/faceswap', { method:'POST', body:fd });
+  if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || 'Local server error ' + res.status); }
+  return await res.blob();
+}
+
+// ── Result actions ─────────────────────────────────────────────────────────────
+function fsSaveResult() {
+  if (!_fs.resultBlob) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(_fs.resultBlob);
+  a.download = _fs.resultIsVideo ? 'face-swap-video.mp4' : 'face-swap-result.jpg';
+  a.click();
+  showToast('💾 Saved!', 2000);
+}
+
+function fsShareResult() {
+  if (!_fs.resultBlob) return;
+  if (navigator.share) {
+    const file = new File([_fs.resultBlob], _fs.resultIsVideo ? 'video.mp4':'image.jpg', { type: _fs.resultBlob.type });
+    navigator.share({ files:[file], title:'My Face Swap Video', text:'Created with Shashi Creator Studio 🎬' })
+      .catch(e => showToast('Share cancelled', 2000));
+  } else {
+    fsSaveResult();
+    showToast('📋 Download the file and share manually', 3000);
+  }
+}
+
+function fsUseAsNews() {
+  if (!_fs.resultBlob || _fs.resultIsVideo) {
+    showToast('Only image results can be used in News Studio', 3000); return;
+  }
+  const file = new File([_fs.resultBlob], 'faceswap.jpg', { type:'image/jpeg' });
+  const dt = new DataTransfer(); dt.items.add(file);
+  const bgInput = document.getElementById('customBgInput');
+  if (bgInput) { bgInput.files = dt.files; bgInput.dispatchEvent(new Event('change')); }
+  closeFaceSwapStudio();
+  if (typeof openNewsStudio === 'function') openNewsStudio();
+  showToast('🎭 Image set as background in News Studio!', 3500);
+}
+
+function fsReset() {
+  _fs.selectedTpl = null; _fs.srcFile = null;
+  _fs.selectedBg = 'none'; _fs.bgFile = null;
+  _fs.resultBlob = null; _fs.resultIsVideo = false;
+  // Reset face upload
+  const srcPrev = document.getElementById('fsSrcPreview');
+  if (srcPrev) { srcPrev.src=''; srcPrev.style.display='none'; }
+  const srcPh = document.getElementById('fsSrcPlaceholder');
+  if (srcPh) srcPh.style.display='';
+  const srcInput = document.getElementById('fsSrcInput');
+  if (srcInput) srcInput.value='';
+  // Reset bg selection
+  document.querySelectorAll('.fs-bg-opt').forEach(c => c.classList.remove('selected'));
+  const noneOpt = document.getElementById('fsBgOpt_none');
+  if (noneOpt) noneOpt.classList.add('selected');
+  // Reset result
+  const rb = document.getElementById('fsResultBox');
+  if (rb) rb.style.display='none';
+  // Reset template
+  fsClearTemplate();
+  fsRenderTemplates('all');
+  fsGoStep(1, true);
+}
